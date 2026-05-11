@@ -1,6 +1,6 @@
 {
   "name": "@portaki/module-checklist",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Module Portaki — checklist de départ",
   "license": "AGPL-3.0",
   "type": "module",

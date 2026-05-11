@@ -1,6 +1,6 @@
 {
   "name": "@portaki/module-events",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Module Portaki — événements locaux et carte",
   "license": "AGPL-3.0",
   "type": "module",

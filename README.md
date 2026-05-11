@@ -26,7 +26,7 @@
 <details>
 <summary><strong>🔗 Workspace <code>pnpm</code></strong> (clique pour déplier)</summary>
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, cette dépendance est réécrite vers une semver publiable (ex. **`^0.2.1`** tant que le SDK est en `0.2.x`).
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, cette dépendance est réécrite vers une semver publiable (ex. **`^0.2.2`** tant que le SDK est en `0.2.x`).
 
 </details>
 
@@ -65,7 +65,7 @@ export default definePortakiModule({
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.2.1-SNAPSHOT</version>
+  <version>0.2.2-SNAPSHOT</version>
 </dependency>
 ```
 
