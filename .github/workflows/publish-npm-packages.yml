@@ -1,10 +1,14 @@
-name: Publish guest modules (npmjs)
+# Publishes @portakiapp/module-* packages under packages/ (manual dispatch).
+
+name: publish-npm-packages
+
+run-name: publish-npm-packages-${{ github.run_id }}
 
 on:
   workflow_dispatch:
     inputs:
-      package:
-        description: Package npm à publier
+      npm_package:
+        description: "Package to publish"
         required: true
         type: choice
         options:
@@ -19,30 +23,39 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9.15.4"
+  NPM_REGISTRY: https://registry.npmjs.org
+
 jobs:
   publish:
+    name: publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 9.15.4
+          version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.NPM_REGISTRY }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Publish selected package(s)
+      - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          TARGET="${{ github.event.inputs.package }}"
+          TARGET="${{ github.event.inputs.npm_package }}"
           publish_one() {
             pnpm publish --filter "$1" --access public --no-git-checks
           }

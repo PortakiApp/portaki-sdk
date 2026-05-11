@@ -2,7 +2,7 @@
 
 Bibliothèques officielles pour développer des **modules invités** Portaki : SDK **JavaScript / React**, SDK **Java**, et les **paquets** `@portakiapp/module-*` (dossier `packages/`) dans un même dépôt monorepo (`pnpm`).
 
-[![CI](https://github.com/portaki/portaki-sdk/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/portaki/portaki-sdk/actions/workflows/ci.yml)
+[![CI](https://github.com/portaki/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop)](https://github.com/portaki/portaki-sdk/actions/workflows/ci-verify.yml)
 
 ---
 
@@ -84,16 +84,16 @@ Les paquets sous `packages/` résolvent `@portakiapp/module-sdk` via `workspace:
 
 ## CI/CD
 
-Les workflows ne se déclenchent que lorsque des fichiers pertinents changent (voir les filtres `paths` et les jobs conditionnels dans [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+Les workflows utilisent des **noms en slug** (`ci-verify`, `publish-npm-sdk`, …), des **jobs** stables (`sdk_javascript`, `workspace_packages`, …) et des **étapes** homogènes (`Checkout`, `Setup Node.js`, `Install dependencies`, …). Ils ne se déclenchent que lorsque les chemins pertinents changent (`paths` + filtre dans `ci-verify`).
 
 | Workflow | Rôle |
 |----------|------|
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Build SDK JS, `mvn verify` SDK Java, lint `packages/`, backend pre-arrival si touché |
-| [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml) | Publie **`@portakiapp/module-sdk`** sur **npmjs** (`NPM_TOKEN`) |
-| [`.github/workflows/publish-maven.yml`](.github/workflows/publish-maven.yml) | Déploie le JAR SDK vers **Maven Central** via **OSSRH** (`OSSRH_USERNAME`, `OSSRH_TOKEN`) |
-| [`.github/workflows/publish-modules-npm.yml`](.github/workflows/publish-modules-npm.yml) | Publication manuelle des packages `@portakiapp/module-*` sur npmjs |
+| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` SDK Java, lint `packages/`, backend pre-arrival si touché |
+| [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portakiapp/module-sdk`** sur **npmjs** (`NPM_TOKEN`) |
+| [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | Déploie le JAR SDK vers **Maven Central** (OSSRH : `OSSRH_USERNAME`, `OSSRH_TOKEN`) |
+| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication **manuelle** des `@portakiapp/module-*` (`workflow_dispatch`) |
 
-Détails des secrets et des tags de release : **[docs/deployment.md](docs/deployment.md)**.
+**Publier sur npmjs** : créer un token npm avec droit **publish** sur le scope **`@portakiapp`**, ajouter le secret **`NPM_TOKEN`** au dépôt GitHub, puis lancer les workflows ou pousser sur `develop` — détail pas à pas dans **[docs/deployment.md](docs/deployment.md)**.
 
 Guide d’utilisation des API : **[docs/getting-started.md](docs/getting-started.md)**.
 

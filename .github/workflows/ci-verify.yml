@@ -1,0 +1,168 @@
+# Continuous verification: SDK JS/Java, workspace packages, optional Maven module backend.
+# Job IDs are stable slugs for branch protection / required checks.
+
+name: ci-verify
+
+run-name: verify-${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "sdk/**"
+      - "packages/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci-verify.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "sdk/**"
+      - "packages/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci-verify.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  JAVA_VERSION: "21"
+  PNPM_VERSION: "9.15.4"
+
+jobs:
+  detect_changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      sdk_javascript: ${{ steps.paths.outputs.sdk_javascript }}
+      sdk_java: ${{ steps.paths.outputs.sdk_java }}
+      workspace_packages: ${{ steps.paths.outputs.workspace_packages }}
+      pre_arrival_java: ${{ steps.paths.outputs.pre_arrival_java }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths filter
+        uses: dorny/paths-filter@v3
+        id: paths
+        with:
+          filters: |
+            sdk_javascript:
+              - 'sdk/javascript/**'
+              - '.github/workflows/ci-verify.yml'
+            sdk_java:
+              - 'sdk/java/**'
+              - '.github/workflows/ci-verify.yml'
+            workspace_packages:
+              - 'packages/**'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/ci-verify.yml'
+            pre_arrival_java:
+              - 'sdk/java/**'
+              - 'packages/pre-arrival-form/backend/**'
+              - '.github/workflows/ci-verify.yml'
+
+  sdk_javascript:
+    name: sdk-javascript
+    needs: detect_changes
+    if: needs.detect_changes.outputs.sdk_javascript == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/javascript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: sdk/javascript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  sdk_java:
+    name: sdk-java
+    needs: detect_changes
+    if: needs.detect_changes.outputs.sdk_java == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/java
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Verify
+        run: mvn -B -ntp verify
+
+  workspace_packages:
+    name: workspace-packages
+    needs: detect_changes
+    if: needs.detect_changes.outputs.workspace_packages == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  pre_arrival_java:
+    name: pre-arrival-java
+    needs: detect_changes
+    if: needs.detect_changes.outputs.pre_arrival_java == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Install SDK locally
+        working-directory: sdk/java
+        run: mvn -B -ntp install -DskipTests
+
+      - name: Verify backend
+        working-directory: packages/pre-arrival-form/backend
+        run: mvn -B -ntp verify
