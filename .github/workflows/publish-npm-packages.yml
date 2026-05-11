@@ -52,12 +52,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Trusted Publishing (OIDC): pnpm publish delegates to npm >= 11.5.1 — no NPM_TOKEN secret.
-      - name: Upgrade npm for OIDC publish
-        run: npm install -g npm@^11.5.1
-
-      - name: Publish
+      # Install npm 11 into an isolated prefix (never `npm i -g npm` without --prefix: it corrupts hostedtoolcache npm).
+      - name: Install npm 11 for OIDC (side-by-side prefix)
+        shell: bash
         run: |
           set -euo pipefail
+          ROOT="${RUNNER_TEMP}/npm-11-root"
+          npm install -g npm@11.5.1 --prefix "$ROOT"
+          echo "NPM_OIDC_BIN=${ROOT}/bin" >> "$GITHUB_ENV"
+          "${ROOT}/bin/npm" --version
+
+      - name: Publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="${NPM_OIDC_BIN}:$PATH"
           TARGET="${{ github.event.inputs.npm_package }}"
           publish_one() {
             pnpm publish --filter "$1" --access public --no-git-checks
