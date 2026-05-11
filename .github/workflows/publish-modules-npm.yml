@@ -1,0 +1,58 @@
+name: Publish guest modules (npmjs)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package npm à publier
+        required: true
+        type: choice
+        options:
+          - all
+          - "@portakiapp/module-train"
+          - "@portakiapp/module-events"
+          - "@portakiapp/module-rules"
+          - "@portakiapp/module-appliances"
+          - "@portakiapp/module-checklist"
+          - "@portakiapp/module-pre-arrival-form"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish selected package(s)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGET="${{ github.event.inputs.package }}"
+          publish_one() {
+            pnpm publish --filter "$1" --access public --no-git-checks
+          }
+          if [ "$TARGET" = "all" ]; then
+            publish_one "@portakiapp/module-train"
+            publish_one "@portakiapp/module-events"
+            publish_one "@portakiapp/module-rules"
+            publish_one "@portakiapp/module-appliances"
+            publish_one "@portakiapp/module-checklist"
+            publish_one "@portakiapp/module-pre-arrival-form"
+          else
+            publish_one "$TARGET"
+          fi

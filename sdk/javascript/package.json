@@ -1,5 +1,5 @@
 {
-  "name": "@portaki/module-sdk",
+  "name": "@portakiapp/module-sdk",
   "version": "0.1.0",
   "description": "Portaki guest modules SDK for React / Next.js",
   "license": "MIT",
@@ -9,7 +9,8 @@
     "url": "git+https://github.com/portaki/portaki-sdk.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

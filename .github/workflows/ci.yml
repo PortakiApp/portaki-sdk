@@ -3,30 +3,73 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths:
+      - "sdk/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main, develop]
+    paths:
+      - "sdk/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      javascript: ${{ steps.filter.outputs.javascript }}
+      java: ${{ steps.filter.outputs.java }}
+      modules: ${{ steps.filter.outputs.modules }}
+      pre_arrival_backend: ${{ steps.filter.outputs.pre_arrival_backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            javascript:
+              - 'sdk/javascript/**'
+              - '.github/workflows/**'
+            java:
+              - 'sdk/java/**'
+              - '.github/workflows/**'
+            modules:
+              - 'sdk/modules/**'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/**'
+            pre_arrival_backend:
+              - 'sdk/java/**'
+              - 'sdk/modules/pre-arrival-form/backend/**'
+              - '.github/workflows/**'
+
   javascript:
-    name: JavaScript — build
+    name: JavaScript — SDK build
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: javascript
+        working-directory: sdk/javascript
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: javascript/package-lock.json
+          cache-dependency-path: sdk/javascript/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -35,22 +78,70 @@ jobs:
         run: npm run build
 
   java:
-    name: Java — verify
+    name: Java — SDK verify
+    needs: changes
+    if: needs.changes.outputs.java == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: java
+        working-directory: sdk/java
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Temurin JDK
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
 
       - name: Maven verify
+        run: mvn -B -ntp verify
+
+  modules-lint:
+    name: pnpm — workspace lint (modules)
+    needs: changes
+    if: needs.changes.outputs.modules == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  pre-arrival-backend:
+    name: Maven verify (pre-arrival-form backend)
+    needs: changes
+    if: needs.changes.outputs.pre_arrival_backend == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install portaki-module-sdk (local)
+        working-directory: sdk/java
+        run: mvn -B -ntp install -DskipTests
+
+      - name: Verify backend
+        working-directory: sdk/modules/pre-arrival-form/backend
         run: mvn -B -ntp verify

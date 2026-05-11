@@ -1,7 +1,8 @@
 # Dependencies & build outputs
-javascript/node_modules/
-javascript/dist/
-java/target/
+sdk/javascript/node_modules/
+sdk/javascript/dist/
+sdk/java/target/
+node_modules/
 **/target/
 
 # TypeScript

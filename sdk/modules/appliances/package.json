@@ -1,0 +1,28 @@
+{
+  "name": "@portakiapp/module-appliances",
+  "version": "0.1.0",
+  "description": "Module Portaki — guide des appareils du logement",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./src/index.tsx",
+  "scripts": {
+    "lint": "echo \"no lint yet\""
+  },
+  "dependencies": {
+    "@portakiapp/module-sdk": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PortakiApp/portaki-sdk.git",
+    "directory": "sdk/modules/appliances"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

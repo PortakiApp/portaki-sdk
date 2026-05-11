@@ -1,0 +1,4 @@
+packages:
+  - "sdk/javascript"
+  - "sdk/modules/*"
+  - "sdk/modules/pre-arrival-form/frontend"
