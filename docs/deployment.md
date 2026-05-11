@@ -38,7 +38,7 @@ Déclenché sur `push` / `pull_request` vers `main` et `develop` :
 **Déclencheurs**
 
 1. **Push sur `develop`** (fichiers sous `java/` ou ce workflow)  
-   - Déploie la version courante du `pom.xml` (typiquement `…-SNAPSHOT`). Les SNAPSHOT Maven peuvent être **republiés** à chaque push.
+   - Déploie la version courante du `pom.xml` (typiquement **`0.1.0-SNAPSHOT`**). Les SNAPSHOT Maven peuvent être **republiés** à chaque push.
 2. **Release GitHub** : `published`  
    - Tag supportés : `java-v0.2.0` ou `v0.2.0` → version Maven `0.2.0`.
 3. **workflow_dispatch** : champ optionnel `version` (semver ou `…-SNAPSHOT`). Si vide, la version du `pom.xml` est utilisée telle quelle.
