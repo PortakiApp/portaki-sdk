@@ -12,7 +12,7 @@ Bibliothèques officielles pour développer des **modules invités** Portaki : S
 |--------|---------|
 | [`sdk/javascript/`](sdk/javascript/) | `@portakiapp/module-sdk` — types et `definePortakiModule` |
 | [`sdk/java/`](sdk/java/) | `app.portaki:portaki-module-sdk` — annotations backend |
-| [`sdk/modules/`](sdk/modules/) | Modules invités publiés sous `@portakiapp/module-*` |
+| [`modules/`](modules/) | Modules invités publiés sous `@portakiapp/module-*` |
 
 À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`workspace:*` vers le SDK JS).
 

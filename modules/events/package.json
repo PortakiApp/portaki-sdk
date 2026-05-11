@@ -1,7 +1,7 @@
 {
-  "name": "@portakiapp/module-checklist",
+  "name": "@portakiapp/module-events",
   "version": "0.1.0",
-  "description": "Module Portaki — checklist de départ",
+  "description": "Module Portaki — événements locaux et carte",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "./src/index.tsx",
@@ -20,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/PortakiApp/portaki-sdk.git",
-    "directory": "sdk/modules/checklist"
+    "directory": "modules/events"
   },
   "publishConfig": {
     "access": "public"

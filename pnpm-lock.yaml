@@ -8,125 +8,125 @@ importers:
 
   .: {}
 
+  modules/appliances:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  modules/checklist:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  modules/events:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  modules/pre-arrival-form/frontend:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  modules/rules:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  modules/train:
+    dependencies:
+      '@portakiapp/module-sdk':
+        specifier: workspace:*
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   sdk/javascript:
     dependencies:
       react:
         specifier: '>=18'
         version: 19.2.6
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/appliances:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/checklist:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/events:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/pre-arrival-form/frontend:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/rules:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
-  sdk/modules/train:
-    dependencies:
-      '@portakiapp/module-sdk':
-        specifier: workspace:*
-        version: link:../../javascript
-      react:
-        specifier: ^19.1.0
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.6(react@19.2.6)
     devDependencies:
       '@types/react':
         specifier: ^19
