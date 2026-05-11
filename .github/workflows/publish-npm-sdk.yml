@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: publish-npm-sdk-${{ github.ref }}
@@ -76,7 +77,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Trusted Publishing (OIDC) requires npm CLI >= 11.5.1 — no NPM_TOKEN secret.
+      - name: Upgrade npm for OIDC publish
+        run: npm install -g npm@^11.5.1
+
       - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public

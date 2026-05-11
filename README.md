@@ -89,11 +89,11 @@ Les workflows utilisent des **noms en slug** (`ci-verify`, `publish-npm-sdk`, �
 | Workflow | Rôle |
 |----------|------|
 | [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` SDK Java, lint `packages/`, backend pre-arrival si touché |
-| [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur **npmjs** (`NPM_TOKEN`) |
+| [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur **npmjs** (Trusted Publishing / OIDC) |
 | [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | Déploie le JAR SDK vers **Maven Central** (OSSRH : `OSSRH_USERNAME`, `OSSRH_TOKEN`) |
 | [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication **manuelle** des `@portaki/module-*` (`workflow_dispatch`) |
 
-**Publier sur npmjs** : créer un token npm avec droit **publish** sur le scope **`@portaki`**, ajouter le secret **`NPM_TOKEN`** au dépôt GitHub, puis lancer les workflows ou pousser sur `develop` — détail pas à pas dans **[docs/deployment.md](docs/deployment.md)**.
+**Publier sur npmjs** : configurer **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** sur npm pour chaque paquet (workflow `publish-npm-sdk.yml` ou `publish-npm-packages.yml`), puis lancer les workflows ou pousser sur `develop` — détail dans **[docs/deployment.md](docs/deployment.md)**.
 
 Guide d’utilisation des API : **[docs/getting-started.md](docs/getting-started.md)**.
 

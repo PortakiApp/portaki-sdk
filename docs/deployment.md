@@ -2,7 +2,7 @@
 
 Les workflows publient :
 
-- **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** via le secret GitHub **`NPM_TOKEN`**.
+- **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, npm CLI **≥ 11.5.1**, pas de **`NPM_TOKEN`** dans les jobs de publication).
 - **Maven** : **Sonatype OSSRH** → **Maven Central** avec **`OSSRH_USERNAME`** et **`OSSRH_TOKEN`**.
 
 ---
@@ -10,11 +10,8 @@ Les workflows publient :
 ## Publier sur npmjs (résumé)
 
 1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portaki/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portaki** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
-2. **Token de publication** : npm → **Access Tokens** → **Generate New Token** → type **Granular** ou **Classic** avec au minimum :
-   - **Publish** pour les packages concernés (scope `@portaki` si granular).
-3. **Secret GitHub** : dans le dépôt → **Settings** → **Secrets and variables** → **Actions** → **New repository secret** :
-   - Nom : **`NPM_TOKEN`**
-   - Valeur : le token npm (commence souvent par `npm_…`).
+2. **CI — Trusted Publishing** : pour chaque paquet publié par GitHub Actions, dans les **paramètres du paquet** sur npm → **Trusted Publisher** : **GitHub Actions**, org **`PortakiApp`**, dépôt **`portaki-sdk`**, et le **nom du fichier workflow** exact (`publish-npm-sdk.yml` pour `@portaki/module-sdk`, `publish-npm-packages.yml` pour les modules sous `packages/`). Optionnel : **Environment name** si le job utilise un [environment GitHub](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) du même nom.
+3. **Publication locale / secours** : npm → **Access Tokens** (granulaire avec **Publish** sur le scope **`@portaki`**) si vous publiez hors CI ou sans Trusted Publishing ; config locale : `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (ne pas committer).
 4. **Déclencher une publication** :
    - **Automatique** : push sur **`develop`** qui modifie `sdk/javascript/` déclenche [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) (version `major.minor.<run_number>`).
    - **Release GitHub** : créer une release avec un tag du type `javascript-v0.2.0`, `js-v0.2.0`, ou `v0.2.0`.
@@ -27,15 +24,13 @@ Les workflows publient :
    npm publish --access public
    ```
 
-   Utiliser un token en CI/local : `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (éviter de committer le token).
-
 ---
 
 ## Secrets GitHub
 
 | Secret | Utilisation |
 |--------|-------------|
-| `NPM_TOKEN` | Publication npm (`NODE_AUTH_TOKEN` dans les jobs `Setup Node.js` avec `registry-url: https://registry.npmjs.org`). |
+| *(aucun pour npm en CI)* | La publication npm utilise **Trusted Publishing** (OIDC), pas **`NPM_TOKEN`**. |
 | `OSSRH_USERNAME` | Identifiant Sonatype (OSSRH / Central Portal). |
 | `OSSRH_TOKEN` | Mot de passe ou token Sonatype. |
 
@@ -70,7 +65,7 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 ### Publication paquets invités — `publish-npm-packages.yml`
 
-Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`). Utilise `pnpm publish --filter` et **`NPM_TOKEN`**.
+Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`). Utilise `pnpm publish --filter` avec **Trusted Publishing** (OIDC), comme le SDK.
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
@@ -104,6 +99,7 @@ cd sdk/java && mvn install -DskipTests
 
 ## Références
 
+- [npm — Trusted publishers](https://docs.npmjs.com/trusted-publishers)
 - [npm — publishing scoped packages](https://docs.npmjs.com/cli/v10/using-npm/scope)
 - [GitHub Actions — npm provenance](https://docs.npmjs.com/generating-provenance-statements)
 - [Sonatype / OSSRH](https://central.sonatype.org/)
