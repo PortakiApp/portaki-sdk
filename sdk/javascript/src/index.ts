@@ -1,37 +1,43 @@
-import type { ReactNode } from 'react'
+export type { LangCode } from './types/module'
+export type {
+  StayData,
+  PropertyData,
+  TrackingEvent,
+  ModuleContext,
+  MapMarker,
+  PortakiModuleDefinition,
+  PortakiModuleDefinitionInput,
+  NavSlot,
+  StayStatus,
+} from './types/module'
+export { definePortakiModule } from './types/module'
 
-export type LangCode = 'fr' | 'en'
+export type {
+  ModuleConfigFieldType,
+  ModuleConfigAlert as ModuleConfigAlertSpec,
+  ModuleConfigField,
+  ModuleConfigSchema,
+} from './types/config'
 
-export interface PortakiGuestProperty {
-  id: string
-  trainStationCode?: string
-  checklistItems?: readonly { id: string; labelFr: string; labelEn: string }[]
-}
+export type { PortakiGuestProperty, PortakiGuestStay, PortakiRenderContext } from './types/legacy'
 
-export interface PortakiGuestStay {
-  id: string
-}
+export { useTracking } from './hooks/useTracking'
+export type { UseTrackingOptions } from './hooks/useTracking'
 
-export interface PortakiRenderContext {
-  property: PortakiGuestProperty
-  stay?: PortakiGuestStay
-  lang: LangCode
-}
-
-export interface PortakiModuleDefinition {
-  id: string
-  label: Record<string, string>
-  icon: string
-  navSlot?: 'section' | 'bottom-bar' | 'poi-overlay'
-  mapOverlay?: boolean
-  visibleOnStatus?: readonly string[]
-  render: (ctx: PortakiRenderContext) => ReactNode
-  mapMarkers?: (ctx: PortakiRenderContext) => Promise<unknown[]>
-}
-
-export function definePortakiModule(def: PortakiModuleDefinition): PortakiModuleDefinition {
-  return def
-}
+export {
+  ModuleSection,
+  ModuleCard,
+  ModuleLoading,
+  ModuleError,
+  ModuleEmpty,
+  CopyButton,
+  ExternalLink,
+  WazeButton,
+  GoogleMapsButton,
+  ModuleConfigAlert,
+} from './components'
 
 /** Chargement dynamique du module par défaut (`definePortakiModule`). */
-export type PortakiModuleLoader = () => Promise<{ default: PortakiModuleDefinition }>
+export type PortakiModuleLoader = () => Promise<{
+  default: import('./types/module').PortakiModuleDefinition
+}>
