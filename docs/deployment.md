@@ -2,7 +2,7 @@
 
 Les workflows publient :
 
-- **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, npm CLI **≥ 11.5.1** installé dans un **préfixe isolé** — pas de **`npm install -g npm`** sans `--prefix` sur le runner GitHub, pas de **`NPM_TOKEN`** dans les jobs de publication).
+- **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, **Node 24** pour le **npm 11.5.x** fourni avec Node — pas de **`NPM_TOKEN`** dans les jobs de publication).
 - **Maven** : **Sonatype OSSRH** → **Maven Central** avec **`OSSRH_USERNAME`** et **`OSSRH_TOKEN`**.
 
 ---

@@ -28,7 +28,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "22"
+  # Node 24 bundles npm 11.5.x+ — Trusted Publishing (OIDC) needs npm CLI >= 11.5.1 (no extra npm install step).
+  NODE_VERSION: "24"
   NPM_REGISTRY: https://registry.npmjs.org
 
 jobs:
@@ -77,19 +78,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Trusted Publishing (OIDC) requires npm CLI >= 11.5.1 — no NPM_TOKEN secret.
-      # Install npm 11 into an isolated prefix (never `npm i -g npm` without --prefix: it corrupts hostedtoolcache npm).
-      - name: Install npm 11 for OIDC (side-by-side prefix)
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="${RUNNER_TEMP}/npm-11-root"
-          npm install -g npm@11.5.1 --prefix "$ROOT"
-          echo "NPM_OIDC_BIN=${ROOT}/bin" >> "$GITHUB_ENV"
-          "${ROOT}/bin/npm" --version
-
+      # Trusted Publishing (OIDC): bundled npm from Node 24 — no NPM_TOKEN secret.
       - name: Publish
-        shell: bash
-        run: |
-          export PATH="${NPM_OIDC_BIN}:$PATH"
-          npm publish --access public
+        run: npm publish --access public
