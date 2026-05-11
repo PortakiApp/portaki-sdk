@@ -1,23 +1,14 @@
 # Publishes @portaki/module-sdk (folder sdk/javascript) to registry.npmjs.org.
+# Version: bump dans sdk/javascript/package.json côté dépôt (pas dans la CI).
 
 name: publish-npm-sdk
 
 run-name: publish-npm-sdk-${{ github.event_name }}
 
 on:
-  push:
-    branches: [develop]
-    paths:
-      - "sdk/javascript/**"
-      - ".github/workflows/publish-npm-sdk.yml"
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Semver (e.g. 0.2.0). Empty keeps package.json."
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -36,6 +27,12 @@ jobs:
   publish:
     name: publish
     runs-on: ubuntu-latest
+    # Évite de lancer ce workflow sur une release Maven ou autre tag sans lien avec le SDK JS.
+    if: >
+      github.event_name != 'release' ||
+      startsWith(github.event.release.tag_name, 'javascript-v') ||
+      startsWith(github.event.release.tag_name, 'js-v') ||
+      startsWith(github.event.release.tag_name, 'sdk-js-v')
     defaults:
       run:
         working-directory: sdk/javascript
@@ -51,29 +48,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Version bump (push to develop)
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          BASE="$(node -p "require('./package.json').version.replace(/[-+].*$/,'')")"
-          MM="${BASE%.*}"
-          npm version "${MM}.${{ github.run_number }}" --no-git-tag-version --allow-same-version
-
-      - name: Version bump (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
-        run: npm version "${{ github.event.inputs.version }}" --no-git-tag-version --allow-same-version
-
-      - name: Version bump (GitHub release)
-        if: github.event_name == 'release'
-        shell: bash
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          RAW="${TAG#javascript-v}"
-          RAW="${RAW#js-v}"
-          RAW="${RAW#sdk-js-v}"
-          RAW="${RAW#v}"
-          npm version "$RAW" --no-git-tag-version --allow-same-version
 
       - name: Build
         run: npm run build

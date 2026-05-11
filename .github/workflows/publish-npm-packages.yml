@@ -1,4 +1,5 @@
-# Publishes @portaki/module-* packages under packages/ (manual dispatch).
+# Publie les @portaki/module-* sous packages/ — une ligne de matrice par paquet (parallèle si "all").
+# Version: bump dans chaque packages/<nom>/package.json (pas dans la CI).
 
 name: publish-npm-packages
 
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       npm_package:
-        description: "Package to publish"
+        description: "Package à publier"
         required: true
         type: choice
         options:
@@ -25,15 +26,25 @@ permissions:
   id-token: write
 
 env:
-  # Node 24 bundles npm 11.5.x+ — Trusted Publishing (OIDC) needs npm CLI >= 11.5.1 (no extra npm install step).
   NODE_VERSION: "24"
   PNPM_VERSION: "9.15.4"
   NPM_REGISTRY: https://registry.npmjs.org
 
 jobs:
   publish:
-    name: publish
+    name: ${{ matrix.package }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@portaki/module-train"
+          - "@portaki/module-events"
+          - "@portaki/module-rules"
+          - "@portaki/module-appliances"
+          - "@portaki/module-checklist"
+          - "@portaki/module-pre-arrival-form"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,21 +63,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Trusted Publishing (OIDC): pnpm publish delegates to bundled npm (Node 24) — no NPM_TOKEN secret.
-      - name: Publish
+      # Trusted Publishing (OIDC): pnpm publish délègue au npm fourni par Node 24 — pas de NPM_TOKEN.
+      - name: Publish ${{ matrix.package }}
+        shell: bash
         run: |
           set -euo pipefail
           TARGET="${{ github.event.inputs.npm_package }}"
-          publish_one() {
-            pnpm publish --filter "$1" --access public --no-git-checks
-          }
-          if [ "$TARGET" = "all" ]; then
-            publish_one "@portaki/module-train"
-            publish_one "@portaki/module-events"
-            publish_one "@portaki/module-rules"
-            publish_one "@portaki/module-appliances"
-            publish_one "@portaki/module-checklist"
-            publish_one "@portaki/module-pre-arrival-form"
-          else
-            publish_one "$TARGET"
+          PKG="${{ matrix.package }}"
+          if [[ "$TARGET" != "all" && "$TARGET" != "$PKG" ]]; then
+            echo "Skip $PKG (sélection: $TARGET)"
+            exit 0
           fi
+          pnpm publish --filter "$PKG" --access public --no-git-checks

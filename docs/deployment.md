@@ -12,11 +12,11 @@ Les workflows publient :
 1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portaki/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portaki** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
 2. **CI — Trusted Publishing** : pour chaque paquet publié par GitHub Actions, dans les **paramètres du paquet** sur npm → **Trusted Publisher** : **GitHub Actions**, org **`PortakiApp`**, dépôt **`portaki-sdk`**, et le **nom du fichier workflow** exact (`publish-npm-sdk.yml` pour `@portaki/module-sdk`, `publish-npm-packages.yml` pour les modules sous `packages/`). Optionnel : **Environment name** si le job utilise un [environment GitHub](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) du même nom.
 3. **Publication locale / secours** : npm → **Access Tokens** (granulaire avec **Publish** sur le scope **`@portaki`**) si vous publiez hors CI ou sans Trusted Publishing ; config locale : `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (ne pas committer).
-4. **Déclencher une publication** :
-   - **Automatique** : push sur **`develop`** qui modifie `sdk/javascript/` déclenche [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) (version `major.minor.<run_number>`).
-   - **Release GitHub** : créer une release avec un tag du type `javascript-v0.2.0`, `js-v0.2.0`, ou `v0.2.0`.
+4. **Version dans le dépôt** : bump **`version`** dans `sdk/javascript/package.json` (SDK) ou dans chaque `packages/<module>/package.json` **avant** publication — la CI **ne modifie pas** ces fichiers.
+5. **Déclencher une publication** :
    - **Manuel** : **Actions** → **publish-npm-sdk** ou **publish-npm-packages** → **Run workflow**.
-5. **Localement** (sans CI), depuis la racine du paquet :
+   - **Release GitHub** : uniquement pour le SDK JS, un tag du type **`javascript-v…`**, **`js-v…`** ou **`sdk-js-v…`** déclenche [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) (aucun bump automatique ; la version publiée est celle déjà dans `package.json`).
+6. **Localement** (sans CI), depuis la racine du paquet :
 
    ```bash
    cd sdk/javascript   # ou un dossier sous packages/<nom>/
@@ -57,15 +57,19 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Paquet :** `@portaki/module-sdk`.
 
-**Déclencheurs :**
+**Version :** celle de **`sdk/javascript/package.json`** (à faire évoluer dans une PR avant publication).
 
-1. Push sur **`develop`** (changements sous `sdk/javascript/` ou ce workflow). Version : **`major.minor.<run_number>`**.
-2. Release GitHub **`published`** — tags : `javascript-v`, `js-v`, `sdk-js-v`, ou `v`.
-3. **`workflow_dispatch`** — champ **`version`** optionnel.
+**Déclencheurs :** **`workflow_dispatch`** ; ou **`release`** **`published`** dont le tag commence par **`javascript-v`**, **`js-v`** ou **`sdk-js-v`** (évite de lancer une publication npm sur une release Maven `java-v…`).
 
 ### Publication paquets invités — `publish-npm-packages.yml`
 
-Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`). Utilise `pnpm publish --filter` avec **Trusted Publishing** (OIDC), comme le SDK.
+**Uniquement `workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`).
+
+**Matrice :** un job par paquet ; avec **`all`**, les publications s’exécutent **en parallèle** (`fail-fast: false`). Les jobs non sélectionnés se terminent tout de suite (**Skip**).
+
+**Version :** celle de chaque **`packages/.../package.json`** — bump manuel par le développeur avant de lancer le workflow.
+
+**Trusted Publishing** (OIDC), comme le SDK.
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
