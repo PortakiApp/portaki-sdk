@@ -1,7 +1,7 @@
 {
-  "name": "@portakiapp/module-checklist",
+  "name": "@portakiapp/module-pre-arrival-form",
   "version": "0.1.0",
-  "description": "Module Portaki — checklist de départ",
+  "description": "Module Portaki — formulaire avant arrivée (séjour)",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "./src/index.tsx",
@@ -20,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/PortakiApp/portaki-sdk.git",
-    "directory": "modules/checklist"
+    "directory": "packages/pre-arrival-form/frontend"
   },
   "publishConfig": {
     "access": "public"

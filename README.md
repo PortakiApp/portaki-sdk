@@ -1,6 +1,6 @@
 # Portaki SDK
 
-Bibliothèques officielles pour développer des **modules invités** Portaki : SDK **JavaScript / React**, SDK **Java**, et les **packages modules** (`@portakiapp/module-*`) dans un même dépôt monorepo (`pnpm`).
+Bibliothèques officielles pour développer des **modules invités** Portaki : SDK **JavaScript / React**, SDK **Java**, et les **paquets** `@portakiapp/module-*` (dossier `packages/`) dans un même dépôt monorepo (`pnpm`).
 
 [![CI](https://github.com/portaki/portaki-sdk/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/portaki/portaki-sdk/actions/workflows/ci.yml)
 
@@ -12,7 +12,7 @@ Bibliothèques officielles pour développer des **modules invités** Portaki : S
 |--------|---------|
 | [`sdk/javascript/`](sdk/javascript/) | `@portakiapp/module-sdk` — types et `definePortakiModule` |
 | [`sdk/java/`](sdk/java/) | `app.portaki:portaki-module-sdk` — annotations backend |
-| [`modules/`](modules/) | Modules invités publiés sous `@portakiapp/module-*` |
+| [`packages/`](packages/) | Paquets invités publiés sous `@portakiapp/module-*` |
 
 À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`workspace:*` vers le SDK JS).
 
@@ -71,14 +71,14 @@ cd sdk/java
 mvn verify
 ```
 
-**Workspace modules (pnpm)**
+**Workspace packages (pnpm)**
 
 ```bash
 pnpm install
 pnpm lint
 ```
 
-Les modules résolvent `@portakiapp/module-sdk` via `workspace:*` (pas besoin de publication npm locale).
+Les paquets sous `packages/` résolvent `@portakiapp/module-sdk` via `workspace:*` (pas besoin de publication npm locale).
 
 ---
 
@@ -88,7 +88,7 @@ Les workflows ne se déclenchent que lorsque des fichiers pertinents changent (v
 
 | Workflow | Rôle |
 |----------|------|
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Build SDK JS, `mvn verify` SDK Java, lint pnpm, backend pre-arrival si touché |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Build SDK JS, `mvn verify` SDK Java, lint `packages/`, backend pre-arrival si touché |
 | [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml) | Publie **`@portakiapp/module-sdk`** sur **npmjs** (`NPM_TOKEN`) |
 | [`.github/workflows/publish-maven.yml`](.github/workflows/publish-maven.yml) | Déploie le JAR SDK vers **Maven Central** via **OSSRH** (`OSSRH_USERNAME`, `OSSRH_TOKEN`) |
 | [`.github/workflows/publish-modules-npm.yml`](.github/workflows/publish-modules-npm.yml) | Publication manuelle des packages `@portakiapp/module-*` sur npmjs |

@@ -5,7 +5,7 @@ on:
     branches: [main, develop]
     paths:
       - "sdk/**"
-      - "modules/**"
+      - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci.yml"
@@ -13,7 +13,7 @@ on:
     branches: [main, develop]
     paths:
       - "sdk/**"
-      - "modules/**"
+      - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci.yml"
@@ -31,7 +31,7 @@ jobs:
     outputs:
       javascript: ${{ steps.filter.outputs.javascript }}
       java: ${{ steps.filter.outputs.java }}
-      modules: ${{ steps.filter.outputs.modules }}
+      packages: ${{ steps.filter.outputs.packages }}
       pre_arrival_backend: ${{ steps.filter.outputs.pre_arrival_backend }}
     steps:
       - uses: actions/checkout@v4
@@ -45,14 +45,14 @@ jobs:
             java:
               - 'sdk/java/**'
               - '.github/workflows/**'
-            modules:
-              - 'modules/**'
+            packages:
+              - 'packages/**'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - '.github/workflows/**'
             pre_arrival_backend:
               - 'sdk/java/**'
-              - 'modules/pre-arrival-form/backend/**'
+              - 'packages/pre-arrival-form/backend/**'
               - '.github/workflows/**'
 
   javascript:
@@ -100,10 +100,10 @@ jobs:
       - name: Maven verify
         run: mvn -B -ntp verify
 
-  modules-lint:
-    name: pnpm — workspace lint (modules)
+  packages-lint:
+    name: pnpm — workspace lint (packages)
     needs: changes
-    if: needs.changes.outputs.modules == 'true'
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -145,5 +145,5 @@ jobs:
         run: mvn -B -ntp install -DskipTests
 
       - name: Verify backend
-        working-directory: modules/pre-arrival-form/backend
+        working-directory: packages/pre-arrival-form/backend
         run: mvn -B -ntp verify

@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  modules/appliances:
+  packages/appliances:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*
@@ -27,7 +27,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  modules/checklist:
+  packages/checklist:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*
@@ -46,7 +46,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  modules/events:
+  packages/events:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*
@@ -65,7 +65,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  modules/pre-arrival-form/frontend:
+  packages/pre-arrival-form/frontend:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*
@@ -84,7 +84,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  modules/rules:
+  packages/rules:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*
@@ -103,7 +103,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  modules/train:
+  packages/train:
     dependencies:
       '@portakiapp/module-sdk':
         specifier: workspace:*

@@ -1,7 +1,7 @@
 {
-  "name": "@portakiapp/module-rules",
+  "name": "@portakiapp/module-train",
   "version": "0.1.0",
-  "description": "Module Portaki — règlement intérieur (contenu riche)",
+  "description": "Module Portaki — horaires trains (Navitia / SNCF)",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "./src/index.tsx",
@@ -20,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/PortakiApp/portaki-sdk.git",
-    "directory": "modules/rules"
+    "directory": "packages/train"
   },
   "publishConfig": {
     "access": "public"

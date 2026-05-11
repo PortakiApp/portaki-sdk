@@ -25,7 +25,7 @@ Pour les **releases Maven** signées (hors SNAPSHOT), une configuration GPG et l
 
 Déclenché sur `push` / `pull_request` vers `main` et `develop`, uniquement si les chemins sous `sdk/**`, `pnpm-workspace.yaml`, `package.json` ou le workflow lui-même changent.
 
-Les jobs **JavaScript**, **Java**, **modules (pnpm)** et **pre-arrival backend Maven** ne s’exécutent que lorsque les fichiers correspondants sont modifiés (filtre [`dorny/paths-filter`](https://github.com/dorny/paths-filter)).
+Les jobs **JavaScript**, **Java**, **packages (pnpm)** et **pre-arrival backend Maven** ne s’exécutent que lorsque les fichiers correspondants sont modifiés (filtre [`dorny/paths-filter`](https://github.com/dorny/paths-filter)).
 
 ### Publication npm — `.github/workflows/publish-npm.yml`
 
@@ -51,7 +51,7 @@ Les jobs **JavaScript**, **Java**, **modules (pnpm)** et **pre-arrival backend M
 
 Le job génère `~/.m2/settings.xml` avec le serveur **`ossrh`** puis exécute **`mvn deploy`**.
 
-### Publication des modules invités — `.github/workflows/publish-modules-npm.yml`
+### Publication des paquets invités — `.github/workflows/publish-modules-npm.yml`
 
 Uniquement **`workflow_dispatch`** : choix du package `@portakiapp/module-*` ou `all`. Utilise `pnpm publish --filter` et **`NPM_TOKEN`**.
 
