@@ -14,7 +14,7 @@ Bibliothèques officielles pour développer des **modules invités** Portaki : S
 | [`sdk/java/`](sdk/java/) | `app.portaki:portaki-module-sdk` — annotations backend |
 | [`packages/`](packages/) | Paquets invités publiés sous `@portaki/module-*` |
 
-À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`@portaki/module-sdk` en `^0.1.0`, résolu localement par pnpm).
+À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`@portaki/module-sdk` en `workspace:^` dans les modules ; au **`pnpm publish`**, pnpm réécrit vers la semver du SDK, ex. `^0.2.0`).
 
 ---
 
@@ -48,7 +48,7 @@ export default definePortakiModule({
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -78,7 +78,7 @@ pnpm install
 pnpm lint
 ```
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en `^0.1.0` : même chose publiée sur npm (pour les consommateurs) et liée au workspace en local.
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en `workspace:^` : en local le workspace est utilisé ; sur npm le manifest publié contient la plage semver correspondant au SDK (`^0.2.0` tant que le SDK est en `0.2.x`).
 
 ---
 

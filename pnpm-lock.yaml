@@ -11,8 +11,8 @@ importers:
   packages/appliances:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -30,8 +30,8 @@ importers:
   packages/checklist:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -49,8 +49,8 @@ importers:
   packages/events:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -68,8 +68,8 @@ importers:
   packages/pre-arrival-form/frontend:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -87,8 +87,8 @@ importers:
   packages/rules:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -106,8 +106,8 @@ importers:
   packages/train:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.1.0
-        version: 0.1.7(react@19.2.6)
+        specifier: workspace:^
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -137,11 +137,6 @@ importers:
 
 packages:
 
-  '@portaki/module-sdk@0.1.7':
-    resolution: {integrity: sha512-7bX+XwU+SPhRD5I8GM484ALr1P5H6qzaMrrfq4wo/FL/Qd/vRdM+19cjJnNUoPAnFbOockG+KZ+qMLQUAQt50Q==}
-    peerDependencies:
-      react: '>=18'
-
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
 
@@ -166,10 +161,6 @@ packages:
     hasBin: true
 
 snapshots:
-
-  '@portaki/module-sdk@0.1.7(react@19.2.6)':
-    dependencies:
-      react: 19.2.6
 
   '@types/react@19.2.14':
     dependencies:

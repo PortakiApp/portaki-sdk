@@ -6,7 +6,7 @@
 
   <groupId>app.portaki.module</groupId>
   <artifactId>pre-arrival-form-backend</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>Pre-arrival form module (Java)</name>
 
@@ -35,7 +35,7 @@
     <dependency>
       <groupId>app.portaki</groupId>
       <artifactId>portaki-module-sdk</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.2.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
 
