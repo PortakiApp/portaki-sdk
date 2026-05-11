@@ -1,46 +1,69 @@
-# Événements (`@portaki/module-events`)
+<div align="center">
 
-> **Annoncer et localiser ce qui se passe autour du logement** — section dédiée + point d’accroche pour la carte.
+# 📅 Module Événements
 
-## Public cible
+### `@portaki/module-events`
 
-Voyageurs en recherche d’activités, événements locaux, ou repères sur la carte pendant le séjour.
+[![npm](https://img.shields.io/npm/v/@portaki/module-events?label=npm&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-events)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
+[![SDK](https://img.shields.io/badge/built%20with-%40portaki%2Fmodule--sdk-181717?logo=github)](https://github.com/PortakiApp/portaki-sdk)
 
-## Ce que ça apporte
+*Annonce locale + hooks carte pour l’app guest*
 
-- Entrée de menu « Événements » cohérente avec les autres modules.
-- Préparation d’**overlays carte** via `mapOverlay` et le hook `mapMarkers` (à alimenter côté data).
-- Contenu extensible dans `EventsSection` (listes, liens, partenaires).
+</div>
 
-## Fiche technique
+---
 
-| Champ | Valeur |
-|--------|--------|
-| **Package npm** | `@portaki/module-events` |
-| **Identifiant `id`** | `events` |
-| **Slot navigation** | `section` |
-| **Icône** | `calendar` |
-| **Visibilité** | Toujours affiché |
-| **Carte / carte overlay** | Oui — `mapOverlay: true` ; `mapMarkers` async (retour typé côté app) |
+> 🎯 **En une phrase** — Section **Événements** avec support **carte** (`mapOverlay`, marqueurs async) pour tout ce qui bouge autour du logement.
 
-## Intégration Portaki
+## 👥 Pour qui ?
 
-`render` reçoit `property.id` pour charger les contenus. La fonction `mapMarkers` est prête à retourner des marqueurs ; implémentez la récupération d’événements selon votre API.
+| Persona | Besoin |
+|---------|--------|
+| 🧭 **Voyageurs** | Activités, événements, repères sur la carte |
+| 🗺️ **Produit** | Overlays carte cohérents avec les autres modules |
 
-## Données & API
+## ✨ Ce que le module apporte
 
-Brancher les endpoints guest listant les événements (par `propertyId` ou zone). Le composant actuel sert de structure d’accueil.
+- [x] Entrée menu **« Événements »**
+- [x] **`mapOverlay: true`** + hook **`mapMarkers`** (async)
+- [x] **`EventsSection`** prêt à être branché sur tes données
 
-## Développement local
+---
 
-Depuis la racine du monorepo :
+## 🧭 Fiche technique
+
+| Clé | Valeur |
+|-----|--------|
+| 📦 **npm** | `@portaki/module-events` |
+| 🆔 **`id`** | `events` |
+| 📍 **Slot nav** | `section` |
+| 🎨 **Icône** | `calendar` |
+| 👁️ **Visibilité** | Toujours affiché |
+| 🗺️ **Carte** | Oui — overlay + marqueurs typés côté app |
+
+---
+
+## 🔌 Intégration Portaki
+
+`render` reçoit `property.id`. Implémente **`mapMarkers`** selon ton API d’événements.
+
+## 📡 Données & API
+
+Endpoints guest listant les événements (par `propertyId` ou zone). La structure UI est là ; branche les flux réels.
+
+---
+
+## 🛠️ Développement local
 
 ```bash
-pnpm install
+pnpm install   # racine du monorepo portaki-sdk
 ```
 
-Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Dépend de **`@portaki/module-sdk`** → [**portaki-sdk**](https://github.com/PortakiApp/portaki-sdk).
 
-## Licence
+---
 
-AGPL-3.0 — voir le `package.json`.
+## 📄 Licence
+
+**AGPL-3.0** — voir `package.json`.

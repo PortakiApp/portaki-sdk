@@ -1,28 +1,45 @@
-# Portaki SDK
+<div align="center">
 
-Bibliothèques officielles pour développer des **modules invités** Portaki : SDK **JavaScript / React**, SDK **Java**, et les **paquets** `@portaki/module-*` (dossier `packages/`) dans un même dépôt monorepo (`pnpm`).
+# 🧩 Portaki SDK
+
+**Modules invités · React · Java · monorepo `pnpm`**
 
 [![CI](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop)](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml)
+[![npm org](https://img.shields.io/badge/npm-%40portaki-CB3837?logo=npm)](https://www.npmjs.com/org/portaki)
+[![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?logo=pnpm)](https://pnpm.io/workspaces)
+[![Docs](https://img.shields.io/badge/docs-deployment-0366d6)](docs/deployment.md)
+
+</div>
+
+> 📦 Bibliothèques officielles pour construire des **modules guest** [Portaki](https://github.com/PortakiApp) : SDK **JavaScript / React**, SDK **Java**, et paquets **`@portaki/module-*`** dans un seul dépôt.
 
 ---
 
-## Arborescence
+## 📂 Ce que tu trouves ici
 
-| Chemin | Contenu |
-|--------|---------|
-| [`sdk/javascript/`](sdk/javascript/) | `@portaki/module-sdk` — types et `definePortakiModule` |
-| [`sdk/java/`](sdk/java/) | `app.portaki:portaki-module-sdk` — annotations backend |
-| [`packages/`](packages/) | Paquets invités publiés sous `@portaki/module-*` |
+| 🗂️ Chemin | 📌 Contenu |
+|-----------|------------|
+| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** — types, `definePortakiModule`, build TypeScript |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** — annotations & modèle côté JVM |
+| [`packages/`](packages/) | Modules guest publiés sous **`@portaki/module-*`** |
 
-À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`@portaki/module-sdk` en `workspace:^` dans les modules ; au **`pnpm publish`**, pnpm réécrit vers la semver du SDK, ex. `^0.2.0`).
+<details>
+<summary><strong>🔗 Workspace <code>pnpm</code></strong> (clique pour déplier)</summary>
+
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, cette dépendance est réécrite vers une semver publiable (ex. **`^0.2.0`** tant que le SDK est en `0.2.x`).
+
+</details>
 
 ---
 
-## SDK JavaScript (`@portaki/module-sdk`)
+## ⚛️ SDK JavaScript — `@portaki/module-sdk`
 
-```bash
-npm install @portaki/module-sdk react
-```
+| | |
+|:---|:---|
+| **Installer** | `npm install @portaki/module-sdk react` |
+| **Registry** | [npmjs — `@portaki/module-sdk`](https://www.npmjs.com/package/@portaki/module-sdk) |
+
+**Exemple minimal :**
 
 ```tsx
 import { definePortakiModule } from "@portaki/module-sdk";
@@ -42,7 +59,7 @@ export default definePortakiModule({
 
 ---
 
-## SDK Java (`app.portaki:portaki-module-sdk`)
+## ☕ SDK Java — `app.portaki:portaki-module-sdk`
 
 ```xml
 <dependency>
@@ -54,51 +71,33 @@ export default definePortakiModule({
 
 ---
 
-## Développement local
+## 🛠️ Développement local
 
-**SDK JavaScript**
-
-```bash
-cd sdk/javascript
-npm ci
-npm run build
-```
-
-**SDK Java**
-
-```bash
-cd sdk/java
-mvn verify
-```
-
-**Workspace packages (pnpm)**
-
-```bash
-pnpm install
-pnpm lint
-```
-
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en `workspace:^` : en local le workspace est utilisé ; sur npm le manifest publié contient la plage semver correspondant au SDK (`^0.2.0` tant que le SDK est en `0.2.x`).
+| Stack | Commandes |
+|-------|-----------|
+| **SDK JS** | `cd sdk/javascript` → `npm ci` → `npm run build` |
+| **SDK Java** | `cd sdk/java` → `mvn verify` |
+| **Workspace** | à la racine : `pnpm install` → `pnpm lint` |
 
 ---
 
-## CI/CD
+## 🚀 CI / CD
 
-Les workflows utilisent des **noms en slug** (`ci-verify`, `publish-npm-sdk`, …), des **jobs** stables (`sdk_javascript`, `workspace_packages`, …) et des **étapes** homogènes (`Checkout`, `Setup Node.js`, `Install dependencies`, …). Ils ne se déclenchent que lorsque les chemins pertinents changent (`paths` + filtre dans `ci-verify`).
+Les workflows utilisent des **slugs** stables (`ci-verify`, `publish-npm-sdk`, …) et des chemins filtrés (`paths` + [`paths-filter`](https://github.com/dorny/paths-filter) dans `ci-verify`).
 
-| Workflow | Rôle |
-|----------|------|
-| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` SDK Java, lint `packages/`, backend pre-arrival si touché |
+| Workflow | 🎯 Rôle |
+|----------|---------|
+| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` Java, lint `packages/`, backend pre-arrival si touché |
 | [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur **npmjs** (Trusted Publishing / OIDC) |
-| [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | Déploie le JAR SDK vers **Maven Central** (OSSRH : `OSSRH_USERNAME`, `OSSRH_TOKEN`) |
-| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication **manuelle** des `@portaki/module-*` (`workflow_dispatch`) |
+| [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | JAR SDK vers **Maven Central** (`OSSRH_USERNAME`, `OSSRH_TOKEN`) |
+| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication **manuelle** des `@portaki/module-*` |
 
-**Publier sur npmjs** : bump **`version`** dans les `package.json` concernés, configurer **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** sur npm, puis lancer **`publish-npm-sdk`** ou **`publish-npm-packages`** — détail dans **[docs/deployment.md](docs/deployment.md)**.
+> **☁️ npmjs** — Bump la **`version`** dans les `package.json` concernés, configure [Trusted Publishing](https://docs.npmjs.com/trusted-publishers), puis lance les workflows. Détail : **[docs/deployment.md](docs/deployment.md)**.
 
-Guide d’utilisation des API : **[docs/getting-started.md](docs/getting-started.md)**.
+📘 Guide API : **[docs/getting-started.md](docs/getting-started.md)**
 
 ---
 
-## Licence
+## 📜 Licence
 
-MIT — voir les champs `license` des paquets individuels (modules souvent AGPL-3.0).
+Le dépôt mélange **MIT** (SDK JS par défaut) et **AGPL-3.0** (plusieurs modules sous `packages/`) — voir le champ `license` de chaque paquet.

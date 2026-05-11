@@ -1,46 +1,69 @@
-# Règlement intérieur (`@portaki/module-rules`)
+<div align="center">
 
-> **Rendre accessibles les règles de la maison** — contenu riche (TipTap / éditeur) à connecter à votre CMS ou API.
+# ⚖️ Module Règlement intérieur
 
-## Public cible
+### `@portaki/module-rules`
 
-Voyageurs qui doivent connaître le règlement (bruit, fumeur, tri, etc.) avant ou pendant le séjour.
+[![npm](https://img.shields.io/npm/v/@portaki/module-rules?label=npm&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-rules)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
+[![SDK](https://img.shields.io/badge/built%20with-%40portaki%2Fmodule--sdk-181717?logo=github)](https://github.com/PortakiApp/portaki-sdk)
 
-## Ce que ça apporte
+*House rules accessibles, contenu riche (TipTap / CMS)*
 
-- Section claire **House rules** / **Règlement** dans l’app guest.
-- Emplacement `data-module="rules"` pour le style et l’analytics.
-- Base prête pour brancher le contenu TipTap ou le HTML issu de votre back-office.
+</div>
 
-## Fiche technique
+---
 
-| Champ | Valeur |
-|--------|--------|
-| **Package npm** | `@portaki/module-rules` |
-| **Identifiant `id`** | `rules` |
-| **Slot navigation** | `section` |
-| **Icône** | `scale` |
-| **Visibilité** | Toujours affiché |
-| **Carte / carte overlay** | Non |
+> 🎯 **En une phrase** — Une section **Règlement** claire pour bruit, fumeur, tri… avec **`data-module="rules"`** pour style & analytics.
 
-## Intégration Portaki
+## 👥 Pour qui ?
 
-Le module ne dépend pas encore d’une source de contenu : remplacez le texte factice par la chaîne / document fourni par l’API guest.
+| Persona | Besoin |
+|---------|--------|
+| 🛋️ **Voyageurs** | Lire les règles avant / pendant le séjour |
+| ✍️ **Ops / CMS** | Pousser du HTML ou TipTap sanitizé |
 
-## Données & API
+## ✨ Ce que le module apporte
 
-Prévoir un endpoint (ou un champ `property`) transportant le document de règlement structuré ou HTML sanitisé.
+- [x] Section **House rules** / **Règlement**
+- [x] Hook **`data-module="rules"`**
+- [x] Gabarit prêt pour **TipTap** ou HTML back-office
 
-## Développement local
+---
 
-Depuis la racine du monorepo :
+## 🧭 Fiche technique
+
+| Clé | Valeur |
+|-----|--------|
+| 📦 **npm** | `@portaki/module-rules` |
+| 🆔 **`id`** | `rules` |
+| 📍 **Slot nav** | `section` |
+| 🎨 **Icône** | `scale` |
+| 👁️ **Visibilité** | Toujours affiché |
+| 🗺️ **Carte** | Non |
+
+---
+
+## 🔌 Intégration Portaki
+
+Remplace le placeholder par la chaîne / document fourni par ton API guest ou CMS.
+
+## 📡 Données & API
+
+Prévoir un endpoint (ou champ `property`) avec document structuré ou **HTML sanitisé**.
+
+---
+
+## 🛠️ Développement local
 
 ```bash
-pnpm install
+pnpm install   # racine du monorepo portaki-sdk
 ```
 
-Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Dépend de **`@portaki/module-sdk`** → [**portaki-sdk**](https://github.com/PortakiApp/portaki-sdk).
 
-## Licence
+---
 
-AGPL-3.0 — voir le `package.json`.
+## 📄 Licence
+
+**AGPL-3.0** — voir `package.json`.

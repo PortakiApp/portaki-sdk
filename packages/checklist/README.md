@@ -1,46 +1,69 @@
-# Checklist départ (`@portaki/module-checklist`)
+<div align="center">
 
-> **Accompagner le voyageur pour une sortie sans oubli** — liste issue de la configuration propriété et persistance via l’API guest.
+# ✅ Module Checklist départ
 
-## Public cible
+### `@portaki/module-checklist`
 
-Voyageurs en fin de séjour qui doivent valider les étapes de départ (clés, déchets, linge, etc.).
+[![npm](https://img.shields.io/npm/v/@portaki/module-checklist?label=npm&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-checklist)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
+[![SDK](https://img.shields.io/badge/built%20with-%40portaki%2Fmodule--sdk-181717?logo=github)](https://github.com/PortakiApp/portaki-sdk)
 
-## Ce que ça apporte
+*Liste de départ · persistance guest · FR / EN*
 
-- Affichage conditionnel : réservé aux séjours au statut **`ACTIVE`** (`visibleOnStatus`).
-- Libellés **FR / EN** par item (`checklistItems` sur la propriété).
-- Point d’accroche pour `POST` guest par item (`stayId` + `itemId`).
+</div>
 
-## Fiche technique
+---
 
-| Champ | Valeur |
-|--------|--------|
-| **Package npm** | `@portaki/module-checklist` |
-| **Identifiant `id`** | `checklist` |
-| **Slot navigation** | `section` |
-| **Icône** | `check-square` |
-| **Visibilité** | `visibleOnStatus: ['ACTIVE']` |
-| **Carte / carte overlay** | Non |
+> 🎯 **En une phrase** — Accompagne la **sortie du séjour** avec une checklist pilotée par la config propriété et les **`POST`** guest.
 
-## Intégration Portaki
+## 👥 Pour qui ?
 
-Si `stay` est absent, le module ne rend rien. Sinon `ChecklistSection` reçoit `stay.id` et la liste `property.checklistItems`.
+| Persona | Besoin |
+|---------|--------|
+| 🧳 **Voyageurs** | Ne rien oublier (clés, déchets, linge…) |
+| 🔐 **Produit** | Afficher seulement pour séjour **`ACTIVE`** |
 
-## Données & API
+## ✨ Ce que le module apporte
 
-Persistance décrite côté produit comme `POST .../checklist/{itemId}` sur le contexte guest. Adaptez les appels dans le composant lorsque les routes sont figées.
+- [x] Visible si **`visibleOnStatus: ['ACTIVE']`**
+- [x] Items **FR / EN** via `property.checklistItems`
+- [x] Hooks pour **`POST`** par item (`stayId`, `itemId`)
 
-## Développement local
+---
 
-Depuis la racine du monorepo :
+## 🧭 Fiche technique
+
+| Clé | Valeur |
+|-----|--------|
+| 📦 **npm** | `@portaki/module-checklist` |
+| 🆔 **`id`** | `checklist` |
+| 📍 **Slot nav** | `section` |
+| 🎨 **Icône** | `check-square` |
+| 👁️ **Visibilité** | `visibleOnStatus: ['ACTIVE']` |
+| 🗺️ **Carte** | Non |
+
+---
+
+## 🔌 Intégration Portaki
+
+Sans **`stay`**, le module ne rend rien. Sinon **`ChecklistSection`** reçoit `stay.id` et `property.checklistItems`.
+
+## 📡 Données & API
+
+Persistance type **`POST .../checklist/{itemId}`** côté guest — adapte les routes une fois figées.
+
+---
+
+## 🛠️ Développement local
 
 ```bash
-pnpm install
+pnpm install   # racine du monorepo portaki-sdk
 ```
 
-Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Dépend de **`@portaki/module-sdk`** → [**portaki-sdk**](https://github.com/PortakiApp/portaki-sdk).
 
-## Licence
+---
 
-AGPL-3.0 — voir le `package.json`.
+## 📄 Licence
+
+**AGPL-3.0** — voir `package.json`.

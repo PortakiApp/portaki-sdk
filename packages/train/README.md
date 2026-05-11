@@ -1,46 +1,70 @@
-# Trains (`@portaki/module-train`)
+<div align="center">
 
-> **Horaires et informations trains au départ de la gare configurée** — s’appuie sur l’écosystème Navitia / données voyageurs.
+# 🚆 Module Trains
 
-## Public cible
+### `@portaki/module-train`
 
-Voyageurs qui consultent l’app guest pour préparer un trajet depuis le logement (gare la plus pertinente configurée côté propriété).
+[![npm](https://img.shields.io/npm/v/@portaki/module-train?label=npm&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-train)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
+[![SDK](https://img.shields.io/badge/built%20with-%40portaki%2Fmodule--sdk-181717?logo=github)](https://github.com/PortakiApp/portaki-sdk)
 
-## Ce que ça apporte
+*Horaires & infos voyageurs au départ de la gare configurée*
 
-- Vue dédiée « Trains » dans la navigation guest.
-- Contextualisation avec le **code gare** (`trainStationCode`) porté par la fiche propriété.
-- Base prête pour brancher les API guest Navitia / SNCF existantes.
+</div>
 
-## Fiche technique
+---
 
-| Champ | Valeur |
-|--------|--------|
-| **Package npm** | `@portaki/module-train` |
-| **Identifiant `id`** | `train` |
-| **Slot navigation** | `section` |
-| **Icône** | `train` |
-| **Visibilité** | Toujours affiché (pas de `visibleOnStatus`) |
-| **Carte / carte overlay** | Non |
+> 🎯 **En une phrase** — Donne aux voyageurs une vue **Trains** branchée sur **Navitia / données voyageurs**, contextualisée avec le **code gare** de la propriété.
 
-## Intégration Portaki
+## 👥 Pour qui ?
 
-Le module exporte un **default export** créé avec `definePortakiModule`. Le rendu reçoit `property.trainStationCode` pour afficher ou masquer le détail selon la configuration.
+| Persona | Besoin |
+|---------|--------|
+| 🧳 **Voyageurs** | Préparer un trajet depuis le logement |
+| 🏠 **Hôte** | Afficher la bonne gare (`trainStationCode`) |
 
-## Données & API
+## ✨ Ce que le module apporte
 
-Données voyageurs via les endpoints guest déjà prévus (`GET` Navitia / hub SNCF selon votre infra). Aujourd’hui l’UI est un gabarit ; branchez vos appels dans `TrainSection`.
+- [x] Entrée de navigation dédiée **« Trains »**
+- [x] Liaison avec **`property.trainStationCode`**
+- [x] Base UI prête pour tes appels **Navitia / SNCF** guest
 
-## Développement local
+---
 
-Depuis la racine du monorepo :
+## 🧭 Fiche technique
+
+| Clé | Valeur |
+|-----|--------|
+| 📦 **npm** | `@portaki/module-train` |
+| 🆔 **`id`** | `train` |
+| 📍 **Slot nav** | `section` |
+| 🎨 **Icône** | `train` |
+| 👁️ **Visibilité** | Toujours affiché |
+| 🗺️ **Carte** | Non |
+
+---
+
+## 🔌 Intégration Portaki
+
+Export **default** via `definePortakiModule`. Le rendu utilise `property.trainStationCode` pour adapter l’affichage.
+
+## 📡 Données & API
+
+Branche tes endpoints guest (Navitia / hub SNCF). Le composant **`TrainSection`** est le point d’accroche pour tes `fetch`.
+
+---
+
+## 🛠️ Développement local
 
 ```bash
+# depuis la racine du monorepo portaki-sdk
 pnpm install
 ```
 
-Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Dépend de **`@portaki/module-sdk`** → dépôt [**portaki-sdk**](https://github.com/PortakiApp/portaki-sdk).
 
-## Licence
+---
 
-AGPL-3.0 — voir le `package.json`.
+## 📄 Licence
+
+**AGPL-3.0** — voir `package.json`.

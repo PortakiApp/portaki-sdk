@@ -1,45 +1,71 @@
-# Formulaire avant arrivée — package npm (`@portaki/module-pre-arrival-form`)
+<div align="center">
 
-> **Partie UI du module pré-arrivée** — export npm consommé par l’application guest ; le backend Java est documenté dans [../README.md](../README.md).
+# 📋 Pré-arrivée · Package npm
 
-## Public cible
+### `@portaki/module-pre-arrival-form`
 
-Même que le module complet : voyageurs en amont du séjour ; cette page documente uniquement le **package React** publié sur npm.
+[![npm](https://img.shields.io/npm/v/@portaki/module-pre-arrival-form?label=npm&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-pre-arrival-form)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
+[![Module complet](https://img.shields.io/badge/doc-module%20full--stack-6366f1)](../README.md)
 
-## Ce que ça apporte
+*Partie **React** publiée sur npm — le backend Java vit dans [`../README.md`](../README.md)*
 
-- Export par défaut `definePortakiModule` pour le formulaire lié au séjour.
-- Masquage automatique lorsque le séjour n’est pas aux statuts configurés.
+</div>
 
-## Fiche technique
+---
 
-| Champ | Valeur |
-|--------|--------|
-| **Package npm** | `@portaki/module-pre-arrival-form` |
-| **Identifiant `id`** | `pre-arrival-form` |
-| **Slot navigation** | `section` |
-| **Icône** | `clipboard-list` |
-| **Visibilité** | `visibleOnStatus: ['PRE_ARRIVAL', 'UPCOMING']` |
-| **Carte / carte overlay** | Non |
+> 🎯 **En une phrase** — Export **`definePortakiModule`** pour le formulaire lié au séjour ; masquage auto hors statuts **`PRE_ARRIVAL`** / **`UPCOMING`**.
 
-## Intégration Portaki
+## 📌 À savoir
 
-Importer le default export comme pour les autres `@portaki/module-*`. Le composant `PreArrivalForm` reçoit `stayId` et `lang`.
+| Sujet | Détail |
+|-------|--------|
+| 🎯 **Public** | Identique au module complet — ici on documente **uniquement le paquet UI** |
+| 📦 **Publication** | Ce dossier est ce qui est publié sous **`@portaki/module-pre-arrival-form`** |
 
-## Données & API
+---
 
-À connecter aux routes guest de soumission / chargement d’étapes du formulaire.
+## ✨ Fonctionnalités
 
-## Développement local
+- [x] **Default export** `definePortakiModule`
+- [x] Masquage si le séjour n’est pas aux statuts attendus
+- [x] Composant **`PreArrivalForm`** · props **`stayId`**, **`lang`**
 
-Depuis la racine du monorepo :
+---
+
+## 🧭 Fiche technique
+
+| Clé | Valeur |
+|-----|--------|
+| 📦 **npm** | `@portaki/module-pre-arrival-form` |
+| 🆔 **`id`** | `pre-arrival-form` |
+| 📍 **Slot nav** | `section` |
+| 🎨 **Icône** | `clipboard-list` |
+| 👁️ **Visibilité** | `visibleOnStatus: ['PRE_ARRIVAL', 'UPCOMING']` |
+| 🗺️ **Carte** | Non |
+
+---
+
+## 🔌 Intégration Portaki
+
+Import du default export comme les autres **`@portaki/module-*`**.
+
+## 📡 Données & API
+
+Brancher chargement / soumission sur tes routes guest (étapes du formulaire).
+
+---
+
+## 🛠️ Développement local
 
 ```bash
-pnpm install
+pnpm install   # racine du monorepo portaki-sdk
 ```
 
-Voir aussi le dépôt **[portaki-sdk](https://github.com/PortakiApp/portaki-sdk)** pour `@portaki/module-sdk`.
+🔧 **`@portaki/module-sdk`** → [**portaki-sdk**](https://github.com/PortakiApp/portaki-sdk)
 
-## Licence
+---
 
-AGPL-3.0 — voir le `package.json`.
+## 📄 Licence
+
+**AGPL-3.0** — voir `package.json`.
