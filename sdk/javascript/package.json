@@ -1,5 +1,5 @@
 {
-  "name": "@portakiapp/module-sdk",
+  "name": "@portaki/module-sdk",
   "version": "0.1.0",
   "description": "Portaki guest modules SDK for React / Next.js",
   "license": "MIT",

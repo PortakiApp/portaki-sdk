@@ -1,4 +1,4 @@
-# Formulaire avant arrivée — package npm (`@portakiapp/module-pre-arrival-form`)
+# Formulaire avant arrivée — package npm (`@portaki/module-pre-arrival-form`)
 
 > **Partie UI du module pré-arrivée** — export npm consommé par l’application guest ; le backend Java est documenté dans [../README.md](../README.md).
 
@@ -15,7 +15,7 @@ Même que le module complet : voyageurs en amont du séjour ; cette page documen
 
 | Champ | Valeur |
 |--------|--------|
-| **Package npm** | `@portakiapp/module-pre-arrival-form` |
+| **Package npm** | `@portaki/module-pre-arrival-form` |
 | **Identifiant `id`** | `pre-arrival-form` |
 | **Slot navigation** | `section` |
 | **Icône** | `clipboard-list` |
@@ -24,7 +24,7 @@ Même que le module complet : voyageurs en amont du séjour ; cette page documen
 
 ## Intégration Portaki
 
-Importer le default export comme pour les autres `@portakiapp/module-*`. Le composant `PreArrivalForm` reçoit `stayId` et `lang`.
+Importer le default export comme pour les autres `@portaki/module-*`. Le composant `PreArrivalForm` reçoit `stayId` et `lang`.
 
 ## Données & API
 
@@ -38,7 +38,7 @@ Depuis la racine du monorepo :
 pnpm install
 ```
 
-Voir aussi le dépôt **[portaki-sdk](https://github.com/PortakiApp/portaki-sdk)** pour `@portakiapp/module-sdk`.
+Voir aussi le dépôt **[portaki-sdk](https://github.com/PortakiApp/portaki-sdk)** pour `@portaki/module-sdk`.
 
 ## Licence
 

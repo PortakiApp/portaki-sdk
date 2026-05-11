@@ -1,4 +1,4 @@
-import { definePortakiModule } from '@portakiapp/module-sdk'
+import { definePortakiModule } from '@portaki/module-sdk'
 import EventsSection from './components/EventsSection'
 
 export default definePortakiModule({

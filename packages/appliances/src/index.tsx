@@ -1,4 +1,4 @@
-import { definePortakiModule } from '@portakiapp/module-sdk'
+import { definePortakiModule } from '@portaki/module-sdk'
 
 export default definePortakiModule({
   id: 'appliances',

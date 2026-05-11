@@ -1,4 +1,4 @@
-# Publishes @portakiapp/module-* packages under packages/ (manual dispatch).
+# Publishes @portaki/module-* packages under packages/ (manual dispatch).
 
 name: publish-npm-packages
 
@@ -13,12 +13,12 @@ on:
         type: choice
         options:
           - all
-          - "@portakiapp/module-train"
-          - "@portakiapp/module-events"
-          - "@portakiapp/module-rules"
-          - "@portakiapp/module-appliances"
-          - "@portakiapp/module-checklist"
-          - "@portakiapp/module-pre-arrival-form"
+          - "@portaki/module-train"
+          - "@portaki/module-events"
+          - "@portaki/module-rules"
+          - "@portaki/module-appliances"
+          - "@portaki/module-checklist"
+          - "@portaki/module-pre-arrival-form"
 
 permissions:
   contents: read
@@ -60,12 +60,12 @@ jobs:
             pnpm publish --filter "$1" --access public --no-git-checks
           }
           if [ "$TARGET" = "all" ]; then
-            publish_one "@portakiapp/module-train"
-            publish_one "@portakiapp/module-events"
-            publish_one "@portakiapp/module-rules"
-            publish_one "@portakiapp/module-appliances"
-            publish_one "@portakiapp/module-checklist"
-            publish_one "@portakiapp/module-pre-arrival-form"
+            publish_one "@portaki/module-train"
+            publish_one "@portaki/module-events"
+            publish_one "@portaki/module-rules"
+            publish_one "@portaki/module-appliances"
+            publish_one "@portaki/module-checklist"
+            publish_one "@portaki/module-pre-arrival-form"
           else
             publish_one "$TARGET"
           fi

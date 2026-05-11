@@ -10,7 +10,7 @@ importers:
 
   packages/appliances:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript
       react:
@@ -29,7 +29,7 @@ importers:
 
   packages/checklist:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript
       react:
@@ -48,7 +48,7 @@ importers:
 
   packages/events:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript
       react:
@@ -67,7 +67,7 @@ importers:
 
   packages/pre-arrival-form/frontend:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../../sdk/javascript
       react:
@@ -86,7 +86,7 @@ importers:
 
   packages/rules:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript
       react:
@@ -105,7 +105,7 @@ importers:
 
   packages/train:
     dependencies:
-      '@portakiapp/module-sdk':
+      '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../../sdk/javascript
       react:

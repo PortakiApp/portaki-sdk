@@ -9,9 +9,9 @@ Les workflows publient :
 
 ## Publier sur npmjs (résumé)
 
-1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portakiapp/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portakiapp** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
+1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portaki/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portaki** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
 2. **Token de publication** : npm → **Access Tokens** → **Generate New Token** → type **Granular** ou **Classic** avec au minimum :
-   - **Publish** pour les packages concernés (scope `@portakiapp` si granular).
+   - **Publish** pour les packages concernés (scope `@portaki` si granular).
 3. **Secret GitHub** : dans le dépôt → **Settings** → **Secrets and variables** → **Actions** → **New repository secret** :
    - Nom : **`NPM_TOKEN`**
    - Valeur : le token npm (commence souvent par `npm_…`).
@@ -48,8 +48,8 @@ Les **releases Maven** non-SNAPSHOT peuvent exiger signature GPG selon la politi
 | Fichier | Rôle |
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java, lint `packages/`, backend pre-arrival Maven si chemins concernés. |
-| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portakiapp/module-sdk`** (`sdk/javascript`). |
-| [`publish-npm-packages.yml`](../.github/workflows/publish-npm-packages.yml) | Publie manuellement les **`@portakiapp/module-*`** sous `packages/`. |
+| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
+| [`publish-npm-packages.yml`](../.github/workflows/publish-npm-packages.yml) | Publie manuellement les **`@portaki/module-*`** sous `packages/`. |
 | [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`) vers OSSRH. |
 
 ### CI — `ci-verify.yml`
@@ -60,7 +60,7 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 ### Publication SDK JS — `publish-npm-sdk.yml`
 
-**Paquet :** `@portakiapp/module-sdk`.
+**Paquet :** `@portaki/module-sdk`.
 
 **Déclencheurs :**
 
@@ -70,7 +70,7 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 ### Publication paquets invités — `publish-npm-packages.yml`
 
-Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portakiapp/module-…`). Utilise `pnpm publish --filter` et **`NPM_TOKEN`**.
+Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`). Utilise `pnpm publish --filter` et **`NPM_TOKEN`**.
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
@@ -85,7 +85,7 @@ Uniquement **`workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@port
 ## Consommer depuis npmjs
 
 ```bash
-npm install @portakiapp/module-sdk
+npm install @portaki/module-sdk
 ```
 
 Paquets **publics** sous scope autorisé : pas de `.npmrc` obligatoire.

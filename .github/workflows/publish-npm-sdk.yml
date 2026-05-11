@@ -1,4 +1,4 @@
-# Publishes @portakiapp/module-sdk (folder sdk/javascript) to registry.npmjs.org.
+# Publishes @portaki/module-sdk (folder sdk/javascript) to registry.npmjs.org.
 
 name: publish-npm-sdk
 

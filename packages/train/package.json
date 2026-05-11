@@ -1,5 +1,5 @@
 {
-  "name": "@portakiapp/module-train",
+  "name": "@portaki/module-train",
   "version": "0.1.0",
   "description": "Module Portaki — horaires trains (Navitia / SNCF)",
   "license": "AGPL-3.0",
@@ -9,7 +9,7 @@
     "lint": "echo \"no lint yet\""
   },
   "dependencies": {
-    "@portakiapp/module-sdk": "workspace:*",
+    "@portaki/module-sdk": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

@@ -1,4 +1,4 @@
-# Appareils (`@portakiapp/module-appliances`)
+# Appareils (`@portaki/module-appliances`)
 
 > **Guide des équipements du logement** — four, lave-linge, chauffage, etc., avec contenu éditorial.
 
@@ -15,7 +15,7 @@ Voyageurs qui utilisent les équipements sur place et ont besoin d’instruction
 
 | Champ | Valeur |
 |--------|--------|
-| **Package npm** | `@portakiapp/module-appliances` |
+| **Package npm** | `@portaki/module-appliances` |
 | **Identifiant `id`** | `appliances` |
 | **Slot navigation** | `section` |
 | **Icône** | `plug` |
@@ -38,7 +38,7 @@ Depuis la racine du monorepo :
 pnpm install
 ```
 
-Ce package dépend de **`@portakiapp/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
 
 ## Licence
 

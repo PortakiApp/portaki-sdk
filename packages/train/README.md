@@ -1,4 +1,4 @@
-# Trains (`@portakiapp/module-train`)
+# Trains (`@portaki/module-train`)
 
 > **Horaires et informations trains au départ de la gare configurée** — s’appuie sur l’écosystème Navitia / données voyageurs.
 
@@ -16,7 +16,7 @@ Voyageurs qui consultent l’app guest pour préparer un trajet depuis le logeme
 
 | Champ | Valeur |
 |--------|--------|
-| **Package npm** | `@portakiapp/module-train` |
+| **Package npm** | `@portaki/module-train` |
 | **Identifiant `id`** | `train` |
 | **Slot navigation** | `section` |
 | **Icône** | `train` |
@@ -39,7 +39,7 @@ Depuis la racine du monorepo :
 pnpm install
 ```
 
-Ce package dépend de **`@portakiapp/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
+Ce package dépend de **`@portaki/module-sdk`** (publié depuis [portaki-sdk](https://github.com/PortakiApp/portaki-sdk)).
 
 ## Licence
 
