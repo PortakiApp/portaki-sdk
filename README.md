@@ -2,7 +2,7 @@
 
 Bibliothèques officielles pour développer des **modules invités** Portaki : SDK **JavaScript / React**, SDK **Java**, et les **paquets** `@portakiapp/module-*` (dossier `packages/`) dans un même dépôt monorepo (`pnpm`).
 
-[![CI](https://github.com/portaki/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop)](https://github.com/portaki/portaki-sdk/actions/workflows/ci-verify.yml)
+[![CI](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop)](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml)
 
 ---
 
