@@ -1,0 +1,22 @@
+# Dependencies & build outputs
+javascript/node_modules/
+javascript/dist/
+java/target/
+**/target/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs & caches
+*.log
+.npm/
+.cache/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Test / coverage (future)
+coverage/

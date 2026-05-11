@@ -1,0 +1,80 @@
+name: Publish JavaScript (GitHub Packages)
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'javascript/**'
+      - '.github/workflows/publish-npm.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version semver (e.g. 0.2.0). Leave empty to use package.json version.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-npm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: npm publish
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: javascript
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://npm.pkg.github.com
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Align package scope with GitHub owner (GitHub Packages rule)
+        shell: bash
+        run: |
+          OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          npm pkg set "name=@${OWNER_LOWER}/module-sdk"
+
+      - name: Prerelease version (push to develop)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          BASE="$(node -p "require('./package.json').version.replace(/[-+].*$/,'')")"
+          npm version "${BASE}-develop.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+
+      - name: Apply manual version (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+        run: npm version "${{ github.event.inputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Version from GitHub Release tag
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          RAW="${TAG#javascript-v}"
+          RAW="${RAW#js-v}"
+          RAW="${RAW#v}"
+          npm version "$RAW" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish --access restricted
