@@ -14,7 +14,7 @@ Bibliothèques officielles pour développer des **modules invités** Portaki : S
 | [`sdk/java/`](sdk/java/) | `app.portaki:portaki-module-sdk` — annotations backend |
 | [`packages/`](packages/) | Paquets invités publiés sous `@portaki/module-*` |
 
-À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`workspace:*` vers le SDK JS).
+À la racine : `pnpm-workspace.yaml` et `package.json` pour lier le workspace (`@portaki/module-sdk` en `^0.1.0`, résolu localement par pnpm).
 
 ---
 
@@ -78,7 +78,7 @@ pnpm install
 pnpm lint
 ```
 
-Les paquets sous `packages/` résolvent `@portaki/module-sdk` via `workspace:*` (pas besoin de publication npm locale).
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en `^0.1.0` : même chose publiée sur npm (pour les consommateurs) et liée au workspace en local.
 
 ---
 
