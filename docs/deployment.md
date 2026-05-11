@@ -26,7 +26,7 @@ Déclenché sur `push` / `pull_request` vers `main` et `develop` :
 **Déclencheurs**
 
 1. **Push sur `develop`** (fichiers sous `javascript/` ou ce workflow)  
-   - Version publiée : `<base>-develop.<run_number>` où `<base>` est la version semver « nue » du `package.json` (ex. `0.1.0` → `0.1.0-develop.42`). Chaque push produit une **nouvelle** version npm (nécessaire : npm refuse de republier une version déjà présente).
+   - Version publiée : **`major.minor.<run_number>`** où `major.minor` vient des deux premiers segments du `package.json` (ex. `0.1.0` → `0.1`) et `<run_number>` est l’identifiant monotonique du workflow sur GitHub (ex. **`0.1.47`**). Pas de prérelease du type `-develop.*`. Chaque push produit une **nouvelle** version npm (npm interdit de republier une version identique).
 2. **Release GitHub** : type `published`  
    - Le tag de la release est interprété pour la version npm : préfixes supportés `javascript-v`, `js-v`, ou `v` seul (ex. `javascript-v0.2.0` → `0.2.0`).
 3. **workflow_dispatch** : champ optionnel `version` (semver). Si vide, la version du `package.json` est conservée.

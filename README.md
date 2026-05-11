@@ -101,7 +101,7 @@ mvn verify
 ## CI/CD et publication sur GitHub
 
 - **CI** : build JS + `mvn verify` sur les branches `main` et `develop` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
-- **Publication automatique** : à chaque **push sur `develop`** (avec changements dans `javascript/` ou `java/`), les workflows publient vers **GitHub Packages** — npm en `x.y.z-develop.<run>` (base **`0.1.0`** du package JS) et Maven en **SNAPSHOT** (`0.1.0-SNAPSHOT`). Voir [docs/deployment.md](docs/deployment.md).
+- **Publication automatique** : à chaque **push sur `develop`** (avec changements dans `javascript/` ou `java/`), les workflows publient vers **GitHub Packages** — npm en **`major.minor.<run>`** (ex. `0.1.42`, dérivé du `package.json` + numéro de run GitHub, sans suffixe `-develop`) et Maven en **SNAPSHOT** (`0.1.0-SNAPSHOT`). Voir [docs/deployment.md](docs/deployment.md).
 - **Publication npm** (release / manuel inclus) : [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml).
 - **Publication Maven** : [`.github/workflows/publish-maven.yml`](.github/workflows/publish-maven.yml).
 
