@@ -1,0 +1,11 @@
+---
+description: Règles SDK et modules officiels Portaki
+globs: ["**/*"]
+alwaysApply: true
+---
+
+Chaque module dans packages/ est un projet indépendant publié séparément.
+RÈGLE FONDAMENTALE : tout module DOIT utiliser @portaki/module-sdk (JS)
+ou portaki-module-sdk (Java). Ne jamais appeler l'API directement sans le SDK.
+Les modules officiels sont les tests d'intégration du SDK.
+Si un module ne fonctionne pas sur L'Islette du Riou, le SDK est invalide.
