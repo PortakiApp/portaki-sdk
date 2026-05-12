@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Portaki">
+  <title>Portaki</title>
+  <rect width="32" height="32" rx="7" fill="#09090b"/>
+  <text
+    x="6.5"
+    y="22.5"
+    font-family="Cal Sans, ui-sans-serif, system-ui, sans-serif"
+    font-size="17"
+    font-weight="600"
+    fill="#fafafa"
+    letter-spacing="-0.06em"
+  >p</text>
+  <circle cx="23.5" cy="20.5" r="3.8" fill="#f59e0b"/>
+</svg>

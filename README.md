@@ -1,45 +1,53 @@
-<div align="center">
+<p align="center">
+  <a href="https://www.portaki.app" title="Portaki">
+    <img
+      src="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-icon.svg"
+      width="96"
+      height="96"
+      alt="Portaki"
+    >
+  </a>
+</p>
 
-# 🧩 Portaki SDK
+<h1 align="center">Portaki SDK</h1>
 
-**Modules invités · React · Java · monorepo `pnpm`**
+<p align="center">
+  <strong>Monorepo officiel</strong> — SDK <strong>JavaScript / React</strong>, SDK <strong>Java</strong>, et modules invités <code>@portaki/module-*</code><br/>
+  <sub>pnpm · CI GitHub · publication npm &amp; Maven</sub>
+</p>
 
-[![CI](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop)](https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml)
-[![npm org](https://img.shields.io/badge/npm-%40portaki-CB3837?logo=npm)](https://www.npmjs.com/org/portaki)
-[![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?logo=pnpm)](https://pnpm.io/workspaces)
-[![Docs](https://img.shields.io/badge/docs-deployment-0366d6)](docs/deployment.md)
-
-</div>
-
-> 📦 Bibliothèques officielles pour construire des **modules guest** [Portaki](https://github.com/PortakiApp) : SDK **JavaScript / React**, SDK **Java**, et paquets **`@portaki/module-*`** dans un seul dépôt.
-
----
-
-## 📂 Ce que tu trouves ici
-
-| 🗂️ Chemin | 📌 Contenu |
-|-----------|------------|
-| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** — types, `definePortakiModule`, build TypeScript |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** — annotations & modèle côté JVM |
-| [`packages/`](packages/) | Modules guest publiés sous **`@portaki/module-*`** |
-
-<details>
-<summary><strong>🔗 Workspace <code>pnpm</code></strong> (clique pour déplier)</summary>
-
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, cette dépendance est réécrite vers une semver publiable (ex. **`^0.2.2`** tant que le SDK est en `0.2.x`).
-
-</details>
+<p align="center">
+  <a href="https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml"><img src="https://github.com/PortakiApp/portaki-sdk/actions/workflows/ci-verify.yml/badge.svg?branch=develop" alt="CI"></a>
+  <a href="https://www.npmjs.com/org/portaki"><img src="https://img.shields.io/badge/npm-%40portaki-CB3837?logo=npm" alt="npm @portaki"></a>
+  <a href="https://pnpm.io/workspaces"><img src="https://img.shields.io/badge/pnpm-workspace-f69220?logo=pnpm" alt="pnpm"></a>
+  <a href="./docs/deployment.md"><img src="https://img.shields.io/badge/docs-deployment-0366d6" alt="Docs deployment"></a>
+</p>
 
 ---
 
-## ⚛️ SDK JavaScript — `@portaki/module-sdk`
+## Aperçu
+
+| Chemin | Contenu |
+|--------|---------|
+| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.0` — types, `definePortakiModule`, build TypeScript |
+| [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0-SNAPSHOT` — annotations & modèle JVM |
+| [`packages/`](packages/) | Modules invités publiés **`@portaki/module-*`** |
+
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, la dépendance workspace est réécrite vers une semver publiable (ex. **`^0.3.0`**).
+
+---
+
+## SDK JavaScript — `@portaki/module-sdk`
+
+```bash
+npm install @portaki/module-sdk react
+```
 
 | | |
 |:---|:---|
-| **Installer** | `npm install @portaki/module-sdk react` |
-| **Registry** | [npmjs — `@portaki/module-sdk`](https://www.npmjs.com/package/@portaki/module-sdk) |
-
-**Exemple minimal :**
+| **npm** | [npmjs.com/package/@portaki/module-sdk](https://www.npmjs.com/package/@portaki/module-sdk) |
+| **README paquet** | [sdk/javascript/README.md](sdk/javascript/README.md) |
 
 ```tsx
 import { definePortakiModule } from "@portaki/module-sdk";
@@ -59,45 +67,41 @@ export default definePortakiModule({
 
 ---
 
-## ☕ SDK Java — `app.portaki:portaki-module-sdk`
+## SDK Java — `app.portaki:portaki-module-sdk`
 
 ```xml
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.2.2-SNAPSHOT</version>
+  <version>0.3.0-SNAPSHOT</version>
 </dependency>
 ```
 
 ---
 
-## 🛠️ Développement local
+## Développement local
 
-| Stack | Commandes |
-|-------|-----------|
+| Zone | Commandes |
+|------|-------------|
 | **SDK JS** | `cd sdk/javascript` → `npm ci` → `npm run build` |
 | **SDK Java** | `cd sdk/java` → `mvn verify` |
-| **Workspace** | à la racine : `pnpm install` → `pnpm lint` |
+| **Workspace** | racine : `pnpm install` → `pnpm lint` |
 
 ---
 
-## 🚀 CI / CD
+## CI / CD
 
-Les workflows utilisent des **slugs** stables (`ci-verify`, `publish-npm-sdk`, …) et des chemins filtrés (`paths` + [`paths-filter`](https://github.com/dorny/paths-filter) dans `ci-verify`).
+| Workflow | Rôle |
+|----------|------|
+| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` Java, lint `packages/` |
+| [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur npmjs |
+| [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | JAR SDK vers Maven Central |
+| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication manuelle des `@portaki/module-*` |
 
-| Workflow | 🎯 Rôle |
-|----------|---------|
-| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` Java, lint `packages/`, backend pre-arrival si touché |
-| [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur **npmjs** (Trusted Publishing / OIDC) |
-| [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | JAR SDK vers **Maven Central** (`OSSRH_USERNAME`, `OSSRH_TOKEN`) |
-| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication **manuelle** des `@portaki/module-*` |
-
-> **☁️ npmjs** — Bump la **`version`** dans les `package.json` concernés, configure [Trusted Publishing](https://docs.npmjs.com/trusted-publishers), puis lance les workflows. Détail : **[docs/deployment.md](docs/deployment.md)**.
-
-📘 Guide API : **[docs/getting-started.md](docs/getting-started.md)**
+Détail publication : **[docs/deployment.md](docs/deployment.md)** · guide **[docs/getting-started.md](docs/getting-started.md)**
 
 ---
 
-## 📜 Licence
+## Licence
 
-Le dépôt mélange **MIT** (SDK JS par défaut) et **AGPL-3.0** (plusieurs modules sous `packages/`) — voir le champ `license` de chaque paquet.
+Le dépôt mélange **MIT** (SDK JS) et **AGPL-3.0** (plusieurs modules sous `packages/`) — voir le champ `license` de chaque paquet.

@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 0.2.2 or 0.2.2-SNAPSHOT). Empty keeps pom."
+        description: "Version (e.g. 0.3.0 or 0.3.0-SNAPSHOT). Empty keeps pom."
         required: false
         default: ""
         type: string

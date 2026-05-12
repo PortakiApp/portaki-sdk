@@ -1,5 +1,7 @@
 <div align="center">
 
+<a href="https://www.portaki.app"><img src="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-icon.svg" width="56" height="56" alt="Portaki"></a>
+
 # ⚖️ Module Règlement intérieur
 
 ### `@portaki/module-rules`
