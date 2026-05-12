@@ -8,7 +8,7 @@
 <h1 align="center">Portaki SDK</h1>
 
 <p align="center">
-  <strong>Monorepo officiel</strong> — SDK <strong>JavaScript / React</strong>, SDK <strong>Java</strong>, et modules invités <code>@portaki/module-*</code><br/>
+  <strong>Monorepo officiel</strong> — SDK <strong>JavaScript / React</strong>, SDK <strong>Java</strong>, schéma manifestes ; modules invités <code>@portaki/module-*</code> dans <a href="https://github.com/PortakiApp/portaki-modules">portaki-modules</a><br/>
   <sub>pnpm · CI GitHub · publication npm &amp; Maven</sub>
 </p>
 
@@ -28,9 +28,9 @@
 | [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.2` — types, `definePortakiModule`, build TypeScript |
 | [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
 | [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0-SNAPSHOT` — annotations & modèle JVM |
-| [`packages/`](packages/) | Modules invités publiés **`@portaki/module-*`** |
+| [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^0.3.2`** dans le monorepo (résolu en **`^0.3.2`** dans le tarball npm). Les apps (ex. **portaki-web**) utilisent **`^0.3.2`** sur le registre public.
+Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** et **`@portaki/module-*`** en **semver** depuis le registre public.
 
 ---
 
@@ -81,7 +81,7 @@ export default definePortakiModule({
 |------|-------------|
 | **SDK JS** | `cd sdk/javascript` → `npm ci` → `npm run build` |
 | **SDK Java** | `cd sdk/java` → `mvn verify` |
-| **Workspace** | racine : `pnpm install` → `pnpm lint` |
+| **Racine pnpm** | `pnpm install` (workspace minimal : SDK JS uniquement) |
 
 ---
 
@@ -89,10 +89,11 @@ export default definePortakiModule({
 
 | Workflow | Rôle |
 |----------|------|
-| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS, `mvn verify` Java, lint `packages/` |
+| [`ci-verify.yml`](.github/workflows/ci-verify.yml) | Build SDK JS et `mvn verify` Java |
 | [`publish-npm-sdk.yml`](.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** sur npmjs |
 | [`publish-maven-sdk.yml`](.github/workflows/publish-maven-sdk.yml) | JAR SDK vers Maven Central |
-| [`publish-npm-packages.yml`](.github/workflows/publish-npm-packages.yml) | Publication manuelle des `@portaki/module-*` |
+
+Les **`@portaki/module-*`** invités sont publiés depuis **[portaki-modules](https://github.com/PortakiApp/portaki-modules)**.
 
 Détail publication : **[docs/deployment.md](docs/deployment.md)** · guide **[docs/getting-started.md](docs/getting-started.md)**
 
@@ -100,4 +101,4 @@ Détail publication : **[docs/deployment.md](docs/deployment.md)** · guide **[d
 
 ## Licence
 
-Le dépôt mélange **MIT** (SDK JS) et **AGPL-3.0** (plusieurs modules sous `packages/`) — voir le champ `license` de chaque paquet.
+Le dépôt contient le **SDK JS (MIT)** et le **SDK Java** ; les modules invités AGPL sont dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** — voir le champ `license` de chaque paquet.

@@ -4,13 +4,6 @@
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "lint": "pnpm -r lint",
-    "validate:modules": "node scripts/validate-manifests.js",
-    "assert-no-file-deps": "node scripts/assert-no-file-deps.mjs"
-  },
-  "devDependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "lucide-react": "^0.468.0"
+    "lint": "pnpm -r lint"
   }
 }

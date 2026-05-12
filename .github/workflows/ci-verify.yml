@@ -1,4 +1,4 @@
-# Continuous verification: SDK JS/Java, workspace packages, optional Maven module backend.
+# Continuous verification: SDK JS/Java. Guest modules live in portaki-modules.
 # Job IDs are stable slugs for branch protection / required checks.
 
 name: ci-verify
@@ -10,19 +10,15 @@ on:
     branches: [main, develop]
     paths:
       - "sdk/**"
-      - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
-      - "scripts/assert-no-file-deps.mjs"
       - ".github/workflows/ci-verify.yml"
   pull_request:
     branches: [main, develop]
     paths:
       - "sdk/**"
-      - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
-      - "scripts/assert-no-file-deps.mjs"
       - ".github/workflows/ci-verify.yml"
 
 permissions:
@@ -35,7 +31,6 @@ concurrency:
 env:
   NODE_VERSION: "22"
   JAVA_VERSION: "21"
-  PNPM_VERSION: "9.15.4"
 
 jobs:
   detect_changes:
@@ -44,8 +39,6 @@ jobs:
     outputs:
       sdk_javascript: ${{ steps.paths.outputs.sdk_javascript }}
       sdk_java: ${{ steps.paths.outputs.sdk_java }}
-      workspace_packages: ${{ steps.paths.outputs.workspace_packages }}
-      pre_arrival_java: ${{ steps.paths.outputs.pre_arrival_java }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,16 +53,6 @@ jobs:
               - '.github/workflows/ci-verify.yml'
             sdk_java:
               - 'sdk/java/**'
-              - '.github/workflows/ci-verify.yml'
-            workspace_packages:
-              - 'packages/**'
-              - 'pnpm-workspace.yaml'
-              - 'package.json'
-              - 'scripts/assert-no-file-deps.mjs'
-              - '.github/workflows/ci-verify.yml'
-            pre_arrival_java:
-              - 'sdk/java/**'
-              - 'packages/pre-arrival-form/backend/**'
               - '.github/workflows/ci-verify.yml'
 
   sdk_javascript:
@@ -117,58 +100,4 @@ jobs:
           cache: maven
 
       - name: Verify
-        run: mvn -B -ntp verify
-
-  workspace_packages:
-    name: workspace-packages
-    needs: detect_changes
-    if: needs.detect_changes.outputs.workspace_packages == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: "Assert no file: dependencies in packages"
-        run: pnpm assert-no-file-deps
-
-      - name: Lint
-        run: pnpm lint
-
-  pre_arrival_java:
-    name: pre-arrival-java
-    needs: detect_changes
-    if: needs.detect_changes.outputs.pre_arrival_java == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-
-      - name: Install SDK locally
-        working-directory: sdk/java
-        run: mvn -B -ntp install -DskipTests
-
-      - name: Verify backend
-        working-directory: packages/pre-arrival-form/backend
         run: mvn -B -ntp verify

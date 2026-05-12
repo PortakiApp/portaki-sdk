@@ -4,7 +4,7 @@ globs: ["**/*"]
 alwaysApply: true
 ---
 
-Chaque module dans packages/ est un projet indépendant publié séparément.
+Chaque module invité vit dans le dépôt **portaki-modules** (`modules/`) et est publié séparément sur npm sous `@portaki/module-*`.
 RÈGLE FONDAMENTALE : tout module DOIT utiliser @portaki/module-sdk (JS)
 ou portaki-module-sdk (Java). Ne jamais appeler l'API directement sans le SDK.
 Les modules officiels sont les tests d'intégration du SDK.

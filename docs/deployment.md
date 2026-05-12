@@ -10,16 +10,16 @@ Les workflows publient :
 ## Publier sur npmjs (résumé)
 
 1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portaki/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portaki** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
-2. **CI — Trusted Publishing** : pour chaque paquet publié par GitHub Actions, dans les **paramètres du paquet** sur npm → **Trusted Publisher** : **GitHub Actions**, org **`PortakiApp`**, dépôt **`portaki-sdk`**, et le **nom du fichier workflow** exact (`publish-npm-sdk.yml` pour `@portaki/module-sdk`, `publish-npm-packages.yml` pour les modules sous `packages/`). Optionnel : **Environment name** si le job utilise un [environment GitHub](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) du même nom.
+2. **CI — Trusted Publishing** : pour **`@portaki/module-sdk`**, configurer sur npm : dépôt **`portaki-sdk`**, workflow **`publish-npm-sdk.yml`**. Pour les **`@portaki/module-*`** invités, configurer sur npm : dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)**, workflow **`publish-npm.yml`** (voir la doc de ce dépôt).
 3. **Publication locale / secours** : npm → **Access Tokens** (granulaire avec **Publish** sur le scope **`@portaki`**) si vous publiez hors CI ou sans Trusted Publishing ; config locale : `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (ne pas committer).
-4. **Version dans le dépôt** : bump **`version`** dans `sdk/javascript/package.json` (SDK) ou dans chaque `packages/<module>/package.json` **avant** publication — la CI **ne modifie pas** ces fichiers.
+4. **Version dans le dépôt** : bump **`version`** dans `sdk/javascript/package.json` (SDK) **avant** publication — la CI **ne modifie pas** ce fichier. Les modules invités : bump dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (`modules/<id>/package.json`).
 5. **Déclencher une publication** :
-   - **Manuel** : **Actions** → **publish-npm-sdk** ou **publish-npm-packages** → **Run workflow**.
-   - **Release GitHub** : uniquement pour le SDK JS, un tag du type **`javascript-v…`**, **`js-v…`** ou **`sdk-js-v…`** déclenche [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) (aucun bump automatique ; la version publiée est celle déjà dans `package.json`).
+   - **SDK** : **Actions** → **publish-npm-sdk** → **Run workflow** (ou release tag `javascript-v…` / `js-v…` / `sdk-js-v…`).
+   - **Modules invités** : **Actions** sur **portaki-modules** → **publish-npm-packages** (`publish-npm.yml`) → **Run workflow**.
 6. **Localement** (sans CI), depuis la racine du paquet :
 
    ```bash
-   cd sdk/javascript   # ou un dossier sous packages/<nom>/
+   cd sdk/javascript
    npm login           # une fois
    npm publish --access public
    ```
@@ -42,16 +42,17 @@ Les **releases Maven** non-SNAPSHOT peuvent exiger signature GPG selon la politi
 
 | Fichier | Rôle |
 |---------|------|
-| [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java, lint `packages/`, backend pre-arrival Maven si chemins concernés. |
+| [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-npm-packages.yml`](../.github/workflows/publish-npm-packages.yml) | Publie manuellement les **`@portaki/module-*`** sous `packages/`. |
 | [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`) vers OSSRH. |
+
+Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
 ### CI — `ci-verify.yml`
 
-Déclenché sur `push` / `pull_request` vers `main` et `develop` lorsque `sdk/**`, `packages/**`, fichiers workspace racine ou ce workflow changent.
+Déclenché sur `push` / `pull_request` vers `main` et `develop` lorsque `sdk/**`, `pnpm-workspace.yaml`, `package.json` ou ce workflow changent.
 
-Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**, **`workspace_packages`**, **`pre_arrival_java`**, pilotés par [`dorny/paths-filter`](https://github.com/dorny/paths-filter).
+Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**, pilotés par [`dorny/paths-filter`](https://github.com/dorny/paths-filter).
 
 ### Publication SDK JS — `publish-npm-sdk.yml`
 
@@ -60,16 +61,6 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 **Version :** celle de **`sdk/javascript/package.json`** (à faire évoluer dans une PR avant publication).
 
 **Déclencheurs :** **`workflow_dispatch`** ; ou **`release`** **`published`** dont le tag commence par **`javascript-v`**, **`js-v`** ou **`sdk-js-v`** (évite de lancer une publication npm sur une release Maven `java-v…`).
-
-### Publication paquets invités — `publish-npm-packages.yml`
-
-**Uniquement `workflow_dispatch`** : choix **`npm_package`** (`all` ou un `@portaki/module-…`).
-
-**Matrice :** un job par paquet ; avec **`all`**, les publications s’exécutent **en parallèle** (`fail-fast: false`). Les jobs non sélectionnés se terminent tout de suite (**Skip**).
-
-**Version :** celle de chaque **`packages/.../package.json`** — bump manuel par le développeur avant de lancer le workflow.
-
-**Trusted Publishing** (OIDC), comme le SDK.
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
@@ -93,7 +84,7 @@ Paquets **publics** sous scope autorisé : pas de `.npmrc` obligatoire.
 
 Les paquets **`@portaki/module-*`** et **`@portaki/module-sdk`** sont publiés en **0.3.2** sur npmjs (patch après des **0.3.0** avec dépendance `file:` incorrecte). **portaki-web** peut déclarer **`^0.3.2`** (ou **`^0.3.0`** pour rétrocompat semver) et exécuter **`pnpm install`**.
 
-Pour publier une nouvelle série : bump des **`version`** dans les `package.json`, puis workflows **`publish-npm-sdk`** et **`publish-npm-packages`** (voir ci-dessus).
+Pour publier une nouvelle série : bump des **`version`** côté **portaki-sdk** (SDK) et côté **portaki-modules** (invités), puis lancer **`publish-npm-sdk`** sur ce dépôt et **`publish-npm-packages`** sur **portaki-modules** (workflow `publish-npm.yml`).
 
 ---
 
