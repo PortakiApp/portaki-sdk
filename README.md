@@ -25,12 +25,12 @@
 
 | Chemin | Contenu |
 |--------|---------|
-| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.1` — types, `definePortakiModule`, build TypeScript |
+| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.2` — types, `definePortakiModule`, build TypeScript |
 | [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
 | [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0-SNAPSHOT` — annotations & modèle JVM |
 | [`packages/`](packages/) | Modules invités publiés **`@portaki/module-*`** |
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^0.3.1`** dans le monorepo (résolu en **`^0.3.1`** dans le tarball npm). Les apps (ex. **portaki-web**) utilisent **`^0.3.1`** sur le registre public.
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^0.3.2`** dans le monorepo (résolu en **`^0.3.2`** dans le tarball npm). Les apps (ex. **portaki-web**) utilisent **`^0.3.2`** sur le registre public.
 
 ---
 
