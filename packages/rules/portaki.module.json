@@ -6,9 +6,23 @@
     "en": "House rules"
   },
   "description": {
-    "fr": "Bloc riche bilingue (FR/EN) pour les consignes du logement, affiché sur la page voyageur.",
-    "en": "Rich bilingual block (EN/FR) for house rules on the guest page."
+    "fr": "Bloc riche bilingue pour les consignes du logement.",
+    "en": "Rich bilingual block for house rules on the guest page."
   },
+  "details": {
+    "fr": "Rédigez vos règles en français et en anglais dans l’éditeur hôte. Le module les affiche dans l’app voyageur sans configuration technique supplémentaire.\n\nAstuce : gardez des phrases courtes (bruit, fumeurs, animaux, déchets).",
+    "en": "Write your rules in French and English in the host editor. The module shows them in the guest app with no extra technical setup.\n\nTip: keep short sentences (noise, smoking, pets, waste)."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Contenu prêt à lire", "en": "Ready-to-read content" },
+      "description": {
+        "fr": "Titres, listes et emphases respectent la charte typographique Portaki.",
+        "en": "Headings, lists and emphasis follow Portaki typography."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/rules"
+    }
+  ],
   "version": "1.0.0",
   "author": {
     "name": "Portaki",
@@ -17,12 +31,35 @@
   },
   "icon": "scroll-text",
   "type": "official",
-  "tags": ["editorial", "rules", "legal"],
+  "tags": ["editorial", "rules", "legal", "content"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
   "repository": "https://github.com/portaki-app/portaki-sdk",
   "screenshots": [],
   "config": {
+    "defaults": {},
     "fields": []
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "House rules claires — contenu riche (TipTap / CMS).",
+      "en": "Clear house rules — rich content (TipTap / CMS)."
+    },
+    "highlights": [
+      {
+        "fr": "Bloc dédié aux règles avant et pendant le séjour",
+        "en": "Dedicated block for rules before and during the stay"
+      },
+      {
+        "fr": "Prêt pour HTML ou contenu TipTap sanitisé depuis votre CMS",
+        "en": "Ready for HTML or sanitized TipTap content from your CMS"
+      },
+      {
+        "fr": "Structure pensée analytics et cohérence visuelle",
+        "en": "Structure built for analytics and visual consistency"
+      }
+    ],
+    "npmPackage": "@portaki/module-rules",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-rules"
   }
 }
