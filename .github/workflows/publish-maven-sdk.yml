@@ -62,7 +62,7 @@ jobs:
       - name: Tests and package (mvn verify)
         run: mvn -B -ntp verify
 
-      - name: Configure OSSRH credentials
+      - name: Configure Maven Central credentials (Portal user token, server id ossrh)
         env:
           OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}

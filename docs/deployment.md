@@ -3,7 +3,7 @@
 Les workflows publient :
 
 - **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, **Node 24** pour le **npm 11.5.x** fourni avec Node — pas de **`NPM_TOKEN`** dans les jobs de publication).
-- **Maven** : **Sonatype OSSRH** → **Maven Central** avec **`OSSRH_USERNAME`** et **`OSSRH_TOKEN`**.
+- **Maven** : **[Central Publisher Portal](https://central.sonatype.com/)** (l’ancien OSSRH `s01.oss.sonatype.org` est **fermé**) avec **`OSSRH_USERNAME`** et **`OSSRH_TOKEN`** remplis par un **[User Token Portal](https://central.sonatype.com/usertoken)** (pas un ancien mot de passe JIRA OSSRH).
 
 ---
 
@@ -31,8 +31,10 @@ Les workflows publient :
 | Secret | Utilisation |
 |--------|-------------|
 | *(aucun pour npm en CI)* | La publication npm utilise **Trusted Publishing** (OIDC), pas **`NPM_TOKEN`**. |
-| `OSSRH_USERNAME` | Identifiant Sonatype (OSSRH / Central Portal). |
-| `OSSRH_TOKEN` | Mot de passe ou token Sonatype. |
+| `OSSRH_USERNAME` | **User token** — champ *username* affiché sur [central.sonatype.com/usertoken](https://central.sonatype.com/usertoken) (après *Generate User Token*). |
+| `OSSRH_TOKEN` | **User token** — champ *password* du même jeton (copié une seule fois à la création). |
+
+Les noms de secrets restent `OSSRH_*` pour la CI, mais la valeur doit être un **jeton Portal**, pas d’anciennes credentials OSSRH (sinon échec d’auth ou hôtes obsolètes).
 
 Les **releases Maven** non-SNAPSHOT peuvent exiger signature GPG selon la politique Sonatype — à ajouter au `pom.xml` si besoin.
 
@@ -44,7 +46,7 @@ Les **releases Maven** non-SNAPSHOT peuvent exiger signature GPG selon la politi
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`) vers OSSRH. |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`) vers Central (snapshots + staging API). |
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
@@ -68,7 +70,11 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Déclencheurs :** push **`main`** sur `sdk/java/` (ou ce workflow) ; ou **`workflow_dispatch`** avec **`version`** optionnelle.
 
-Étapes : **`mvn verify`** (tests + package), **`Configure OSSRH credentials`**, **`mvn deploy`**, puis sur **`main`** uniquement et si la version n’est pas **`-SNAPSHOT`**, création d’une **release GitHub** `java-v{version}` (sautée si elle existe déjà).
+Étapes : **`mvn verify`** (tests + package), écriture de **`~/.m2/settings.xml`** (serveur **`ossrh`**, token Portal), **`mvn deploy`**, puis sur **`main`** uniquement et si la version n’est pas **`-SNAPSHOT`**, création d’une **release GitHub** `java-v{version}` (sautée si elle existe déjà).
+
+**Snapshots** : URL **`https://central.sonatype.com/repository/maven-snapshots/`** ; activer **Enable SNAPSHOTs** sur le namespace dans [Publishing → Namespaces](https://central.sonatype.com/publishing/namespaces).
+
+**Releases** (sans `-SNAPSHOT`) : URL de staging **`https://ossrh-staging-api.central.sonatype.com/...`** ; avec **`maven-deploy`**, prévoir la [finalisation « Maven-like »](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/) (`POST /manual/upload/...`) ou migrer vers **`central-publishing-maven-plugin`** + exigences (GPG, sources, javadoc) selon [publish-portal-maven](https://central.sonatype.org/publish/publish-portal-maven/).
 
 ---
 
