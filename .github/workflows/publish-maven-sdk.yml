@@ -2,7 +2,7 @@
 # GitHub tutorial (setup-java + secrets; examples are OSSRH legacy): https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
-# After setup-java, settings.xml is rewritten: Bearer base64(user:pass) + preemptive (Portal API; upload 401 if wrong).
+# After setup-java, settings.xml adds Bearer base64(user:pass) for Portal API (see central.sonatype.org publish-portal-api).
 
 name: publish-maven-sdk
 
@@ -81,9 +81,7 @@ jobs:
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
 
-      # Central Publisher API uses Authorization: Bearer base64(username:password), not only HTTP Basic.
-      # See https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization
-      - name: Maven settings — Bearer token + preemptive auth (server central)
+      - name: Maven settings — Bearer for Portal API (server central)
         run: |
           python3 << 'PY'
           import base64
@@ -113,11 +111,6 @@ jobs:
                       <value>{}</value>
                     </property>
                   </httpHeaders>
-                  <httpConfiguration>
-                    <all>
-                      <usePreemptiveAuth>true</usePreemptiveAuth>
-                    </all>
-                  </httpConfiguration>
                 </configuration>
               </server>
             </servers>

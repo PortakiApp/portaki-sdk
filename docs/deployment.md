@@ -36,7 +36,21 @@ Les workflows publient :
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
 | `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
 
-La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** avec **`server-id`** / **`server-username`** / **`server-password`** (noms de variables d’environnement), secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**, puis **`mvn deploy`**. Contrairement aux exemples **OSSRH** du tutoriel, ce dépôt utilise le **Central Portal** (`server` **`central`**, **`central-publishing-maven-plugin`**, GPG, profil **`-Dcentral.deploy=true`**). Après **`setup-java`**, **`settings.xml`** est réécrit avec l’en-tête **`Authorization: Bearer`** + **`base64(username:password)`** (exigence de l’[API Publisher](https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization)), les champs **username/password** du serveur, et **`usePreemptiveAuth`**. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** (`server-id` **`central`**, **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`**), secrets **`OSSRH_*`**, puis **`mvn deploy -Dcentral.deploy=true`**. Après **`setup-java`**, **`~/.m2/settings.xml`** est réécrit pour ajouter l’en-tête **`Authorization: Bearer`** + **`base64(username:password)`** exigé par l’[API Publisher](https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization), en plus des champs **username/password** du serveur **`central`**. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+
+---
+
+## Prérequis Maven Central (checklist)
+
+À valider **côté compte Sonatype / build** avant de chercher un problème côté `usePreemptiveAuth` ou autre détail HTTP :
+
+1. **Namespace** : le `groupId` **`app.portaki`** correspond à un [namespace vérifié](https://central.sonatype.com/publishing/namespaces) sur le Central Portal (même compte ou droits de publication).
+2. **User token** : jeton généré depuis [Generate User Token](https://central.sonatype.org/publish/generate-portal-token/) / compte [central.sonatype.com](https://central.sonatype.com/account) — **pas** un ancien mot de passe OSSRH. Les secrets GitHub **`OSSRH_USERNAME`** et **`OSSRH_TOKEN`** doivent être **exactement** le couple *username* / *password* affiché à la création du jeton (sans espace parasite, sans retour ligne).
+3. **Métadonnées POM** : [exigences Sonatype](https://central.sonatype.org/publish/requirements/) — notamment [nom, description, URL](https://central.sonatype.org/publish/requirements/#project-name-description-and-url), licence, développeurs (email **ou** URL de profil, cf. doc), **SCM** ; version **release** (pas **`-SNAPSHOT`**).
+4. **Sources & Javadoc** : jars **`-sources`** et **`-javadoc`** (profil **`central-deploy`** dans ce dépôt).
+5. **GPG** : chaque fichier publié a un **`.asc`** ; voir [Working with PGP Signatures](https://central.sonatype.org/publish/requirements/gpg/) — clé publique poussée vers un [serveur de clés supporté](https://central.sonatype.org/publish/requirements/gpg/#distributing-your-public-key) (**`keyserver.ubuntu.com`**, **`keys.openpgp.org`**, **`pgp.mit.edu`**) et **clé enregistrée** sur votre profil Central. **Attention** : si une **sous-clé** est utilisée pour signer (`usage: S` sur un `ssb`), Central peut refuser la vérification — il faut signer avec la **clé primaire** (voir la section *Delete a Sub Key* de la doc GPG Sonatype).
+6. **Checksums** : générés par **`central-publishing-maven-plugin`** (cf. [exigences checksums](https://central.sonatype.org/publish/requirements/#provide-file-checksums)).
+7. **Secrets CI** : **`GPG_PRIVATE_KEY`** (armored) + **`GPG_PASSPHRASE`** + **`MAVEN_GPG_PASSPHRASE`** (même valeur que la passphrase pour le plugin Maven en CI).
 
 ---
 
@@ -68,7 +82,7 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Coordonnées :** `app.portaki:portaki-module-sdk` — version **release** dans **`sdk/java/pom.xml`** (ex. **`0.3.0`**, sans **`-SNAPSHOT`**).
 
-**Métadonnées POM :** alignées sur les [exigences Sonatype](https://central.sonatype.org/publish/requirements/), y compris [nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url), licence **Apache 2.0**, **`developers`**, **`scm`**.
+**Métadonnées POM :** alignées sur les [exigences Sonatype](https://central.sonatype.org/publish/requirements/), y compris [nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url), licence **Apache 2.0**, **`developers`** (avec **URL** profil GitHub si pas d’email), **`scm`**.
 
 **Build :** profil Maven **`central-deploy`** activé par **`-Dcentral.deploy=true`** — attache **sources** et **javadoc**, **GPG sign**, puis **`central-publishing-maven-plugin`** (`autoPublish`, `waitUntil` **`published`**). Le **`mvn verify`** local (CI **`ci-verify`**) **n’active pas** ce profil : pas de GPG requis sur les postes de dev.
 
