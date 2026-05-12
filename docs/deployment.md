@@ -36,7 +36,7 @@ Les workflows publient :
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
 | `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
 
-La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** avec **`server-id`** / **`server-username`** / **`server-password`** (noms de variables d’environnement), secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**, puis **`mvn deploy`**. Contrairement aux exemples **OSSRH** du tutoriel, ce dépôt utilise le **Central Portal** (`server` **`central`**, **`central-publishing-maven-plugin`**, GPG, profil **`-Dcentral.deploy=true`**). Une étape réécrit **`~/.m2/settings.xml`** avec **`usePreemptiveAuth`** pour éviter les **401** sur l’upload du bundle. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** avec **`server-id`** / **`server-username`** / **`server-password`** (noms de variables d’environnement), secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**, puis **`mvn deploy`**. Contrairement aux exemples **OSSRH** du tutoriel, ce dépôt utilise le **Central Portal** (`server` **`central`**, **`central-publishing-maven-plugin`**, GPG, profil **`-Dcentral.deploy=true`**). Après **`setup-java`**, **`settings.xml`** est réécrit avec l’en-tête **`Authorization: Bearer`** + **`base64(username:password)`** (exigence de l’[API Publisher](https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization)), les champs **username/password** du serveur, et **`usePreemptiveAuth`**. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
 
 ---
 
@@ -129,6 +129,7 @@ cd sdk/java && mvn install -DskipTests
 - [npm — publishing scoped packages](https://docs.npmjs.com/cli/v10/using-npm/scope)
 - [GitHub Actions — npm provenance](https://docs.npmjs.com/generating-provenance-statements)
 - [GitHub Actions — Publier des paquets Java avec Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)
+- [Sonatype — API Publisher (auth Bearer base64)](https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization)
 - [Sonatype — Publier sur Maven Central (Central Portal + plugin)](https://central.sonatype.org/publish/publish-portal-maven/)
 - [Sonatype — Exigences Central (POM, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
 - [Sonatype — Nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url)

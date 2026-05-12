@@ -2,7 +2,7 @@
 # GitHub tutorial (setup-java + secrets; examples are OSSRH legacy): https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
-# After setup-java, settings.xml is rewritten with usePreemptiveAuth for server central (bundle upload can 401 otherwise).
+# After setup-java, settings.xml is rewritten: Bearer base64(user:pass) + preemptive (Portal API; upload 401 if wrong).
 
 name: publish-maven-sdk
 
@@ -81,16 +81,22 @@ jobs:
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
 
-      # setup-java omits usePreemptiveAuth; Central publisher bundle upload (PUT) can 401 without preemptive Basic.
-      - name: Maven settings — preemptive Basic for server central
+      # Central Publisher API uses Authorization: Bearer base64(username:password), not only HTTP Basic.
+      # See https://central.sonatype.org/publish/publish-portal-api/#authentication--authorization
+      - name: Maven settings — Bearer token + preemptive auth (server central)
         run: |
           python3 << 'PY'
+          import base64
           import os
           import pathlib
           import xml.sax.saxutils as x
 
-          user = x.escape(os.environ["MAVEN_SERVER_USERNAME"])
-          password = x.escape(os.environ["MAVEN_SERVER_PASSWORD"])
+          user = os.environ["MAVEN_SERVER_USERNAME"]
+          password = os.environ["MAVEN_SERVER_PASSWORD"]
+          bearer_raw = "Bearer " + base64.b64encode(
+              f"{user}:{password}".encode("utf-8")
+          ).decode("ascii")
+          bearer = x.escape(bearer_raw)
           settings = """<?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -101,6 +107,12 @@ jobs:
                 <username>{}</username>
                 <password>{}</password>
                 <configuration>
+                  <httpHeaders>
+                    <property>
+                      <name>Authorization</name>
+                      <value>{}</value>
+                    </property>
+                  </httpHeaders>
                   <httpConfiguration>
                     <all>
                       <usePreemptiveAuth>true</usePreemptiveAuth>
@@ -110,7 +122,7 @@ jobs:
               </server>
             </servers>
           </settings>
-          """.format(user, password)
+          """.format(x.escape(user), x.escape(password), bearer)
           path = pathlib.Path.home() / ".m2" / "settings.xml"
           path.parent.mkdir(parents=True, exist_ok=True)
           path.write_text(settings, encoding="utf-8")
