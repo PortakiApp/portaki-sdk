@@ -1,24 +1,21 @@
-# Deploys app.portaki:portaki-module-sdk (sdk/java) to Central Portal snapshot host (SNAPSHOT) or staging API (release).
-# Doc: https://central.sonatype.org/publish/publish-portal-maven/
-# Maven server ossrh via actions/setup-java (MAVEN_SERVER_* env names). No GPG for -SNAPSHOT.
+# Release app.portaki:portaki-module-sdk to Maven Central via central-publishing-maven-plugin.
+# Requirements: https://central.sonatype.org/publish/requirements/
+# Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
 
 name: publish-maven-sdk
 
 run-name: publish-maven-sdk-${{ github.event_name }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "sdk/java/**"
-      - ".github/workflows/publish-maven-sdk.yml"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 0.3.0 or 0.3.0-SNAPSHOT). Empty keeps pom."
+        description: "Release version (e.g. 0.3.1). Empty keeps pom. No -SNAPSHOT."
         required: false
         default: ""
         type: string
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -32,24 +29,45 @@ env:
 
 jobs:
   publish:
-    name: test-and-publish
+    name: release-to-central
     runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'java-v'))
     env:
       MAVEN_SERVER_USERNAME: ${{ secrets.OSSRH_USERNAME }}
       MAVEN_SERVER_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+      MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     defaults:
       run:
         working-directory: sdk/java
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
-      - name: Require Maven Central token
+      - name: Require Central Portal token
         run: |
           if [ -z "${MAVEN_SERVER_USERNAME}" ] || [ -z "${MAVEN_SERVER_PASSWORD}" ]; then
-            echo "::error::Set secrets OSSRH_USERNAME and OSSRH_TOKEN (Central Portal user token: https://central.sonatype.com/usertoken)."
+            echo "::error::Set secrets OSSRH_USERNAME and OSSRH_TOKEN (https://central.sonatype.org/publish/generate-portal-token/)."
             exit 1
           fi
+
+      - name: Require GPG signing secrets
+        run: |
+          if [ -z "${GPG_PRIVATE_KEY}" ] || [ -z "${GPG_PASSPHRASE}" ]; then
+            echo "::error::Set secrets GPG_PRIVATE_KEY (armored) and GPG_PASSPHRASE (https://central.sonatype.org/publish/requirements/gpg/)."
+            exit 1
+          fi
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -57,33 +75,37 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
-          server-id: ossrh
+          server-id: central
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
-        run: >
-          mvn -B -ntp org.codehaus.mojo:versions-maven-plugin:2.17.1:set
-          "-DnewVersion=${{ github.event.inputs.version }}" -DgenerateBackupPoms=false
+        run: |
+          V="${{ github.event.inputs.version }}"
+          case "$V" in *-SNAPSHOT*)
+            echo "::error::SNAPSHOT versions are not published with this workflow."
+            exit 1
+            ;;
+          esac
+          mvn -B -ntp org.codehaus.mojo:versions-maven-plugin:2.17.1:set "-DnewVersion=${V}" -DgenerateBackupPoms=false
 
       - name: Project version
         id: project
         run: |
           V=$(mvn -B -ntp -q -DforceStdout help:evaluate -Dexpression=project.version | tr -d '\r\n')
           echo "version=$V" >> "$GITHUB_OUTPUT"
-
-      - name: Tests and package (mvn verify)
-        run: mvn -B -ntp verify
+          case "$V" in *-SNAPSHOT*)
+            echo "::error::POM version must not be a SNAPSHOT for Central release (got ${V})."
+            exit 1
+            ;;
+          esac
 
       - name: Deploy to Maven Central
-        run: mvn -B -ntp deploy -DskipTests
+        run: mvn -B -ntp deploy -DskipTests -Dcentral.deploy=true
 
-      - name: Create GitHub Release (main, non-SNAPSHOT only)
-        if: >
-          success() &&
-          github.ref == 'refs/heads/main' &&
-          !contains(steps.project.outputs.version, 'SNAPSHOT')
+      - name: Create GitHub Release (workflow_dispatch on main)
+        if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -94,6 +116,6 @@ jobs:
           else
             gh release create "${TAG}" \
               --title "Java SDK ${TAG}" \
-              --notes "Maven coordinates: \`app.portaki:portaki-module-sdk:${VERSION}\` (Maven Central)." \
+              --notes "Maven coordinates: \`app.portaki:portaki-module-sdk:${VERSION}\` ([Maven Central](https://central.sonatype.com/))." \
               --target "${{ github.sha }}"
           fi

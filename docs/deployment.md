@@ -3,7 +3,7 @@
 Les workflows publient :
 
 - **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, **Node 24** pour le **npm 11.5.x** fourni avec Node — pas de **`NPM_TOKEN`** dans les jobs de publication).
-- **Maven** : **[Central Publisher Portal](https://central.sonatype.com/)** — doc officielle Sonatype **[Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)** ; snapshots via **`maven-deploy`** + jeton Portal ([détails](#secrets-github)). Activer **Enable SNAPSHOTs** sur le namespace **`app.portaki`** ([namespaces](https://central.sonatype.com/publishing/namespaces)).
+- **Maven** : **[Maven Central](https://central.sonatype.com/)** via le **[Central Publisher Portal](https://central.sonatype.com/)** — publication des **releases** stables (pas de **`-SNAPSHOT`**) avec **`central-publishing-maven-plugin`** ([guide Maven](https://central.sonatype.org/publish/publish-portal-maven/)). Le `pom` du SDK respecte les **[exigences Central](https://central.sonatype.org/publish/requirements/)** (nom, description, URL, licence, développeurs, SCM, [sources & javadoc](https://central.sonatype.org/publish/requirements/#supply-javadoc-and-sources), [signatures GPG](https://central.sonatype.org/publish/requirements/#sign-files-with-gpgpgp)).
 
 ---
 
@@ -26,15 +26,17 @@ Les workflows publient :
 
 ---
 
-## Secrets GitHub
+## Secrets GitHub (Maven Central)
 
 | Secret | Utilisation |
 |--------|-------------|
 | *(aucun pour npm en CI)* | La publication npm utilise **Trusted Publishing** (OIDC), pas **`NPM_TOKEN`**. |
-| `OSSRH_USERNAME` | **User token** Central — champ *username* ([usertoken](https://central.sonatype.com/usertoken)). |
-| `OSSRH_TOKEN` | **User token** Central — champ *password* du même jeton. |
+| `OSSRH_USERNAME` | **User token** Central Portal — champ *username* ([générer un jeton](https://central.sonatype.org/publish/generate-portal-token/)). |
+| `OSSRH_TOKEN` | **User token** Central Portal — champ *password* du même jeton. |
+| `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
+| `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
 
-La workflow **`publish-maven-sdk`** définit les variables d’environnement **`MAVEN_SERVER_USERNAME`** et **`MAVEN_SERVER_PASSWORD`** à partir des secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont ces **noms** de variables (pas les secrets en clair) : l’action écrit le serveur **`ossrh`** dans **`~/.m2/settings.xml`** pour **`mvn deploy`**. Les **`-SNAPSHOT`** vont vers **`https://central.sonatype.com/repository/maven-snapshots/`** (sans GPG). Voir la [doc Sonatype (Central Portal + Maven)](https://central.sonatype.org/publish/publish-portal-maven/).
+La workflow **`publish-maven-sdk`** mappe **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`** sur **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont les **noms** de ces variables d’environnement ; l’action écrit le serveur Maven **`central`** dans **`~/.m2/settings.xml`**, attendu par **`central-publishing-maven-plugin`** (`publishingServerId` **`central`**). L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
 
 ---
 
@@ -44,7 +46,7 @@ La workflow **`publish-maven-sdk`** définit les variables d’environnement **`
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`, **SNAPSHOT**) : JDK + cache + serveur **`ossrh`** via **`setup-java`** (`MAVEN_SERVER_*`). |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** en **release** sur Central (`mvn deploy -Dcentral.deploy=true`). |
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
@@ -64,17 +66,23 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
-Référence Sonatype : **[Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)**.
+**Coordonnées :** `app.portaki:portaki-module-sdk` — version **release** dans **`sdk/java/pom.xml`** (ex. **`0.3.0`**, sans **`-SNAPSHOT`**).
 
-**Artefact :** `app.portaki:portaki-module-sdk` (version **`0.3.0-SNAPSHOT`** dans le `pom` tant qu’on publie des snapshots).
+**Métadonnées POM :** alignées sur les [exigences Sonatype](https://central.sonatype.org/publish/requirements/), y compris [nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url), licence **Apache 2.0**, **`developers`**, **`scm`**.
 
-**Déclencheurs :** push **`main`** sur `sdk/java/` (ou ce workflow) ; ou **`workflow_dispatch`** avec **`version`** optionnelle.
+**Build :** profil Maven **`central-deploy`** activé par **`-Dcentral.deploy=true`** — attache **sources** et **javadoc**, **GPG sign**, puis **`central-publishing-maven-plugin`** (`autoPublish`, `waitUntil` **`published`**). Le **`mvn verify`** local (CI **`ci-verify`**) **n’active pas** ce profil : pas de GPG requis sur les postes de dev.
 
-Étapes : contrôle des secrets, **`actions/setup-java`** (JDK + cache Maven + **`settings.xml`** serveur **`ossrh`**), **`mvn verify`**, **`mvn deploy`**, puis sur **`main`** sans **`-SNAPSHOT`** : **release GitHub** `java-v{version}` si absente.
+**Déclencheurs :**
 
-**Snapshots :** activer **Enable SNAPSHOTs** sur le namespace dans [Publishing → Namespaces](https://central.sonatype.com/publishing/namespaces).
+1. **`workflow_dispatch`** sur **`main`** uniquement — champ **`version`** optionnel (ex. `0.3.1`) pour **`versions:set`** avant déploiement ; laisser vide pour publier la version déjà dans le `pom`.
+2. **`release`** **`published`** dont le tag commence par **`java-v`** (ex. **`java-v0.3.0`**) — checkout au tag, puis **`mvn deploy`** (utile si la release GitHub est créée à la main après merge du bump de version).
 
-**Releases** (sans `-SNAPSHOT`) : exigent GPG + sources + javadoc côté Central — non couvert par ce flux minimal ; utiliser plus tard **`central-publishing-maven-plugin`** ou une doc dédiée.
+Après un **`workflow_dispatch`** réussi sur **`main`**, création d’une **release GitHub** `java-v{version}` si elle n’existe pas encore.
+
+**Références :**
+
+- [Publier avec Maven (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)
+- [Exigences (métadonnées, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
 
 ---
 
@@ -96,7 +104,17 @@ Pour publier une nouvelle série : bump des **`version`** côté **portaki-sdk**
 
 ## Consommer le jar Maven (Maven Central)
 
-Après publication sur Central, utilisez la version publiée. En local dans ce dépôt :
+Après synchronisation sur Central, déclarez la dépendance sans dépôt supplémentaire (artefacts **release** sur **`repo1.maven.org`**) :
+
+```xml
+<dependency>
+  <groupId>app.portaki</groupId>
+  <artifactId>portaki-module-sdk</artifactId>
+  <version>0.3.0</version>
+</dependency>
+```
+
+En local dans ce dépôt :
 
 ```bash
 cd sdk/java && mvn install -DskipTests
@@ -109,4 +127,6 @@ cd sdk/java && mvn install -DskipTests
 - [npm — Trusted publishers](https://docs.npmjs.com/trusted-publishers)
 - [npm — publishing scoped packages](https://docs.npmjs.com/cli/v10/using-npm/scope)
 - [GitHub Actions — npm provenance](https://docs.npmjs.com/generating-provenance-statements)
-- [Sonatype — Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)
+- [Sonatype — Publier sur Maven Central (Central Portal + plugin)](https://central.sonatype.org/publish/publish-portal-maven/)
+- [Sonatype — Exigences Central (POM, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
+- [Sonatype — Nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url)
