@@ -1,12 +1,8 @@
 <p align="center">
-  <a href="https://portaki.app" title="Portaki">
-    <img
-      src="https://portaki.app/portaki-wordmark.svg"
-      width="142"
-      height="39"
-      alt="Portaki"
-    >
-  </a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-wordmark-light.svg">
+    <img src="https://portaki.app/portaki-wordmark.svg" width="142" height="39" alt="Portaki" />
+  </picture>
 </p>
 
 <h1 align="center">Portaki Module SDK · Java</h1>

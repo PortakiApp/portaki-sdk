@@ -1,0 +1,104 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "access-guide",
+  "name": {
+    "fr": "Accès & parking",
+    "en": "Access & parking"
+  },
+  "description": {
+    "fr": "Étapes jusqu’au logement : parking, porte, ascenseur, photos.",
+    "en": "Steps to the stay: parking, door, lift, photos."
+  },
+  "details": {
+    "fr": "Le champ `steps_json` est un tableau JSON : `id`, `kind` (parking, door, elevator, other), `title` et `detail` en FR/EN.",
+    "en": "`steps_json` is a JSON array: `id`, `kind` (parking, door, elevator, other), localized `title` and `detail`."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Parking puis hall", "en": "Parking then lobby" },
+      "description": {
+        "fr": "Deux étapes `kind`: parking puis door, avec lien Street View dans `parking_map_url`.",
+        "en": "Two `kind` steps: parking then door, plus Street View in `parking_map_url`."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/access-guide"
+    }
+  ],
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "car-front",
+  "type": "official",
+  "tags": ["access", "parking", "arrival"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "defaults": {},
+    "globalAlert": {
+      "type": "info",
+      "message": {
+        "fr": "Le champ JSON `steps_json` décrit chaque étape (titre + détail FR/EN). Utilisez `kind` pour regrouper visuellement : parking, door, elevator, other.",
+        "en": "The `steps_json` field lists each step (FR/EN title + detail). Use `kind` for grouping: parking, door, elevator, other."
+      },
+      "helpUrl": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/access-guide"
+    },
+    "fields": [
+      {
+        "key": "steps_json",
+        "label": { "fr": "Étapes d’accès (JSON)", "en": "Access steps (JSON)" },
+        "description": {
+          "fr": "Exemple : [{\"id\":\"park\",\"kind\":\"parking\",\"title\":{\"fr\":\"Parking\",\"en\":\"Parking\"},\"detail\":{\"fr\":\"Place B12, niveau -1.\",\"en\":\"Spot B12, level -1.\"}},{\"id\":\"door\",\"kind\":\"door\",\"title\":{\"fr\":\"Porte\",\"en\":\"Door\"},\"detail\":{\"fr\":\"Digicode 1234 puis pousser.\",\"en\":\"Code 1234 then push.\"}}]",
+          "en": "Example: [{\"id\":\"park\",\"kind\":\"parking\",\"title\":{\"fr\":\"…\",\"en\":\"Parking\"},\"detail\":{\"fr\":\"…\",\"en\":\"Spot B12…\"}}]"
+        },
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "key": "parking_map_url",
+        "label": { "fr": "Lien plan / Google Maps parking", "en": "Parking map / Google Maps URL" },
+        "description": {
+          "fr": "Lien vers une carte annotée ou Street View.",
+          "en": "Link to an annotated map or Street View."
+        },
+        "type": "url",
+        "required": false
+      },
+      {
+        "key": "arrival_video_url",
+        "label": { "fr": "Vidéo arrivée (optionnel)", "en": "Arrival video (optional)" },
+        "description": {
+          "fr": "Lien YouTube / Loom montrant le trajet porte à porte.",
+          "en": "YouTube / Loom link for door-to-door walkthrough."
+        },
+        "type": "url",
+        "required": false
+      },
+      {
+        "key": "global_note",
+        "label": { "fr": "Note générale (optionnel)", "en": "General note (optional)" },
+        "description": {
+          "fr": "Ex. « Sonnette « Martin » au hall ».",
+          "en": "e.g. “Ring ‘Martin’ at lobby.”"
+        },
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Du parking à la porte, sans ambiguïté.",
+      "en": "From parking to the door, without guesswork."
+    },
+    "highlights": [
+      { "fr": "Étapes JSON", "en": "JSON steps" },
+      { "fr": "Liens carte / vidéo", "en": "Map / video links" }
+    ],
+    "npmPackage": "@portaki/module-access-guide",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-access-guide"
+  }
+}

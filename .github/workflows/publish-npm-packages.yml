@@ -13,12 +13,20 @@ on:
         required: true
         type: choice
         options:
+          # Aligné sur portaki-api OfficialModuleCatalogAdapter.ORDERED_IDS (+ "all")
           - all
           - "@portaki/module-train"
           - "@portaki/module-events"
+          - "@portaki/module-checklist"
           - "@portaki/module-rules"
           - "@portaki/module-appliances"
-          - "@portaki/module-checklist"
+          - "@portaki/module-facility-hours"
+          - "@portaki/module-wifi-guest"
+          - "@portaki/module-waste-recycling"
+          - "@portaki/module-local-guide"
+          - "@portaki/module-weather"
+          - "@portaki/module-access-guide"
+          - "@portaki/module-emergency-contacts"
           - "@portaki/module-pre-arrival-form"
 
 permissions:
@@ -38,11 +46,19 @@ jobs:
       fail-fast: false
       matrix:
         package:
+          # Même ordre que workflow_dispatch.options (sauf "all")
           - "@portaki/module-train"
           - "@portaki/module-events"
+          - "@portaki/module-checklist"
           - "@portaki/module-rules"
           - "@portaki/module-appliances"
-          - "@portaki/module-checklist"
+          - "@portaki/module-facility-hours"
+          - "@portaki/module-wifi-guest"
+          - "@portaki/module-waste-recycling"
+          - "@portaki/module-local-guide"
+          - "@portaki/module-weather"
+          - "@portaki/module-access-guide"
+          - "@portaki/module-emergency-contacts"
           - "@portaki/module-pre-arrival-form"
 
     steps:

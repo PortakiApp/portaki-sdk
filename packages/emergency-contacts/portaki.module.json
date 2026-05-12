@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "emergency-contacts",
+  "name": {
+    "fr": "Urgences & utiles",
+    "en": "Emergency & useful"
+  },
+  "description": {
+    "fr": "Numéros d’urgence, pharmacie de garde, ligne hôte.",
+    "en": "Emergency numbers, duty pharmacy, host line."
+  },
+  "details": {
+    "fr": "Le tableau `contacts_json` contient `id`, `label` FR/EN, `phone`, `note` optionnelle, `category` libre.",
+    "en": "`contacts_json` array: `id`, localized `label`, `phone`, optional `note`, free-form `category`."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Pharmacie + hôte", "en": "Pharmacy + host" },
+      "description": {
+        "fr": "Une ligne `category: pharmacy` et `host_visible_phone` pour la ligne directe.",
+        "en": "One `category: pharmacy` row plus `host_visible_phone` for the direct host line."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/emergency-contacts"
+    }
+  ],
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "phone",
+  "type": "official",
+  "tags": ["emergency", "contacts", "host"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "defaults": {},
+    "globalAlert": {
+      "type": "warning",
+      "message": {
+        "fr": "En cas d’urgence vitale, composez le **112** (UE) ou le **15** (SAMU) selon les consignes locales.",
+        "en": "For life-threatening emergencies, dial **112** (EU) or your local emergency number."
+      }
+    },
+    "fields": [
+      {
+        "key": "contacts_json",
+        "label": { "fr": "Contacts (JSON)", "en": "Contacts (JSON)" },
+        "description": {
+          "fr": "Tableau : id, label {fr,en}, phone (E.164 ou local), note {fr,en} optionnel, category (ex. police, pharmacy, host).",
+          "en": "Array: id, label {fr,en}, phone, optional note {fr,en}, category (police, pharmacy, host, …)."
+        },
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "key": "host_visible_phone",
+        "label": { "fr": "Téléphone hôte affiché (optionnel)", "en": "Visible host phone (optional)" },
+        "description": {
+          "fr": "Ligne directe affichée en plus du JSON (texte simple, non chiffré).",
+          "en": "Extra line shown besides JSON (plain text, not encrypted)."
+        },
+        "type": "text",
+        "required": false
+      }
+    ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Les bons numéros, au bon endroit.",
+      "en": "The right numbers in one place."
+    },
+    "highlights": [
+      { "fr": "JSON structuré", "en": "Structured JSON" },
+      { "fr": "Lien tel:", "en": "tel: links" }
+    ],
+    "npmPackage": "@portaki/module-emergency-contacts",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-emergency-contacts"
+  }
+}

@@ -89,6 +89,17 @@ npm install @portaki/module-sdk
 
 Paquets **publics** sous scope autorisé : pas de `.npmrc` obligatoire.
 
+### `portaki-web` et la série **0.3.0**
+
+Les paquets sous `packages/` et **`sdk/javascript`** sont en **`0.3.0`** dans ce dépôt. **portaki-web** peut pointer en **`file:../portaki-sdk/...`** vers chaque module + le SDK (résolution **0.3.0** locale sans attendre npm).
+
+- Quand **npmjs** expose bien toute la série **`0.3.0`** :
+
+  1. Actions → **`publish-npm-sdk`** (ou tag release `javascript-v…` / `sdk-js-v…`) pour **`@portaki/module-sdk@0.3.0`**.
+  2. Actions → **`publish-npm-packages`** → **`all`** pour tous les **`@portaki/module-*`**.
+
+  Ensuite, dans **portaki-web** : remplacer les **`file:`** par **`^0.3.0`** sur les dépendances `@portaki/*` si tu veux consommer le registre, puis `pnpm install`.
+
 ---
 
 ## Consommer le jar Maven (Maven Central)

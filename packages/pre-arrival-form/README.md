@@ -1,10 +1,13 @@
 <div align="center">
 
-<a href="https://portaki.app"><img src="https://portaki.app/portaki-wordmark.svg" width="148" height="40" alt="Portaki"></a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-wordmark-light.svg">
+  <img src="https://portaki.app/portaki-wordmark.svg" width="160" height="44" alt="Portaki" />
+</picture>
 
 # 📋 Module Pré-arrivée · Full stack
 
-### `pre-arrival-form`
+### `@portaki/module-pre-arrival-form`
 
 [![Frontend npm](https://img.shields.io/npm/v/@portaki/module-pre-arrival-form?label=%40portaki%2Fmodule-pre-arrival-form&logo=npm&color=CB3837)](https://www.npmjs.com/package/@portaki/module-pre-arrival-form)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://opensource.org/licenses/AGPL-3.0)
@@ -43,6 +46,7 @@
 | 🆔 **`id`** | `pre-arrival-form` |
 | 📍 **Slot nav** | `section` |
 | 🎨 **Icône** | `clipboard-list` |
+| 📄 **Manifeste** | [`portaki.module.json`](./portaki.module.json) |
 | 👁️ **Visibilité** | `visibleOnStatus: ['PRE_ARRIVAL', 'UPCOMING']` |
 | ☕ **Backend** | [`backend/`](./backend/) — Maven, `portaki-module-sdk` Java, Spring |
 

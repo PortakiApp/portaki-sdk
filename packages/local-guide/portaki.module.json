@@ -1,0 +1,90 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "local-guide",
+  "name": {
+    "fr": "Bons plans du coin",
+    "en": "Local picks"
+  },
+  "description": {
+    "fr": "Boulangerie, plage, parking, urgences — liens et notes courtes.",
+    "en": "Bakery, beach, parking, ER — links and short notes."
+  },
+  "details": {
+    "fr": "`spots_json` : tableau d’objets avec `id`, `title` {fr,en}, `url` (optionnel), `category` (optionnel), `note` {fr,en} optionnel. Le champ `disclaimer` rappelle que les horaires peuvent changer.",
+    "en": "`spots_json`: array with `id`, `title`, optional `url`, `category`, `note`. `disclaimer` reminds guests hours may change."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Lien Google Maps", "en": "Google Maps link" },
+      "description": {
+        "fr": "Collez un goo.gl / maps.app pour ouvrir directement l’itinéraire.",
+        "en": "Paste maps.app / goo.gl for one-tap directions."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/local-guide"
+    }
+  ],
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "map-pin",
+  "type": "official",
+  "tags": ["local", "map", "guest", "tips"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "defaults": {},
+    "globalAlert": {
+      "type": "info",
+      "message": {
+        "fr": "Chaque entrée peut avoir une URL (Google Maps, site). Catégories libres : food, beach, health, transport…",
+        "en": "Each entry can include a URL (Maps, website). Free-form categories: food, beach, health, transport…"
+      },
+      "helpUrl": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/local-guide"
+    },
+    "fields": [
+      {
+        "key": "spots_json",
+        "label": { "fr": "Lieux & liens (JSON)", "en": "Places & links (JSON)" },
+        "description": {
+          "fr": "Exemple : [{\"id\":\"bakery\",\"title\":{\"fr\":\"Boulangerie Martin\",\"en\":\"Martin bakery\"},\"url\":\"https://maps.app.goo.gl/...\",\"category\":\"food\",\"note\":{\"fr\":\"Fermé le lundi\",\"en\":\"Closed Monday\"}}]",
+          "en": "Example: [{\"id\":\"bakery\",\"title\":{\"fr\":\"...\",\"en\":\"Martin bakery\"},\"url\":\"...\",\"category\":\"food\",\"note\":{\"fr\":\"...\",\"en\":\"Closed Monday\"}}]"
+        },
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "key": "disclaimer",
+        "label": { "fr": "Avertissement (optionnel)", "en": "Disclaimer (optional)" },
+        "description": {
+          "fr": "Ex. « Liens indicatifs, horaires à vérifier sur place. »",
+          "en": "e.g. “Indicative links; verify hours on site.”"
+        },
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Curated local — une ligne par lieu.",
+      "en": "Curated local — one row per place."
+    },
+    "highlights": [
+      {
+        "fr": "URLs externes (Maps, sites)",
+        "en": "External URLs (Maps, sites)"
+      },
+      {
+        "fr": "Disclaimer optionnel (horaires indicatifs)",
+        "en": "Optional disclaimer (indicative hours)"
+      }
+    ],
+    "npmPackage": "@portaki/module-local-guide",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-local-guide"
+  }
+}

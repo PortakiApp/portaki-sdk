@@ -1,12 +1,8 @@
 <p align="center">
-  <a href="https://portaki.app" title="Portaki">
-    <img
-      src="https://portaki.app/portaki-wordmark.svg"
-      width="177"
-      height="48"
-      alt="Portaki"
-    >
-  </a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-wordmark-light.svg">
+    <img src="https://portaki.app/portaki-wordmark.svg" width="177" height="48" alt="Portaki" />
+  </picture>
 </p>
 
 <h1 align="center">Portaki SDK</h1>
@@ -34,7 +30,7 @@
 | [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0-SNAPSHOT` — annotations & modèle JVM |
 | [`packages/`](packages/) | Modules invités publiés **`@portaki/module-*`** |
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`**. En local, pnpm relie au dossier `sdk/javascript`. Au **`pnpm publish`**, la dépendance workspace est réécrite vers une semver publiable (ex. **`^0.3.0`**).
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`** (résolution locale du paquet `sdk/javascript` en **0.3.0**). Au **`pnpm publish`**, pnpm réécrit vers une semver publiable (**`^0.3.0`** une fois le SDK publié sur npm).
 
 ---
 

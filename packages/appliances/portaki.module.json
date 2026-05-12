@@ -6,19 +6,19 @@
     "en": "Appliance guide"
   },
   "description": {
-    "fr": "Accordéon par appareil avec consignes courtes pour le voyageur.",
-    "en": "Accordion per appliance with short guest-facing tips."
+    "fr": "Accordéon par appareil : consignes, notices PDF, sécurité.",
+    "en": "Per-appliance tips, PDF manuals, safety notes."
   },
   "details": {
-    "fr": "Ajoutez vos appareils (TV, lave-linge, four, clim…) et des consignes concises. Zéro champ technique : activez le module et remplissez les fiches depuis l’espace hôte.\n\nLes icônes Lucide suggèrent le type d’appareil pour une lecture rapide.",
-    "en": "Add appliances (TV, washer, oven, AC…) with concise tips. No technical fields: enable the module and fill cards from the host area.\n\nLucide icons hint at device type for quick scanning."
+    "fr": "Renseignez la liste en JSON depuis le configurateur hôte (champ « Liste des appareils »). Chaque entrée peut inclure un lien vers une notice hébergée (PDF ou page fabricant).\n\nUn bloc « sécurité » optionnel s’affiche en tête (coupure eau, extincteur…).",
+    "en": "Fill the JSON list from the host configurator (“Appliance list” field). Each entry can link to a manual (PDF or vendor page).\n\nAn optional safety block appears at the top (water shutoff, extinguisher…)."
   },
   "examples": [
     {
       "title": { "fr": "Fiches appareil", "en": "Appliance cards" },
       "description": {
-        "fr": "Chaque ligne se déplie : marche / arrêt, programmes utiles, sécurité.",
-        "en": "Each row expands: on/off, useful programs, safety notes."
+        "fr": "Titre FR/EN, astuces courtes, lien notice.",
+        "en": "FR/EN title, short tips, manual link."
       },
       "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/appliances"
     }
@@ -29,34 +29,63 @@
     "url": "https://portaki.app",
     "type": "official"
   },
-  "icon": "microwave",
+  "icon": "plug",
   "type": "official",
-  "tags": ["howto", "devices", "home", "guest"],
+  "tags": ["howto", "devices", "home", "guest", "manual"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
-  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
   "screenshots": [],
   "config": {
     "defaults": {},
-    "fields": []
+    "globalAlert": {
+      "type": "info",
+      "message": {
+        "fr": "Collez un tableau JSON conforme au modèle du configurateur.",
+        "en": "Paste a JSON array as documented in the host configurator."
+      },
+      "helpUrl": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/appliances"
+    },
+    "fields": [
+      {
+        "key": "devices_json",
+        "label": { "fr": "Liste des appareils (JSON)", "en": "Appliance list (JSON)" },
+        "description": {
+          "fr": "Tableau JSON : id, title {fr,en}, tips {fr,en}?, manualUrl?, icon?",
+          "en": "JSON array: id, title {fr,en}, tips?, manualUrl?, icon?"
+        },
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "key": "safety_notice",
+        "label": { "fr": "Consignes de sécurité", "en": "Safety notice" },
+        "description": {
+          "fr": "Optionnel — affiché en tête.",
+          "en": "Optional — shown at the top."
+        },
+        "type": "textarea",
+        "required": false
+      }
+    ]
   },
   "catalog": {
     "tagline": {
-      "fr": "Four, lave-linge, chauffage… guide éditorial par équipement.",
-      "en": "Oven, washer, heating… editorial guide per appliance."
+      "fr": "Four, lave-linge, clim… données par logement.",
+      "en": "Oven, washer, AC… per-property data."
     },
     "highlights": [
       {
-        "fr": "Section « Appareils » dans la navigation invité",
-        "en": "“Appliances” section in guest navigation"
+        "fr": "JSON structuré + notices PDF",
+        "en": "Structured JSON + PDF manuals"
       },
       {
-        "fr": "Guide riche : TipTap, médias, FAQ courte",
-        "en": "Rich guide: TipTap, media, short FAQ"
+        "fr": "Bloc sécurité optionnel",
+        "en": "Optional safety banner"
       },
       {
-        "fr": "Données par propriété (liste, notices, liens)",
-        "en": "Per-property data (list, manuals, links)"
+        "fr": "Affichage invité après activation logement",
+        "en": "Guest view after property activation"
       }
     ],
     "npmPackage": "@portaki/module-appliances",

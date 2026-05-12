@@ -1,0 +1,28 @@
+{
+  "name": "@portaki/module-emergency-contacts",
+  "version": "0.3.0",
+  "description": "Portaki module — emergency and useful phone numbers",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./src/index.tsx",
+  "scripts": {
+    "lint": "echo \"no lint yet\""
+  },
+  "dependencies": {
+    "@portaki/module-sdk": "file:../../sdk/javascript",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PortakiApp/portaki-sdk.git",
+    "directory": "packages/emergency-contacts"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

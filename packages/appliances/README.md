@@ -1,6 +1,9 @@
 <div align="center">
 
-<a href="https://portaki.app"><img src="https://portaki.app/portaki-wordmark.svg" width="148" height="40" alt="Portaki"></a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-wordmark-light.svg">
+  <img src="https://portaki.app/portaki-wordmark.svg" width="160" height="44" alt="Portaki" />
+</picture>
 
 # 🔌 Module Appareils
 
@@ -40,6 +43,7 @@
 | 🆔 **`id`** | `appliances` |
 | 📍 **Slot nav** | `section` |
 | 🎨 **Icône** | `plug` |
+| 📄 **Manifeste** | [`../portaki.module.json`](../portaki.module.json) |
 | 👁️ **Visibilité** | Toujours affiché |
 | 🗺️ **Carte** | Non |
 
@@ -51,7 +55,23 @@ Branche CMS / JSON propriété dans le JSX pour remplacer la démo.
 
 ## 📡 Données & API
 
-Contenus **par propriété** : liste d’appareils, notices, liens externes.
+Contenus **par propriété** : le configurateur hôte enregistre `devices_json` (tableau JSON) et `safety_notice` (optionnel). Chaque appareil supporte `title` {fr,en}, `tips`, `manualUrl`, `icon`.
+
+### Exemple `devices_json`
+
+```json
+[
+  {
+    "id": "lave-vaisselle",
+    "title": { "fr": "Lave-vaisselle", "en": "Dishwasher" },
+    "tips": { "fr": "Programme Éco — pastilles dans le tiroir.", "en": "Eco cycle — tabs in the drawer." },
+    "manualUrl": "",
+    "icon": "utensils"
+  }
+]
+```
+
+La page invité reçoit la config déchiffrée via `GET /api/v1/guest/{slug}/{code}` (`moduleConfigs`).
 
 ---
 

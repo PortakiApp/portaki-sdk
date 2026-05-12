@@ -34,7 +34,7 @@
   "tags": ["form", "pre-arrival", "guest", "onboarding"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
-  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
   "screenshots": [],
   "config": {
     "defaults": {},

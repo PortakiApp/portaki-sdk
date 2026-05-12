@@ -25,6 +25,9 @@ export interface PropertyData {
   name?: string
   slug?: string
   address?: string
+  /** Coordonnées du bien (page invité) — utilisées p. ex. par le module météo. */
+  lat?: number
+  lng?: number
 }
 
 export interface TrackingEvent {

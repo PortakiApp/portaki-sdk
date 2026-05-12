@@ -79,8 +79,10 @@ export default definePortakiModule({
 
   render: ({ stay, property, lang, config, track }) => (
     <TrainSection
-      departureStationName={(config.departure_station_name as string) ?? ''}
-      departureStationCode={(config.departure_station_code as string) ?? property.trainStationCode ?? ''}
+      departureStationName={String(config.departure_station_name ?? '')}
+      departureStationCode={
+        String(config.departure_station_code ?? '') || property.trainStationCode || ''
+      }
       lang={lang}
       onSearch={() => track({ type: 'action', label: 'search_train' })}
       onDepartureClick={(train) =>

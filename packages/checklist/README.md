@@ -1,6 +1,9 @@
 <div align="center">
 
-<a href="https://portaki.app"><img src="https://portaki.app/portaki-wordmark.svg" width="148" height="40" alt="Portaki"></a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-wordmark-light.svg">
+  <img src="https://portaki.app/portaki-wordmark.svg" width="160" height="44" alt="Portaki" />
+</picture>
 
 # ✅ Module Checklist départ
 
@@ -40,7 +43,8 @@
 | 📦 **npm** | `@portaki/module-checklist` |
 | 🆔 **`id`** | `checklist` |
 | 📍 **Slot nav** | `section` |
-| 🎨 **Icône** | `check-square` |
+| 🎨 **Icône** | `list-checks` |
+| 📄 **Manifeste** | [`portaki.module.json`](./portaki.module.json) |
 | 👁️ **Visibilité** | `visibleOnStatus: ['ACTIVE']` |
 | 🗺️ **Carte** | Non |
 
