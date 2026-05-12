@@ -1,4 +1,5 @@
 # Release app.portaki:portaki-module-sdk to Maven Central via central-publishing-maven-plugin.
+# GitHub tutorial (setup-java + secrets; examples are OSSRH legacy): https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
 # After setup-java, settings.xml is rewritten with usePreemptiveAuth for server central (bundle upload can 401 otherwise).

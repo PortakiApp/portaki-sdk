@@ -3,7 +3,7 @@
 Les workflows publient :
 
 - **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, **Node 24** pour le **npm 11.5.x** fourni avec Node — pas de **`NPM_TOKEN`** dans les jobs de publication).
-- **Maven** : **[Maven Central](https://central.sonatype.com/)** via le **[Central Publisher Portal](https://central.sonatype.com/)** — publication des **releases** stables (pas de **`-SNAPSHOT`**) avec **`central-publishing-maven-plugin`** ([guide Maven](https://central.sonatype.org/publish/publish-portal-maven/)). Le `pom` du SDK respecte les **[exigences Central](https://central.sonatype.org/publish/requirements/)** (nom, description, URL, licence, développeurs, SCM, [sources & javadoc](https://central.sonatype.org/publish/requirements/#supply-javadoc-and-sources), [signatures GPG](https://central.sonatype.org/publish/requirements/#sign-files-with-gpgpgp)).
+- **Maven** : **[Maven Central](https://central.sonatype.com/)** via le **[Central Publisher Portal](https://central.sonatype.com/)** — publication des **releases** stables (pas de **`-SNAPSHOT`**) avec **`central-publishing-maven-plugin`** ([guide Sonatype](https://central.sonatype.org/publish/publish-portal-maven/)). La CI reprend les idées du tutoriel GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** (`actions/setup-java`, secrets `OSSRH_*`), en s’appuyant sur la doc Sonatype plutôt que sur les exemples **OSSRH legacy** signalés dans ce tutoriel ([différences Portal vs OSSRH](https://central.sonatype.org/faq/what-is-different-between-central-portal-and-legacy-ossrh/#publishing)). Le `pom` respecte les **[exigences Central](https://central.sonatype.org/publish/requirements/)** (nom, description, URL, licence, développeurs, SCM, [sources & javadoc](https://central.sonatype.org/publish/requirements/#supply-javadoc-and-sources), [signatures GPG](https://central.sonatype.org/publish/requirements/#sign-files-with-gpgpgp)).
 
 ---
 
@@ -36,7 +36,7 @@ Les workflows publient :
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
 | `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
 
-La workflow **`publish-maven-sdk`** mappe **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`** sur **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. **`actions/setup-java`** installe le JDK et le cache Maven et écrit une première entrée serveur **`central`** ; une étape suivante réécrit **`~/.m2/settings.xml`** avec **`usePreemptiveAuth`** sur ce serveur — sans cela, l’upload du bundle par **`central-publishing-maven-plugin`** peut renvoyer **401** alors que le staging local réussit. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** avec **`server-id`** / **`server-username`** / **`server-password`** (noms de variables d’environnement), secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**, puis **`mvn deploy`**. Contrairement aux exemples **OSSRH** du tutoriel, ce dépôt utilise le **Central Portal** (`server` **`central`**, **`central-publishing-maven-plugin`**, GPG, profil **`-Dcentral.deploy=true`**). Une étape réécrit **`~/.m2/settings.xml`** avec **`usePreemptiveAuth`** pour éviter les **401** sur l’upload du bundle. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
 
 ---
 
@@ -81,6 +81,7 @@ Après un **`workflow_dispatch`** réussi sur **`main`**, création d’une **re
 
 **Références :**
 
+- [GitHub Actions — Publier des paquets Java avec Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)
 - [Publier avec Maven (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)
 - [Exigences (métadonnées, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
 
@@ -127,6 +128,7 @@ cd sdk/java && mvn install -DskipTests
 - [npm — Trusted publishers](https://docs.npmjs.com/trusted-publishers)
 - [npm — publishing scoped packages](https://docs.npmjs.com/cli/v10/using-npm/scope)
 - [GitHub Actions — npm provenance](https://docs.npmjs.com/generating-provenance-statements)
+- [GitHub Actions — Publier des paquets Java avec Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)
 - [Sonatype — Publier sur Maven Central (Central Portal + plugin)](https://central.sonatype.org/publish/publish-portal-maven/)
 - [Sonatype — Exigences Central (POM, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
 - [Sonatype — Nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url)
