@@ -1,7 +1,7 @@
 {
-  "name": "@portaki/module-checklist",
+  "name": "@portaki/module-ical-sync",
   "version": "0.3.0",
-  "description": "Module Portaki — checklist de départ",
+  "description": "Portaki host module — iCal / Airbnb calendar sync",
   "license": "AGPL-3.0",
   "type": "module",
   "main": "./src/index.tsx",
@@ -20,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/PortakiApp/portaki-sdk.git",
-    "directory": "packages/checklist"
+    "directory": "packages/ical-sync"
   },
   "publishConfig": {
     "access": "public"

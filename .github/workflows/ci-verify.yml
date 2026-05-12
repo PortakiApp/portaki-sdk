@@ -13,6 +13,7 @@ on:
       - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
+      - "scripts/assert-no-file-deps.mjs"
       - ".github/workflows/ci-verify.yml"
   pull_request:
     branches: [main, develop]
@@ -21,6 +22,7 @@ on:
       - "packages/**"
       - "pnpm-workspace.yaml"
       - "package.json"
+      - "scripts/assert-no-file-deps.mjs"
       - ".github/workflows/ci-verify.yml"
 
 permissions:
@@ -63,6 +65,7 @@ jobs:
               - 'packages/**'
               - 'pnpm-workspace.yaml'
               - 'package.json'
+              - 'scripts/assert-no-file-deps.mjs'
               - '.github/workflows/ci-verify.yml'
             pre_arrival_java:
               - 'sdk/java/**'
@@ -139,6 +142,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Assert no file: dependencies in packages
+        run: pnpm assert-no-file-deps
 
       - name: Lint
         run: pnpm lint

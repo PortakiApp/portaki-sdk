@@ -28,6 +28,7 @@ on:
           - "@portaki/module-access-guide"
           - "@portaki/module-emergency-contacts"
           - "@portaki/module-pre-arrival-form"
+          - "@portaki/module-ical-sync"
 
 permissions:
   contents: read
@@ -60,6 +61,7 @@ jobs:
           - "@portaki/module-access-guide"
           - "@portaki/module-emergency-contacts"
           - "@portaki/module-pre-arrival-form"
+          - "@portaki/module-ical-sync"
 
     steps:
       - name: Checkout
@@ -78,6 +80,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Assert no file: dependencies in packages
+        run: pnpm assert-no-file-deps
 
       # Trusted Publishing (OIDC): pnpm publish délègue au npm fourni par Node 24 — pas de NPM_TOKEN.
       - name: Publish ${{ matrix.package }}

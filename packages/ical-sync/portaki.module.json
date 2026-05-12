@@ -1,0 +1,73 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "ical-sync",
+  "name": {
+    "fr": "Calendriers (iCal / Airbnb)",
+    "en": "Calendars (iCal / Airbnb)"
+  },
+  "description": {
+    "fr": "Synchronisez des flux iCal publics (Airbnb, etc.) côté hôte.",
+    "en": "Sync public iCal feeds (Airbnb, etc.) on the host side."
+  },
+  "details": {
+    "fr": "Collez l’URL d’export .ics (Airbnb : Calendrier → Exporter). Portaki télécharge le fichier, compte les évènements et met à jour un résumé dans la configuration du module.",
+    "en": "Paste the .ics export URL (Airbnb: Calendar → Export). Portaki downloads the file, counts events, and updates a summary in the module config."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Export Airbnb", "en": "Airbnb export" },
+      "description": {
+        "fr": "Utilisez le lien secret fourni par Airbnb ; ne le partagez pas publiquement.",
+        "en": "Use the secret link from Airbnb; do not share it publicly."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/ical-sync"
+    }
+  ],
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "calendar-range",
+  "type": "official",
+  "tags": ["ical", "airbnb", "calendar", "host"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "defaults": {},
+    "globalAlert": {
+      "type": "info",
+      "message": {
+        "fr": "Module réservé à l’espace hôte : invisible pour les voyageurs.",
+        "en": "Host-only module: not shown to guests."
+      }
+    },
+    "fields": [
+      {
+        "key": "feeds_json",
+        "label": { "fr": "Flux iCal (JSON)", "en": "iCal feeds (JSON)" },
+        "description": {
+          "fr": "Ex. [{\"id\":\"airbnb\",\"url\":\"https://www.airbnb.com/calendar/ical/….ics\"}]",
+          "en": "e.g. [{\"id\":\"airbnb\",\"url\":\"https://www.airbnb.com/calendar/ical/….ics\"}]"
+        },
+        "type": "textarea",
+        "required": true
+      }
+    ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Synchronisez Airbnb et autres flux .ics.",
+      "en": "Sync Airbnb and other .ics feeds."
+    },
+    "highlights": [
+      { "fr": "Hôte uniquement", "en": "Host only" },
+      { "fr": "API Portaki", "en": "Portaki API" }
+    ],
+    "npmPackage": "@portaki/module-ical-sync",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-ical-sync"
+  }
+}

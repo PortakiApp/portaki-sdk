@@ -21,8 +21,8 @@ importers:
   packages/access-guide:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -40,8 +40,8 @@ importers:
   packages/appliances:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -59,8 +59,8 @@ importers:
   packages/checklist:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -78,8 +78,8 @@ importers:
   packages/emergency-contacts:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -97,8 +97,8 @@ importers:
   packages/events:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -116,8 +116,27 @@ importers:
   packages/facility-hours:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.14
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/ical-sync:
+    dependencies:
+      '@portaki/module-sdk':
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -135,8 +154,8 @@ importers:
   packages/local-guide:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -154,8 +173,8 @@ importers:
   packages/pre-arrival-form/frontend:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -173,8 +192,8 @@ importers:
   packages/rules:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -192,8 +211,8 @@ importers:
   packages/train:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -211,8 +230,8 @@ importers:
   packages/waste-recycling:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -230,8 +249,8 @@ importers:
   packages/weather:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -249,8 +268,8 @@ importers:
   packages/wifi-guest:
     dependencies:
       '@portaki/module-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.6)
+        specifier: workspace:^0.3.0
+        version: link:../../sdk/javascript
       react:
         specifier: ^19.1.0
         version: 19.2.6
@@ -279,11 +298,6 @@ importers:
         version: 5.9.3
 
 packages:
-
-  '@portaki/module-sdk@0.3.0':
-    resolution: {integrity: sha512-DwYHtCweMCyuV2txJ/zd4xiWWBmGDhRrl6BP+ys8g8wnDLOfxfylsCGdS3vA6K4TMYQvaNuTkbL5WneegZZapw==}
-    peerDependencies:
-      react: '>=18'
 
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
@@ -338,10 +352,6 @@ packages:
     hasBin: true
 
 snapshots:
-
-  '@portaki/module-sdk@0.3.0(react@19.2.6)':
-    dependencies:
-      react: 19.2.6
 
   '@types/react@19.2.14':
     dependencies:

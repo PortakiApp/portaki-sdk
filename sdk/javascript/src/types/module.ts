@@ -8,6 +8,8 @@ export type NavSlot = 'section' | 'bottom-bar' | 'poi-overlay'
 
 export type StayStatus = 'PRE_ARRIVAL' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
 
+export type ModuleSurface = 'guest' | 'host' | 'both'
+
 export interface StayData {
   id: string
   guestName: string
@@ -44,6 +46,14 @@ export interface ModuleContext {
   track: (event: TrackingEvent) => void
 }
 
+/** Contexte pour un rendu côté hôte (dashboard / réglages logement). */
+export interface HostModuleContext {
+  lang: LangCode
+  propertyId: string
+  config: Record<string, string | boolean | number>
+  track: (event: TrackingEvent) => void
+}
+
 export interface MapMarker {
   id: string
   lat: number
@@ -68,23 +78,72 @@ export interface PortakiModuleDefinition {
 
   config?: ModuleConfigSchema
 
+  /** Cible d’affichage : invité, hôte, ou les deux (dérivé si omis). */
+  surface?: ModuleSurface
+
   render: (ctx: ModuleContext) => ReactNode
+
+  renderHost?: (ctx: HostModuleContext) => ReactNode
 
   mapMarkers?: (ctx: Omit<ModuleContext, 'track'>) => Promise<MapMarker[]>
 }
 
 export type PortakiModuleDefinitionInput = Partial<
-  Pick<PortakiModuleDefinition, 'description' | 'version' | 'navSlot'>
+  Pick<
+    PortakiModuleDefinition,
+    | 'description'
+    | 'version'
+    | 'navSlot'
+    | 'surface'
+    | 'renderHost'
+    | 'render'
+    | 'mapMarkers'
+    | 'author'
+    | 'defaultNavLabel'
+    | 'defaultNavIcon'
+    | 'visibleOnStatus'
+    | 'mapOverlay'
+    | 'config'
+  >
 > &
-  Pick<PortakiModuleDefinition, 'id' | 'label' | 'icon' | 'render'> &
+  Pick<PortakiModuleDefinition, 'id' | 'label' | 'icon'> &
   Omit<
     PortakiModuleDefinition,
-    'id' | 'label' | 'icon' | 'render' | 'description' | 'version' | 'navSlot'
+    | 'id'
+    | 'label'
+    | 'icon'
+    | 'render'
+    | 'renderHost'
+    | 'description'
+    | 'version'
+    | 'navSlot'
+    | 'surface'
+    | 'mapMarkers'
+    | 'author'
+    | 'defaultNavLabel'
+    | 'defaultNavIcon'
+    | 'visibleOnStatus'
+    | 'mapOverlay'
+    | 'config'
   >
 
 export function definePortakiModule(def: PortakiModuleDefinitionInput): PortakiModuleDefinition {
   const description = def.description ?? { fr: '', en: '' }
   const version = def.version ?? '0.1.0'
   const navSlot = def.navSlot ?? 'section'
-  return { ...def, description, version, navSlot }
+  if (!def.render && !def.renderHost) {
+    throw new Error('@portaki/module-sdk: definePortakiModule requires `render` and/or `renderHost`')
+  }
+  const render = def.render ?? (() => null)
+  let surface: ModuleSurface | undefined = def.surface
+  if (!surface) {
+    if (def.renderHost && def.render) {
+      surface = 'both'
+    } else if (def.renderHost) {
+      surface = 'host'
+    } else {
+      surface = 'guest'
+    }
+  }
+  return { ...def, description, version, navSlot, render, surface }
 }

@@ -4,13 +4,17 @@ export type {
   PropertyData,
   TrackingEvent,
   ModuleContext,
+  HostModuleContext,
   MapMarker,
   PortakiModuleDefinition,
   PortakiModuleDefinitionInput,
   NavSlot,
   StayStatus,
+  ModuleSurface,
 } from './types/module'
 export { definePortakiModule } from './types/module'
+
+export { portakiModule, guestModule, hostModule, PortakiModuleBuilder } from './builder'
 
 export type {
   ModuleConfigFieldType,
