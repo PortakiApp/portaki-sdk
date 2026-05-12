@@ -1,5 +1,5 @@
 # Deploys app.portaki:portaki-module-sdk (sdk/java) to Central Portal snapshot host (SNAPSHOT) or staging API (release).
-# Maven server credentials via actions/setup-java (server-id ossrh). No GPG for -SNAPSHOT.
+# ~/.m2/settings.xml server ossrh: Basic + usePreemptiveAuth (setup-java alone omits preemptive; Central may 401). No GPG for -SNAPSHOT.
 
 name: publish-maven-sdk
 
@@ -34,8 +34,8 @@ jobs:
     name: test-and-publish
     runs-on: ubuntu-latest
     env:
-      MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-      MAVEN_CENTRAL_TOKEN: ${{ secrets.OSSRH_TOKEN }}
+      MAVEN_SERVER_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+      MAVEN_SERVER_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
     defaults:
       run:
         working-directory: sdk/java
@@ -45,7 +45,7 @@ jobs:
 
       - name: Require Maven Central token
         run: |
-          if [ -z "${MAVEN_USERNAME}" ] || [ -z "${MAVEN_CENTRAL_TOKEN}" ]; then
+          if [ -z "${MAVEN_SERVER_USERNAME}" ] || [ -z "${MAVEN_SERVER_PASSWORD}" ]; then
             echo "::error::Set secrets OSSRH_USERNAME and OSSRH_TOKEN (Central Portal user token: https://central.sonatype.com/usertoken)."
             exit 1
           fi
@@ -57,8 +57,45 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
           server-id: ossrh
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_CENTRAL_TOKEN
+          server-username: MAVEN_SERVER_USERNAME
+          server-password: MAVEN_SERVER_PASSWORD
+
+      # setup-java does not set usePreemptiveAuth; Central snapshot deploy (GET metadata + PUT)
+      # often returns 401 without preemptive Basic. Write ~/.m2/settings.xml explicitly.
+      - name: Configure Maven Central (preemptive Basic)
+        run: |
+          python3 << 'PY'
+          import os
+          import pathlib
+          import xml.sax.saxutils as x
+
+          user = x.escape(os.environ["MAVEN_SERVER_USERNAME"])
+          password = x.escape(os.environ["MAVEN_SERVER_PASSWORD"])
+          settings = """<?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+            <servers>
+              <server>
+                <id>ossrh</id>
+                <username>{}</username>
+                <password>{}</password>
+                <configuration>
+                  <httpConfiguration>
+                    <all>
+                      <usePreemptiveAuth>true</usePreemptiveAuth>
+                    </all>
+                  </httpConfiguration>
+                </configuration>
+              </server>
+            </servers>
+          </settings>
+          """.format(user, password)
+          path = pathlib.Path.home() / ".m2" / "settings.xml"
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(settings, encoding="utf-8")
+          print("Wrote", path)
+          PY
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''

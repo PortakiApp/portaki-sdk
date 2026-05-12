@@ -34,7 +34,7 @@ Les workflows publient :
 | `OSSRH_USERNAME` | **User token** Central — champ *username* ([usertoken](https://central.sonatype.com/usertoken)). |
 | `OSSRH_TOKEN` | **User token** Central — champ *password* du même jeton. |
 
-La workflow **`publish-maven-sdk`** définit **`MAVEN_USERNAME`** et **`MAVEN_CENTRAL_TOKEN`** à partir des secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**, puis **`actions/setup-java`** avec **`server-id: ossrh`**, **`server-username: MAVEN_USERNAME`** et **`server-password: MAVEN_CENTRAL_TOKEN`** : c’est la [méthode documentée](https://github.com/actions/setup-java/blob/main/docs/advanced-usage.md) — le action écrit **`~/.m2/settings.xml`** avec le couple HTTP Basic attendu par **`mvn deploy`** (GET `maven-metadata.xml` + PUT). Les **`-SNAPSHOT`** vont vers **`https://central.sonatype.com/repository/maven-snapshots/`** (sans GPG).
+La workflow **`publish-maven-sdk`** définit les variables d’environnement **`MAVEN_SERVER_USERNAME`** et **`MAVEN_SERVER_PASSWORD`** à partir des secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont ces **noms** de variables (pas les secrets en clair) : l’action lit leurs valeurs pour écrire le serveur **`ossrh`** dans **`settings.xml`**. Une étape suivante réécrit **`~/.m2/settings.xml`** avec le même couple et **`usePreemptiveAuth`** — le dépôt snapshot Central refuse souvent les requêtes sans Basic préemptif (**401**). Les **`-SNAPSHOT`** vont vers **`https://central.sonatype.com/repository/maven-snapshots/`** (sans GPG).
 
 ---
 
@@ -44,7 +44,7 @@ La workflow **`publish-maven-sdk`** définit **`MAVEN_USERNAME`** et **`MAVEN_CE
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`, **SNAPSHOT**) via **`setup-java`** (`server-id` **ossrh** + secrets). |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`, **SNAPSHOT**) : JDK + cache via **`setup-java`**, puis **`settings.xml`** (**ossrh** + Basic préemptif) + secrets. |
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
@@ -68,7 +68,7 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Déclencheurs :** push **`main`** sur `sdk/java/` (ou ce workflow) ; ou **`workflow_dispatch`** avec **`version`** optionnelle.
 
-Étapes : contrôle des secrets, **`actions/setup-java`** (JDK + cache Maven + **`settings.xml`** serveur **`ossrh`**), **`mvn verify`**, **`mvn deploy`**, puis sur **`main`** sans **`-SNAPSHOT`** : **release GitHub** `java-v{version}` si absente.
+Étapes : contrôle des secrets, **`actions/setup-java`** (JDK + cache Maven), écriture **`~/.m2/settings.xml`** (serveur **`ossrh`**, **`usePreemptiveAuth`**), **`mvn verify`**, **`mvn deploy`**, puis sur **`main`** sans **`-SNAPSHOT`** : **release GitHub** `java-v{version}` si absente.
 
 **Snapshots :** activer **Enable SNAPSHOTs** sur le namespace dans [Publishing → Namespaces](https://central.sonatype.com/publishing/namespaces).
 
