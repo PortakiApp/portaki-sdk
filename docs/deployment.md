@@ -34,7 +34,7 @@ Les workflows publient :
 | `OSSRH_USERNAME` | **User token** — champ *username* affiché sur [central.sonatype.com/usertoken](https://central.sonatype.com/usertoken) (après *Generate User Token*). |
 | `OSSRH_TOKEN` | **User token** — champ *password* du même jeton (copié une seule fois à la création). |
 
-Les noms de secrets restent `OSSRH_*` pour la CI, mais la valeur doit être un **jeton Portal**, pas d’anciennes credentials OSSRH (sinon échec d’auth ou hôtes obsolètes).
+Les noms de secrets restent `OSSRH_*` pour la CI. La workflow **`publish-maven-sdk`** écrit un **`Authorization: Bearer …`** (base64 du couple *username*:*password* du jeton), comme l’[API Publisher](https://central.sonatype.org/publish/publish-portal-api/#authentication-authorization) — le dépôt **`maven-snapshots`** peut refuser le seul *Basic* Maven (`401`).
 
 Les **releases Maven** non-SNAPSHOT peuvent exiger signature GPG selon la politique Sonatype — à ajouter au `pom.xml` si besoin.
 

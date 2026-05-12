@@ -68,21 +68,37 @@ jobs:
           OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
         run: |
           python3 <<'PY'
+          import base64
           import os
           import pathlib
           import xml.sax.saxutils as xs
 
+          u_raw = os.environ.get("OSSRH_USERNAME", "").strip()
+          p_raw = os.environ.get("OSSRH_TOKEN", "").strip()
+          if not u_raw or not p_raw:
+              raise SystemExit(
+                  "OSSRH_USERNAME and OSSRH_TOKEN must be set to a Central Portal user token "
+                  "(https://central.sonatype.com/usertoken). Legacy OSSRH passwords will not work."
+              )
+
+          bearer = base64.b64encode(f"{u_raw}:{p_raw}".encode("utf-8")).decode("ascii")
+          bearer_header = xs.escape(f"Bearer {bearer}")
+
           root = pathlib.Path.home() / ".m2"
           root.mkdir(parents=True, exist_ok=True)
-          u = xs.escape(os.environ["OSSRH_USERNAME"])
-          p = xs.escape(os.environ["OSSRH_TOKEN"])
           xml = f'''<?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
             <servers>
               <server>
                 <id>ossrh</id>
-                <username>{u}</username>
-                <password>{p}</password>
+                <configuration>
+                  <httpHeaders>
+                    <property>
+                      <name>Authorization</name>
+                      <value>{bearer_header}</value>
+                    </property>
+                  </httpHeaders>
+                </configuration>
               </server>
             </servers>
           </settings>
@@ -90,7 +106,7 @@ jobs:
           (root / "settings.xml").write_text(xml)
           PY
 
-      - name: Deploy to OSSRH
+      - name: Deploy to Maven Central
         run: mvn -B -ntp deploy -DskipTests
 
       - name: Create GitHub Release (main, non-SNAPSHOT only)
