@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Assert no file: dependencies in packages
+      - name: "Assert no file: dependencies in packages"
         run: pnpm assert-no-file-deps
 
       # Trusted Publishing (OIDC): pnpm publish délègue au npm fourni par Node 24 — pas de NPM_TOKEN.
