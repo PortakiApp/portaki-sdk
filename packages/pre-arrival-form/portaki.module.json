@@ -6,9 +6,23 @@
     "en": "Pre-arrival form"
   },
   "description": {
-    "fr": "Collecte heure d’arrivée, occasion, allergies — visible selon le statut du séjour.",
-    "en": "Collects arrival time, occasion, allergies — shown according to stay status."
+    "fr": "Collecte heure d’arrivée, occasion, allergies — selon le statut du séjour.",
+    "en": "Collects arrival time, occasion, allergies — shown by stay status."
   },
+  "details": {
+    "fr": "Le formulaire s’affiche aux voyageurs en phase pré-arrivée. Les réponses sont stockées côté Portaki pour préparer l’accueil.\n\nAucun champ à mapper : activez le module, puis personnalisez les libellés si votre offre l’exige (évolution produit).",
+    "en": "The form appears to guests in the pre-arrival phase. Responses are stored in Portaki to prepare the welcome.\n\nNo field mapping: enable the module, then adjust labels if your offer requires it (product evolution)."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Parcours mobile", "en": "Mobile flow" },
+      "description": {
+        "fr": "Champs courts, validation douce, focus accessibilité.",
+        "en": "Short fields, gentle validation, accessibility-minded focus."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/pre-arrival-form"
+    }
+  ],
   "version": "1.0.0",
   "author": {
     "name": "Portaki",
@@ -17,12 +31,13 @@
   },
   "icon": "clipboard-list",
   "type": "official",
-  "tags": ["form", "pre-arrival", "guest"],
+  "tags": ["form", "pre-arrival", "guest", "onboarding"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
   "repository": "https://github.com/portaki-app/portaki-sdk",
   "screenshots": [],
   "config": {
+    "defaults": {},
     "fields": []
   }
 }

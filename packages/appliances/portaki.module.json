@@ -6,9 +6,23 @@
     "en": "Appliance guide"
   },
   "description": {
-    "fr": "Accordéon par appareil (TV, lave-linge, cuisine…) avec consignes courtes pour le voyageur.",
-    "en": "Accordion per appliance (TV, washer, kitchen…) with short guest-facing tips."
+    "fr": "Accordéon par appareil avec consignes courtes pour le voyageur.",
+    "en": "Accordion per appliance with short guest-facing tips."
   },
+  "details": {
+    "fr": "Ajoutez vos appareils (TV, lave-linge, four, clim…) et des consignes concises. Zéro champ technique : activez le module et remplissez les fiches depuis l’espace hôte.\n\nLes icônes Lucide suggèrent le type d’appareil pour une lecture rapide.",
+    "en": "Add appliances (TV, washer, oven, AC…) with concise tips. No technical fields: enable the module and fill cards from the host area.\n\nLucide icons hint at device type for quick scanning."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Fiches appareil", "en": "Appliance cards" },
+      "description": {
+        "fr": "Chaque ligne se déplie : marche / arrêt, programmes utiles, sécurité.",
+        "en": "Each row expands: on/off, useful programs, safety notes."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/appliances"
+    }
+  ],
   "version": "1.0.0",
   "author": {
     "name": "Portaki",
@@ -17,12 +31,13 @@
   },
   "icon": "microwave",
   "type": "official",
-  "tags": ["howto", "devices", "home"],
+  "tags": ["howto", "devices", "home", "guest"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
   "repository": "https://github.com/portaki-app/portaki-sdk",
   "screenshots": [],
   "config": {
+    "defaults": {},
     "fields": []
   }
 }

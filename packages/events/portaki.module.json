@@ -6,9 +6,23 @@
     "en": "Local events"
   },
   "description": {
-    "fr": "Affiche les événements à proximité du logement via OpenAgenda (rayon configurable côté hôte).",
-    "en": "Shows events near the property via OpenAgenda (radius configured by the host)."
+    "fr": "Événements à proximité du logement via OpenAgenda.",
+    "en": "Events near the property via OpenAgenda."
   },
+  "details": {
+    "fr": "Les données proviennent d’OpenAgenda (France). Le rayon et les sources peuvent être affinés côté produit ; une clé API optionnelle augmente les quotas.\n\nPensez à vérifier les horaires sur les sites des organisateurs.",
+    "en": "Data comes from OpenAgenda (France). Radius and sources may be tuned in the product; an optional API key increases quotas.\n\nAlways double-check times on organizer websites."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Carte + liste", "en": "Map + list" },
+      "description": {
+        "fr": "Repères sur la carte invité et liste des événements à venir.",
+        "en": "Pins on the guest map plus a list of upcoming happenings."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/events"
+    }
+  ],
   "version": "1.0.0",
   "author": {
     "name": "Portaki",
@@ -17,12 +31,15 @@
   },
   "icon": "calendar-days",
   "type": "official",
-  "tags": ["events", "openagenda", "culture"],
+  "tags": ["events", "openagenda", "culture", "map"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
   "repository": "https://github.com/portaki-app/portaki-sdk",
   "screenshots": [],
   "config": {
+    "defaults": {
+      "openagenda_api_key": ""
+    },
     "fields": [
       {
         "key": "openagenda_api_key",
@@ -31,8 +48,8 @@
           "en": "OpenAgenda API key (optional)"
         },
         "description": {
-          "fr": "Augmente les quotas et débloque certaines sources. Sans clé, usage mutualisé selon disponibilité.",
-          "en": "Increases quotas and unlocks some sources. Without a key, shared usage when available."
+          "fr": "Augmente les quotas. Sans clé, usage mutualisé selon disponibilité.",
+          "en": "Increases quotas. Without a key, shared usage when available."
         },
         "type": "secret",
         "required": false,

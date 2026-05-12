@@ -6,9 +6,23 @@
     "en": "Train schedule"
   },
   "description": {
-    "fr": "Affiche les prochains départs SNCF depuis la gare la plus proche du logement.",
-    "en": "Shows upcoming SNCF departures from the nearest station to the property."
+    "fr": "Prochains départs SNCF depuis la gare du logement (Navitia).",
+    "en": "Upcoming SNCF departures from the property station (Navitia)."
   },
+  "details": {
+    "fr": "Le module interroge l’API Navitia avec la gare configurée (ou les valeurs par défaut ci-dessous). Sans clé API personnelle, un quota mutualisé avec cache d’environ une heure s’applique — ajoutez votre clé gratuite sur navitia.io pour lever la limitation.\n\nLes horaires affichés sont indicatifs ; vérifiez toujours auprès du transporteur.",
+    "en": "The module calls the Navitia API using the configured station (or the built-in defaults below). Without a personal API key, a shared quota with ~1h caching applies — add your free key at navitia.io to lift the limit.\n\nTimes are indicative; always confirm with the carrier."
+  },
+  "examples": [
+    {
+      "title": { "fr": "Liste des départs", "en": "Departures list" },
+      "description": {
+        "fr": "Heure, destination, voie et retard éventuel sur une ligne claire pour le voyageur.",
+        "en": "Time, destination, platform and delay on a clear line for guests."
+      },
+      "link": "https://github.com/PortakiApp/portaki-sdk/tree/develop/packages/train"
+    }
+  ],
   "version": "1.0.0",
   "author": {
     "name": "Portaki",
@@ -17,12 +31,17 @@
   },
   "icon": "train-front",
   "type": "official",
-  "tags": ["transport", "sncf", "train"],
+  "tags": ["transport", "sncf", "train", "navitia"],
   "portakiVersionMin": "1.0.0",
   "license": "AGPL-3.0",
   "repository": "https://github.com/portaki-app/portaki-sdk",
   "screenshots": [],
   "config": {
+    "defaults": {
+      "navitia_api_key": "",
+      "departure_station_name": "Mandelieu-la-Napoule",
+      "departure_station_code": "stop_area:SNCF:87754759"
+    },
     "globalAlert": {
       "type": "info",
       "message": {
@@ -47,20 +66,37 @@
         "helpUrl": "https://navitia.io/register"
       },
       {
+        "key": "departure_station_name",
+        "label": {
+          "fr": "Gare de départ",
+          "en": "Departure station"
+        },
+        "description": {
+          "fr": "Nom affiché pour le voyageur. Peut être ajusté après activation.",
+          "en": "Label shown to guests. You can edit after activation."
+        },
+        "type": "text",
+        "required": false,
+        "placeholder": {
+          "fr": "Ex. Mandelieu-la-Napoule",
+          "en": "e.g. Mandelieu-la-Napoule"
+        }
+      },
+      {
         "key": "departure_station_code",
         "label": {
           "fr": "Code Navitia de la gare",
           "en": "Navitia station code"
         },
         "description": {
-          "fr": "Trouvez le code sur navitia.io/explore.",
-          "en": "Find the code at navitia.io/explore."
+          "fr": "Identifiant stop_area Navitia. Une valeur d’exemple est préremplie — remplacez par votre gare sur navitia.io/explore.",
+          "en": "Navitia stop_area id. A sample value is prefilled — replace with your station via navitia.io/explore."
         },
         "type": "text",
-        "required": true,
+        "required": false,
         "placeholder": {
-          "fr": "stop_area:SNCF:87757005",
-          "en": "stop_area:SNCF:87757005"
+          "fr": "stop_area:SNCF:87754759",
+          "en": "stop_area:SNCF:87754759"
         }
       }
     ]
