@@ -55,7 +55,7 @@
   <!--
     Central Portal (releases): https://central.sonatype.org/publish/publish-portal-maven/
     Requirements (POM, javadoc, sources, GPG): https://central.sonatype.org/publish/requirements/
-    Signing + publishing plugins are in profile central-deploy (CI: -Dcentral.deploy=true).
+    Signing + publishing plugins are in profile central-deploy (CI only: env PORTAKI_PUBLISH_TO_CENTRAL=true).
   -->
   <build>
     <plugins>
@@ -75,7 +75,7 @@
       <id>central-deploy</id>
       <activation>
         <property>
-          <name>central.deploy</name>
+          <name>env.PORTAKI_PUBLISH_TO_CENTRAL</name>
           <value>true</value>
         </property>
       </activation>

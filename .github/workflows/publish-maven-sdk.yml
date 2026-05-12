@@ -2,7 +2,6 @@
 # GitHub tutorial (setup-java + secrets; examples are OSSRH legacy): https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
-# After setup-java, settings.xml adds Bearer base64(user:pass) for Portal API (see central.sonatype.org publish-portal-api).
 
 name: publish-maven-sdk
 
@@ -37,6 +36,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'java-v'))
     env:
+      PORTAKI_PUBLISH_TO_CENTRAL: "true"
       MAVEN_SERVER_USERNAME: ${{ secrets.OSSRH_USERNAME }}
       MAVEN_SERVER_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
       MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -81,46 +81,6 @@ jobs:
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
 
-      - name: Maven settings — Bearer for Portal API (server central)
-        run: |
-          python3 << 'PY'
-          import base64
-          import os
-          import pathlib
-          import xml.sax.saxutils as x
-
-          user = os.environ["MAVEN_SERVER_USERNAME"]
-          password = os.environ["MAVEN_SERVER_PASSWORD"]
-          bearer_raw = "Bearer " + base64.b64encode(
-              f"{user}:{password}".encode("utf-8")
-          ).decode("ascii")
-          bearer = x.escape(bearer_raw)
-          settings = """<?xml version="1.0" encoding="UTF-8"?>
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
-                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
-            <servers>
-              <server>
-                <id>central</id>
-                <username>{}</username>
-                <password>{}</password>
-                <configuration>
-                  <httpHeaders>
-                    <property>
-                      <name>Authorization</name>
-                      <value>{}</value>
-                    </property>
-                  </httpHeaders>
-                </configuration>
-              </server>
-            </servers>
-          </settings>
-          """.format(x.escape(user), x.escape(password), bearer)
-          path = pathlib.Path.home() / ".m2" / "settings.xml"
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(settings, encoding="utf-8")
-          PY
-
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
         run: |
@@ -144,7 +104,7 @@ jobs:
           esac
 
       - name: Deploy to Maven Central
-        run: mvn -B -ntp deploy -DskipTests -Dcentral.deploy=true
+        run: mvn --batch-mode deploy
 
       - name: Create GitHub Release (workflow_dispatch on main)
         if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
