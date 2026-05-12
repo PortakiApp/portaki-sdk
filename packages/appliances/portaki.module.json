@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "appliances",
+  "name": {
+    "fr": "Guide appareils",
+    "en": "Appliance guide"
+  },
+  "description": {
+    "fr": "Accordéon par appareil (TV, lave-linge, cuisine…) avec consignes courtes pour le voyageur.",
+    "en": "Accordion per appliance (TV, washer, kitchen…) with short guest-facing tips."
+  },
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "microwave",
+  "type": "official",
+  "tags": ["howto", "devices", "home"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "fields": []
+  }
+}

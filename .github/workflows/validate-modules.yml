@@ -1,0 +1,31 @@
+name: Validate module manifests
+
+on:
+  pull_request:
+    paths:
+      - "packages/*/portaki.module.json"
+      - "schema/module.v1.json"
+      - "scripts/validate-manifests.js"
+      - ".github/workflows/validate-modules.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Validate manifests (JSON Schema + rules)
+        run: pnpm run validate:modules

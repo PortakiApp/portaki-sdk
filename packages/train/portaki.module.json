@@ -1,0 +1,68 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "train",
+  "name": {
+    "fr": "Horaires train",
+    "en": "Train schedule"
+  },
+  "description": {
+    "fr": "Affiche les prochains départs SNCF depuis la gare la plus proche du logement.",
+    "en": "Shows upcoming SNCF departures from the nearest station to the property."
+  },
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "train-front",
+  "type": "official",
+  "tags": ["transport", "sncf", "train"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "globalAlert": {
+      "type": "info",
+      "message": {
+        "fr": "Sans clé Navitia personnelle, Portaki utilise une clé mutualisée avec cache 1h.",
+        "en": "Without a personal Navitia key, Portaki uses a shared key with 1h cache."
+      },
+      "helpUrl": "https://navitia.io/register"
+    },
+    "fields": [
+      {
+        "key": "navitia_api_key",
+        "label": {
+          "fr": "Clé API Navitia (optionnelle)",
+          "en": "Navitia API key (optional)"
+        },
+        "description": {
+          "fr": "Clé gratuite sur navitia.io. Sans clé, quota mutualisé.",
+          "en": "Free key at navitia.io. Without a key, shared quota."
+        },
+        "type": "secret",
+        "required": false,
+        "helpUrl": "https://navitia.io/register"
+      },
+      {
+        "key": "departure_station_code",
+        "label": {
+          "fr": "Code Navitia de la gare",
+          "en": "Navitia station code"
+        },
+        "description": {
+          "fr": "Trouvez le code sur navitia.io/explore.",
+          "en": "Find the code at navitia.io/explore."
+        },
+        "type": "text",
+        "required": true,
+        "placeholder": {
+          "fr": "stop_area:SNCF:87757005",
+          "en": "stop_area:SNCF:87757005"
+        }
+      }
+    ]
+  }
+}

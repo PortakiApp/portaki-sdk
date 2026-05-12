@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "pre-arrival-form",
+  "name": {
+    "fr": "Formulaire pré-arrivée",
+    "en": "Pre-arrival form"
+  },
+  "description": {
+    "fr": "Collecte heure d’arrivée, occasion, allergies — visible selon le statut du séjour.",
+    "en": "Collects arrival time, occasion, allergies — shown according to stay status."
+  },
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "clipboard-list",
+  "type": "official",
+  "tags": ["form", "pre-arrival", "guest"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "fields": []
+  }
+}

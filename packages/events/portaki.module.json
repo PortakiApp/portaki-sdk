@@ -1,0 +1,43 @@
+{
+  "$schema": "../../schema/module.v1.json",
+  "id": "events",
+  "name": {
+    "fr": "Événements locaux",
+    "en": "Local events"
+  },
+  "description": {
+    "fr": "Affiche les événements à proximité du logement via OpenAgenda (rayon configurable côté hôte).",
+    "en": "Shows events near the property via OpenAgenda (radius configured by the host)."
+  },
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "calendar-days",
+  "type": "official",
+  "tags": ["events", "openagenda", "culture"],
+  "portakiVersionMin": "1.0.0",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/portaki-app/portaki-sdk",
+  "screenshots": [],
+  "config": {
+    "fields": [
+      {
+        "key": "openagenda_api_key",
+        "label": {
+          "fr": "Clé API OpenAgenda (optionnelle)",
+          "en": "OpenAgenda API key (optional)"
+        },
+        "description": {
+          "fr": "Augmente les quotas et débloque certaines sources. Sans clé, usage mutualisé selon disponibilité.",
+          "en": "Increases quotas and unlocks some sources. Without a key, shared usage when available."
+        },
+        "type": "secret",
+        "required": false,
+        "helpUrl": "https://openagenda.com/"
+      }
+    ]
+  }
+}
