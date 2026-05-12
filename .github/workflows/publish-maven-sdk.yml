@@ -1,5 +1,5 @@
-# Deploys app.portaki:portaki-module-sdk (sdk/java) to OSSRH / Maven Central.
-# Runs tests, then deploy. On branch main, creates a GitHub Release for non-SNAPSHOT versions.
+# Publie app.portaki:portaki-module-sdk (sdk/java) sur Maven Central via central-publishing-maven-plugin.
+# Release 0.3.0+ : GPG + jeton Portal. Les PR gardent gpg.skip=true (ci-verify).
 
 name: publish-maven-sdk
 
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 0.3.0 or 0.3.0-SNAPSHOT). Empty keeps pom."
+        description: "Version (e.g. 0.3.1). Empty keeps pom."
         required: false
         default: ""
         type: string
@@ -40,6 +40,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Import GPG key (Maven Central signing)
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -59,46 +65,38 @@ jobs:
           V=$(mvn -B -ntp -q -DforceStdout help:evaluate -Dexpression=project.version | tr -d '\r\n')
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Tests and package (mvn verify)
-        run: mvn -B -ntp verify
+      - name: Tests and package (mvn verify, sign)
+        run: mvn -B -ntp verify -Dgpg.skip=false
 
-      - name: Configure Maven Central credentials (Portal user token, server id ossrh)
+      - name: Configure Central Portal credentials (server id central)
         env:
-          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
+          CENTRAL_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
         run: |
           python3 <<'PY'
-          import base64
           import os
           import pathlib
           import xml.sax.saxutils as xs
 
-          u_raw = os.environ.get("OSSRH_USERNAME", "").strip()
-          p_raw = os.environ.get("OSSRH_TOKEN", "").strip()
+          u_raw = os.environ.get("CENTRAL_USERNAME", "").strip()
+          p_raw = os.environ.get("CENTRAL_PASSWORD", "").strip()
           if not u_raw or not p_raw:
               raise SystemExit(
                   "OSSRH_USERNAME and OSSRH_TOKEN must be set to a Central Portal user token "
-                  "(https://central.sonatype.com/usertoken). Legacy OSSRH passwords will not work."
+                  "(https://central.sonatype.com/usertoken)."
               )
 
-          bearer = base64.b64encode(f"{u_raw}:{p_raw}".encode("utf-8")).decode("ascii")
-          bearer_header = xs.escape(f"Bearer {bearer}")
-
+          u = xs.escape(u_raw)
+          p = xs.escape(p_raw)
           root = pathlib.Path.home() / ".m2"
           root.mkdir(parents=True, exist_ok=True)
           xml = f'''<?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
             <servers>
               <server>
-                <id>ossrh</id>
-                <configuration>
-                  <httpHeaders>
-                    <property>
-                      <name>Authorization</name>
-                      <value>{bearer_header}</value>
-                    </property>
-                  </httpHeaders>
-                </configuration>
+                <id>central</id>
+                <username>{u}</username>
+                <password>{p}</password>
               </server>
             </servers>
           </settings>
@@ -107,7 +105,7 @@ jobs:
           PY
 
       - name: Deploy to Maven Central
-        run: mvn -B -ntp deploy -DskipTests
+        run: mvn -B -ntp deploy -DskipTests -Dgpg.skip=false
 
       - name: Create GitHub Release (main, non-SNAPSHOT only)
         if: >
@@ -124,6 +122,6 @@ jobs:
           else
             gh release create "${TAG}" \
               --title "Java SDK ${TAG}" \
-              --notes "Maven coordinates: \`app.portaki:portaki-module-sdk:${VERSION}\` (OSSRH / Maven Central)." \
+              --notes "Maven coordinates: \`app.portaki:portaki-module-sdk:${VERSION}\` (Maven Central)." \
               --target "${{ github.sha }}"
           fi
