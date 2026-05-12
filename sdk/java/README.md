@@ -1,9 +1,9 @@
 <p align="center">
-  <a href="https://www.portaki.app" title="Portaki">
+  <a href="https://portaki.app" title="Portaki">
     <img
-      src="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-icon.svg"
-      width="72"
-      height="72"
+      src="https://portaki.app/portaki-wordmark.svg"
+      width="142"
+      height="39"
       alt="Portaki"
     >
   </a>

@@ -1,9 +1,9 @@
 <p align="center">
-  <a href="https://www.portaki.app" title="Portaki">
+  <a href="https://portaki.app" title="Portaki">
     <img
-      src="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-icon.svg"
-      width="88"
-      height="88"
+      src="https://portaki.app/portaki-wordmark.svg"
+      width="160"
+      height="44"
       alt="Portaki"
     >
   </a>
@@ -12,7 +12,7 @@
 <h1 align="center">@portaki/module-sdk</h1>
 
 <p align="center">
-  <strong>SDK officiel npm</strong> — construire des <strong>modules invités</strong> React pour <a href="https://www.portaki.app">Portaki</a><br/>
+  <strong>SDK officiel npm</strong> — construire des <strong>modules invités</strong> React pour <a href="https://portaki.app">Portaki</a><br/>
   <sub>TypeScript · ESM · <code>definePortakiModule</code></sub>
 </p>
 
@@ -78,7 +78,7 @@ Manifest JSON des modules : schéma **`module.v1`** dans le dépôt [portaki-sdk
 
 | Ressource | URL |
 |-----------|-----|
-| Site & marque | [portaki.app](https://www.portaki.app) |
+| Site & marque | [portaki.app](https://portaki.app) |
 | Monorepo (Java, modules, CI) | [github.com/PortakiApp/portaki-sdk](https://github.com/PortakiApp/portaki-sdk) |
 | Paquet npm | [npmjs.com/package/@portaki/module-sdk](https://www.npmjs.com/package/@portaki/module-sdk) |
 | Guide développeur | [Getting started](https://github.com/PortakiApp/portaki-sdk/blob/develop/docs/getting-started.md) |

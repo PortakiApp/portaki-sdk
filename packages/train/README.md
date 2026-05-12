@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://www.portaki.app"><img src="https://raw.githubusercontent.com/PortakiApp/portaki-sdk/develop/docs/assets/portaki-icon.svg" width="56" height="56" alt="Portaki"></a>
+<a href="https://portaki.app"><img src="https://portaki.app/portaki-wordmark.svg" width="148" height="40" alt="Portaki"></a>
 
 # 🚆 Module Trains
 
