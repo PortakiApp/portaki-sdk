@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "dependencyDashboard": true,
+  "timezone": "Europe/Paris",
+  "schedule": ["before 10am on monday"],
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on sunday"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "groupName": "React (workspace)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"]
+    },
+    {
+      "groupName": "TypeScript",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["typescript"]
+    },
+    {
+      "groupName": "JSON schema tooling",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["ajv", "ajv-formats"]
+    },
+    {
+      "description": "Majors — review manuelle",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "breaking"]
+    }
+  ]
+}
