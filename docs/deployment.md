@@ -66,9 +66,9 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Artefact :** `app.portaki:portaki-module-sdk`.
 
-**Déclencheurs :** push `develop` sur `sdk/java/`, release (`java-v`, `sdk-java-v`, `v`), ou `workflow_dispatch` avec **`version`**.
+**Déclencheurs :** push **`main`** sur `sdk/java/` (ou ce workflow) ; ou **`workflow_dispatch`** avec **`version`** optionnelle.
 
-Étapes : bump de version optionnel, **`Configure OSSRH credentials`**, puis **`Deploy`** (`mvn deploy`).
+Étapes : **`mvn verify`** (tests + package), **`Configure OSSRH credentials`**, **`mvn deploy`**, puis sur **`main`** uniquement et si la version n’est pas **`-SNAPSHOT`**, création d’une **release GitHub** `java-v{version}` (sautée si elle existe déjà).
 
 ---
 

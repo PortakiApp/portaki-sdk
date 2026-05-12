@@ -1,4 +1,5 @@
 # Deploys app.portaki:portaki-module-sdk (sdk/java) to OSSRH / Maven Central.
+# Runs tests, then deploy. On branch main, creates a GitHub Release for non-SNAPSHOT versions.
 
 name: publish-maven-sdk
 
@@ -6,12 +7,10 @@ run-name: publish-maven-sdk-${{ github.event_name }}
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
     paths:
       - "sdk/java/**"
       - ".github/workflows/publish-maven-sdk.yml"
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -21,7 +20,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: publish-maven-sdk-${{ github.ref }}
@@ -32,7 +31,7 @@ env:
 
 jobs:
   publish:
-    name: publish
+    name: test-and-publish
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,15 +53,14 @@ jobs:
           mvn -B -ntp org.codehaus.mojo:versions-maven-plugin:2.17.1:set
           "-DnewVersion=${{ github.event.inputs.version }}" -DgenerateBackupPoms=false
 
-      - name: Version bump (GitHub release)
-        if: github.event_name == 'release'
-        shell: bash
+      - name: Project version
+        id: project
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          RAW="${TAG#java-v}"
-          RAW="${RAW#sdk-java-v}"
-          RAW="${RAW#v}"
-          mvn -B -ntp org.codehaus.mojo:versions-maven-plugin:2.17.1:set "-DnewVersion=${RAW}" -DgenerateBackupPoms=false
+          V=$(mvn -B -ntp -q -DforceStdout help:evaluate -Dexpression=project.version | tr -d '\r\n')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Tests and package (mvn verify)
+        run: mvn -B -ntp verify
 
       - name: Configure OSSRH credentials
         env:
@@ -92,5 +90,24 @@ jobs:
           (root / "settings.xml").write_text(xml)
           PY
 
-      - name: Deploy
-        run: mvn -B -ntp deploy
+      - name: Deploy to OSSRH
+        run: mvn -B -ntp deploy -DskipTests
+
+      - name: Create GitHub Release (main, non-SNAPSHOT only)
+        if: >
+          success() &&
+          github.ref == 'refs/heads/main' &&
+          !contains(steps.project.outputs.version, 'SNAPSHOT')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.project.outputs.version }}"
+          TAG="java-v${VERSION}"
+          if gh release view "${TAG}" --json name 2>/dev/null; then
+            echo "Release ${TAG} already exists, skipping."
+          else
+            gh release create "${TAG}" \
+              --title "Java SDK ${TAG}" \
+              --notes "Maven coordinates: \`app.portaki:portaki-module-sdk:${VERSION}\` (OSSRH / Maven Central)." \
+              --target "${{ github.sha }}"
+          fi
