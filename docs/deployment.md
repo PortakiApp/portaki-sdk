@@ -3,7 +3,7 @@
 Les workflows publient :
 
 - **npm** : registre public **[registry.npmjs.org](https://www.npmjs.com/)** en CI via **[Trusted Publishing](https://docs.npmjs.com/trusted-publishers)** (OIDC GitHub Actions : permission **`id-token: write`**, **Node 24** pour le **npm 11.5.x** fourni avec Node — pas de **`NPM_TOKEN`** dans les jobs de publication).
-- **Maven** : **[Central Publisher Portal](https://central.sonatype.com/)** — snapshots via **`maven-deploy`** + jeton Portal ([détails](#secrets-github)). Activer **Enable SNAPSHOTs** sur le namespace **`app.portaki`** ([namespaces](https://central.sonatype.com/publishing/namespaces)).
+- **Maven** : **[Central Publisher Portal](https://central.sonatype.com/)** — doc officielle Sonatype **[Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)** ; snapshots via **`maven-deploy`** + jeton Portal ([détails](#secrets-github)). Activer **Enable SNAPSHOTs** sur le namespace **`app.portaki`** ([namespaces](https://central.sonatype.com/publishing/namespaces)).
 
 ---
 
@@ -34,7 +34,7 @@ Les workflows publient :
 | `OSSRH_USERNAME` | **User token** Central — champ *username* ([usertoken](https://central.sonatype.com/usertoken)). |
 | `OSSRH_TOKEN` | **User token** Central — champ *password* du même jeton. |
 
-La workflow **`publish-maven-sdk`** définit les variables d’environnement **`MAVEN_SERVER_USERNAME`** et **`MAVEN_SERVER_PASSWORD`** à partir des secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont ces **noms** de variables (pas les secrets en clair) : l’action lit leurs valeurs pour écrire le serveur **`ossrh`** dans **`settings.xml`**. Une étape suivante réécrit **`~/.m2/settings.xml`** avec le même couple et **`usePreemptiveAuth`** — le dépôt snapshot Central refuse souvent les requêtes sans Basic préemptif (**401**). Les **`-SNAPSHOT`** vont vers **`https://central.sonatype.com/repository/maven-snapshots/`** (sans GPG).
+La workflow **`publish-maven-sdk`** définit les variables d’environnement **`MAVEN_SERVER_USERNAME`** et **`MAVEN_SERVER_PASSWORD`** à partir des secrets **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont ces **noms** de variables (pas les secrets en clair) : l’action écrit le serveur **`ossrh`** dans **`~/.m2/settings.xml`** pour **`mvn deploy`**. Les **`-SNAPSHOT`** vont vers **`https://central.sonatype.com/repository/maven-snapshots/`** (sans GPG). Voir la [doc Sonatype (Central Portal + Maven)](https://central.sonatype.org/publish/publish-portal-maven/).
 
 ---
 
@@ -44,7 +44,7 @@ La workflow **`publish-maven-sdk`** définit les variables d’environnement **`
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`, **SNAPSHOT**) : JDK + cache via **`setup-java`**, puis **`settings.xml`** (**ossrh** + Basic préemptif) + secrets. |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Déploie **`app.portaki:portaki-module-sdk`** (`sdk/java`, **SNAPSHOT**) : JDK + cache + serveur **`ossrh`** via **`setup-java`** (`MAVEN_SERVER_*`). |
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
@@ -64,11 +64,13 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 ### Publication Maven — `publish-maven-sdk.yml`
 
+Référence Sonatype : **[Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)**.
+
 **Artefact :** `app.portaki:portaki-module-sdk` (version **`0.3.0-SNAPSHOT`** dans le `pom` tant qu’on publie des snapshots).
 
 **Déclencheurs :** push **`main`** sur `sdk/java/` (ou ce workflow) ; ou **`workflow_dispatch`** avec **`version`** optionnelle.
 
-Étapes : contrôle des secrets, **`actions/setup-java`** (JDK + cache Maven), écriture **`~/.m2/settings.xml`** (serveur **`ossrh`**, **`usePreemptiveAuth`**), **`mvn verify`**, **`mvn deploy`**, puis sur **`main`** sans **`-SNAPSHOT`** : **release GitHub** `java-v{version}` si absente.
+Étapes : contrôle des secrets, **`actions/setup-java`** (JDK + cache Maven + **`settings.xml`** serveur **`ossrh`**), **`mvn verify`**, **`mvn deploy`**, puis sur **`main`** sans **`-SNAPSHOT`** : **release GitHub** `java-v{version}` si absente.
 
 **Snapshots :** activer **Enable SNAPSHOTs** sur le namespace dans [Publishing → Namespaces](https://central.sonatype.com/publishing/namespaces).
 
@@ -107,4 +109,4 @@ cd sdk/java && mvn install -DskipTests
 - [npm — Trusted publishers](https://docs.npmjs.com/trusted-publishers)
 - [npm — publishing scoped packages](https://docs.npmjs.com/cli/v10/using-npm/scope)
 - [GitHub Actions — npm provenance](https://docs.npmjs.com/generating-provenance-statements)
-- [Sonatype / OSSRH](https://central.sonatype.org/)
+- [Sonatype — Publier sur Maven Central (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)

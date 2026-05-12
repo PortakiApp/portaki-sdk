@@ -25,7 +25,7 @@
     </dependency>
   </dependencies>
 
-  <!-- Central Portal (OSSRH legacy hosts are shut down — see https://central.sonatype.org/publish/publish-maven/ ) -->
+  <!-- Central Portal — distributionManagement: https://central.sonatype.org/publish/publish-portal-maven/ -->
   <distributionManagement>
     <snapshotRepository>
       <id>ossrh</id>

@@ -1,5 +1,6 @@
 # Deploys app.portaki:portaki-module-sdk (sdk/java) to Central Portal snapshot host (SNAPSHOT) or staging API (release).
-# ~/.m2/settings.xml server ossrh: Basic + usePreemptiveAuth (setup-java alone omits preemptive; Central may 401). No GPG for -SNAPSHOT.
+# Doc: https://central.sonatype.org/publish/publish-portal-maven/
+# Maven server ossrh via actions/setup-java (MAVEN_SERVER_* env names). No GPG for -SNAPSHOT.
 
 name: publish-maven-sdk
 
@@ -59,43 +60,6 @@ jobs:
           server-id: ossrh
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
-
-      # setup-java does not set usePreemptiveAuth; Central snapshot deploy (GET metadata + PUT)
-      # often returns 401 without preemptive Basic. Write ~/.m2/settings.xml explicitly.
-      - name: Configure Maven Central (preemptive Basic)
-        run: |
-          python3 << 'PY'
-          import os
-          import pathlib
-          import xml.sax.saxutils as x
-
-          user = x.escape(os.environ["MAVEN_SERVER_USERNAME"])
-          password = x.escape(os.environ["MAVEN_SERVER_PASSWORD"])
-          settings = """<?xml version="1.0" encoding="UTF-8"?>
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
-                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
-            <servers>
-              <server>
-                <id>ossrh</id>
-                <username>{}</username>
-                <password>{}</password>
-                <configuration>
-                  <httpConfiguration>
-                    <all>
-                      <usePreemptiveAuth>true</usePreemptiveAuth>
-                    </all>
-                  </httpConfiguration>
-                </configuration>
-              </server>
-            </servers>
-          </settings>
-          """.format(user, password)
-          path = pathlib.Path.home() / ".m2" / "settings.xml"
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(settings, encoding="utf-8")
-          print("Wrote", path)
-          PY
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
