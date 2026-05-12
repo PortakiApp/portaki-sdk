@@ -1,6 +1,6 @@
 {
   "name": "@portaki/module-access-guide",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Portaki module — access, parking, door steps",
   "license": "AGPL-3.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "lint": "echo \"no lint yet\""
   },
   "dependencies": {
-    "@portaki/module-sdk": "workspace:^0.3.0",
+    "@portaki/module-sdk": "workspace:^0.3.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

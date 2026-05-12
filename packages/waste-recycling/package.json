@@ -1,6 +1,6 @@
 {
   "name": "@portaki/module-waste-recycling",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Portaki module — recycling & waste",
   "license": "AGPL-3.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "lint": "echo \"no lint yet\""
   },
   "dependencies": {
-    "@portaki/module-sdk": "workspace:^0.3.0",
+    "@portaki/module-sdk": "workspace:^0.3.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

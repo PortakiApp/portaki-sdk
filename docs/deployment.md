@@ -89,9 +89,9 @@ npm install @portaki/module-sdk
 
 Paquets **publics** sous scope autorisé : pas de `.npmrc` obligatoire.
 
-### `portaki-web` et la série **0.3.0**
+### `portaki-web` et la série **0.3.1**
 
-Les paquets **`@portaki/module-*`** et **`@portaki/module-sdk`** sont publiés en **0.3.0** sur npmjs. **portaki-web** peut déclarer **`^0.3.0`** sur ces dépendances et exécuter **`pnpm install`**.
+Les paquets **`@portaki/module-*`** et **`@portaki/module-sdk`** sont publiés en **0.3.1** sur npmjs (patch après des **0.3.0** avec dépendance `file:` incorrecte). **portaki-web** peut déclarer **`^0.3.1`** (ou **`^0.3.0`** pour rétrocompat semver) et exécuter **`pnpm install`**.
 
 Pour publier une nouvelle série : bump des **`version`** dans les `package.json`, puis workflows **`publish-npm-sdk`** et **`publish-npm-packages`** (voir ci-dessus).
 
