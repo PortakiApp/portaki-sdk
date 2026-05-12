@@ -30,7 +30,7 @@
 | [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0-SNAPSHOT` — annotations & modèle JVM |
 | [`packages/`](packages/) | Modules invités publiés **`@portaki/module-*`** |
 
-Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`workspace:^`** (résolution locale du paquet `sdk/javascript` en **0.3.0**). Au **`pnpm publish`**, pnpm réécrit vers une semver publiable (**`^0.3.0`** une fois le SDK publié sur npm).
+Les paquets sous `packages/` déclarent `@portaki/module-sdk` en **`^0.3.0`** (npmjs, aligné sur **`sdk/javascript`** du monorepo). Au **`pnpm publish`**, la même plage est publiable pour les consommateurs hors workspace.
 
 ---
 

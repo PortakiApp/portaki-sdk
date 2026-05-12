@@ -91,14 +91,9 @@ Paquets **publics** sous scope autorisé : pas de `.npmrc` obligatoire.
 
 ### `portaki-web` et la série **0.3.0**
 
-Les paquets sous `packages/` et **`sdk/javascript`** sont en **`0.3.0`** dans ce dépôt. **portaki-web** peut pointer en **`file:../portaki-sdk/...`** vers chaque module + le SDK (résolution **0.3.0** locale sans attendre npm).
+Les paquets **`@portaki/module-*`** et **`@portaki/module-sdk`** sont publiés en **0.3.0** sur npmjs. **portaki-web** peut déclarer **`^0.3.0`** sur ces dépendances et exécuter **`pnpm install`**.
 
-- Quand **npmjs** expose bien toute la série **`0.3.0`** :
-
-  1. Actions → **`publish-npm-sdk`** (ou tag release `javascript-v…` / `sdk-js-v…`) pour **`@portaki/module-sdk@0.3.0`**.
-  2. Actions → **`publish-npm-packages`** → **`all`** pour tous les **`@portaki/module-*`**.
-
-  Ensuite, dans **portaki-web** : remplacer les **`file:`** par **`^0.3.0`** sur les dépendances `@portaki/*` si tu veux consommer le registre, puis `pnpm install`.
+Pour publier une nouvelle série : bump des **`version`** dans les `package.json`, puis workflows **`publish-npm-sdk`** et **`publish-npm-packages`** (voir ci-dessus).
 
 ---
 
