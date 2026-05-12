@@ -1,5 +1,5 @@
 # Deploys app.portaki:portaki-module-sdk (sdk/java) to Central Portal snapshot host (SNAPSHOT) or staging API (release).
-# Portal user token as server username/password (HTTP Basic) + preemptive auth. No GPG for -SNAPSHOT.
+# Maven server credentials via actions/setup-java (server-id ossrh). No GPG for -SNAPSHOT.
 
 name: publish-maven-sdk
 
@@ -33,6 +33,9 @@ jobs:
   publish:
     name: test-and-publish
     runs-on: ubuntu-latest
+    env:
+      MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+      MAVEN_CENTRAL_TOKEN: ${{ secrets.OSSRH_TOKEN }}
     defaults:
       run:
         working-directory: sdk/java
@@ -40,12 +43,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require Maven Central token
+        run: |
+          if [ -z "${MAVEN_USERNAME}" ] || [ -z "${MAVEN_CENTRAL_TOKEN}" ]; then
+            echo "::error::Set secrets OSSRH_USERNAME and OSSRH_TOKEN (Central Portal user token: https://central.sonatype.com/usertoken)."
+            exit 1
+          fi
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_CENTRAL_TOKEN
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
@@ -61,49 +74,6 @@ jobs:
 
       - name: Tests and package (mvn verify)
         run: mvn -B -ntp verify
-
-      - name: Configure Maven Central credentials (Portal user token, server id ossrh)
-        env:
-          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
-        run: |
-          python3 <<'PY'
-          import os
-          import pathlib
-          import xml.sax.saxutils as xs
-
-          u_raw = os.environ.get("OSSRH_USERNAME", "").strip()
-          p_raw = os.environ.get("OSSRH_TOKEN", "").strip()
-          if not u_raw or not p_raw:
-              raise SystemExit(
-                  "OSSRH_USERNAME and OSSRH_TOKEN must be set to a Central Portal user token "
-                  "(https://central.sonatype.com/usertoken)."
-              )
-
-          u = xs.escape(u_raw)
-          p = xs.escape(p_raw)
-          root = pathlib.Path.home() / ".m2"
-          root.mkdir(parents=True, exist_ok=True)
-          xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
-            <servers>
-              <server>
-                <id>ossrh</id>
-                <username>{u}</username>
-                <password>{p}</password>
-                <configuration>
-                  <httpConfiguration>
-                    <all>
-                      <usePreemptiveAuth>true</usePreemptiveAuth>
-                    </all>
-                  </httpConfiguration>
-                </configuration>
-              </server>
-            </servers>
-          </settings>
-          '''
-          (root / "settings.xml").write_text(xml)
-          PY
 
       - name: Deploy to Maven Central
         run: mvn -B -ntp deploy -DskipTests
