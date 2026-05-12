@@ -39,5 +39,27 @@
   "config": {
     "defaults": {},
     "fields": []
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Four, lave-linge, chauffage… guide éditorial par équipement.",
+      "en": "Oven, washer, heating… editorial guide per appliance."
+    },
+    "highlights": [
+      {
+        "fr": "Section « Appareils » dans la navigation invité",
+        "en": "“Appliances” section in guest navigation"
+      },
+      {
+        "fr": "Guide riche : TipTap, médias, FAQ courte",
+        "en": "Rich guide: TipTap, media, short FAQ"
+      },
+      {
+        "fr": "Données par propriété (liste, notices, liens)",
+        "en": "Per-property data (list, manuals, links)"
+      }
+    ],
+    "npmPackage": "@portaki/module-appliances",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-appliances"
   }
 }

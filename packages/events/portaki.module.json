@@ -56,5 +56,27 @@
         "helpUrl": "https://openagenda.com/"
       }
     ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Annonce locale et carte pour tout ce qui bouge autour du logement.",
+      "en": "Local listings and a map for everything happening around the property."
+    },
+    "highlights": [
+      {
+        "fr": "Point de menu « Événements » sur la page voyageur",
+        "en": "“Events” menu entry on the guest page"
+      },
+      {
+        "fr": "Carte : overlay et hook `mapMarkers` pour vos données",
+        "en": "Map: overlay and `mapMarkers` hook for your data"
+      },
+      {
+        "fr": "Composant prêt à brancher sur votre API locale",
+        "en": "Component ready to wire to your local API"
+      }
+    ],
+    "npmPackage": "@portaki/module-events",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-events"
   }
 }

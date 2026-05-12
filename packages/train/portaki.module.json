@@ -100,5 +100,27 @@
         }
       }
     ]
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Horaires et infos voyageurs au départ de la gare configurée.",
+      "en": "Timetables and passenger info from your configured station."
+    },
+    "highlights": [
+      {
+        "fr": "Entrée de navigation dédiée « Trains »",
+        "en": "Dedicated “Trains” navigation entry"
+      },
+      {
+        "fr": "Lien avec le code gare du bien (`trainStationCode`)",
+        "en": "Uses the property station code (`trainStationCode`)"
+      },
+      {
+        "fr": "UI prête pour vos appels API côté page invité",
+        "en": "UI ready for your guest-page API calls"
+      }
+    ],
+    "npmPackage": "@portaki/module-train",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-train"
   }
 }

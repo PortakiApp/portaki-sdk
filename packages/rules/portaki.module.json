@@ -39,5 +39,27 @@
   "config": {
     "defaults": {},
     "fields": []
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "House rules claires — contenu riche (TipTap / CMS).",
+      "en": "Clear house rules — rich content (TipTap / CMS)."
+    },
+    "highlights": [
+      {
+        "fr": "Bloc dédié aux règles avant et pendant le séjour",
+        "en": "Dedicated block for rules before and during the stay"
+      },
+      {
+        "fr": "Prêt pour HTML ou contenu TipTap sanitisé depuis votre CMS",
+        "en": "Ready for HTML or sanitized TipTap content from your CMS"
+      },
+      {
+        "fr": "Structure pensée analytics et cohérence visuelle",
+        "en": "Structure built for analytics and visual consistency"
+      }
+    ],
+    "npmPackage": "@portaki/module-rules",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-rules"
   }
 }

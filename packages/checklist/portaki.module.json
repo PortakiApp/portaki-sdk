@@ -39,5 +39,27 @@
   "config": {
     "defaults": {},
     "fields": []
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Liste de départ · persistance invité · FR / EN.",
+      "en": "Departure list · guest persistence · FR / EN."
+    },
+    "highlights": [
+      {
+        "fr": "Affichage sur séjour actif (selon statut configuré)",
+        "en": "Shown on active stay (per configured status)"
+      },
+      {
+        "fr": "Libellés FR / EN via la configuration propriété",
+        "en": "FR / EN labels via property configuration"
+      },
+      {
+        "fr": "Hooks pour enregistrer l’état de chaque item",
+        "en": "Hooks to persist each item’s state"
+      }
+    ],
+    "npmPackage": "@portaki/module-checklist",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-checklist"
   }
 }

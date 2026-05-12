@@ -62,6 +62,23 @@
     "license": { "type": "string" },
     "repository": { "type": "string", "format": "uri" },
     "screenshots": { "type": "array", "items": { "type": "string" } },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tagline": { "$ref": "#/definitions/localePairOptional" },
+        "highlights": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/localePairOptional" }
+        },
+        "requiredPlanId": {
+          "type": "string",
+          "description": "Minimum billing plan id (e.g. starter, pro). Omit or use free when the module is available on the free tier."
+        },
+        "npmPackage": { "type": "string", "minLength": 1 },
+        "npmUrl": { "type": "string", "format": "uri" }
+      }
+    },
     "config": {
       "type": "object",
       "additionalProperties": true,

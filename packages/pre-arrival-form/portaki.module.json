@@ -39,5 +39,27 @@
   "config": {
     "defaults": {},
     "fields": []
+  },
+  "catalog": {
+    "tagline": {
+      "fr": "Collecte des infos avant l’entrée dans les lieux — UI et socle backend.",
+      "en": "Collects information before check-in — UI and optional backend hooks."
+    },
+    "highlights": [
+      {
+        "fr": "Affichage selon les statuts de séjour (ex. pré-arrivée, à venir)",
+        "en": "Shown based on stay status (e.g. pre-arrival, upcoming)"
+      },
+      {
+        "fr": "Front `definePortakiModule`, aligné sur le reste du catalogue",
+        "en": "Guest UI via `definePortakiModule`, consistent with the catalog"
+      },
+      {
+        "fr": "Dépôt Java / Axon pour réactions aux événements séjour",
+        "en": "Optional Java / Axon module for stay event reactions"
+      }
+    ],
+    "npmPackage": "@portaki/module-pre-arrival-form",
+    "npmUrl": "https://www.npmjs.com/package/@portaki/module-pre-arrival-form"
   }
 }
