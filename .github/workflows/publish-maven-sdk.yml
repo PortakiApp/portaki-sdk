@@ -1,5 +1,5 @@
 # Deploys app.portaki:portaki-module-sdk (sdk/java) to Central Portal snapshot host (SNAPSHOT) or staging API (release).
-# Portal user token as Bearer on server id ossrh. No GPG required for -SNAPSHOT.
+# Portal user token as server username/password (HTTP Basic) + preemptive auth. No GPG for -SNAPSHOT.
 
 name: publish-maven-sdk
 
@@ -68,7 +68,6 @@ jobs:
           OSSRH_TOKEN: ${{ secrets.OSSRH_TOKEN }}
         run: |
           python3 <<'PY'
-          import base64
           import os
           import pathlib
           import xml.sax.saxutils as xs
@@ -81,9 +80,8 @@ jobs:
                   "(https://central.sonatype.com/usertoken)."
               )
 
-          bearer = base64.b64encode(f"{u_raw}:{p_raw}".encode("utf-8")).decode("ascii")
-          bearer_header = xs.escape(f"Bearer {bearer}")
-
+          u = xs.escape(u_raw)
+          p = xs.escape(p_raw)
           root = pathlib.Path.home() / ".m2"
           root.mkdir(parents=True, exist_ok=True)
           xml = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -91,13 +89,14 @@ jobs:
             <servers>
               <server>
                 <id>ossrh</id>
+                <username>{u}</username>
+                <password>{p}</password>
                 <configuration>
-                  <httpHeaders>
-                    <property>
-                      <name>Authorization</name>
-                      <value>{bearer_header}</value>
-                    </property>
-                  </httpHeaders>
+                  <httpConfiguration>
+                    <all>
+                      <usePreemptiveAuth>true</usePreemptiveAuth>
+                    </all>
+                  </httpConfiguration>
                 </configuration>
               </server>
             </servers>
