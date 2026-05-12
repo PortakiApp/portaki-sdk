@@ -9,7 +9,7 @@
   <version>0.3.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>Portaki Module SDK (Java)</name>
-  <description>Annotations and types for Portaki backend modules</description>
+  <description>Annotations and types for Portaki modules — host backend contracts (monolith or microservice)</description>
 
   <properties>
     <java.version>21</java.version>

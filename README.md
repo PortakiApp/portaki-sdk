@@ -73,6 +73,21 @@ export default definePortakiModule({
 </dependency>
 ```
 
+### Backend hôte (monolithe → microservice)
+
+Le paquet **`app.portaki.sdk.module.backend`** définit le contrat stable pour tout travail serveur rattaché à un module hôte (sync iCal, import externe, …) :
+
+| Type | Rôle |
+|------|------|
+| `ModuleHostContext` | `tenantId`, `propertyId`, `moduleId` — périmètre après contrôle d’accès API |
+| `HostModuleAction` | Action nommée (ex. `SYNC`) — extensible pour webhooks / jobs |
+| `HostModuleRunResult` | Agrégat générique (succès / échecs / total / résumé) |
+| `PortakiHostModuleBackend` | Implémentation par `moduleId` |
+| `PortakiHostModuleBackendRegistry` | Résolution `moduleId` → backend (beans Spring aujourd’hui, client HTTP vers microservice demain) |
+| `@PortakiHostModule` | Marqueur sur les implémentations pour découverte / conventions |
+
+L’API cœur peut **router** vers une implémentation in-process ou vers un **microservice modules** sans changer les types consommés par les modules « officiels ».
+
 ---
 
 ## Développement local
