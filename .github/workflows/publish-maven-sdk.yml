@@ -1,6 +1,7 @@
 # Release app.portaki:portaki-module-sdk to Maven Central via central-publishing-maven-plugin.
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
+# After setup-java, settings.xml is rewritten with usePreemptiveAuth for server central (bundle upload can 401 otherwise).
 
 name: publish-maven-sdk
 
@@ -78,6 +79,41 @@ jobs:
           server-id: central
           server-username: MAVEN_SERVER_USERNAME
           server-password: MAVEN_SERVER_PASSWORD
+
+      # setup-java omits usePreemptiveAuth; Central publisher bundle upload (PUT) can 401 without preemptive Basic.
+      - name: Maven settings — preemptive Basic for server central
+        run: |
+          python3 << 'PY'
+          import os
+          import pathlib
+          import xml.sax.saxutils as x
+
+          user = x.escape(os.environ["MAVEN_SERVER_USERNAME"])
+          password = x.escape(os.environ["MAVEN_SERVER_PASSWORD"])
+          settings = """<?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+            <servers>
+              <server>
+                <id>central</id>
+                <username>{}</username>
+                <password>{}</password>
+                <configuration>
+                  <httpConfiguration>
+                    <all>
+                      <usePreemptiveAuth>true</usePreemptiveAuth>
+                    </all>
+                  </httpConfiguration>
+                </configuration>
+              </server>
+            </servers>
+          </settings>
+          """.format(user, password)
+          path = pathlib.Path.home() / ".m2" / "settings.xml"
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(settings, encoding="utf-8")
+          PY
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''

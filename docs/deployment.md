@@ -36,7 +36,7 @@ Les workflows publient :
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
 | `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
 
-La workflow **`publish-maven-sdk`** mappe **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`** sur **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. Sur **`actions/setup-java`**, **`server-username`** / **`server-password`** sont les **noms** de ces variables d’environnement ; l’action écrit le serveur Maven **`central`** dans **`~/.m2/settings.xml`**, attendu par **`central-publishing-maven-plugin`** (`publishingServerId` **`central`**). L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+La workflow **`publish-maven-sdk`** mappe **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`** sur **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`**. **`actions/setup-java`** installe le JDK et le cache Maven et écrit une première entrée serveur **`central`** ; une étape suivante réécrit **`~/.m2/settings.xml`** avec **`usePreemptiveAuth`** sur ce serveur — sans cela, l’upload du bundle par **`central-publishing-maven-plugin`** peut renvoyer **401** alors que le staging local réussit. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
 
 ---
 
