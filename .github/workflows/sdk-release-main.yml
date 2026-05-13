@@ -4,7 +4,8 @@
 # Prérequis : bump sdk/java/pom.xml, sdk/module-sdk/package.json et/ou sdk/guest/package.json avant merge.
 # Déclenchement manuel : workflow_dispatch (même branche que le bouton Actions, en général main).
 #
-# GITHUB_TOKEN ne chaîne pas les workflows entre eux : on utilise workflow_run sur ci-verify.
+# Chaînes needs : chaque publish ne dépend que de son verify (plus de gate en needs),
+# pour que le graphe GitHub Actions ne trace pas de faux liens entre jobs npm et Maven.
 name: SDK release (main)
 
 run-name: sdk-release-${{ github.run_id }}
@@ -111,6 +112,8 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ needs.gate.outputs.head_sha }}
     defaults:
       run:
         working-directory: sdk/java
@@ -130,6 +133,8 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ needs.gate.outputs.head_sha }}
     defaults:
       run:
         working-directory: sdk/module-sdk
@@ -158,6 +163,8 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ needs.gate.outputs.head_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -184,8 +191,8 @@ jobs:
 
   release-publish-java:
     name: Publish Maven — portaki-module-sdk
-    needs: [gate, verify-java]
-    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true' && needs.verify-java.result == 'success'
+    needs: [verify-java]
+    if: always() && needs.verify-java.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -194,7 +201,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate.outputs.head_sha }}
+          ref: ${{ needs.verify-java.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Require Central + GPG secrets
@@ -268,7 +275,7 @@ jobs:
           V="${{ steps.project.outputs.version }}"
           TAG="java-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
-          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "Java SDK ${TAG}" --generate-notes)
+          ARGS=(--target "${{ needs.verify-java.outputs.head_sha }}" --title "Java SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
@@ -276,8 +283,8 @@ jobs:
 
   release-publish-javascript:
     name: Publish npm — @portaki/module-sdk
-    needs: [gate, verify-module-sdk]
-    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true' && needs.verify-module-sdk.result == 'success'
+    needs: [verify-module-sdk]
+    if: always() && needs.verify-module-sdk.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -288,7 +295,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate.outputs.head_sha }}
+          ref: ${{ needs.verify-module-sdk.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Read package version
@@ -346,7 +353,7 @@ jobs:
           V="${{ steps.pkg.outputs.version }}"
           TAG="javascript-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
-          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
+          ARGS=(--target "${{ needs.verify-module-sdk.outputs.head_sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
@@ -354,8 +361,8 @@ jobs:
 
   release-publish-guest:
     name: Publish npm — @portaki/sdk (guest)
-    needs: [gate, verify-guest]
-    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true' && needs.verify-guest.result == 'success'
+    needs: [verify-guest]
+    if: always() && needs.verify-guest.result == 'success'
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY: https://registry.npmjs.org
@@ -363,7 +370,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.gate.outputs.head_sha }}
+          ref: ${{ needs.verify-guest.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Read package version
@@ -429,7 +436,7 @@ jobs:
           V="${{ steps.pkg.outputs.version }}"
           TAG="guest-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
-          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "Guest SDK ${TAG}" --generate-notes)
+          ARGS=(--target "${{ needs.verify-guest.outputs.head_sha }}" --title "Guest SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
