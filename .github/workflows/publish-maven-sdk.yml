@@ -10,7 +10,7 @@
 # Env names follow the article (MAVEN_USERNAME / MAVEN_PASSWORD / MAVEN_GPG_PASSPHRASE) for
 # actions/setup-java server-id + GPG; values come from the Portaki secrets above.
 #
-# POM profile: central-deploy (activated when env PORTAKI_PUBLISH_TO_CENTRAL=true).
+# POM profile: central-deploy (mvn … -P central-deploy — sources, javadoc, GPG, central-publishing).
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
 
@@ -38,7 +38,6 @@ concurrency:
 
 env:
   JAVA_VERSION: "21"
-  PORTAKI_PUBLISH_TO_CENTRAL: "true"
   MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
   MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
   MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -127,7 +126,7 @@ jobs:
           esac
 
       - name: Publish package to Maven Central
-        run: mvn --batch-mode deploy -DskipTests
+        run: mvn --batch-mode deploy -DskipTests -P central-deploy
 
       - name: Create GitHub Release (workflow_dispatch on main)
         if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'

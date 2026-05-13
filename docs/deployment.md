@@ -36,7 +36,7 @@ Les workflows publient :
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
 | `GPG_PASSPHRASE` | Passphrase de la clé ; en CI elle est exposée sous le nom d’environnement **`MAVEN_GPG_PASSPHRASE`** pour **`actions/setup-java`** et **`maven-gpg-plugin`**. |
 
-La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish your artifact to the Maven Central Repository using GitHub Actions](https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88)** : checkout, **`actions/setup-java`** avec `server-id` **`central`**, identifiants **`MAVEN_USERNAME`** / **`MAVEN_PASSWORD`** (remplis depuis **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`** au lieu des secrets **`CENTRAL_TOKEN_*`** de l’article), import GPG intégré (`gpg-private-key` ← **`GPG_PRIVATE_KEY`**, `gpg-passphrase` ← **`MAVEN_GPG_PASSPHRASE`** ← **`GPG_PASSPHRASE`**), **`versions:set`** sur **`release`** à partir du tag **`java-v…`**, variable **`PORTAKI_PUBLISH_TO_CENTRAL=true`** pour le profil **`central-deploy`**, puis **`mvn --batch-mode deploy -DskipTests`**.
+La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish your artifact to the Maven Central Repository using GitHub Actions](https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88)** : checkout, **`actions/setup-java`** avec `server-id` **`central`**, identifiants **`MAVEN_USERNAME`** / **`MAVEN_PASSWORD`** (remplis depuis **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`** au lieu des secrets **`CENTRAL_TOKEN_*`** de l’article), import GPG intégré (`gpg-private-key` ← **`GPG_PRIVATE_KEY`**, `gpg-passphrase` ← **`MAVEN_GPG_PASSPHRASE`** ← **`GPG_PASSPHRASE`**), **`versions:set`** sur **`release`** à partir du tag **`java-v…`**, puis **`mvn --batch-mode deploy -DskipTests -P central-deploy`** (profil **`central-deploy`** : sources, javadoc, GPG, plugin Central).
 
 ---
 
@@ -60,7 +60,7 @@ La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish yo
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** en **release** sur Central (`mvn --batch-mode deploy`, profil **`central-deploy`** via **`PORTAKI_PUBLISH_TO_CENTRAL`**). |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** en **release** sur Central (`mvn --batch-mode deploy -DskipTests -P central-deploy`). |
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 
@@ -84,12 +84,12 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 
 **Métadonnées POM :** alignées sur les [exigences Sonatype](https://central.sonatype.org/publish/requirements/), y compris [nom, description et URL du projet](https://central.sonatype.org/publish/requirements/#project-name-description-and-url), licence **Apache 2.0**, **`developers`** (avec **URL** profil GitHub si pas d’email), **`scm`**.
 
-**Build :** profil Maven **`central-deploy`** activé uniquement lorsque **`PORTAKI_PUBLISH_TO_CENTRAL=true`** (défini dans le job **`publish-maven-sdk`**) — attache **sources** et **javadoc**, **GPG sign**, puis **`central-publishing-maven-plugin`** (`autoPublish`, `waitUntil` **`published`**). Le **`mvn verify`** local (CI **`ci-verify`**) **n’active pas** ce profil : pas de GPG requis sur les postes de dev.
+**Build :** profil Maven **`central-deploy`** activé explicitement avec **`-P central-deploy`** sur **`deploy`** (CI et publication locale) — attache **sources** et **javadoc**, **GPG sign**, puis **`central-publishing-maven-plugin`** (`autoPublish`, `waitUntil` **`published`**). Le **`mvn verify`** local (CI **`ci-verify`**) **sans** ce profil : pas de GPG requis sur les postes de dev.
 
 **Déclencheurs :**
 
 1. **`workflow_dispatch`** sur **`main`** uniquement — champ **`version`** optionnel (ex. `0.3.1`) pour **`versions:set`** avant déploiement ; laisser vide pour publier la version déjà dans le `pom`.
-2. **`release`** **`published`** dont le tag commence par **`java-v`** (ex. **`java-v0.3.0`**) — checkout au tag, puis **`versions:set`** sur la version sans préfixe (ex. **`0.3.0`**), puis **`mvn --batch-mode deploy -DskipTests`**.
+2. **`release`** **`published`** dont le tag commence par **`java-v`** (ex. **`java-v0.3.0`**) — checkout au tag, puis **`versions:set`** sur la version sans préfixe (ex. **`0.3.0`**), puis **`mvn --batch-mode deploy -DskipTests -P central-deploy`**.
 
 Après un **`workflow_dispatch`** réussi sur **`main`**, création d’une **release GitHub** `java-v{version}` si elle n’existe pas encore.
 
