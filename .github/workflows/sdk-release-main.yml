@@ -107,7 +107,7 @@ jobs:
           echo "guest=${guest}" >> "$GITHUB_OUTPUT"
 
   verify-java:
-    name: verify-java
+    name: Verify Java — sdk/java
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true'
     runs-on: ubuntu-latest
@@ -126,7 +126,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
 
   verify-module-sdk:
-    name: verify-module-sdk
+    name: Verify npm — @portaki/module-sdk
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true'
     runs-on: ubuntu-latest
@@ -154,7 +154,7 @@ jobs:
         run: npm run test --if-present
 
   verify-guest:
-    name: verify-guest
+    name: Verify npm — @portaki/sdk (guest)
     needs: [gate]
     if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true'
     runs-on: ubuntu-latest
@@ -183,7 +183,7 @@ jobs:
         run: pnpm --filter @portaki/sdk run build
 
   release-publish-java:
-    name: release-publish-java
+    name: Publish Maven — portaki-module-sdk
     needs: [gate, verify-java]
     if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true' && needs.verify-java.result == 'success'
     runs-on: ubuntu-latest
@@ -275,7 +275,7 @@ jobs:
           gh release create "${TAG}" "${ARGS[@]}"
 
   release-publish-javascript:
-    name: release-publish-javascript
+    name: Publish npm — @portaki/module-sdk
     needs: [gate, verify-module-sdk]
     if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true' && needs.verify-module-sdk.result == 'success'
     runs-on: ubuntu-latest
@@ -353,7 +353,7 @@ jobs:
           gh release create "${TAG}" "${ARGS[@]}"
 
   release-publish-guest:
-    name: release-publish-guest
+    name: Publish npm — @portaki/sdk (guest)
     needs: [gate, verify-guest]
     if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true' && needs.verify-guest.result == 'success'
     runs-on: ubuntu-latest
