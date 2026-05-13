@@ -28,9 +28,9 @@
 | [`js/`](js/) | **`@portaki/sdk`** — pont invité : hooks, HMAC, Route Handlers Next (`/api/portaki/*`), slots |
 | [`packages/`](packages/) | Manifestes `portaki.module.json` étendus (scopes, queries, commands, events) — génération whitelist côté **portaki-web** |
 | [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** — `definePortakiModule` (legacy guest modules npm) |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0-SNAPSHOT` — gateway + annotations hôte existantes |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0` — gateway + annotations hôte existantes |
 | [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0-SNAPSHOT` — gateway + annotations JVM |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0` — gateway + annotations JVM |
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 
 Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** / **`@portaki/sdk`** et **`@portaki/module-*`** en **semver** (ou `file:` pour le pont en dev monorepo) depuis le registre public.
@@ -82,7 +82,7 @@ export default definePortakiModule({
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
