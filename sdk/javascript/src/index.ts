@@ -28,6 +28,17 @@ export type { PortakiGuestProperty, PortakiGuestStay, PortakiRenderContext } fro
 export { useTracking } from './hooks/useTracking'
 export type { UseTrackingOptions } from './hooks/useTracking'
 
+export { createHostApiClient } from './api/create-host-api-client'
+export type { CreateHostApiClientOptions, PortakiHostApiClient } from './api/create-host-api-client'
+export type {
+  HostModuleCountDto,
+  HostPropertyModuleItem,
+  HostPropertyNextStayDto,
+  HostPropertyStatsPeriod,
+  HostPropertyStatsResponse,
+  HostSyncIcalFeedsResponse,
+} from './api/host-types'
+
 export {
   ModuleSection,
   ModuleCard,
