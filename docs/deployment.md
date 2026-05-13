@@ -59,7 +59,7 @@ La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish yo
 | Fichier | Rôle |
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
-| [`sdk-release-main.yml`](../.github/workflows/sdk-release-main.yml) | **Push `main`** (chemins SDK) : tests, **release GitHub** `java-v*` / `javascript-v*` (notes auto), **Maven Central** / **npmjs** dans le même run (évite la limite GITHUB_TOKEN → pas de chaînage via `release`). |
+| [`sdk-release-main.yml`](../.github/workflows/sdk-release-main.yml) | Enchaîne sur **`ci-verify`** terminé avec succès sur **`main`** (ou `workflow_dispatch`) : vérifie Java/JS selon les fichiers du commit, **releases GitHub** `java-v*` / `javascript-v*`, **Maven Central** + **npmjs** (évite la course avec la CI du même push). |
 | [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`) — manuel / release UI. |
 | [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** — **`workflow_dispatch`** ou **`release`** publiée depuis l’UI GitHub (`java-v…`). |
 

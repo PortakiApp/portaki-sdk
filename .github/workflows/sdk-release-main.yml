@@ -1,22 +1,19 @@
-# Sur push vers main : vérifie SDK Java / JS, crée une release GitHub (notes auto depuis les PR),
-# puis publie (Maven Central pour Java, npm pour JS) — sans compter sur l’événement release
-# (GITHUB_TOKEN ne déclenche pas les autres workflows du même dépôt).
+# Après un **ci-verify** vert sur `main` : détecte les changements SDK dans le commit, vérifie Java/JS,
+# puis publie (Maven Central + npm) et crée les releases GitHub — plus de parallèle avec la CI.
 #
-# Prérequis : bump manuel de sdk/java/pom.xml et sdk/javascript/package.json avant merge.
-# Maven Central : le plugin central-publishing attend waitUntil=published (pas du fire-and-forget).
+# Prérequis : bump sdk/java/pom.xml et sdk/javascript/package.json avant merge.
+# Déclenchement manuel : workflow_dispatch (même branche que le bouton Actions, en général main).
+#
+# GITHUB_TOKEN ne chaîne pas les workflows entre eux : on utilise workflow_run sur ci-verify.
 name: SDK release (main)
 
-run-name: sdk-release-main-${{ github.ref_name }}
+run-name: sdk-release-${{ github.run_id }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "sdk/java/**"
-      - "sdk/javascript/**"
-      - ".github/workflows/sdk-release-main.yml"
-      - ".github/scripts/sdk_prev_release_tag.py"
-      - ".github/actions/**"
+  workflow_run:
+    workflows: [ci-verify]
+    types: [completed]
+  workflow_dispatch:
 
 concurrency:
   group: sdk-release-main-${{ github.ref }}
@@ -34,34 +31,75 @@ env:
   MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
 jobs:
-  changes:
-    name: detect-changes
+  gate:
+    name: Gate
     runs-on: ubuntu-latest
     outputs:
-      java: ${{ steps.filter.outputs.java }}
-      javascript: ${{ steps.filter.outputs.javascript }}
+      proceed: ${{ steps.pro.outputs.proceed }}
+      head_sha: ${{ steps.pro.outputs.head_sha }}
+      java: ${{ steps.paths.outputs.java }}
+      javascript: ${{ steps.paths.outputs.javascript }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - id: pro
+        env:
+          WR_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${WR_CONCLUSION}" != "success" ] || [ "${WR_BRANCH}" != "main" ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "head_sha=" >> "$GITHUB_OUTPUT"
+            echo "java=false" >> "$GITHUB_OUTPUT"
+            echo "javascript=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${WR_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Paths filter
-        uses: dorny/paths-filter@v3
-        id: filter
+      - name: Checkout (path filter)
+        if: steps.pro.outputs.proceed == 'true' && github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
         with:
-          filters: |
-            java:
-              - 'sdk/java/**'
-              - '.github/actions/**'
-              - '.github/workflows/sdk-release-main.yml'
-            javascript:
-              - 'sdk/javascript/**'
-              - '.github/actions/**'
-              - '.github/workflows/sdk-release-main.yml'
+          ref: ${{ steps.pro.outputs.head_sha }}
+          fetch-depth: 1
+
+      - id: paths
+        if: steps.pro.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "java=true" >> "$GITHUB_OUTPUT"
+            echo "javascript=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          java=false
+          javascript=false
+          while IFS= read -r f; do
+            [ -z "${f}" ] && continue
+            case "${f}" in
+              sdk/java/*|.github/actions/*|.github/scripts/*|.github/workflows/sdk-release-main.yml|package.json|pnpm-workspace.yaml)
+                java=true
+                ;;
+            esac
+            case "${f}" in
+              sdk/javascript/*|.github/actions/*|.github/workflows/sdk-release-main.yml|package.json|pnpm-workspace.yaml)
+                javascript=true
+                ;;
+            esac
+          done < <(git show --pretty="" --name-only HEAD)
+          echo "java=${java}" >> "$GITHUB_OUTPUT"
+          echo "javascript=${javascript}" >> "$GITHUB_OUTPUT"
 
   verify-java:
     name: verify-java
-    needs: [changes]
-    if: needs.changes.outputs.java == 'true'
+    needs: [gate]
+    if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,6 +107,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_sha }}
 
       - name: Java SDK — Maven verify
         uses: ./.github/actions/java-sdk-verify
@@ -77,8 +117,8 @@ jobs:
 
   verify-javascript:
     name: verify-javascript
-    needs: [changes]
-    if: needs.changes.outputs.javascript == 'true'
+    needs: [gate]
+    if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.javascript == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -86,6 +126,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_sha }}
 
       - name: Setup Node.js (sdk/javascript)
         uses: ./.github/actions/nodejs-npm-sdk-javascript
@@ -103,8 +145,8 @@ jobs:
 
   release-publish-java:
     name: release-publish-java
-    needs: [changes, verify-java]
-    if: always() && needs.changes.outputs.java == 'true' && needs.verify-java.result == 'success'
+    needs: [gate, verify-java]
+    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.java == 'true' && needs.verify-java.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -113,6 +155,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.gate.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Require Central + GPG secrets
@@ -186,7 +229,7 @@ jobs:
           V="${{ steps.project.outputs.version }}"
           TAG="java-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
-          ARGS=(--target "${{ github.sha }}" --title "Java SDK ${TAG}" --generate-notes)
+          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "Java SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
@@ -194,8 +237,8 @@ jobs:
 
   release-publish-javascript:
     name: release-publish-javascript
-    needs: [changes, verify-javascript]
-    if: always() && needs.changes.outputs.javascript == 'true' && needs.verify-javascript.result == 'success'
+    needs: [gate, verify-javascript]
+    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.javascript == 'true' && needs.verify-javascript.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -206,6 +249,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.gate.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Read package version
@@ -263,7 +307,7 @@ jobs:
           V="${{ steps.pkg.outputs.version }}"
           TAG="javascript-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
-          ARGS=(--target "${{ github.sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
+          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
