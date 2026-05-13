@@ -36,7 +36,7 @@ export type {
   HostPropertyNextStayDto,
   HostPropertyStatsPeriod,
   HostPropertyStatsResponse,
-  HostSyncIcalFeedsResponse,
+  HostModuleSyncResponse,
 } from './api/host-types'
 
 export {

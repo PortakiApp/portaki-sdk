@@ -2,7 +2,7 @@ import type {
   HostPropertyModuleItem,
   HostPropertyStatsPeriod,
   HostPropertyStatsResponse,
-  HostSyncIcalFeedsResponse,
+  HostModuleSyncResponse,
 } from './host-types'
 
 export type CreateHostApiClientOptions = {
@@ -62,6 +62,12 @@ export function createHostApiClient(opts: CreateHostApiClientOptions) {
   }
 
   return {
+    /**
+     * Appel HTTP authentifié relatif à `apiPrefix` (chemins type `/properties/...`).
+     * Point d’extension pour le shell hôte sans exposer chaque route dans le SDK.
+     */
+    request,
+
     getPropertyStats(propertyId: string, period: HostPropertyStatsPeriod | string = '30d') {
       const q = new URLSearchParams({ period: String(period) })
       return request<HostPropertyStatsResponse>(
@@ -73,10 +79,10 @@ export function createHostApiClient(opts: CreateHostApiClientOptions) {
       return request<HostPropertyModuleItem[]>(`/properties/${encodeURIComponent(propertyId)}/modules`)
     },
 
-    /** `POST /api/v1/properties/:id/modules/ical-sync/sync` */
-    syncIcalFeeds(propertyId: string) {
-      return request<HostSyncIcalFeedsResponse>(
-        `/properties/${encodeURIComponent(propertyId)}/modules/ical-sync/sync`,
+    /** Lance l’action hôte `sync` pour un module officiel (`moduleId`, ex. `ical-sync`). */
+    syncHostModule(propertyId: string, moduleId: string) {
+      return request<HostModuleSyncResponse>(
+        `/properties/${encodeURIComponent(propertyId)}/modules/${encodeURIComponent(moduleId)}/sync`,
         { method: 'POST' },
       )
     },

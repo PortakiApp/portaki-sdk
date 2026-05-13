@@ -5,14 +5,19 @@ alwaysApply: true
 ---
 
 Chaque module invité vit dans le dépôt **portaki-modules** (`modules/`) et est publié séparément sur npm sous `@portaki/module-*`.
-RÈGLE FONDAMENTALE : tout module DOIT utiliser @portaki/module-sdk (JS)
-ou portaki-module-sdk (Java). Ne jamais appeler l'API directement sans le SDK.
+RÈGLE FONDAMENTALE (modules invités) : tout module invité DOIT s’appuyer sur **@portaki/module-sdk** (JS) ou **portaki-module-sdk** (Java) pour les contrats (`definePortakiModule`, hooks, backend hôte `PortakiHostModuleBackend`, etc.) — pas de contournement des types / lifecycle officiels.
 Les modules officiels sont les tests d'intégration du SDK.
 Si un module ne fonctionne pas sur L'Islette du Riou, le SDK est invalide.
 
 ## Neutralité (pas de logique métier module)
 
-Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de vocabulaire, codes d’erreur ou types liés à iCal, météo, etc.). Uniquement des **contrats réutilisables**, SPI et petits utilitaires génériques (HTTP sécurisé, types manifeste, …). Toute logique métier reste dans **portaki-modules** ou l’API hôte.
+Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de vocabulaire, types, méthodes ou chemins REST nommés d’après un module : iCal, météo, etc.). Uniquement des **contrats réutilisables** entre le développeur et Portaki : SPI module invité/hôte, schéma manifeste, utilitaires génériques (`SafeHttpsUtf8Fetcher` côté Java, etc.).
+
+- **Code métier module** (parsing d’un format, règles sync, intégration fournisseur) : **uniquement** dans le backend du module (`portaki-modules`, JAR `*-backend`) — pas dans `portaki-api`, pas dans le SDK.
+- **Client hôte TypeScript** : pas de méthodes du type `syncIcal…` ni de types `…Ical…`. Préférer des primitives **génériques** (`syncHostModule(propertyId, moduleId)`, ou `request(path)` sous authentification) pour que le shell hôte reste agnostique du catalogue modules.
+- **Appels HTTP** : le SDK n’est pas un client OpenAPI exhaustif de l’API Portaki ; exposer au minimum un **point d’extension** (`request`) plutôt qu’une explosion de wrappers par route. Les routes spécifiques à un domaine produit restent consommables via `request` ou côté appli hôte.
+
+Toute logique métier d’un module officiel reste dans **portaki-modules** (et l’API ne fait qu’orchestrer / persister).
 
 ## Versionnement (semver)
 

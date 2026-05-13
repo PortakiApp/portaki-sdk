@@ -45,10 +45,11 @@ export type HostPropertyModuleItem = {
   audience?: string
 }
 
-/** Réponse `POST /api/v1/properties/:id/modules/ical-sync/sync` */
-export type HostSyncIcalFeedsResponse = {
-  feedsOk: number
-  feedsFailed: number
-  eventsTotal: number
+/** Réponse `POST /api/v1/properties/:id/modules/:moduleId/sync` (action hôte générique, sans vocabulaire métier module). */
+export type HostModuleSyncResponse = {
+  ok: boolean
+  succeeded: number
+  failed: number
+  itemsTotal: number
   summary: string
 }
