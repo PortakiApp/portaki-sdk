@@ -1,0 +1,29 @@
+name: Java SDK — Maven verify
+description: >
+  JDK Temurin + cache Maven, puis mvn verify dans le répertoire du SDK Java
+  (usage typique depuis la racine du dépôt portaki-sdk).
+
+inputs:
+  java-version:
+    description: Version du JDK Temurin
+    required: false
+    default: "21"
+  working-directory:
+    description: Répertoire du projet Maven (relatif au workspace)
+    required: false
+    default: sdk/java
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+
+    - name: Maven verify
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: mvn -B -ntp verify

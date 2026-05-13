@@ -1,0 +1,37 @@
+name: Node.js + npm cache — sdk/javascript
+description: >
+  Configure Node.js avec cache npm sur le package-lock du SDK JavaScript
+  (dépôt portaki-sdk, dossier sdk/javascript par défaut).
+
+inputs:
+  node-version:
+    description: Version Node.js
+    required: true
+  working-directory:
+    description: Dossier du package npm (relatif au workspace)
+    required: false
+    default: sdk/javascript
+  registry-url:
+    description: Registry npm (vide = pas de registry-url dans setup-node)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js (registry)
+      if: inputs.registry-url != ''
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+    - name: Setup Node.js
+      if: inputs.registry-url == ''
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json

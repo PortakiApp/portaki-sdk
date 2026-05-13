@@ -1,5 +1,8 @@
 # Publish app.portaki:portaki-module-sdk to Maven Central (Central Portal + central-publishing-maven-plugin).
 #
+# Publication automatisée depuis main (après tests) : voir sdk-release-main.yml (release GitHub + mvn deploy
+# dans le même workflow — le GITHUB_TOKEN ne déclenche pas publish-maven-sdk sur l’événement release).
+#
 # Flow aligned with:
 # https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88
 #

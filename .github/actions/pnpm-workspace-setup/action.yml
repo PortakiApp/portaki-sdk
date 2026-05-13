@@ -1,0 +1,45 @@
+name: Setup pnpm monorepo (Node + install)
+description: >
+  Installe pnpm, configure Node (cache pnpm via lockfile), registry npmjs par défaut,
+  puis pnpm install --frozen-lockfile à la racine du workspace.
+
+inputs:
+  node-version:
+    description: Version Node.js
+    required: true
+  pnpm-version:
+    description: Version pnpm
+    required: true
+  pnpm-lockfile-path:
+    description: Chemin du lockfile pnpm depuis la racine du workspace
+    required: false
+    default: pnpm-lock.yaml
+  registry-url:
+    description: Registry npm (Trusted Publishing / npm publish)
+    required: false
+    default: https://registry.npmjs.org
+  run-install:
+    description: Si true, exécute pnpm install --frozen-lockfile
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        cache: pnpm
+        cache-dependency-path: ${{ inputs.pnpm-lockfile-path }}
+
+    - name: Install dependencies
+      if: inputs.run-install == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile

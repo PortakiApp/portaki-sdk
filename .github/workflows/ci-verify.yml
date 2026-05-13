@@ -13,6 +13,7 @@ on:
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci-verify.yml"
+      - ".github/actions/**"
   pull_request:
     branches: [main, develop]
     paths:
@@ -20,6 +21,7 @@ on:
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci-verify.yml"
+      - ".github/actions/**"
 
 permissions:
   contents: read
@@ -51,9 +53,11 @@ jobs:
             sdk_javascript:
               - 'sdk/javascript/**'
               - '.github/workflows/ci-verify.yml'
+              - '.github/actions/**'
             sdk_java:
               - 'sdk/java/**'
               - '.github/workflows/ci-verify.yml'
+              - '.github/actions/**'
 
   sdk_javascript:
     name: sdk-javascript
@@ -67,18 +71,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js (sdk/javascript)
+        uses: ./.github/actions/nodejs-npm-sdk-javascript
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: sdk/javascript/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
+
+      - name: Test (if defined)
+        run: npm run test --if-present
 
   sdk_java:
     name: sdk-java
@@ -92,12 +97,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Java SDK — Maven verify
+        uses: ./.github/actions/java-sdk-verify
         with:
-          distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-
-      - name: Verify
-        run: mvn -B -ntp verify

@@ -59,8 +59,13 @@ La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish yo
 | Fichier | Rôle |
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
-| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`). |
-| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** en **release** sur Central (`mvn --batch-mode deploy -DskipTests -P central-deploy`). |
+| [`sdk-release-main.yml`](../.github/workflows/sdk-release-main.yml) | **Push `main`** (chemins SDK) : tests, **release GitHub** `java-v*` / `javascript-v*` (notes auto), **Maven Central** / **npmjs** dans le même run (évite la limite GITHUB_TOKEN → pas de chaînage via `release`). |
+| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`) — manuel / release UI. |
+| [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** — **`workflow_dispatch`** ou **`release`** publiée depuis l’UI GitHub (`java-v…`). |
+
+### Maven Central — attente de fin de déploiement
+
+Le profil **`central-deploy`** active **`central-publishing-maven-plugin`** avec **`waitUntil: published`**. Le job **`mvn deploy`** attend donc que Sonatype ait **terminé** la publication côté Central avant de se terminer avec succès : ce n’est **pas** du fire-and-forget à l’échelle du workflow (contrairement à un simple upload HTTP sans attente).
 
 Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (workflow `publish-npm.yml`).
 

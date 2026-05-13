@@ -1,0 +1,270 @@
+# Sur push vers main : vérifie SDK Java / JS, crée une release GitHub (notes auto depuis les PR),
+# puis publie (Maven Central pour Java, npm pour JS) — sans compter sur l’événement release
+# (GITHUB_TOKEN ne déclenche pas les autres workflows du même dépôt).
+#
+# Prérequis : bump manuel de sdk/java/pom.xml et sdk/javascript/package.json avant merge.
+# Maven Central : le plugin central-publishing attend waitUntil=published (pas du fire-and-forget).
+name: SDK release (main)
+
+run-name: sdk-release-main-${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sdk/java/**"
+      - "sdk/javascript/**"
+      - ".github/workflows/sdk-release-main.yml"
+      - ".github/scripts/sdk_prev_release_tag.py"
+      - ".github/actions/**"
+
+concurrency:
+  group: sdk-release-main-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  JAVA_VERSION: "21"
+  NODE_VERSION: "24"
+  MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+  MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+  MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+jobs:
+  changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      java: ${{ steps.filter.outputs.java }}
+      javascript: ${{ steps.filter.outputs.javascript }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            java:
+              - 'sdk/java/**'
+              - '.github/actions/**'
+              - '.github/workflows/sdk-release-main.yml'
+            javascript:
+              - 'sdk/javascript/**'
+              - '.github/actions/**'
+              - '.github/workflows/sdk-release-main.yml'
+
+  verify-java:
+    name: verify-java
+    needs: [changes]
+    if: needs.changes.outputs.java == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/java
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java SDK — Maven verify
+        uses: ./.github/actions/java-sdk-verify
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+
+  verify-javascript:
+    name: verify-javascript
+    needs: [changes]
+    if: needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/javascript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (sdk/javascript)
+        uses: ./.github/actions/nodejs-npm-sdk-javascript
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test (if defined)
+        run: npm run test --if-present
+
+  release-publish-java:
+    name: release-publish-java
+    needs: [changes, verify-java]
+    if: always() && needs.changes.outputs.java == 'true' && needs.verify-java.result == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/java
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require Central + GPG secrets
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "${MAVEN_USERNAME}" ] || [ -z "${MAVEN_PASSWORD}" ]; then
+            echo "::error::Secrets OSSRH_USERNAME / OSSRH_TOKEN manquants pour Maven Central."
+            exit 1
+          fi
+          if [ -z "${GPG_PRIVATE_KEY}" ] || [ -z "${MAVEN_GPG_PASSPHRASE}" ]; then
+            echo "::error::Secrets GPG_PRIVATE_KEY / GPG_PASSPHRASE manquants."
+            exit 1
+          fi
+
+      - name: Project version
+        id: project
+        run: |
+          V=$(mvn -B -ntp -q -DforceStdout help:evaluate -Dexpression=project.version | tr -d '\r\n')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in *-SNAPSHOT*)
+            echo "::error::Version SNAPSHOT interdite pour Central (${V})."
+            exit 1
+            ;;
+          esac
+
+      - name: Skip if release already exists
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.project.outputs.version }}"
+          TAG="java-v${V}"
+          if gh release view "${TAG}" --json name >/dev/null 2>&1; then
+            echo "Release ${TAG} déjà présente — rien à publier (bump le pom pour une nouvelle série)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Previous tag for release notes
+        if: steps.skip.outputs.skip != 'true'
+        id: prev
+        run: |
+          V="${{ steps.project.outputs.version }}"
+          PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "java-v" "${V}")"
+          echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK and Maven Central
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Publish to Maven Central
+        if: steps.skip.outputs.skip != 'true'
+        run: mvn --batch-mode deploy -DskipTests -P central-deploy
+
+      - name: Create GitHub Release
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.project.outputs.version }}"
+          TAG="java-v${V}"
+          PREV="${{ steps.prev.outputs.prev_tag }}"
+          ARGS=(--target "${{ github.sha }}" --title "Java SDK ${TAG}" --generate-notes)
+          if [ -n "${PREV}" ]; then
+            ARGS+=(--notes-start-tag "${PREV}")
+          fi
+          gh release create "${TAG}" "${ARGS[@]}"
+
+  release-publish-javascript:
+    name: release-publish-javascript
+    needs: [changes, verify-javascript]
+    if: always() && needs.changes.outputs.javascript == 'true' && needs.verify-javascript.result == 'success'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/javascript
+    env:
+      NPM_REGISTRY: https://registry.npmjs.org
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package version
+        id: pkg
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if release already exists
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          TAG="javascript-v${V}"
+          if gh release view "${TAG}" --json name >/dev/null 2>&1; then
+            echo "Release ${TAG} déjà présente — bump sdk/javascript/package.json pour republier."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Previous tag for release notes
+        if: steps.skip.outputs.skip != 'true'
+        id: prev
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "javascript-v" "${V}")"
+          echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js (sdk/javascript)
+        if: steps.skip.outputs.skip != 'true'
+        uses: ./.github/actions/nodejs-npm-sdk-javascript
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.NPM_REGISTRY }}
+
+      - name: Install dependencies
+        if: steps.skip.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Build
+        if: steps.skip.outputs.skip != 'true'
+        run: npm run build
+
+      - name: Publish to npmjs
+        if: steps.skip.outputs.skip != 'true'
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          TAG="javascript-v${V}"
+          PREV="${{ steps.prev.outputs.prev_tag }}"
+          ARGS=(--target "${{ github.sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
+          if [ -n "${PREV}" ]; then
+            ARGS+=(--notes-start-tag "${PREV}")
+          fi
+          gh release create "${TAG}" "${ARGS[@]}"

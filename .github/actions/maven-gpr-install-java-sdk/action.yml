@@ -1,0 +1,56 @@
+name: Maven (GitHub Packages) + install Java SDK locally
+description: >
+  Configure ~/.m2 pour GitHub Packages (GPR), installe JDK + cache Maven,
+  puis compile et installe portaki-module-sdk depuis un clone présent sous le workspace
+  (voir l’action checkout-portaki-sdk).
+
+inputs:
+  java-version:
+    description: Version du JDK Temurin
+    required: false
+    default: "21"
+  gpr-actor:
+    description: Utilisateur GPR (vide = github.actor)
+    required: false
+    default: ""
+  gpr-token:
+    description: Token GPR (souvent secrets.GITHUB_TOKEN)
+    required: true
+  sdk-relative-path:
+    description: Chemin relatif du clone portaki-sdk
+    required: false
+    default: .deps/portaki-sdk
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+
+    - name: Maven settings.xml (GitHub Packages)
+      shell: bash
+      env:
+        GPR_ACTOR: ${{ inputs.gpr-actor != '' && inputs.gpr-actor || github.actor }}
+        GPR_TOKEN: ${{ inputs.gpr-token }}
+      run: |
+        mkdir -p ~/.m2
+        python3 <<'PY'
+        import os
+        import pathlib
+
+        action_path = pathlib.Path(os.environ["GITHUB_ACTION_PATH"])
+        template = (action_path / "maven-gpr-settings.xml").read_text()
+        template = template.replace("__GPR_ACTOR__", os.environ["GPR_ACTOR"])
+        template = template.replace("__GPR_TOKEN__", os.environ["GPR_TOKEN"])
+        pathlib.Path.home().joinpath(".m2/settings.xml").write_text(template)
+        PY
+
+    - name: Install portaki-module-sdk into local Maven repo
+      shell: bash
+      env:
+        SDK_RELATIVE_PATH: ${{ inputs.sdk-relative-path }}
+      run: bash "${GITHUB_ACTION_PATH}/install-java-sdk-local.sh"
