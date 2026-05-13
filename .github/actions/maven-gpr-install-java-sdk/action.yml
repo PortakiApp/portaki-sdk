@@ -1,8 +1,9 @@
-name: Maven (GitHub Packages) + install Java SDK locally
+name: Maven (GitHub Packages) + JDK — SDK Central ou build local
 description: >
-  Configure ~/.m2 pour GitHub Packages (GPR), installe JDK + cache Maven,
-  puis compile et installe portaki-module-sdk depuis un clone présent sous le workspace
-  (voir l’action checkout-portaki-sdk).
+  Installe JDK + cache Maven et écrit ~/.m2/settings.xml pour publier vers GitHub Packages (GPR).
+  Par défaut ne compile pas le SDK : la dépendance app.portaki:portaki-module-sdk est résolue
+  depuis Maven Central. Activez install-sdk-from-source + checkout-portaki-sdk pour un build
+  hors Central (ex. snapshot).
 
 inputs:
   java-version:
@@ -16,8 +17,14 @@ inputs:
   gpr-token:
     description: Token GPR (souvent secrets.GITHUB_TOKEN)
     required: true
+  install-sdk-from-source:
+    description: >
+      Si true, exécute mvn install depuis un clone portaki-sdk (voir checkout-portaki-sdk).
+      Si false (défaut), aucun clone requis — résolution du SDK via les repositories du POM / Maven Central.
+    required: false
+    default: "false"
   sdk-relative-path:
-    description: Chemin relatif du clone portaki-sdk
+    description: Chemin relatif du clone portaki-sdk (si install-sdk-from-source true)
     required: false
     default: .deps/portaki-sdk
 
@@ -50,6 +57,7 @@ runs:
         PY
 
     - name: Install portaki-module-sdk into local Maven repo
+      if: inputs.install-sdk-from-source == 'true'
       shell: bash
       env:
         SDK_RELATIVE_PATH: ${{ inputs.sdk-relative-path }}
