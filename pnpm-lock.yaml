@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  js:
+  sdk/guest:
     dependencies:
       react:
         specifier: '>=18'
@@ -24,7 +24,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  sdk/javascript:
+  sdk/module-sdk:
     dependencies:
       react:
         specifier: '>=18'

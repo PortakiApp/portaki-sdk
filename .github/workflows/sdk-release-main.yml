@@ -1,7 +1,7 @@
 # Après un **ci-verify** vert sur `main` : détecte les changements SDK dans le commit, vérifie Java/JS,
 # puis publie (Maven Central + npm) et crée les releases GitHub — plus de parallèle avec la CI.
 #
-# Prérequis : bump sdk/java/pom.xml et sdk/javascript/package.json avant merge.
+# Prérequis : bump sdk/java/pom.xml et sdk/module-sdk/package.json avant merge.
 # Déclenchement manuel : workflow_dispatch (même branche que le bouton Actions, en général main).
 #
 # GITHUB_TOKEN ne chaîne pas les workflows entre eux : on utilise workflow_run sur ci-verify.
@@ -38,7 +38,8 @@ jobs:
       proceed: ${{ steps.pro.outputs.proceed }}
       head_sha: ${{ steps.pro.outputs.head_sha }}
       java: ${{ steps.paths.outputs.java }}
-      javascript: ${{ steps.paths.outputs.javascript }}
+      module_sdk: ${{ steps.paths.outputs.module_sdk }}
+      guest: ${{ steps.paths.outputs.guest }}
     steps:
       - id: pro
         env:
@@ -56,7 +57,8 @@ jobs:
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             echo "head_sha=" >> "$GITHUB_OUTPUT"
             echo "java=false" >> "$GITHUB_OUTPUT"
-            echo "javascript=false" >> "$GITHUB_OUTPUT"
+            echo "module_sdk=false" >> "$GITHUB_OUTPUT"
+            echo "guest=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "proceed=true" >> "$GITHUB_OUTPUT"
@@ -75,11 +77,13 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "java=true" >> "$GITHUB_OUTPUT"
-            echo "javascript=true" >> "$GITHUB_OUTPUT"
+            echo "module_sdk=true" >> "$GITHUB_OUTPUT"
+            echo "guest=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           java=false
-          javascript=false
+          module_sdk=false
+          guest=false
           while IFS= read -r f; do
             [ -z "${f}" ] && continue
             case "${f}" in
@@ -88,13 +92,19 @@ jobs:
                 ;;
             esac
             case "${f}" in
-              sdk/javascript/*|.github/actions/*|.github/workflows/sdk-release-main.yml|package.json|pnpm-workspace.yaml)
-                javascript=true
+              sdk/module-sdk/*|.github/actions/*|.github/workflows/sdk-release-main.yml|package.json|pnpm-workspace.yaml)
+                module_sdk=true
+                ;;
+            esac
+            case "${f}" in
+              sdk/guest/*|.github/actions/*|.github/workflows/sdk-release-main.yml|package.json|pnpm-workspace.yaml)
+                guest=true
                 ;;
             esac
           done < <(git show --pretty="" --name-only HEAD)
           echo "java=${java}" >> "$GITHUB_OUTPUT"
-          echo "javascript=${javascript}" >> "$GITHUB_OUTPUT"
+          echo "module_sdk=${module_sdk}" >> "$GITHUB_OUTPUT"
+          echo "guest=${guest}" >> "$GITHUB_OUTPUT"
 
   verify-java:
     name: verify-java
@@ -115,21 +125,21 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
 
-  verify-javascript:
-    name: verify-javascript
+  verify-module-sdk:
+    name: verify-module-sdk
     needs: [gate]
-    if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.javascript == 'true'
+    if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sdk/javascript
+        working-directory: sdk/module-sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.gate.outputs.head_sha }}
 
-      - name: Setup Node.js (sdk/javascript)
+      - name: Setup Node.js (sdk/module-sdk)
         uses: ./.github/actions/nodejs-npm-sdk-javascript
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -142,6 +152,35 @@ jobs:
 
       - name: Test (if defined)
         run: npm run test --if-present
+
+  verify-guest:
+    name: verify-guest
+    needs: [gate]
+    if: needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js (workspace)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @portaki/sdk
+        run: pnpm --filter @portaki/sdk run build
 
   release-publish-java:
     name: release-publish-java
@@ -237,12 +276,12 @@ jobs:
 
   release-publish-javascript:
     name: release-publish-javascript
-    needs: [gate, verify-javascript]
-    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.javascript == 'true' && needs.verify-javascript.result == 'success'
+    needs: [gate, verify-module-sdk]
+    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.module_sdk == 'true' && needs.verify-module-sdk.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sdk/javascript
+        working-directory: sdk/module-sdk
     env:
       NPM_REGISTRY: https://registry.npmjs.org
     steps:
@@ -266,7 +305,7 @@ jobs:
           V="${{ steps.pkg.outputs.version }}"
           TAG="javascript-v${V}"
           if gh release view "${TAG}" --json name >/dev/null 2>&1; then
-            echo "Release ${TAG} déjà présente — bump sdk/javascript/package.json pour republier."
+            echo "Release ${TAG} déjà présente — bump sdk/module-sdk/package.json pour republier."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -280,7 +319,7 @@ jobs:
           PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "javascript-v" "${V}")"
           echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Node.js (sdk/javascript)
+      - name: Setup Node.js (sdk/module-sdk)
         if: steps.skip.outputs.skip != 'true'
         uses: ./.github/actions/nodejs-npm-sdk-javascript
         with:

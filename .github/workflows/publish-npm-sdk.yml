@@ -1,5 +1,5 @@
-# Publishes @portaki/module-sdk (folder sdk/javascript) to registry.npmjs.org.
-# Version: bump dans sdk/javascript/package.json côté dépôt (pas dans la CI).
+# Publishes @portaki/module-sdk (folder sdk/module-sdk) to registry.npmjs.org.
+# Version: bump dans sdk/module-sdk/package.json côté dépôt (pas dans la CI).
 
 name: publish-npm-sdk
 
@@ -35,12 +35,12 @@ jobs:
       startsWith(github.event.release.tag_name, 'sdk-js-v')
     defaults:
       run:
-        working-directory: sdk/javascript
+        working-directory: sdk/module-sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (sdk/javascript)
+      - name: Setup Node.js (sdk/module-sdk)
         uses: ./.github/actions/nodejs-npm-sdk-javascript
         with:
           node-version: ${{ env.NODE_VERSION }}

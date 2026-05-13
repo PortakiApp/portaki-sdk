@@ -12,14 +12,14 @@ Les workflows publient :
 1. **Compte npm** : créer un compte sur [npmjs.com](https://www.npmjs.com/). Pour un scope **`@portaki/*`**, créer l’[organisation](https://docs.npmjs.com/creating-an-organization) **portaki** (ou utiliser un scope personnel si vous acceptez de changer les noms de paquets).
 2. **CI — Trusted Publishing** : pour **`@portaki/module-sdk`**, configurer sur npm : dépôt **`portaki-sdk`**, fichier **`publish-npm-sdk.yml`**. Pour les **`@portaki/module-*`** invités, configurer sur npm : dépôt **[portaki-modules](https://github.com/PortakiApp/portaki-modules)**, fichier **`publish-npm-packages.yml`** (voir la doc de ce dépôt).
 3. **Publication locale / secours** : npm → **Access Tokens** (granulaire avec **Publish** sur le scope **`@portaki`**) si vous publiez hors CI ou sans Trusted Publishing ; config locale : `npm config set //registry.npmjs.org/:_authToken=YOUR_TOKEN` (ne pas committer).
-4. **Version dans le dépôt** : bump **`version`** dans `sdk/javascript/package.json` (SDK) **avant** publication — la CI **ne modifie pas** ce fichier. Les modules invités : bump dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (`modules/<id>/package.json`).
+4. **Version dans le dépôt** : bump **`version`** dans `sdk/module-sdk/package.json` (SDK) **avant** publication — la CI **ne modifie pas** ce fichier. Les modules invités : bump dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** (`modules/<id>/package.json`).
 5. **Déclencher une publication** :
    - **SDK** : **Actions** → **publish-npm-sdk** → **Run workflow** (ou release tag `javascript-v…` / `js-v…` / `sdk-js-v…`).
    - **Modules invités** : **Actions** sur **portaki-modules** → **Publish npm** (`publish-npm-packages.yml`) → **Run workflow**.
 6. **Localement** (sans CI), depuis la racine du paquet :
 
    ```bash
-   cd sdk/javascript
+   cd sdk/module-sdk
    npm login           # une fois
    npm publish --access public
    ```
@@ -60,7 +60,7 @@ La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish yo
 |---------|------|
 | [`ci-verify.yml`](../.github/workflows/ci-verify.yml) | Vérification : SDK JS, SDK Java. |
 | [`sdk-release-main.yml`](../.github/workflows/sdk-release-main.yml) | Enchaîne sur **`ci-verify`** terminé avec succès sur **`main`** (ou `workflow_dispatch`) : vérifie Java/JS selon les fichiers du commit, **releases GitHub** `java-v*` / `javascript-v*`, **Maven Central** + **npmjs** (évite la course avec la CI du même push). |
-| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/javascript`) — manuel / release UI. |
+| [`publish-npm-sdk.yml`](../.github/workflows/publish-npm-sdk.yml) | Publie **`@portaki/module-sdk`** (`sdk/module-sdk`) — manuel / release UI. |
 | [`publish-maven-sdk.yml`](../.github/workflows/publish-maven-sdk.yml) | Publie **`app.portaki:portaki-module-sdk`** — **`workflow_dispatch`** ou **`release`** publiée depuis l’UI GitHub (`java-v…`). |
 
 ### Maven Central — attente de fin de déploiement
@@ -73,13 +73,13 @@ Les **`@portaki/module-*`** invités sont publiés depuis le dépôt **[portaki-
 
 Déclenché sur `push` / `pull_request` vers `main` et `develop` lorsque `sdk/**`, `pnpm-workspace.yaml`, `package.json` ou ce workflow changent.
 
-Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**, pilotés par [`dorny/paths-filter`](https://github.com/dorny/paths-filter).
+Jobs (IDs stables) : **`detect_changes`**, **`sdk_module_sdk`**, **`sdk_guest`**, **`sdk_java`**, pilotés par [`dorny/paths-filter`](https://github.com/dorny/paths-filter).
 
 ### Publication SDK JS — `publish-npm-sdk.yml`
 
 **Paquet :** `@portaki/module-sdk`.
 
-**Version :** celle de **`sdk/javascript/package.json`** (à faire évoluer dans une PR avant publication).
+**Version :** celle de **`sdk/module-sdk/package.json`** (à faire évoluer dans une PR avant publication).
 
 **Déclencheurs :** **`workflow_dispatch`** ; ou **`release`** **`published`** dont le tag commence par **`javascript-v`**, **`js-v`** ou **`sdk-js-v`** (évite de lancer une publication npm sur une release Maven `java-v…`).
 

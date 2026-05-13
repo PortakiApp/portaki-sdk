@@ -25,21 +25,20 @@
 
 | Chemin | Contenu |
 |--------|---------|
-| [`js/`](js/) | **`@portaki/sdk`** — pont invité : hooks, HMAC, Route Handlers Next (`/api/portaki/*`), slots |
+| [`sdk/guest/`](sdk/guest/) | **`@portaki/sdk`** — pont invité : hooks, HMAC, Route Handlers Next (`/api/portaki/*`), slots |
+| [`sdk/module-sdk/`](sdk/module-sdk/) | **`@portaki/module-sdk`** — `definePortakiModule` (modules invités npm) |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** (Maven) — gateway + annotations hôte JVM |
 | [`packages/`](packages/) | Manifestes `portaki.module.json` étendus (scopes, queries, commands, events) — génération whitelist côté **portaki-web** |
-| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** — `definePortakiModule` (legacy guest modules npm) |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0` — gateway + annotations hôte existantes |
-| [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0` — gateway + annotations JVM |
+| [`sdk/module-sdk/README.md`](sdk/module-sdk/README.md) | **README npm** du paquet **`@portaki/module-sdk`** |
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 
 Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** / **`@portaki/sdk`** et **`@portaki/module-*`** en **semver** (ou `file:` pour le pont en dev monorepo) depuis le registre public.
 
 ---
 
-## Pont invité — `@portaki/sdk` (`js/`)
+## Pont invité — `@portaki/sdk` (`sdk/guest/`)
 
-- **Installation** : `pnpm add @portaki/sdk` (dans ce monorepo : `"@portaki/sdk": "file:../portaki-sdk/js"`).
+- **Installation** : `pnpm add @portaki/sdk` (dans ce monorepo : `"@portaki/sdk": "file:../portaki-sdk/sdk/guest"`).
 - **Provider** : `PortakiProvider` reçoit le contexte métier + `hmacKeyMaterialB64` (dérivé côté serveur avec `deriveModuleHmacKeyMaterialB64(MODULE_HMAC_SECRET, moduleId, stayId)` — aligné sur la vérification Route Handler).
 - **Hooks** : `usePortakiContext`, `usePortakiConfig`, `usePortakiQuery`, `usePortakiCommand`, `usePortakiModuleQuery`.
 - **Serveur** : `import { verifyHmacToken, deriveModuleHmacKeyMaterialB64, portakiServerQuery } from '@portaki/sdk/server'`.
@@ -56,7 +55,7 @@ npm install @portaki/module-sdk react
 | | |
 |:---|:---|
 | **npm** | [npmjs.com/package/@portaki/module-sdk](https://www.npmjs.com/package/@portaki/module-sdk) |
-| **README paquet** | [sdk/javascript/README.md](sdk/javascript/README.md) |
+| **README paquet** | [sdk/module-sdk/README.md](sdk/module-sdk/README.md) |
 
 ```tsx
 import { definePortakiModule } from "@portaki/module-sdk";
@@ -107,7 +106,8 @@ L’API cœur peut **router** vers une implémentation in-process ou vers un **m
 
 | Zone | Commandes |
 |------|-------------|
-| **SDK JS** | `cd sdk/javascript` → `npm ci` → `npm run build` |
+| **@portaki/sdk** (guest) | À la racine : `pnpm install` puis `pnpm --filter @portaki/sdk run build` |
+| **@portaki/module-sdk** | `cd sdk/module-sdk` → `npm ci` → `npm run build` |
 | **SDK Java** | `cd sdk/java` → `mvn verify` |
 | **Racine pnpm** | `pnpm install` (workspace minimal : SDK JS uniquement) |
 
@@ -129,4 +129,4 @@ Détail publication : **[docs/deployment.md](docs/deployment.md)** · guide **[d
 
 ## Licence
 
-Le dépôt contient le **SDK JS (MIT)** et le **SDK Java** ; les modules invités AGPL sont dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** — voir le champ `license` de chaque paquet.
+Le dépôt contient **`@portaki/module-sdk`** (MIT), le pont **`@portaki/sdk`** (AGPL — `sdk/guest/`), et le **SDK Java** (Apache 2.0) ; les modules invités AGPL sont dans **[portaki-modules](https://github.com/PortakiApp/portaki-modules)** — voir le champ `license` de chaque paquet.

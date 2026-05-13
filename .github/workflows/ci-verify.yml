@@ -39,7 +39,8 @@ jobs:
     name: detect-changes
     runs-on: ubuntu-latest
     outputs:
-      sdk_javascript: ${{ steps.paths.outputs.sdk_javascript }}
+      sdk_module_sdk: ${{ steps.paths.outputs.sdk_module_sdk }}
+      sdk_guest: ${{ steps.paths.outputs.sdk_guest }}
       sdk_java: ${{ steps.paths.outputs.sdk_java }}
     steps:
       - name: Checkout
@@ -50,8 +51,13 @@ jobs:
         id: paths
         with:
           filters: |
-            sdk_javascript:
-              - 'sdk/javascript/**'
+            sdk_module_sdk:
+              - 'sdk/module-sdk/**'
+              - '.github/workflows/ci-verify.yml'
+              - '.github/actions/**'
+            sdk_guest:
+              - 'sdk/guest/**'
+              - 'pnpm-workspace.yaml'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
             sdk_java:
@@ -59,19 +65,19 @@ jobs:
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
 
-  sdk_javascript:
-    name: sdk-javascript
+  sdk_module_sdk:
+    name: sdk-module-sdk
     needs: detect_changes
-    if: needs.detect_changes.outputs.sdk_javascript == 'true'
+    if: needs.detect_changes.outputs.sdk_module_sdk == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sdk/javascript
+        working-directory: sdk/module-sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (sdk/javascript)
+      - name: Setup Node.js (sdk/module-sdk)
         uses: ./.github/actions/nodejs-npm-sdk-javascript
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -84,6 +90,33 @@ jobs:
 
       - name: Test (if defined)
         run: npm run test --if-present
+
+  sdk_guest:
+    name: sdk-guest
+    needs: detect_changes
+    if: needs.detect_changes.outputs.sdk_guest == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js (workspace)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @portaki/sdk
+        run: pnpm --filter @portaki/sdk run build
 
   sdk_java:
     name: sdk-java

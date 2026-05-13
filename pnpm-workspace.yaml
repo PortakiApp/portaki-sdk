@@ -1,4 +1,4 @@
 packages:
-  - "js"
-  - "sdk/javascript"
+  - "sdk/guest"
+  - "sdk/module-sdk"
   - "packages/*"

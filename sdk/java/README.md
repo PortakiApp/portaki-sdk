@@ -44,7 +44,7 @@ mvn install
 
 ## Paire npm
 
-Le SDK **React** correspondant : **`@portaki/module-sdk`** — [README npm](../javascript/README.md).
+Le SDK **React** correspondant : **`@portaki/module-sdk`** — [README npm](../module-sdk/README.md).
 
 ---
 

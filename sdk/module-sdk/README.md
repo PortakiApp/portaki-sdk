@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@portaki/module-sdk"><img src="https://img.shields.io/npm/v/@portaki/module-sdk?logo=npm&color=CB3837&label=npm" alt="npm version"></a>
-  <a href="https://github.com/PortakiApp/portaki-sdk/blob/develop/sdk/javascript/LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e" alt="License MIT"></a>
+  <a href="https://github.com/PortakiApp/portaki-sdk/blob/develop/sdk/module-sdk/LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e" alt="License MIT"></a>
   <a href="https://github.com/PortakiApp/portaki-sdk"><img src="https://img.shields.io/badge/source-portaki--sdk-181717?logo=github" alt="GitHub"></a>
 </p>
 
@@ -85,7 +85,7 @@ Manifest JSON des modules : schéma **`module.v1`** dans le dépôt [portaki-sdk
 ## Build local
 
 ```bash
-cd sdk/javascript
+cd sdk/module-sdk
 npm ci
 npm run build
 ```
