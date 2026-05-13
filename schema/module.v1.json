@@ -84,6 +84,101 @@
         }
       }
     },
+    "scopes": {
+      "type": "array",
+      "description": "OAuth-like scopes this module may request; enforced by ScopeEnforcer.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string" } },
+        "optional": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "$ref": "#/definitions/localePair" },
+          "scope": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "$ref": "#/definitions/localePair" },
+          "scope": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "published": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "severity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "$ref": "#/definitions/localePair" },
+              "severity": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] }
+            }
+          }
+        },
+        "subscribed": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["section", "bottom-bar", "map-overlay", "post-stay"]
+          },
+          "position": { "type": "string" },
+          "defaultLabel": { "$ref": "#/definitions/localePairOptional" },
+          "defaultIcon": { "type": "string" }
+        }
+      }
+    },
+    "readme": { "type": "string" },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "severity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "severity": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] }
+            }
+          }
+        }
+      }
+    },
     "config": {
       "type": "object",
       "additionalProperties": true,

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "train",
+  "name": { "fr": "Train", "en": "Train" },
+  "description": { "fr": "Départs", "en": "Departures" },
+  "version": "1.0.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "train",
+  "type": "official",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "scopes": ["stay:read", "property:read"],
+  "dependencies": { "required": [], "optional": ["events"] },
+  "queries": [
+    {
+      "name": "train.departures",
+      "description": { "fr": "Départs", "en": "Departures" },
+      "scope": "stay:read"
+    }
+  ],
+  "commands": [],
+  "events": { "published": [], "subscribed": [] },
+  "config": { "fields": [] },
+  "slots": [],
+  "catalog": { "npmPackage": "@portaki/module-train" }
+}

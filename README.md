@@ -25,12 +25,25 @@
 
 | Chemin | Contenu |
 |--------|---------|
-| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.2` — types, `definePortakiModule`, build TypeScript |
+| [`js/`](js/) | **`@portaki/sdk`** — pont invité : hooks, HMAC, Route Handlers Next (`/api/portaki/*`), slots |
+| [`packages/`](packages/) | Manifestes `portaki.module.json` étendus (scopes, queries, commands, events) — génération whitelist côté **portaki-web** |
+| [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** — `definePortakiModule` (legacy guest modules npm) |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0-SNAPSHOT` — gateway + annotations hôte existantes |
 | [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.2` — annotations & modèle JVM ([Maven Central](https://central.sonatype.com/search?q=g:app.portaki+portaki-module-sdk)) |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.4.0-SNAPSHOT` — gateway + annotations JVM |
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 
-Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** et **`@portaki/module-*`** en **semver** depuis le registre public.
+Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** / **`@portaki/sdk`** et **`@portaki/module-*`** en **semver** (ou `file:` pour le pont en dev monorepo) depuis le registre public.
+
+---
+
+## Pont invité — `@portaki/sdk` (`js/`)
+
+- **Installation** : `pnpm add @portaki/sdk` (dans ce monorepo : `"@portaki/sdk": "file:../portaki-sdk/js"`).
+- **Provider** : `PortakiProvider` reçoit le contexte métier + `hmacKeyMaterialB64` (dérivé côté serveur avec `deriveModuleHmacKeyMaterialB64(MODULE_HMAC_SECRET, moduleId, stayId)` — aligné sur la vérification Route Handler).
+- **Hooks** : `usePortakiContext`, `usePortakiConfig`, `usePortakiQuery`, `usePortakiCommand`, `usePortakiModuleQuery`.
+- **Serveur** : `import { verifyHmacToken, deriveModuleHmacKeyMaterialB64, portakiServerQuery } from '@portaki/sdk/server'`.
+- **Schéma manifeste** : `schema/module.v1.json` (scopes, queries, commands, events, audit, slots).
 
 ---
 
@@ -69,7 +82,7 @@ export default definePortakiModule({
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.3.2</version>
+  <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 

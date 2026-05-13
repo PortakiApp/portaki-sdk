@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "rules",
+  "name": { "fr": "Règlement", "en": "House rules" },
+  "description": { "fr": "Consignes du logement.", "en": "House rules content." },
+  "version": "1.0.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "scale",
+  "type": "official",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/PortakiApp/portaki-sdk",
+  "scopes": ["stay:read", "property:read"],
+  "dependencies": { "required": [], "optional": [] },
+  "queries": [
+    {
+      "name": "rules.content",
+      "description": { "fr": "Contenu TipTap FR/EN", "en": "TipTap JSON FR/EN" },
+      "scope": "stay:read"
+    }
+  ],
+  "commands": [],
+  "config": { "fields": [] },
+  "catalog": { "npmPackage": "@portaki/module-rules" }
+}

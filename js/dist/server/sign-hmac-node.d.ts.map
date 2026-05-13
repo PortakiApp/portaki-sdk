@@ -1,0 +1,1 @@
+{"version":3,"file":"sign-hmac-node.d.ts","sourceRoot":"","sources":["../../src/server/sign-hmac-node.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,kBAAkB,CAAA;AAWnD,gGAAgG;AAChG,wBAAgB,iBAAiB,CAAC,cAAc,EAAE,MAAM,EAAE,OAAO,EAAE,WAAW,GAAG,MAAM,CAOtF"}

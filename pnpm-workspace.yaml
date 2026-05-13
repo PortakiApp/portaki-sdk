@@ -1,2 +1,4 @@
 packages:
+  - "js"
   - "sdk/javascript"
+  - "packages/*"
