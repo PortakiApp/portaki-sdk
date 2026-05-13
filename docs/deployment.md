@@ -34,9 +34,9 @@ Les workflows publient :
 | `OSSRH_USERNAME` | **User token** Central Portal — champ *username* ([générer un jeton](https://central.sonatype.org/publish/generate-portal-token/)). |
 | `OSSRH_TOKEN` | **User token** Central Portal — champ *password* du même jeton. |
 | `GPG_PRIVATE_KEY` | Clé privée **ASCII armored** pour signer les artefacts ([exigences GPG](https://central.sonatype.org/publish/requirements/gpg/)). |
-| `GPG_PASSPHRASE` | Passphrase de la clé ; réutilisée comme **`MAVEN_GPG_PASSPHRASE`** pour **`maven-gpg-plugin`** en CI. |
+| `GPG_PASSPHRASE` | Passphrase de la clé ; en CI elle est exposée sous le nom d’environnement **`MAVEN_GPG_PASSPHRASE`** pour **`actions/setup-java`** et **`maven-gpg-plugin`**. |
 
-La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java packages with Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)** : checkout, **`actions/setup-java`** (`server-id` **`central`**, **`MAVEN_SERVER_USERNAME`** / **`MAVEN_SERVER_PASSWORD`**), secrets **`OSSRH_*`**, variable d’environnement **`PORTAKI_PUBLISH_TO_CENTRAL=true`** pour activer le profil Maven **`central-deploy`**, puis **`mvn --batch-mode deploy`**. L’import GPG utilise **`crazy-max/ghaction-import-gpg`**.
+La workflow **`publish-maven-sdk`** suit le fil du tutoriel Medium **[Publish your artifact to the Maven Central Repository using GitHub Actions](https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88)** : checkout, **`actions/setup-java`** avec `server-id` **`central`**, identifiants **`MAVEN_USERNAME`** / **`MAVEN_PASSWORD`** (remplis depuis **`OSSRH_USERNAME`** / **`OSSRH_TOKEN`** au lieu des secrets **`CENTRAL_TOKEN_*`** de l’article), import GPG intégré (`gpg-private-key` ← **`GPG_PRIVATE_KEY`**, `gpg-passphrase` ← **`MAVEN_GPG_PASSPHRASE`** ← **`GPG_PASSPHRASE`**), **`versions:set`** sur **`release`** à partir du tag **`java-v…`**, variable **`PORTAKI_PUBLISH_TO_CENTRAL=true`** pour le profil **`central-deploy`**, puis **`mvn --batch-mode deploy -DskipTests`**.
 
 ---
 
@@ -50,7 +50,7 @@ La workflow **`publish-maven-sdk`** suit le modèle GitHub **[Publishing Java pa
 4. **Sources & Javadoc** : jars **`-sources`** et **`-javadoc`** (profil **`central-deploy`** dans ce dépôt).
 5. **GPG** : chaque fichier publié a un **`.asc`** ; voir [Working with PGP Signatures](https://central.sonatype.org/publish/requirements/gpg/) — clé publique poussée vers un [serveur de clés supporté](https://central.sonatype.org/publish/requirements/gpg/#distributing-your-public-key) (**`keyserver.ubuntu.com`**, **`keys.openpgp.org`**, **`pgp.mit.edu`**) et **clé enregistrée** sur votre profil Central. **Attention** : si une **sous-clé** est utilisée pour signer (`usage: S` sur un `ssb`), Central peut refuser la vérification — il faut signer avec la **clé primaire** (voir la section *Delete a Sub Key* de la doc GPG Sonatype).
 6. **Checksums** : générés par **`central-publishing-maven-plugin`** (cf. [exigences checksums](https://central.sonatype.org/publish/requirements/#provide-file-checksums)).
-7. **Secrets CI** : **`GPG_PRIVATE_KEY`** (armored) + **`GPG_PASSPHRASE`** + **`MAVEN_GPG_PASSPHRASE`** (même valeur que la passphrase pour le plugin Maven en CI).
+7. **Secrets CI** : **`GPG_PRIVATE_KEY`** (armored) + **`GPG_PASSPHRASE`** (aucun secret supplémentaire ; la CI mappe la passphrase vers **`MAVEN_GPG_PASSPHRASE`**).
 
 ---
 
@@ -89,13 +89,14 @@ Jobs (IDs stables) : **`detect_changes`**, **`sdk_javascript`**, **`sdk_java`**,
 **Déclencheurs :**
 
 1. **`workflow_dispatch`** sur **`main`** uniquement — champ **`version`** optionnel (ex. `0.3.1`) pour **`versions:set`** avant déploiement ; laisser vide pour publier la version déjà dans le `pom`.
-2. **`release`** **`published`** dont le tag commence par **`java-v`** (ex. **`java-v0.3.0`**) — checkout au tag, puis **`mvn --batch-mode deploy`** (utile si la release GitHub est créée à la main après merge du bump de version).
+2. **`release`** **`published`** dont le tag commence par **`java-v`** (ex. **`java-v0.3.0`**) — checkout au tag, puis **`versions:set`** sur la version sans préfixe (ex. **`0.3.0`**), puis **`mvn --batch-mode deploy -DskipTests`**.
 
 Après un **`workflow_dispatch`** réussi sur **`main`**, création d’une **release GitHub** `java-v{version}` si elle n’existe pas encore.
 
 **Références :**
 
 - [GitHub Actions — Publier des paquets Java avec Maven](https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven)
+- [Medium — Publish to Maven Central with GitHub Actions](https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88) (noms de secrets Portaki : **`OSSRH_*`**, **`GPG_PRIVATE_KEY`**, **`GPG_PASSPHRASE`**)
 - [Publier avec Maven (Central Portal)](https://central.sonatype.org/publish/publish-portal-maven/)
 - [Exigences (métadonnées, javadoc, sources, GPG)](https://central.sonatype.org/publish/requirements/)
 

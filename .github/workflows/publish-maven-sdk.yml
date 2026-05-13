@@ -1,5 +1,16 @@
-# Release app.portaki:portaki-module-sdk to Maven Central via central-publishing-maven-plugin.
-# GitHub tutorial (setup-java + secrets; examples are OSSRH legacy): https://docs.github.com/en/actions/tutorials/publish-packages/publish-java-packages-with-maven
+# Publish app.portaki:portaki-module-sdk to Maven Central (Central Portal + central-publishing-maven-plugin).
+#
+# Flow aligned with:
+# https://medium.com/@jtbsorensen/publish-your-artifact-to-the-maven-central-repository-using-github-actions-15d3b5d9ce88
+#
+# That article uses secrets CENTRAL_TOKEN_*, GPG_SIGNING_KEY*. This repo uses:
+#   OSSRH_USERNAME, OSSRH_TOKEN     (Central Portal user token — same role as CENTRAL_TOKEN_*)
+#   GPG_PRIVATE_KEY, GPG_PASSPHRASE (armored private key + passphrase)
+#
+# Env names follow the article (MAVEN_USERNAME / MAVEN_PASSWORD / MAVEN_GPG_PASSPHRASE) for
+# actions/setup-java server-id + GPG; values come from the Portaki secrets above.
+#
+# POM profile: central-deploy (activated when env PORTAKI_PUBLISH_TO_CENTRAL=true).
 # Requirements: https://central.sonatype.org/publish/requirements/
 # Portal + Maven: https://central.sonatype.org/publish/publish-portal-maven/
 
@@ -27,6 +38,10 @@ concurrency:
 
 env:
   JAVA_VERSION: "21"
+  PORTAKI_PUBLISH_TO_CENTRAL: "true"
+  MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+  MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+  MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
 jobs:
   publish:
@@ -35,13 +50,6 @@ jobs:
     if: >
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'java-v'))
-    env:
-      PORTAKI_PUBLISH_TO_CENTRAL: "true"
-      MAVEN_SERVER_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-      MAVEN_SERVER_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-      MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     defaults:
       run:
         working-directory: sdk/java
@@ -53,33 +61,48 @@ jobs:
 
       - name: Require Central Portal token
         run: |
-          if [ -z "${MAVEN_SERVER_USERNAME}" ] || [ -z "${MAVEN_SERVER_PASSWORD}" ]; then
-            echo "::error::Set secrets OSSRH_USERNAME and OSSRH_TOKEN (https://central.sonatype.org/publish/generate-portal-token/)."
+          if [ -z "${MAVEN_USERNAME}" ] || [ -z "${MAVEN_PASSWORD}" ]; then
+            echo "::error::Set repository secrets OSSRH_USERNAME and OSSRH_TOKEN (https://central.sonatype.org/publish/generate-portal-token/)."
             exit 1
           fi
 
       - name: Require GPG signing secrets
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE_CHECK: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          if [ -z "${GPG_PRIVATE_KEY}" ] || [ -z "${GPG_PASSPHRASE}" ]; then
+          if [ -z "${GPG_PRIVATE_KEY}" ] || [ -z "${GPG_PASSPHRASE_CHECK}" ]; then
             echo "::error::Set secrets GPG_PRIVATE_KEY (armored) and GPG_PASSPHRASE (https://central.sonatype.org/publish/requirements/gpg/)."
             exit 1
           fi
 
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      - name: Setup Java
+      - name: Set up JDK and Maven Central credentials
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
           server-id: central
-          server-username: MAVEN_SERVER_USERNAME
-          server-password: MAVEN_SERVER_PASSWORD
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Set version from release tag
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#java-v}"
+          if [ "$VERSION" = "$TAG" ] || [ -z "$VERSION" ]; then
+            echo "::error::Release tag must be java-v<semver> (got: ${TAG})"
+            exit 1
+          fi
+          case "$VERSION" in *-SNAPSHOT*)
+            echo "::error::SNAPSHOT versions are not published with this workflow."
+            exit 1
+            ;;
+          esac
+          mvn -B -ntp org.codehaus.mojo:versions-maven-plugin:2.17.1:set "-DnewVersion=${VERSION}" -DgenerateBackupPoms=false
 
       - name: Version bump (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
@@ -103,8 +126,8 @@ jobs:
             ;;
           esac
 
-      - name: Deploy to Maven Central
-        run: mvn --batch-mode deploy
+      - name: Publish package to Maven Central
+        run: mvn --batch-mode deploy -DskipTests
 
       - name: Create GitHub Release (workflow_dispatch on main)
         if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
