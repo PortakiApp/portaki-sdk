@@ -16,12 +16,12 @@ class ModuleHostContextTest {
         UUID property = UUID.randomUUID();
 
         // When
-        ModuleHostContext ctx = new ModuleHostContext(tenant, property, "ical-sync");
+        ModuleHostContext ctx = new ModuleHostContext(tenant, property, "fixtures-demo");
 
         // Then
         assertEquals(tenant, ctx.tenantId());
         assertEquals(property, ctx.propertyId());
-        assertEquals("ical-sync", ctx.moduleId());
+        assertEquals("fixtures-demo", ctx.moduleId());
     }
 
     @Test

@@ -8,7 +8,7 @@
 <h1 align="center">Portaki Module SDK · Java</h1>
 
 <p align="center">
-  <code>app.portaki:portaki-module-sdk</code> · <strong>0.3.0</strong><br/>
+  <code>app.portaki:portaki-module-sdk</code> · <strong>0.3.2</strong><br/>
   <sub>Annotations &amp; types pour modules backend Portaki</sub>
 </p>
 
@@ -24,11 +24,11 @@
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.2</version>
 </dependency>
 ```
 
-Les coordonnées ci-dessus pointent vers la release **0.3.0** sur **Maven Central** — voir [docs/deployment.md](../../docs/deployment.md).
+Les coordonnées ci-dessus pointent vers la release **0.3.2** sur **Maven Central** — voir [docs/deployment.md](../../docs/deployment.md).
 
 ---
 

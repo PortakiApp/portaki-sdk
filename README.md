@@ -27,7 +27,7 @@
 |--------|---------|
 | [`sdk/javascript/`](sdk/javascript/) | **`@portaki/module-sdk`** `0.3.2` — types, `definePortakiModule`, build TypeScript |
 | [`sdk/javascript/README.md`](sdk/javascript/README.md) | **README npm** dédié au paquet publié |
-| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.0` — annotations & modèle JVM ([Maven Central](https://central.sonatype.com/search?q=g:app.portaki+portaki-module-sdk)) |
+| [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** `0.3.2` — annotations & modèle JVM ([Maven Central](https://central.sonatype.com/search?q=g:app.portaki+portaki-module-sdk)) |
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 
 Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** et **`@portaki/module-*`** en **semver** depuis le registre public.
@@ -69,13 +69,13 @@ export default definePortakiModule({
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.2</version>
 </dependency>
 ```
 
 ### Backend hôte (monolithe → microservice)
 
-Le paquet **`app.portaki.sdk.module.backend`** définit le contrat stable pour tout travail serveur rattaché à un module hôte (sync iCal, import externe, …) :
+Le paquet **`app.portaki.sdk.module.backend`** définit le contrat stable pour tout travail serveur rattaché à un module hôte (jobs planifiés, actions explicites, webhooks, …) — **sans logique métier** d’un module précis :
 
 | Type | Rôle |
 |------|------|

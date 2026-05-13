@@ -6,12 +6,12 @@ package app.portaki.sdk.module.backend;
 public interface PortakiHostModuleBackend {
 
     /**
-     * Identifiant stable du module (ex. {@code ical-sync}).
+     * Identifiant stable du module (aligné sur {@code portaki.module.json}, ex. {@code weather}).
      */
     String moduleId();
 
     /**
-     * Exécute une action (sync, …) avec la configuration module déjà en clair (secrets déchiffrés côté API).
+     * Exécute une action nommée avec la configuration module déjà en clair (secrets déchiffrés côté API).
      *
      * @param plainConfigJson JSON de configuration du module, UTF-8
      */

@@ -10,6 +10,10 @@ ou portaki-module-sdk (Java). Ne jamais appeler l'API directement sans le SDK.
 Les modules officiels sont les tests d'intégration du SDK.
 Si un module ne fonctionne pas sur L'Islette du Riou, le SDK est invalide.
 
+## Neutralité (pas de logique métier module)
+
+Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de vocabulaire, codes d’erreur ou types liés à iCal, météo, etc.). Uniquement des **contrats réutilisables**, SPI et petits utilitaires génériques (HTTP sécurisé, types manifeste, …). Toute logique métier reste dans **portaki-modules** ou l’API hôte.
+
 ## Versionnement (semver)
 
 À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm ou Java, contrats manifeste), **bump la version** dans les fichiers concernés (`package.json` du SDK npm, `sdk/java/pom.xml` pour `app.portaki:portaki-module-sdk`) :

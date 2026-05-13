@@ -11,7 +11,9 @@ import java.time.Duration;
 import app.portaki.sdk.module.backend.ModuleBackendException;
 
 /**
- * GET HTTPS en texte UTF-8 avec garde-fous SSRF (réseaux privés, taille max) pour backends de modules hôte.
+ * GET HTTPS en texte UTF-8 avec garde-fous SSRF (réseaux privés, taille max). Utilitaire générique pour
+ * backends de modules (flux distants, webhooks entrants à relire, etc.) — sans logique métier d’un module
+ * précis.
  */
 public final class SafeHttpsUtf8Fetcher {
 
@@ -30,36 +32,36 @@ public final class SafeHttpsUtf8Fetcher {
         try {
             uri = URI.create(url.trim());
         } catch (IllegalArgumentException e) {
-            throw new ModuleBackendException("ical_url_invalid", "invalid url", e);
+            throw new ModuleBackendException("https_get_url_invalid", "invalid url", e);
         }
         if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new ModuleBackendException("ical_url_https_only", "https only");
+            throw new ModuleBackendException("https_get_https_required", "https only");
         }
         if (uri.getHost() == null || uri.getHost().isBlank()) {
-            throw new ModuleBackendException("ical_url_host_missing", "host missing");
+            throw new ModuleBackendException("https_get_host_missing", "host missing");
         }
         assertHostNotPrivate(uri.getHost());
         HttpRequest req =
                 HttpRequest.newBuilder(uri)
                         .timeout(Duration.ofSeconds(25))
-                        .header("User-Agent", "PortakiIcalSync/1.0")
+                        .header("User-Agent", "PortakiModuleHostBackend/1.0")
                         .GET()
                         .build();
         try {
             HttpResponse<String> resp =
                     HTTP_CLIENT.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (resp.statusCode() >= 300) {
-                throw new ModuleBackendException("ical_http_status_" + resp.statusCode(), "http error");
+                throw new ModuleBackendException("https_get_http_" + resp.statusCode(), "http error");
             }
             String body = resp.body();
             if (body.length() > MAX_BODY_CHARS) {
-                throw new ModuleBackendException("ical_body_too_large", "body too large");
+                throw new ModuleBackendException("https_get_body_too_large", "body too large");
             }
             return body;
         } catch (ModuleBackendException e) {
             throw e;
         } catch (Exception e) {
-            throw new ModuleBackendException("ical_fetch_failed", "fetch failed", e);
+            throw new ModuleBackendException("https_get_failed", "fetch failed", e);
         }
     }
 
@@ -69,7 +71,7 @@ public final class SafeHttpsUtf8Fetcher {
                 || h.endsWith(".localhost")
                 || "0.0.0.0".equals(h)
                 || "[::1]".equals(h)) {
-            throw new ModuleBackendException("ical_url_host_forbidden", "forbidden host");
+            throw new ModuleBackendException("https_get_host_forbidden", "forbidden host");
         }
         try {
             InetAddress addr = InetAddress.getByName(host);
@@ -78,12 +80,12 @@ public final class SafeHttpsUtf8Fetcher {
                     || addr.isLinkLocalAddress()
                     || addr.isSiteLocalAddress()
                     || addr.isMulticastAddress()) {
-                throw new ModuleBackendException("ical_url_host_forbidden", "forbidden host");
+                throw new ModuleBackendException("https_get_host_forbidden", "forbidden host");
             }
         } catch (ModuleBackendException e) {
             throw e;
         } catch (Exception e) {
-            throw new ModuleBackendException("ical_dns_failed", "dns failed", e);
+            throw new ModuleBackendException("https_get_dns_failed", "dns failed", e);
         }
     }
 }

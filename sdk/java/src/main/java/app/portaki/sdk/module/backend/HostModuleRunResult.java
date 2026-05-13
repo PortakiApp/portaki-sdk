@@ -3,8 +3,8 @@ package app.portaki.sdk.module.backend;
 /**
  * Résultat générique d'une action backend (compteurs agrégés + résumé lisible humain / logs).
  *
- * <p>{@code updatedPlainConfigJson} : JSON de configuration module en clair après action (ex. dernier sync,
- * résumé). {@code null} si le backend ne modifie pas la config persistée.
+ * <p>{@code updatedPlainConfigJson} : JSON de configuration module en clair après action, si le backend
+ * renvoie un état à persister côté hôte. {@code null} si la config stockée ne change pas.
  */
 public record HostModuleRunResult(
         boolean ok,

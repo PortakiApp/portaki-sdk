@@ -14,6 +14,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface PortakiHostModule {
 
-    /** Identifiant du module (ex. {@code ical-sync}), aligné sur {@code portaki.module.json}. */
+    /** Identifiant du module, aligné sur {@code portaki.module.json} (ex. {@code checklist}). */
     String value();
 }
