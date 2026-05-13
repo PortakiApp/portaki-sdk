@@ -81,7 +81,7 @@ Le paquet **`app.portaki.sdk.module.backend`** définit le contrat stable pour t
 |------|------|
 | `ModuleHostContext` | `tenantId`, `propertyId`, `moduleId` — périmètre après contrôle d’accès API |
 | `HostModuleAction` | Action nommée (ex. `SYNC`) — extensible pour webhooks / jobs |
-| `HostModuleRunResult` | Agrégat générique (succès / échecs / total / résumé) |
+| `HostModuleRunResult` | Agrégat générique (succès / échecs / total / résumé + JSON config plat optionnel après action) |
 | `PortakiHostModuleBackend` | Implémentation par `moduleId` |
 | `PortakiHostModuleBackendRegistry` | Résolution `moduleId` → backend (beans Spring aujourd’hui, client HTTP vers microservice demain) |
 | `@PortakiHostModule` | Marqueur sur les implémentations pour découverte / conventions |

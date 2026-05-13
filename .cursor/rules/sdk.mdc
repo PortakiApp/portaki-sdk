@@ -9,3 +9,15 @@ RÈGLE FONDAMENTALE : tout module DOIT utiliser @portaki/module-sdk (JS)
 ou portaki-module-sdk (Java). Ne jamais appeler l'API directement sans le SDK.
 Les modules officiels sont les tests d'intégration du SDK.
 Si un module ne fonctionne pas sur L'Islette du Riou, le SDK est invalide.
+
+## Versionnement (semver)
+
+À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm ou Java, contrats manifeste), **bump la version** dans les fichiers concernés (`package.json` du SDK npm, `sdk/java/pom.xml` pour `app.portaki:portaki-module-sdk`) :
+
+| Gravité | Bump | Exemples |
+|---------|------|----------|
+| **Patch** | `x.y.(z+1)` | correctif interne, doc, bugfix sans changement de contrat pour les consommateurs |
+| **Minor** | `x.(y+1).0` | nouvelle API **rétrocompatible**, champs optionnels ajoutés au schéma ou au DTO, nouvelles capacités sans casser l’existant |
+| **Major** | `(x+1).0.0` | **breaking change** (signature publique, suppression, renommage, schéma qui invalide d’anciens manifestes, changement de comportement contractuel) |
+
+Même PR = versions cohérentes (npm / Java / doc release si applicable). Ne pas merger de changement SDK consommable sans bump explicite.

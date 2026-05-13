@@ -76,7 +76,12 @@
           "description": "Minimum billing plan id (e.g. starter, pro). Omit or use free when the module is available on the free tier."
         },
         "npmPackage": { "type": "string", "minLength": 1 },
-        "npmUrl": { "type": "string", "format": "uri" }
+        "npmUrl": { "type": "string", "format": "uri" },
+        "javaArtifact": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Optional Maven coordinates (groupId:artifactId) for the host backend JAR published alongside the npm package."
+        }
       }
     },
     "config": {
