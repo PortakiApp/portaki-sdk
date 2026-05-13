@@ -38,7 +38,7 @@ Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** / **`@portak
 
 ## Pont invité — `@portaki/sdk` (`sdk/guest/`)
 
-- **Installation** : `pnpm add @portaki/sdk` (dans ce monorepo : `"@portaki/sdk": "file:../portaki-sdk/sdk/guest"`).
+- **Installation** : `pnpm add @portaki/sdk` (dans ce monorepo : `"@portaki/sdk": "file:../portaki-sdk/sdk/guest"` — exécuter d’abord `pnpm --filter @portaki/sdk run build` dans **portaki-sdk**, le dossier **`dist/`** n’est pas versionné).
 - **Provider** : `PortakiProvider` reçoit le contexte métier + `hmacKeyMaterialB64` (dérivé côté serveur avec `deriveModuleHmacKeyMaterialB64(MODULE_HMAC_SECRET, moduleId, stayId)` — aligné sur la vérification Route Handler).
 - **Hooks** : `usePortakiContext`, `usePortakiConfig`, `usePortakiQuery`, `usePortakiCommand`, `usePortakiModuleQuery`.
 - **Serveur** : `import { verifyHmacToken, deriveModuleHmacKeyMaterialB64, portakiServerQuery } from '@portaki/sdk/server'`.
