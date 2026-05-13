@@ -131,7 +131,7 @@ Après synchronisation sur Central, déclarez la dépendance sans dépôt suppl�
 <dependency>
   <groupId>app.portaki</groupId>
   <artifactId>portaki-module-sdk</artifactId>
-  <version>0.3.2</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
