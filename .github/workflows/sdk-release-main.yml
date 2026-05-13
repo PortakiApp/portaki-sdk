@@ -6,6 +6,11 @@
 #
 # Chaînes needs : chaque publish ne dépend que de son verify (plus de gate en needs),
 # pour que le graphe GitHub Actions ne trace pas de faux liens entre jobs npm et Maven.
+#
+# Releases GitHub (`gh release create`) : si erreur **403 Resource not accessible by integration**,
+# vérifier **Settings → Actions → General → Workflow permissions** = *Read and write*, les **rulesets**
+# (tags / releases), puis optionnellement secret **`GH_RELEASE_PAT`** (classic `repo` ou fine-grained
+# avec *Contents: Read and write* sur ce dépôt) — le workflow l’utilise à la place de `GITHUB_TOKEN` pour `gh`.
 name: SDK release (main)
 
 run-name: sdk-release-${{ github.run_id }}
@@ -194,6 +199,9 @@ jobs:
     needs: [verify-java]
     if: always() && needs.verify-java.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     defaults:
       run:
         working-directory: sdk/java
@@ -203,6 +211,14 @@ jobs:
         with:
           ref: ${{ needs.verify-java.outputs.head_sha }}
           fetch-depth: 0
+
+      - name: Auth gh for release API
+        run: |
+          if [ -n "${{ secrets.GH_RELEASE_PAT }}" ]; then
+            echo "GH_TOKEN=${{ secrets.GH_RELEASE_PAT }}" >> "$GITHUB_ENV"
+          else
+            echo "GH_TOKEN=${{ github.token }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Require Central + GPG secrets
         env:
@@ -230,8 +246,6 @@ jobs:
 
       - name: Skip if release already exists
         id: skip
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.project.outputs.version }}"
           TAG="java-v${V}"
@@ -269,8 +283,6 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.skip.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.project.outputs.version }}"
           TAG="java-v${V}"
@@ -286,6 +298,9 @@ jobs:
     needs: [verify-module-sdk]
     if: always() && needs.verify-module-sdk.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     defaults:
       run:
         working-directory: sdk/module-sdk
@@ -298,6 +313,14 @@ jobs:
           ref: ${{ needs.verify-module-sdk.outputs.head_sha }}
           fetch-depth: 0
 
+      - name: Auth gh for release API
+        run: |
+          if [ -n "${{ secrets.GH_RELEASE_PAT }}" ]; then
+            echo "GH_TOKEN=${{ secrets.GH_RELEASE_PAT }}" >> "$GITHUB_ENV"
+          else
+            echo "GH_TOKEN=${{ github.token }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Read package version
         id: pkg
         run: |
@@ -306,8 +329,6 @@ jobs:
 
       - name: Skip if release already exists
         id: skip
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.pkg.outputs.version }}"
           TAG="javascript-v${V}"
@@ -347,8 +368,6 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.skip.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.pkg.outputs.version }}"
           TAG="javascript-v${V}"
@@ -364,6 +383,9 @@ jobs:
     needs: [verify-guest]
     if: always() && needs.verify-guest.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     env:
       NPM_REGISTRY: https://registry.npmjs.org
     steps:
@@ -373,6 +395,14 @@ jobs:
           ref: ${{ needs.verify-guest.outputs.head_sha }}
           fetch-depth: 0
 
+      - name: Auth gh for release API
+        run: |
+          if [ -n "${{ secrets.GH_RELEASE_PAT }}" ]; then
+            echo "GH_TOKEN=${{ secrets.GH_RELEASE_PAT }}" >> "$GITHUB_ENV"
+          else
+            echo "GH_TOKEN=${{ github.token }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Read package version
         id: pkg
         run: |
@@ -381,8 +411,6 @@ jobs:
 
       - name: Skip if release already exists
         id: skip
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.pkg.outputs.version }}"
           TAG="guest-v${V}"
@@ -430,8 +458,6 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.skip.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ steps.pkg.outputs.version }}"
           TAG="guest-v${V}"

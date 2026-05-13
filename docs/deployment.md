@@ -143,6 +143,14 @@ cd sdk/java && mvn install -DskipTests
 
 ---
 
+## Dépannage — `gh release` / API Releases en **403** (*Resource not accessible by integration*)
+
+1. **Réglages Actions du dépôt** : **Settings → Actions → General → Workflow permissions** → cocher **Read and write** (pas seulement *Read repository contents and permissions packages*). À l’échelle **organisation**, vérifier que la politique n’impose pas le mode lecture seule pour tous les workflows.
+2. **Rulesets** (dépôt ou org) : une règle sur les **tags** ou les **releases** peut empêcher l’intégration **GitHub Actions** de créer une release — ajouter une exception / bypass pour **GitHub Actions** ou assouplir la règle.
+3. **PAT de secours** : créer un secret dépôt **`GH_RELEASE_PAT`** (token **classic** avec scope **`repo`**, ou **fine-grained** avec *Contents: Read and write* sur **portaki-sdk**). Les workflows **`sdk-release-main`** et **`publish-maven-sdk`** l’injectent dans **`GH_TOKEN`** pour le CLI **`gh`** lorsqu’il est défini ; sinon ils utilisent **`GITHUB_TOKEN`**.
+
+---
+
 ## Références
 
 - [npm — Trusted publishers](https://docs.npmjs.com/trusted-publishers)
