@@ -1,7 +1,7 @@
 # Après un **ci-verify** vert sur `main` : détecte les changements SDK dans le commit, vérifie Java/JS,
-# puis publie (Maven Central + npm) et crée les releases GitHub — plus de parallèle avec la CI.
+# puis publie (Maven Central + npm @portaki/module-sdk + npm @portaki/sdk) et crée les releases GitHub.
 #
-# Prérequis : bump sdk/java/pom.xml et sdk/module-sdk/package.json avant merge.
+# Prérequis : bump sdk/java/pom.xml, sdk/module-sdk/package.json et/ou sdk/guest/package.json avant merge.
 # Déclenchement manuel : workflow_dispatch (même branche que le bouton Actions, en général main).
 #
 # GITHUB_TOKEN ne chaîne pas les workflows entre eux : on utilise workflow_run sur ci-verify.
@@ -347,6 +347,89 @@ jobs:
           TAG="javascript-v${V}"
           PREV="${{ steps.prev.outputs.prev_tag }}"
           ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "JavaScript SDK ${TAG}" --generate-notes)
+          if [ -n "${PREV}" ]; then
+            ARGS+=(--notes-start-tag "${PREV}")
+          fi
+          gh release create "${TAG}" "${ARGS[@]}"
+
+  release-publish-guest:
+    name: release-publish-guest
+    needs: [gate, verify-guest]
+    if: always() && needs.gate.outputs.proceed == 'true' && needs.gate.outputs.guest == 'true' && needs.verify-guest.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      NPM_REGISTRY: https://registry.npmjs.org
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Read package version
+        id: pkg
+        run: |
+          V="$(node -p "require('./sdk/guest/package.json').version")"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if release already exists
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          TAG="guest-v${V}"
+          if gh release view "${TAG}" --json name >/dev/null 2>&1; then
+            echo "Release ${TAG} déjà présente — bump sdk/guest/package.json pour republier."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Previous tag for release notes
+        if: steps.skip.outputs.skip != 'true'
+        id: prev
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "guest-v" "${V}")"
+          echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: steps.skip.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js (workspace + npm OIDC)
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.NPM_REGISTRY }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @portaki/sdk
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm --filter @portaki/sdk run build
+
+      - name: Publish to npmjs
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm publish --filter @portaki/sdk --access public --no-git-checks
+
+      - name: Create GitHub Release
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.pkg.outputs.version }}"
+          TAG="guest-v${V}"
+          PREV="${{ steps.prev.outputs.prev_tag }}"
+          ARGS=(--target "${{ needs.gate.outputs.head_sha }}" --title "Guest SDK ${TAG}" --generate-notes)
           if [ -n "${PREV}" ]; then
             ARGS+=(--notes-start-tag "${PREV}")
           fi
