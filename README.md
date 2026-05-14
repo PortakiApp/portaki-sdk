@@ -8,7 +8,7 @@
 <h1 align="center">Portaki SDK</h1>
 
 <p align="center">
-  <strong>Monorepo officiel</strong> — SDK <strong>JavaScript / React</strong>, SDK <strong>Java</strong>, schéma manifestes ; modules invités <code>@portaki/module-*</code> dans <a href="https://github.com/PortakiApp/portaki-modules">portaki-modules</a><br/>
+  <strong>Monorepo officiel</strong> — SDK <strong>JavaScript / React</strong>, SDK <strong>Java</strong> ; manifestes et modules invités <code>@portaki/module-*</code> dans <a href="https://github.com/PortakiApp/portaki-modules">portaki-modules</a><br/>
   <sub>pnpm · CI GitHub · publication npm &amp; Maven</sub>
 </p>
 
@@ -28,7 +28,6 @@
 | [`sdk/guest/`](sdk/guest/) | **`@portaki/sdk`** — pont invité : hooks, HMAC, Route Handlers Next (`/api/portaki/*`), slots |
 | [`sdk/module-sdk/`](sdk/module-sdk/) | **`@portaki/module-sdk`** — `definePortakiModule` (modules invités npm) |
 | [`sdk/java/`](sdk/java/) | **`app.portaki:portaki-module-sdk`** (Maven) — gateway + annotations hôte JVM |
-| [`packages/`](packages/) | Manifestes `portaki.module.json` étendus (scopes, queries, commands, events) — génération whitelist côté **portaki-web** |
 | [`sdk/module-sdk/README.md`](sdk/module-sdk/README.md) | **README npm** du paquet **`@portaki/module-sdk`** |
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Sources & publication npm des **`@portaki/module-*`** (dossier `modules/`) |
 

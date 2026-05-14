@@ -1,4 +1,3 @@
 packages:
   - "sdk/guest"
   - "sdk/module-sdk"
-  - "packages/*"
