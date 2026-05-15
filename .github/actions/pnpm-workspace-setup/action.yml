@@ -31,13 +31,21 @@ runs:
       with:
         version: ${{ inputs.pnpm-version }}
 
+    - name: Cache bucket UTC (validité 1 h)
+      id: cache_ttl
+      shell: bash
+      run: echo "hour=$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.local/share/pnpm/store
+        key: pnpm-workspace-${{ runner.os }}-${{ hashFiles(inputs.pnpm-lockfile-path) }}-${{ steps.cache_ttl.outputs.hour }}
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
-        cache: pnpm
-        cache-dependency-path: ${{ inputs.pnpm-lockfile-path }}
 
     - name: Install dependencies
       if: inputs.run-install == 'true'

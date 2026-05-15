@@ -33,12 +33,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cache bucket UTC (validité 1 h)
+      id: cache_ttl
+      shell: bash
+      run: echo "hour=$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: m2-maven-gpr-sdk-action-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}-${{ steps.cache_ttl.outputs.hour }}
+
     - name: Set up JDK
       uses: actions/setup-java@v4
       with:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
-        cache: maven
         overwrite-settings: false
 
     - name: Maven settings.xml (GitHub Packages)

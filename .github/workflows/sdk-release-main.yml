@@ -176,20 +176,11 @@ jobs:
         with:
           ref: ${{ needs.gate.outputs.head_sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
-      - name: Setup Node.js (workspace)
-        uses: actions/setup-node@v4
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/pnpm-workspace-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install workspace
-        run: pnpm install --frozen-lockfile
+          pnpm-version: 9.15.4
 
       - name: Build @portaki/sdk
         run: pnpm --filter @portaki/sdk run build
@@ -264,13 +255,23 @@ jobs:
           PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "java-v" "${V}")"
           echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
 
+      - name: Cache bucket UTC (validité 1 h)
+        if: steps.skip.outputs.skip != 'true'
+        id: cache_ttl
+        run: echo "hour=$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        if: steps.skip.outputs.skip != 'true'
+        with:
+          path: ~/.m2/repository
+          key: m2-sdk-release-publish-java-${{ runner.os }}-${{ hashFiles('sdk/java/**/pom.xml') }}-${{ steps.cache_ttl.outputs.hour }}
+
       - name: Set up JDK and Maven Central
         if: steps.skip.outputs.skip != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
           server-id: central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
@@ -429,24 +430,13 @@ jobs:
           PREV="$(python3 "$GITHUB_WORKSPACE/.github/scripts/sdk_prev_release_tag.py" "guest-v" "${V}")"
           echo "prev_tag=${PREV}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup pnpm
+      - name: Setup pnpm workspace
         if: steps.skip.outputs.skip != 'true'
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
-      - name: Setup Node.js (workspace + npm OIDC)
-        if: steps.skip.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/pnpm-workspace-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: 9.15.4
           registry-url: ${{ env.NPM_REGISTRY }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install workspace
-        if: steps.skip.outputs.skip != 'true'
-        run: pnpm install --frozen-lockfile
 
       - name: Build @portaki/sdk
         if: steps.skip.outputs.skip != 'true'

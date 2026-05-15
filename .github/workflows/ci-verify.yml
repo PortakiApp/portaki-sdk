@@ -100,20 +100,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-
-      - name: Setup Node.js (workspace)
-        uses: actions/setup-node@v4
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/pnpm-workspace-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install workspace
-        run: pnpm install --frozen-lockfile
+          pnpm-version: 9.15.4
 
       - name: Build @portaki/sdk
         run: pnpm --filter @portaki/sdk run build

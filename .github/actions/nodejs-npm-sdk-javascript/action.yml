@@ -19,19 +19,25 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cache bucket UTC (validité 1 h)
+      id: cache_ttl
+      shell: bash
+      run: echo "hour=$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: npm-sdk-js-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}-${{ steps.cache_ttl.outputs.hour }}
+
     - name: Setup Node.js (registry)
       if: inputs.registry-url != ''
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
-        cache: npm
-        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
     - name: Setup Node.js
       if: inputs.registry-url == ''
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: npm
-        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
