@@ -1,6 +1,8 @@
 name: Maven (GitHub Packages) + JDK — SDK Central ou build local
 description: >
-  Installe JDK + cache Maven et écrit ~/.m2/settings.xml pour publier vers GitHub Packages (GPR).
+  Installe JDK + cache Maven et met à jour ~/.m2/settings.xml pour GitHub Packages (GPR).
+  Si settings.xml existe déjà (ex. server id central après actions/setup-java), les serveurs
+  GPR sont fusionnés sans supprimer les entrées existantes.
   Par défaut ne compile pas le SDK : la dépendance app.portaki:portaki-module-sdk est résolue
   depuis Maven Central. Activez install-sdk-from-source + checkout-portaki-sdk pour un build
   hors Central (ex. snapshot).
@@ -37,6 +39,7 @@ runs:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
         cache: maven
+        overwrite-settings: false
 
     - name: Maven settings.xml (GitHub Packages)
       shell: bash
@@ -46,14 +49,83 @@ runs:
       run: |
         mkdir -p ~/.m2
         python3 <<'PY'
+        import copy
         import os
         import pathlib
+        import xml.etree.ElementTree as ET
+
+        NS = "http://maven.apache.org/SETTINGS/1.0.0"
+
+        def qn(local):
+            return f"{{{NS}}}{local}"
+
+        def local_tag(tag):
+            if tag.startswith("{"):
+                return tag.rsplit("}", 1)[-1]
+            return tag
+
+        def find_first(parent, name):
+            for c in parent:
+                if local_tag(c.tag) == name:
+                    return c
+            return None
+
+        def ensure_servers(root):
+            el = root.find(qn("servers")) or root.find("servers")
+            if el is None:
+                if root.tag.startswith("{"):
+                    ns = root.tag[1 : root.tag.index("}")]
+                    el = ET.SubElement(root, f"{{{ns}}}servers")
+                else:
+                    el = ET.SubElement(root, "servers")
+            return el
+
+        def server_id(server_el):
+            sid = find_first(server_el, "id")
+            if sid is None or not sid.text:
+                return ""
+            return sid.text.strip()
+
+        def existing_server_ids(servers_el):
+            ids = set()
+            for c in servers_el:
+                if local_tag(c.tag) != "server":
+                    continue
+                i = server_id(c)
+                if i:
+                    ids.add(i)
+            return ids
 
         action_path = pathlib.Path(os.environ["GITHUB_ACTION_PATH"])
-        template = (action_path / "maven-gpr-settings.xml").read_text()
-        template = template.replace("__GPR_ACTOR__", os.environ["GPR_ACTOR"])
-        template = template.replace("__GPR_TOKEN__", os.environ["GPR_TOKEN"])
-        pathlib.Path.home().joinpath(".m2/settings.xml").write_text(template)
+        raw = (action_path / "maven-gpr-settings.xml").read_text(encoding="utf-8")
+        raw = raw.replace("__GPR_ACTOR__", os.environ["GPR_ACTOR"])
+        raw = raw.replace("__GPR_TOKEN__", os.environ["GPR_TOKEN"])
+        gpr_root = ET.fromstring(raw)
+        gpr_servers = gpr_root.find(qn("servers"))
+        if gpr_servers is None:
+            raise SystemExit("maven-gpr-settings.xml: missing <servers>")
+        gpr_server_els = [c for c in gpr_servers if local_tag(c.tag) == "server"]
+
+        path = pathlib.Path.home().joinpath(".m2/settings.xml")
+
+        if not path.exists():
+            path.write_text(raw, encoding="utf-8")
+        else:
+            try:
+                root = ET.fromstring(path.read_text(encoding="utf-8"))
+            except ET.ParseError:
+                path.write_text(raw, encoding="utf-8")
+            else:
+                servers_el = ensure_servers(root)
+                have = existing_server_ids(servers_el)
+                for gs in gpr_server_els:
+                    sid = server_id(gs)
+                    if not sid or sid in have:
+                        continue
+                    servers_el.append(copy.deepcopy(gs))
+                    have.add(sid)
+                ET.indent(root, space="  ")
+                ET.ElementTree(root).write(path, encoding="UTF-8", xml_declaration=True)
         PY
 
     - name: Install portaki-module-sdk into local Maven repo
