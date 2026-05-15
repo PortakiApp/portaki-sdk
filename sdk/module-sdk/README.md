@@ -66,7 +66,7 @@ export default definePortakiModule({
 | **Composants** | `ModuleSection`, `ModuleCard`, `ModuleLoading`, `ModuleError`, `ModuleEmpty`, `CopyButton`, `ExternalLink`, `WazeButton`, `GoogleMapsButton`, `ModuleConfigAlert` — blocs UI alignés sur la page invité. |
 | **Types** | `ModuleContext`, `StayData`, `PropertyData`, `NavSlot`, `StayStatus`, schéma de config module (`ModuleConfigSchema`), etc. |
 
-Manifest JSON des modules : schéma **`module.v1`** dans le dépôt [portaki-sdk](https://github.com/PortakiApp/portaki-sdk) (`schema/module.v1.json`).
+Manifest JSON des modules : schéma **`module.v1`** dans le dépôt [portaki-sdk](https://github.com/PortakiApp/portaki-sdk) (`schema/module.v1.json`). Le champ **`requiresHostSdk`** (semver `X.Y.Z`) indique la version minimale de **`@portaki/module-sdk`** avec laquelle le module a été validé — aligner sur la version publiée du paquet npm (`sdk/module-sdk/package.json`).
 
 ---
 

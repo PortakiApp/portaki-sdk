@@ -59,6 +59,11 @@
     "type": { "type": "string", "enum": ["official", "community"] },
     "tags": { "type": "array", "items": { "type": "string" } },
     "portakiVersionMin": { "type": "string" },
+    "requiresHostSdk": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Minimum @portaki/module-sdk (npm) semver X.Y.Z required by this module's guest UI contract. Align with portaki-sdk/sdk/module-sdk/package.json when bumping the SDK."
+    },
     "license": { "type": "string" },
     "repository": { "type": "string", "format": "uri" },
     "screenshots": { "type": "array", "items": { "type": "string" } },
