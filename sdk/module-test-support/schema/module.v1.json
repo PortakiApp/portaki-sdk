@@ -1,0 +1,400 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://portaki.app/schemas/module.v1.json",
+  "title": "Portaki module manifest",
+  "type": "object",
+  "required": ["id", "name", "description", "version", "author", "icon", "type", "license"],
+  "additionalProperties": true,
+  "definitions": {
+    "localePair": {
+      "type": "object",
+      "required": ["fr", "en"],
+      "additionalProperties": false,
+      "properties": {
+        "fr": { "type": "string", "minLength": 1 },
+        "en": { "type": "string", "minLength": 1 }
+      }
+    },
+    "localePairOptional": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fr": { "type": "string" },
+        "en": { "type": "string" }
+      }
+    },
+    "moduleEmailTrigger": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["relativeToCheckIn", "relativeToCheckOut", "onStayCreated"]
+        },
+        "offset": {
+          "type": "string",
+          "pattern": "^-?P",
+          "description": "ISO-8601 duration (e.g. -P1D, PT2H). Required for relative triggers."
+        },
+        "atLocalTime": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "Optional local send time HH:mm (property/tenant timezone)."
+        }
+      }
+    },
+    "moduleEmailDeclaration": {
+      "type": "object",
+      "required": ["id", "description", "audience", "trigger"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "description": { "$ref": "#/definitions/localePair" },
+        "audience": {
+          "type": "string",
+          "enum": ["guest", "host"]
+        },
+        "requiresGuestEmail": { "type": "boolean" },
+        "trigger": { "$ref": "#/definitions/moduleEmailTrigger" },
+        "skipWhen": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "guest.email.missing",
+              "module.disabled",
+              "stay.preArrivalCompleted",
+              "stay.cancelled"
+            ]
+          }
+        }
+      }
+    },
+    "moduleGuestActionDeclaration": {
+      "type": "object",
+      "required": ["id", "description", "kind", "moduleId"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "description": { "$ref": "#/definitions/localePair" },
+        "kind": {
+          "type": "string",
+          "enum": ["open-module"]
+        },
+        "moduleId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        }
+      }
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "$ref": "#/definitions/localePair" },
+    "description": { "$ref": "#/definitions/localePair" },
+    "details": { "$ref": "#/definitions/localePairOptional" },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "$ref": "#/definitions/localePair" },
+          "description": { "$ref": "#/definitions/localePairOptional" },
+          "image": { "type": "string" },
+          "link": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "author": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "type": { "type": "string", "enum": ["official", "community"] }
+      }
+    },
+    "icon": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "enum": ["official", "community"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "portakiVersionMin": { "type": "string" },
+    "requiresHostSdk": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Minimum @portaki/module-sdk (npm) semver X.Y.Z required by this module's guest UI contract. Align with portaki-sdk/sdk/module-sdk/package.json when bumping the SDK."
+    },
+    "license": { "type": "string" },
+    "repository": { "type": "string", "format": "uri" },
+    "screenshots": { "type": "array", "items": { "type": "string" } },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tagline": { "$ref": "#/definitions/localePairOptional" },
+        "highlights": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/localePairOptional" }
+        },
+        "requiredPlanId": {
+          "type": "string",
+          "description": "Minimum billing plan id (e.g. starter, pro). Omit or use free when the module is available on the free tier."
+        },
+        "npmPackage": { "type": "string", "minLength": 1 },
+        "npmUrl": { "type": "string", "format": "uri" },
+        "javaArtifact": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Optional Maven coordinates (groupId:artifactId) for the host backend JAR published alongside the npm package."
+        }
+      }
+    },
+    "scopes": {
+      "type": "array",
+      "description": "OAuth-like scopes this module may request; enforced by ScopeEnforcer.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string" } },
+        "optional": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "$ref": "#/definitions/localePair" },
+          "scope": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "$ref": "#/definitions/localePair" },
+          "scope": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "published": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "severity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "$ref": "#/definitions/localePair" },
+              "severity": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] }
+            }
+          }
+        },
+        "subscribed": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["section", "bottom-bar", "map-overlay", "post-stay"]
+          },
+          "position": { "type": "string" },
+          "defaultLabel": { "$ref": "#/definitions/localePairOptional" },
+          "defaultIcon": { "type": "string" }
+        }
+      }
+    },
+    "emails": {
+      "type": "array",
+      "description": "E-mails transactionnels déclarés par le module (planification plateforme ; contenu fourni par @PortakiModuleEmail côté backend).",
+      "items": { "$ref": "#/definitions/moduleEmailDeclaration" }
+    },
+    "guestActions": {
+      "type": "array",
+      "description": "Registre optionnel des actions invité référencées par les CTA d’e-mail (validation plateforme).",
+      "items": { "$ref": "#/definitions/moduleGuestActionDeclaration" }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Kind of runtime the platform uses for this module (jar in-process, wasm sandbox, npm guest bundle).",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["jar", "wasm", "none"],
+          "description": "Server-side execution: JAR (legacy), Wasm artifact, or none (config-only)."
+        },
+        "guest": {
+          "type": "string",
+          "enum": ["bundled", "remote-esm", "wasm"],
+          "description": "Guest UI load strategy in portaki-web."
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wasmUrl": { "type": "string", "format": "uri" },
+        "guestEsmUrl": { "type": "string", "format": "uri" },
+        "jarMaven": {
+          "type": "string",
+          "description": "Maven coordinates groupId:artifactId:version for backend JAR."
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Schéma Postgres versionné du module (migrations sous db/migrations/, appliquées par portaki-module-migrator / API runner).",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Dernière révision DDL publiée pour ce module (semver)."
+        }
+      }
+    },
+    "hostSurfaces": {
+      "type": "array",
+      "description": "Surfaces hôte déclarées par le module (onglets workspace logement, etc.). L’UI est implémentée par la plateforme (portaki-web), pas dans le package npm invité.",
+      "items": {
+        "type": "object",
+        "required": ["type", "pathSegment", "label"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["property-workspace-tab"]
+          },
+          "pathSegment": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Segment de route sous /dashboard/listings/{id}/ (ex. sections)."
+          },
+          "label": { "$ref": "#/definitions/localePair" },
+          "icon": {
+            "type": "string",
+            "description": "Nom d’icône Lucide (shell hôte)."
+          }
+        }
+      }
+    },
+    "readme": { "type": "string" },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "severity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "severity": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] }
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "globalAlert": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "type": { "type": "string", "enum": ["info", "warning", "error", "success"] },
+            "message": {
+              "type": "object",
+              "required": ["fr", "en"],
+              "additionalProperties": false,
+              "properties": {
+                "fr": { "type": "string" },
+                "en": { "type": "string" }
+              }
+            },
+            "helpUrl": { "type": "string", "format": "uri" }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "label", "type", "required"],
+            "additionalProperties": true,
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "label": {
+                "type": "object",
+                "required": ["fr", "en"],
+                "additionalProperties": false,
+                "properties": {
+                  "fr": { "type": "string" },
+                  "en": { "type": "string" }
+                }
+              },
+              "description": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text", "secret", "select", "toggle", "number", "url", "textarea"]
+              },
+              "required": { "type": "boolean" },
+              "placeholder": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              },
+              "options": { "type": "array" },
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "helpUrl": { "type": "string", "format": "uri" },
+              "alert": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 export { PortakiProvider, type PortakiProviderProps } from './context/PortakiProvider'
+export type { PortakiProviderValue } from './context/portaki-internal-context'
 export {
   usePortakiCommand,
   usePortakiConfig,
