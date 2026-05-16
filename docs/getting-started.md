@@ -47,6 +47,8 @@ Fournir des **annotations** et des **types** pour les modules backend : identifi
 | `ModuleContext` | Contexte d’exécution (client API, tenant, secrets). **À ce jour**, l’interface est un stub ; les capacités seront exposées dans les prochaines versions. |
 | `WebhookResponse` | Record simple `status` + `body` ; fabrique `ok()` pour HTTP 200. |
 | `StayCreatedEvent` | Record aligné sur l’événement métier : séjour, tenant, bien, dates, email invité. |
+| `@PortakiModuleEmail` | Composer le contenu d’un e-mail transactionnel (`ModuleEmailContent`, `StayEmailContext`) — envoi par la plateforme. Voir **[module-emails.md](./module-emails.md)**. |
+| `ModuleGuestEmailAction` | Action du bouton CTA (`open-module:moduleId:actionId`) — décodage invité via `parsePortakiEmailAction` dans `@portaki/sdk`. |
 
 ### Build
 

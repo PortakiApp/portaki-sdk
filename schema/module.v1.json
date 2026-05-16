@@ -22,6 +22,77 @@
         "fr": { "type": "string" },
         "en": { "type": "string" }
       }
+    },
+    "moduleEmailTrigger": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["relativeToCheckIn", "relativeToCheckOut", "onStayCreated"]
+        },
+        "offset": {
+          "type": "string",
+          "pattern": "^-?P",
+          "description": "ISO-8601 duration (e.g. -P1D, PT2H). Required for relative triggers."
+        },
+        "atLocalTime": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "Optional local send time HH:mm (property/tenant timezone)."
+        }
+      }
+    },
+    "moduleEmailDeclaration": {
+      "type": "object",
+      "required": ["id", "description", "audience", "trigger"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "description": { "$ref": "#/definitions/localePair" },
+        "audience": {
+          "type": "string",
+          "enum": ["guest", "host"]
+        },
+        "requiresGuestEmail": { "type": "boolean" },
+        "trigger": { "$ref": "#/definitions/moduleEmailTrigger" },
+        "skipWhen": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "guest.email.missing",
+              "module.disabled",
+              "stay.preArrivalCompleted",
+              "stay.cancelled"
+            ]
+          }
+        }
+      }
+    },
+    "moduleGuestActionDeclaration": {
+      "type": "object",
+      "required": ["id", "description", "kind", "moduleId"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "description": { "$ref": "#/definitions/localePair" },
+        "kind": {
+          "type": "string",
+          "enum": ["open-module"]
+        },
+        "moduleId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        }
+      }
     }
   },
   "properties": {
@@ -164,6 +235,16 @@
           "defaultIcon": { "type": "string" }
         }
       }
+    },
+    "emails": {
+      "type": "array",
+      "description": "E-mails transactionnels déclarés par le module (planification plateforme ; contenu fourni par @PortakiModuleEmail côté backend).",
+      "items": { "$ref": "#/definitions/moduleEmailDeclaration" }
+    },
+    "guestActions": {
+      "type": "array",
+      "description": "Registre optionnel des actions invité référencées par les CTA d’e-mail (validation plateforme).",
+      "items": { "$ref": "#/definitions/moduleGuestActionDeclaration" }
     },
     "hostSurfaces": {
       "type": "array",

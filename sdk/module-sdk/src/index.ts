@@ -24,6 +24,12 @@ export type {
 } from './types/config'
 
 export type {
+  ModuleEmailDeclaration,
+  ModuleEmailSkipWhen,
+  ModuleEmailTrigger,
+  ModuleEmailTriggerType,
+  ModuleGuestActionDeclaration,
+  ModuleGuestActionKind,
   ModuleHostSurface,
   ModuleHostSurfaceType,
   ModuleManifestHostHints,

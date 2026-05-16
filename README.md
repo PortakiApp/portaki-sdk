@@ -41,7 +41,8 @@ Les apps (ex. **portaki-web**) déclarent **`@portaki/module-sdk`** / **`@portak
 - **Provider** : `PortakiProvider` reçoit le contexte métier + `hmacKeyMaterialB64` (dérivé côté serveur avec `deriveModuleHmacKeyMaterialB64(MODULE_HMAC_SECRET, moduleId, stayId)` — aligné sur la vérification Route Handler).
 - **Hooks** : `usePortakiContext`, `usePortakiConfig`, `usePortakiQuery`, `usePortakiCommand`, `usePortakiModuleQuery`.
 - **Serveur** : `import { verifyHmacToken, deriveModuleHmacKeyMaterialB64, portakiServerQuery } from '@portaki/sdk/server'`.
-- **Schéma manifeste** : `schema/module.v1.json` (scopes, queries, commands, events, audit, slots).
+- **Schéma manifeste** : `schema/module.v1.json` (scopes, queries, commands, events, audit, slots, **emails**, guestActions).
+- **E-mails module** : [docs/module-emails.md](docs/module-emails.md) — contenu + CTA côté module, envoi côté plateforme.
 
 ---
 
