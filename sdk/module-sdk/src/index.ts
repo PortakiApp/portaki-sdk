@@ -23,6 +23,12 @@ export type {
   ModuleConfigSchema,
 } from './types/config'
 
+export type {
+  ModuleHostSurface,
+  ModuleHostSurfaceType,
+  ModuleManifestHostHints,
+} from './types/manifest'
+
 export type { PortakiGuestProperty, PortakiGuestStay, PortakiRenderContext } from './types/legacy'
 
 export { useTracking } from './hooks/useTracking'

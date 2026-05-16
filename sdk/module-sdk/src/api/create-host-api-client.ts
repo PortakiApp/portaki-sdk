@@ -86,6 +86,32 @@ export function createHostApiClient(opts: CreateHostApiClientOptions) {
         { method: 'POST' },
       )
     },
+
+    /** Query gateway module (contexte logement hôte, JWT). */
+    moduleGatewayQuery<T = unknown>(
+      propertyId: string,
+      moduleId: string,
+      query: string,
+      params: Record<string, unknown> = {},
+    ) {
+      return request<T>(
+        `/properties/${encodeURIComponent(propertyId)}/modules/${encodeURIComponent(moduleId)}/gateway/query`,
+        { method: 'POST', json: { query, params } },
+      )
+    },
+
+    /** Command gateway module (contexte logement hôte, JWT). */
+    moduleGatewayCommand(
+      propertyId: string,
+      moduleId: string,
+      command: string,
+      params: Record<string, unknown> = {},
+    ) {
+      return request<void>(
+        `/properties/${encodeURIComponent(propertyId)}/modules/${encodeURIComponent(moduleId)}/gateway/command`,
+        { method: 'POST', json: { command, params } },
+      )
+    },
   }
 }
 

@@ -165,6 +165,31 @@
         }
       }
     },
+    "hostSurfaces": {
+      "type": "array",
+      "description": "Surfaces hôte déclarées par le module (onglets workspace logement, etc.). L’UI est implémentée par la plateforme (portaki-web), pas dans le package npm invité.",
+      "items": {
+        "type": "object",
+        "required": ["type", "pathSegment", "label"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["property-workspace-tab"]
+          },
+          "pathSegment": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Segment de route sous /dashboard/listings/{id}/ (ex. sections)."
+          },
+          "label": { "$ref": "#/definitions/localePair" },
+          "icon": {
+            "type": "string",
+            "description": "Nom d’icône Lucide (shell hôte)."
+          }
+        }
+      }
+    },
     "readme": { "type": "string" },
     "audit": {
       "type": "object",

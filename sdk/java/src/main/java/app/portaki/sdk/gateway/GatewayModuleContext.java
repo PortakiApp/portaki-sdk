@@ -3,6 +3,7 @@ package app.portaki.sdk.gateway;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -28,7 +29,7 @@ public final class GatewayModuleContext {
       Consumer<PortakiModuleEvent> eventSink,
       ScopeValidation scopeValidation) {
     this.moduleId = Objects.requireNonNull(moduleId);
-    this.stayId = Objects.requireNonNull(stayId);
+    this.stayId = stayId;
     this.propertyId = Objects.requireNonNull(propertyId);
     this.tenantIdInternal = Objects.requireNonNull(tenantIdInternal);
     this.scopes = Set.copyOf(scopes);
@@ -37,8 +38,19 @@ public final class GatewayModuleContext {
     this.scopeValidation = Objects.requireNonNull(scopeValidation);
   }
 
+  public Optional<String> stayIdOptional() {
+    return Optional.ofNullable(stayId);
+  }
+
   public String stayId() {
+    if (stayId == null) {
+      throw new IllegalStateException("stay_context_required");
+    }
     return stayId;
+  }
+
+  public boolean hasStayContext() {
+    return stayId != null;
   }
 
   public String propertyId() {
