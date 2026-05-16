@@ -246,6 +246,35 @@
       "description": "Registre optionnel des actions invité référencées par les CTA d’e-mail (validation plateforme).",
       "items": { "$ref": "#/definitions/moduleGuestActionDeclaration" }
     },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Kind of runtime the platform uses for this module (jar in-process, wasm sandbox, npm guest bundle).",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["jar", "wasm", "none"],
+          "description": "Server-side execution: JAR (legacy), Wasm artifact, or none (config-only)."
+        },
+        "guest": {
+          "type": "string",
+          "enum": ["bundled", "remote-esm", "wasm"],
+          "description": "Guest UI load strategy in portaki-web."
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wasmUrl": { "type": "string", "format": "uri" },
+        "guestEsmUrl": { "type": "string", "format": "uri" },
+        "jarMaven": {
+          "type": "string",
+          "description": "Maven coordinates groupId:artifactId:version for backend JAR."
+        }
+      }
+    },
     "database": {
       "type": "object",
       "additionalProperties": false,

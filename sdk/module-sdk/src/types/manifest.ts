@@ -49,10 +49,23 @@ export type ModuleDatabaseDeclaration = {
   schemaVersion: string
 }
 
+export type ModuleRuntimeDeclaration = {
+  backend?: 'jar' | 'wasm' | 'none'
+  guest?: 'bundled' | 'remote-esm' | 'wasm'
+}
+
+export type ModuleArtifactsDeclaration = {
+  wasmUrl?: string
+  guestEsmUrl?: string
+  jarMaven?: string
+}
+
 /** Sous-ensemble du manifeste utile au shell hôte (catalogue + surfaces). */
 export type ModuleManifestHostHints = {
   id: string
   database?: ModuleDatabaseDeclaration
+  runtime?: ModuleRuntimeDeclaration
+  artifacts?: ModuleArtifactsDeclaration
   hostSurfaces?: ModuleHostSurface[]
   emails?: ModuleEmailDeclaration[]
   guestActions?: ModuleGuestActionDeclaration[]
