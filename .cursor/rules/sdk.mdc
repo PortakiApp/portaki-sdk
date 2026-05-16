@@ -17,7 +17,9 @@ Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de 
 - **Client hôte TypeScript** : pas de méthodes du type `syncIcal…` ni de types `…Ical…`. Préférer des primitives **génériques** (`syncHostModule(propertyId, moduleId)`, ou `request(path)` sous authentification) pour que le shell hôte reste agnostique du catalogue modules.
 - **Appels HTTP** : le SDK n’est pas un client OpenAPI exhaustif de l’API Portaki ; exposer au minimum un **point d’extension** (`request`) plutôt qu’une explosion de wrappers par route. Les routes spécifiques à un domaine produit restent consommables via `request` ou côté appli hôte.
 
-Toute logique métier d’un module officiel reste dans **portaki-modules** (backend JAR : données, writes, handlers gateway). **`portaki-api` n’orchestre que le dispatcher** — pas de persistance ni handlers nommés par module dans l’API (voir workspace `.cursor/rules/portaki-module-data-not-in-api.mdc`).
+Toute logique métier d’un module officiel reste dans **portaki-modules** (backend JAR : données, writes, handlers gateway, composers e-mail). **`portaki-api` n’orchestre que des dispatchers génériques** — pas de persistance ni handlers nommés par module (workspace `.cursor/rules/portaki-module-data-not-in-api.mdc`).
+
+Contrats e-mail : `sdk-module-emails.mdc` · Wasm : workspace `portaki-module-platform-wasm.mdc`.
 
 ## Versionnement (semver)
 

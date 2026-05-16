@@ -1,0 +1,32 @@
+---
+description: SDK — contrats e-mail module (LocalizedText, ModuleGuestEmailAction, @PortakiModuleEmail)
+globs:
+  - sdk/java/**/*
+  - sdk/module-sdk/**/*
+  - schema/module.v1.json
+  - docs/module-emails.md
+alwaysApply: false
+---
+
+# SDK — e-mails module (0.7+)
+
+Doc : `docs/module-emails.md` · Schéma : `emails[]`, `guestActions[]` dans `schema/module.v1.json`.
+
+## API Java (`app.portaki.sdk.email`)
+
+- `@PortakiModuleEmail("email-id")` sur méthode `Optional<ModuleEmailContent> compose(StayEmailContext ctx)`
+- `ModuleEmailContent` : `LocalizedText` subject/body (texte brut, `\n\n` = paragraphes), `ModuleEmailCta` optionnel
+- `ModuleGuestEmailAction.openModule(moduleId, actionId)` → `toQueryValue()` pour `portakiAction`
+
+## API npm invité (`@portaki/sdk`)
+
+- `parsePortakiEmailAction(raw)` — decode `open-module:…:…`
+
+## SDK = neutre
+
+- **Pas** de template HTML, pas de client SMTP, pas de `pre-arrival` dans le SDK.
+- Bump **minor** SDK si ajout champs manifeste optionnels ; **major** si breaking manifeste ou signatures publiques.
+
+## Wasm-ready
+
+Les types e-mail sont des **DTO stables** ; le runtime futur appellera la même composition via host function, pas une API Java différente par module.
