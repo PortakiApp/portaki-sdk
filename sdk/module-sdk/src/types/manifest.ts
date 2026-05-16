@@ -45,9 +45,14 @@ export type ModuleGuestActionDeclaration = {
   moduleId: string
 }
 
+export type ModuleDatabaseDeclaration = {
+  schemaVersion: string
+}
+
 /** Sous-ensemble du manifeste utile au shell hôte (catalogue + surfaces). */
 export type ModuleManifestHostHints = {
   id: string
+  database?: ModuleDatabaseDeclaration
   hostSurfaces?: ModuleHostSurface[]
   emails?: ModuleEmailDeclaration[]
   guestActions?: ModuleGuestActionDeclaration[]

@@ -246,6 +246,18 @@
       "description": "Registre optionnel des actions invité référencées par les CTA d’e-mail (validation plateforme).",
       "items": { "$ref": "#/definitions/moduleGuestActionDeclaration" }
     },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Schéma Postgres versionné du module (migrations sous db/migrations/, appliquées par portaki-module-migrator / API runner).",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Dernière révision DDL publiée pour ce module (semver)."
+        }
+      }
+    },
     "hostSurfaces": {
       "type": "array",
       "description": "Surfaces hôte déclarées par le module (onglets workspace logement, etc.). L’UI est implémentée par la plateforme (portaki-web), pas dans le package npm invité.",
