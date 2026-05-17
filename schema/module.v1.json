@@ -269,7 +269,7 @@
       "properties": {
         "wasmUrl": {
           "type": "string",
-          "description": "Backend Wasm: artifacts://{id}/{semver}.wasm, https:// CDN, or oci://ghcr.io/org/pkg:tag"
+          "description": "Backend Wasm OCI/GHCR: oci://ghcr.io/<owner>/portaki-module-<id>:<semver> (gateway.wasm + backend.jar). Alternatives: artifacts://, https:// CDN."
         },
         "guestEsmUrl": {
           "type": "string",
