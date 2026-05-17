@@ -61,9 +61,6 @@ jobs:
           jar="$(find sdk/java/target -maxdepth 1 -name 'portaki-module-sdk-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)"
           build_dir="$(mktemp -d)"
           cp "${jar}" "${build_dir}/portaki-module-sdk.jar"
-          cat > "${build_dir}/Dockerfile" <<'DOCKERFILE'
-FROM scratch
-COPY portaki-module-sdk.jar /portaki-module-sdk.jar
-DOCKERFILE
+          printf '%s\n' 'FROM scratch' 'COPY portaki-module-sdk.jar /portaki-module-sdk.jar' > "${build_dir}/Dockerfile"
           docker build -t "${{ steps.meta.outputs.image }}" "${build_dir}"
           docker push "${{ steps.meta.outputs.image }}"
