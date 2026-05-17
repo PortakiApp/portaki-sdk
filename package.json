@@ -5,6 +5,9 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "lint": "pnpm -r lint",
-    "build": "pnpm -r --if-present build"
+    "build": "pnpm -r --if-present build",
+    "build:test-support": "pnpm --filter @portaki/module-test-support build",
+    "test": "pnpm build:test-support && pnpm -r --if-present test",
+    "test:java": "mvn -q -f sdk/java test && mvn -q -f sdk/java-test-support test"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@portaki/module-sdk",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "description": "Portaki guest modules SDK for React / Next.js",
   "license": "MIT",
   "type": "module",
@@ -21,10 +21,12 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "src"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@types/react": "^19",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.0.5"
   }
 }
