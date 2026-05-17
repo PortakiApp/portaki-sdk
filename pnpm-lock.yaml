@@ -45,6 +45,9 @@ importers:
 
   sdk/module-test-support:
     dependencies:
+      '@portaki/sdk':
+        specifier: workspace:*
+        version: link:../guest
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -55,9 +58,6 @@ importers:
       '@portaki/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
-      '@portaki/sdk':
-        specifier: workspace:*
-        version: link:../guest
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
