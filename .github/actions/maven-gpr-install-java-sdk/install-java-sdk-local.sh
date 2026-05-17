@@ -14,8 +14,13 @@ cd "$SDK_DIR"
 echo "Installing app.portaki:portaki-module-sdk into local ~/.m2 from source…"
 
 if mvn -B install -pl :portaki-module-sdk -am -DskipTests; then
-  exit 0
+  :
+else
+  echo "Reactor install failed; trying full install from repo root…"
+  mvn -B install -DskipTests
 fi
 
-echo "Reactor install failed; trying full install from repo root…"
-mvn -B install -DskipTests
+if [[ -f sdk/java-test-support/pom.xml ]]; then
+  echo "Installing app.portaki:portaki-module-sdk-test into local ~/.m2 from source…"
+  mvn -B install -f sdk/java-test-support/pom.xml -DskipTests
+fi
