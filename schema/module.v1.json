@@ -267,8 +267,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "wasmUrl": { "type": "string", "format": "uri" },
-        "guestEsmUrl": { "type": "string", "format": "uri" },
+        "wasmUrl": {
+          "type": "string",
+          "description": "Backend Wasm: artifacts://{id}/{semver}.wasm, https:// CDN, or oci://ghcr.io/org/pkg:tag"
+        },
+        "guestEsmUrl": {
+          "type": "string",
+          "description": "Guest UI remote ESM (typically https://esm.sh/@portaki/module-{id}@{version})"
+        },
         "jarMaven": {
           "type": "string",
           "description": "Maven coordinates groupId:artifactId:version for backend JAR."
