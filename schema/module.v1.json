@@ -74,6 +74,22 @@
         }
       }
     },
+    "moduleChangelogEntry": {
+      "type": "object",
+      "required": ["version", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "date": {
+          "type": "string",
+          "description": "Optional release date (ISO-8601 date recommended, e.g. 2026-05-16)."
+        },
+        "notes": { "$ref": "#/definitions/localePair" }
+      }
+    },
     "moduleGuestActionDeclaration": {
       "type": "object",
       "required": ["id", "description", "kind", "moduleId"],
@@ -137,6 +153,16 @@
     },
     "license": { "type": "string" },
     "repository": { "type": "string", "format": "uri" },
+    "releaseNotesUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional link to full release notes (GitHub releases, docs)."
+    },
+    "changelog": {
+      "type": "array",
+      "description": "Human-readable release history shown in the host module registry UI.",
+      "items": { "$ref": "#/definitions/moduleChangelogEntry" }
+    },
     "screenshots": { "type": "array", "items": { "type": "string" } },
     "catalog": {
       "type": "object",
