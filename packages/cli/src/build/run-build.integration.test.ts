@@ -20,6 +20,7 @@ describe('runBuild integration (examples/rules)', () => {
       const result = await runBuild(module, {
         outDir,
         manifestPath: rulesManifest,
+        entryPath: null,
       })
 
       expect(result.module.id).toBe('rules')

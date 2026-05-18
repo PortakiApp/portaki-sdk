@@ -6,6 +6,7 @@ import type { PortakiFullModule } from '@portaki/sdk'
 import { moduleDataManifestSlice } from '../codegen/manifest-data.js'
 import { generateSchemaMigrations } from '../codegen/generate-schema-sql.js'
 import { toMigrationBundle } from '../codegen/migration-bundle.js'
+import { bundleModuleExtension } from '../codegen/bundle-extension.js'
 import { recordOperationsBundle } from '../codegen/record-operations.js'
 import { mergeHybridManifest } from '../manifest/merge-hybrid-manifest.js'
 
@@ -19,6 +20,7 @@ export type BuildResult = {
 export type BuildOptions = {
   readonly outDir: string
   readonly manifestPath: string | null
+  readonly entryPath: string | null
 }
 
 export async function runBuild(module: PortakiFullModule, options: BuildOptions): Promise<BuildResult> {
@@ -30,13 +32,15 @@ export async function runBuild(module: PortakiFullModule, options: BuildOptions)
   await writeFile(join(outDir, 'manifest.data.json'), JSON.stringify(manifestSlice, null, 2) + '\n')
 
   if (module.data) {
-    const revisions = generateSchemaMigrations(
-      module.id,
-      module.data.schemaVersion,
-      module.data.schema,
-    )
-    const bundle = toMigrationBundle(module.id, module.data.schemaVersion, revisions)
-    await writeFile(join(outDir, 'migrations.bundle.json'), JSON.stringify(bundle, null, 2) + '\n')
+    if (module.data.schema != null) {
+      const revisions = generateSchemaMigrations(
+        module.id,
+        module.data.schemaVersion,
+        module.data.schema,
+      )
+      const bundle = toMigrationBundle(module.id, module.data.schemaVersion, revisions)
+      await writeFile(join(outDir, 'migrations.bundle.json'), JSON.stringify(bundle, null, 2) + '\n')
+    }
 
     const operations = await recordOperationsBundle(module)
     await writeFile(join(outDir, 'operations.bundle.json'), JSON.stringify(operations, null, 2) + '\n')
@@ -60,6 +64,10 @@ export async function runBuild(module: PortakiFullModule, options: BuildOptions)
         2,
       ) + '\n',
     )
+  }
+
+  if (options.entryPath) {
+    await bundleModuleExtension(module, options.entryPath, outDir)
   }
 
   let manifestPath: string | null = null

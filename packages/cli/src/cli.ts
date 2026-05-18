@@ -2,8 +2,17 @@
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 
+import type { PortakiFullModule } from '@portaki/sdk'
+
 import { runBuild } from './build/run-build.js'
 import { loadModuleDefinition } from './build/load-module.js'
+
+function hasModuleExtension(module: PortakiFullModule): boolean {
+  return (
+    Object.keys(module.hostActions ?? {}).length > 0 ||
+    Object.keys(module.eventHandlers ?? {}).length > 0
+  )
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
@@ -23,10 +32,13 @@ async function main(): Promise<void> {
   let outDir = '.portaki'
   let manifestPath: string | null = 'portaki.module.json'
   let skipManifest = false
+  let extensionEntry: string | null = null
 
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--entry' && args[i + 1]) {
       entry = args[++i]
+    } else if (args[i] === '--extension-entry' && args[i + 1]) {
+      extensionEntry = args[++i]
     } else if (args[i] === '--out' && args[i + 1]) {
       outDir = args[++i]
     } else if (args[i] === '--manifest' && args[i + 1]) {
@@ -42,15 +54,24 @@ async function main(): Promise<void> {
     skipManifest || manifestPath == null ? null : resolve(cwd(), manifestPath)
 
   const module = await loadModuleDefinition(entryPath)
+  const extensionEntryPath =
+    extensionEntry != null
+      ? resolve(cwd(), extensionEntry)
+      : hasModuleExtension(module)
+        ? entryPath
+        : null
+
   const result = await runBuild(module, {
     outDir: outputPath,
     manifestPath: resolvedManifest,
+    entryPath: extensionEntryPath,
   })
 
   console.log(`portaki: built ${result.module.id}@${result.module.version} → ${outputPath}`)
   if (result.module.data) {
+    const tableCount = result.module.data.schema?.tables.length ?? 0
     console.log(
-      `  schema ${result.module.data.schemaVersion} — ${result.module.data.schema.tables.length} table(s), migrations.bundle.json`,
+      `  schema ${result.module.data.schemaVersion} — ${tableCount} table(s), operations bundle`,
     )
   }
   if (result.manifestPath) {
@@ -66,7 +87,7 @@ function printHelp(): void {
   console.log(`@portaki/cli
 
 Usage:
-  portaki build [--entry src/portaki.module.ts] [--out .portaki] [--manifest portaki.module.json] [--no-manifest]
+  portaki build [--entry src/portaki.module.ts] [--extension-entry src/module-extension.ts] [--out .portaki] [--manifest portaki.module.json] [--no-manifest]
 
 Outputs:
   .portaki/migrations.bundle.json   — DDL for modules DB (gitignored, no .sql in repo)

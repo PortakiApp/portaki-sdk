@@ -8,6 +8,11 @@ export type HandlerScope =
   | 'host:property:write'
   | string
 
+export type ModulePublishedEvent = {
+  readonly name: string
+  readonly payload: Record<string, unknown>
+}
+
 /** Context passed to query/command handlers (`ctx.db`, tenant, property, …). */
 export type HandlerContext = {
   readonly moduleId: string
@@ -19,6 +24,8 @@ export type HandlerContext = {
   readonly config: Record<string, unknown>
   /** Schema-bound API — no raw SQL in module handlers. */
   readonly db: ModuleDb
+  /** Emit a module gateway event (platform bus). No-op when not supported by the runtime. */
+  publish(eventName: string, payload: Record<string, unknown>): void
 }
 
 /** Host-provided DB access (Wasm imports / local dev adapter). */
@@ -57,7 +64,8 @@ export type CommandDefinition<TParams = Record<string, unknown>> = {
 }
 
 export type ModuleDataDefinition = {
-  readonly schema: ModuleSchemaDef
+  /** Omitted for config-only handlers (no `ctx.db` tables). */
+  readonly schema?: ModuleSchemaDef
   readonly schemaVersion: string
   readonly queries: Readonly<Record<string, QueryDefinition>>
   readonly commands: Readonly<Record<string, CommandDefinition>>
