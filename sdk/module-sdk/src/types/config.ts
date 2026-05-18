@@ -6,6 +6,7 @@ export type ModuleConfigFieldType =
   | 'number'
   | 'url'
   | 'textarea'
+  | 'readonly'
 
 export interface ModuleConfigAlert {
   type: 'info' | 'warning' | 'error' | 'success'
