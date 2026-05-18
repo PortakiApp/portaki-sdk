@@ -411,7 +411,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["text", "secret", "select", "toggle", "number", "url", "textarea"]
+                "enum": ["text", "secret", "select", "toggle", "number", "url", "textarea", "readonly"]
               },
               "required": { "type": "boolean" },
               "placeholder": {

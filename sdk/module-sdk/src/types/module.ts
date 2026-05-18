@@ -4,7 +4,7 @@ import type { ModuleConfigSchema } from './config'
 
 export type LangCode = 'fr' | 'en'
 
-export type NavSlot = 'section' | 'bottom-bar' | 'poi-overlay'
+export type NavSlot = 'section' | 'bottom-bar' | 'poi-overlay' | 'post-stay'
 
 export type StayStatus = 'PRE_ARRIVAL' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
 
