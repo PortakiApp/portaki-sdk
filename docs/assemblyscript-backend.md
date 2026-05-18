@@ -6,7 +6,7 @@ The **CLI** will compile gateway handlers to **`gateway.wasm`** using **Assembly
 
 ## Why AssemblyScript
 
-- Runs inside **Extism** on the Java `portaki-module-runtime` (same as today’s shim).
+- Runs inside **Extism** on the Portaki module runtime (hôte).
 - Sandboxed — no arbitrary npm in the host process.
 - Predictable binary size and startup vs embedding Node.
 

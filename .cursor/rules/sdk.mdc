@@ -5,30 +5,29 @@ alwaysApply: true
 ---
 
 Chaque module invité vit dans le dépôt **portaki-modules** (`modules/`) et est publié séparément sur npm sous `@portaki/module-*`.
-RÈGLE FONDAMENTALE (modules invités) : tout module invité DOIT s’appuyer sur **@portaki/module-sdk** (JS) ou **portaki-module-sdk** (Java) pour les contrats (`definePortakiModule`, hooks, backend hôte `PortakiHostModuleBackend`, etc.) — pas de contournement des types / lifecycle officiels.
+RÈGLE FONDAMENTALE (modules invités) : tout module auteur DOIT s’appuyer sur **`@portaki/sdk`** (`defineModule` / `definePortakiModule`, hooks, schéma, handlers gateway) et **`@portaki/cli`** (`portaki build`) — pas de contournement des types / lifecycle officiels.
 Les modules officiels sont les tests d'intégration du SDK.
 Si un module ne fonctionne pas sur L'Islette du Riou, le SDK est invalide.
 
 ## Neutralité (pas de logique métier module)
 
-Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de vocabulaire, types, méthodes ou chemins REST nommés d’après un module : iCal, météo, etc.). Uniquement des **contrats réutilisables** entre le développeur et Portaki : SPI module invité/hôte, schéma manifeste, utilitaires génériques (`SafeHttpsUtf8Fetcher` côté Java, etc.).
+Le SDK ne doit contenir **aucune notion métier d’un module précis** (pas de vocabulaire, types, méthodes ou chemins REST nommés d’après un module : iCal, météo, etc.). Uniquement des **contrats réutilisables** entre le développeur et Portaki.
 
-- **Code métier module** (parsing d’un format, règles sync, intégration fournisseur) : **uniquement** dans le backend du module (`portaki-modules`, JAR `*-backend`) — pas dans `portaki-api`, pas dans le SDK.
-- **Client hôte TypeScript** : pas de méthodes du type `syncIcal…` ni de types `…Ical…`. Préférer des primitives **génériques** (`syncHostModule(propertyId, moduleId)`, ou `request(path)` sous authentification) pour que le shell hôte reste agnostique du catalogue modules.
-- **Appels HTTP** : le SDK n’est pas un client OpenAPI exhaustif de l’API Portaki ; exposer au minimum un **point d’extension** (`request`) plutôt qu’une explosion de wrappers par route. Les routes spécifiques à un domaine produit restent consommables via `request` ou côté appli hôte.
+- **Code métier module** (parsing d’un format, règles sync, intégration fournisseur) : **uniquement** dans le module (`portaki-modules` ou projet auteur) — pas dans `portaki-api`, pas dans le SDK.
+- **Client hôte TypeScript** : pas de méthodes du type `syncIcal…`. Préférer des primitives **génériques** (`syncHostModule`, gateway `moduleId`, etc.).
 
-Toute logique métier d’un module officiel reste dans **portaki-modules** (backend JAR : données, writes, handlers gateway, composers e-mail). **`portaki-api` n’orchestre que des dispatchers génériques** — pas de persistance ni handlers nommés par module (workspace `.cursor/rules/portaki-module-data-not-in-api.mdc`).
+Toute persistance / handlers gateway vivent dans le **module auteur** (TypeScript + `portaki build`) ; **`portaki-api` n’orchestre que des dispatchers génériques** (workspace `.cursor/rules/portaki-module-data-not-in-api.mdc`).
 
 Contrats e-mail : `sdk-module-emails.mdc` · Wasm : workspace `portaki-module-platform-wasm.mdc`.
 
 ## Versionnement (semver)
 
-À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm ou Java, contrats manifeste), **bump la version** dans les fichiers concernés (`package.json` du SDK npm, `legacy/java/pom.xml` pour `app.portaki:portaki-module-sdk`) :
+À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm), **bump la version** dans `packages/sdk/package.json` (et aligner `packages/sdk-test-support` ; `packages/cli` si le CLI change) :
 
 | Gravité | Bump | Exemples |
 |---------|------|----------|
-| **Patch** | `x.y.(z+1)` | correctif interne, doc, bugfix sans changement de contrat pour les consommateurs |
-| **Minor** | `x.(y+1).0` | nouvelle API **rétrocompatible**, champs optionnels ajoutés au schéma ou au DTO, nouvelles capacités sans casser l’existant |
-| **Major** | `(x+1).0.0` | **breaking change** (signature publique, suppression, renommage, schéma qui invalide d’anciens manifestes, changement de comportement contractuel) |
+| **Patch** | `x.y.(z+1)` | correctif interne, doc, bugfix sans changement de contrat |
+| **Minor** | `x.(y+1).0` | API rétrocompatible, champs optionnels schéma |
+| **Major** | `(x+1).0.0` | breaking change signatures, manifestes invalidés |
 
-Même PR = versions cohérentes (npm / Java / doc release si applicable). Ne pas merger de changement SDK consommable sans bump explicite.
+Même PR = versions cohérentes. Publication : workflow **Release** sur `main` (voir `docs/deployment.md`).

@@ -1,0 +1,125 @@
+# After green CI on main (or manual): publish npm packages + GitHub release tag v{semver}.
+# Bump packages/sdk, packages/cli, packages/sdk-test-support versions in the repo before merge.
+
+name: Release
+
+run-name: release-${{ github.run_id }}
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "9.15.4"
+  NPM_REGISTRY: https://registry.npmjs.org
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+      head_sha: ${{ steps.gate.outputs.head_sha }}
+    steps:
+      - id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WR_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$WR_CONCLUSION" = "success" ] && [ "$WR_BRANCH" = "main" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${WR_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "head_sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: publish
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve SDK version
+        id: version
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./packages/sdk/package.json').version")"
+          echo "sdk=${V}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${V}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if GitHub release already exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT || github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists — skipping publish."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup pnpm workspace
+        if: steps.exists.outputs.skip != 'true'
+        uses: ./.github/actions/pnpm-workspace-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+          registry-url: ${{ env.NPM_REGISTRY }}
+
+      - name: Build packages
+        if: steps.exists.outputs.skip != 'true'
+        run: pnpm -r --filter '@portaki/sdk' --filter '@portaki/cli' --filter '@portaki/sdk-test-support' build
+
+      - name: Publish to npm (Trusted Publishing)
+        if: steps.exists.outputs.skip != 'true'
+        run: |
+          pnpm --filter '@portaki/sdk' publish --access public --no-git-checks
+          pnpm --filter '@portaki/cli' publish --access public --no-git-checks
+          pnpm --filter '@portaki/sdk-test-support' publish --access public --no-git-checks
+
+      - name: Create GitHub release
+        if: steps.exists.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT || github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SDK_VERSION: ${{ steps.version.outputs.sdk }}
+        run: |
+          set -euo pipefail
+          PREV="$(python3 .github/scripts/sdk_prev_release_tag.py "v" "${SDK_VERSION}" || true)"
+          ARGS=(--generate-notes)
+          if [ -n "${PREV}" ]; then
+            ARGS+=(--notes-start-tag "${PREV}")
+          fi
+          gh release create "${TAG}" \
+            --target "${{ needs.gate.outputs.head_sha || github.sha }}" \
+            --title "Portaki SDK ${TAG}" \
+            "${ARGS[@]}"

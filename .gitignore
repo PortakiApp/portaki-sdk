@@ -5,8 +5,6 @@ packages/cli/node_modules/
 packages/cli/dist/
 packages/sdk-test-support/node_modules/
 packages/sdk-test-support/dist/
-legacy/java/target/
-legacy/java-test-support/target/
 node_modules/
 **/target/
 

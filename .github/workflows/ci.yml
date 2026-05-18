@@ -1,0 +1,58 @@
+# Continuous verification — TypeScript SDK, CLI, examples.
+# Required check name for branch protection: verify (job id).
+
+name: CI
+
+run-name: ci-${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "packages/**"
+      - "examples/**"
+      - "schema/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci.yml"
+      - ".github/actions/pnpm-workspace-setup/**"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "packages/**"
+      - "examples/**"
+      - "schema/**"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci.yml"
+      - ".github/actions/pnpm-workspace-setup/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9.15.4"
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/pnpm-workspace-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+
+      - name: Build and test (coverage)
+        run: pnpm test:coverage

@@ -75,10 +75,11 @@ Manifest JSON des modules : schéma **`module.v1`** dans le dépôt [portaki-sdk
 | Ressource | URL |
 |-----------|-----|
 | Site & marque | [portaki.app](https://portaki.app) |
-| Monorepo (Java, modules, CI) | [github.com/PortakiApp/portaki-sdk](https://github.com/PortakiApp/portaki-sdk) |
+| Monorepo (SDK, CLI, CI) | [github.com/PortakiApp/portaki-sdk](https://github.com/PortakiApp/portaki-sdk) |
 | Paquet npm | [npmjs.com/package/@portaki/sdk](https://www.npmjs.com/package/@portaki/sdk) |
+| CLI | [npmjs.com/package/@portaki/cli](https://www.npmjs.com/package/@portaki/cli) |
 | Guide développeur | [Getting started](https://github.com/PortakiApp/portaki-sdk/blob/develop/docs/getting-started.md) |
-| SDK Java (Maven) | [legacy/java](https://github.com/PortakiApp/portaki-sdk/tree/develop/legacy/java) |
+| Déploiement | [deployment.md](https://github.com/PortakiApp/portaki-sdk/blob/develop/docs/deployment.md) |
 
 ---
 
@@ -91,12 +92,6 @@ npm run build
 ```
 
 Les types et le JS compilé sortent dans `dist/`.
-
----
-
-## Version Java (Maven)
-
-Backend des modules : artefact **`app.portaki:portaki-module-sdk`** — [README Java](https://github.com/PortakiApp/portaki-sdk/blob/develop/legacy/java/README.md).
 
 ---
 
