@@ -1,6 +1,8 @@
 # Dependencies & build outputs
 sdk/module-sdk/node_modules/
 sdk/module-sdk/dist/
+sdk/module-cli/node_modules/
+sdk/module-cli/dist/
 sdk/guest/node_modules/
 sdk/guest/dist/
 sdk/java/target/

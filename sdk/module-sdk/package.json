@@ -1,7 +1,7 @@
 {
   "name": "@portaki/module-sdk",
-  "version": "1.1.0",
-  "description": "Portaki guest modules SDK for React / Next.js",
+  "version": "1.2.0",
+  "description": "Portaki module SDK — guest UI, schema, gateway handlers (build with @portaki/module-cli)",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -19,6 +19,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    },
+    "./gateway": {
+      "types": "./dist/gateway/index.d.ts",
+      "import": "./dist/gateway/index.js"
+    },
+    "./module": {
+      "types": "./dist/module/index.d.ts",
+      "import": "./dist/module/index.js"
+    },
+    "./gateway/recording-db": {
+      "types": "./dist/gateway/recording-db.d.ts",
+      "import": "./dist/gateway/recording-db.js"
     }
   },
   "files": ["dist", "src"],

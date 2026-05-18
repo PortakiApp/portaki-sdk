@@ -1,0 +1,52 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "rules",
+  "name": {
+    "fr": "Règlement intérieur",
+    "en": "House rules"
+  },
+  "description": {
+    "fr": "Texte catalogue conservé au merge hybride.",
+    "en": "Catalog copy kept on hybrid merge."
+  },
+  "version": "1.0.0",
+  "author": {
+    "name": "Portaki",
+    "url": "https://portaki.app",
+    "type": "official"
+  },
+  "icon": "scroll-text",
+  "type": "official",
+  "license": "AGPL-3.0",
+  "scopes": [
+    "host:property:write",
+    "property:read",
+    "stay:read"
+  ],
+  "queries": [
+    {
+      "name": "rules.content",
+      "scope": "property:read",
+      "description": {
+        "fr": "Contenu du règlement.",
+        "en": "House rules content."
+      }
+    }
+  ],
+  "commands": [
+    {
+      "name": "rules.content.save",
+      "scope": "host:property:write",
+      "description": {
+        "fr": "Enregistrer le règlement.",
+        "en": "Save house rules content."
+      }
+    }
+  ],
+  "database": {
+    "schemaVersion": "1.0.0"
+  },
+  "runtime": {
+    "backend": "wasm"
+  }
+}
