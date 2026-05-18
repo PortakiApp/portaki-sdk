@@ -1,5 +1,8 @@
 import type { CommandDefinition, PortakiFullModule, QueryDefinition } from '@portaki/sdk'
+import type { ModuleSchemaDef } from '@portaki/sdk'
 import { createHandlerContext, createRecordingModuleDb } from '@portaki/sdk/build'
+
+const EMPTY_SCHEMA: ModuleSchemaDef = { tables: [] }
 
 export type OperationStep = {
   readonly kind: 'queryOne' | 'query' | 'execute'
@@ -11,6 +14,7 @@ export type OperationStep = {
 export type OperationDefinition = {
   readonly scope: string
   readonly steps: readonly OperationStep[]
+  readonly events?: readonly { readonly name: string; readonly payload: Record<string, unknown> }[]
 }
 
 export type OperationsBundle = {
@@ -34,7 +38,8 @@ export async function recordOperationsBundle(module: PortakiFullModule): Promise
     }
   }
 
-  const { database } = createRecordingModuleDb(module.data.schema)
+  const schema = module.data.schema ?? EMPTY_SCHEMA
+  const { database } = createRecordingModuleDb(schema)
   const operations: Record<string, OperationDefinition> = {}
 
   for (const [name, def] of Object.entries(module.data.queries) as [string, QueryDefinition][]) {
@@ -47,7 +52,7 @@ export async function recordOperationsBundle(module: PortakiFullModule): Promise
       stayId: MOCK_STAY,
       scopes: [def.scope],
       config: {},
-      schema: module.data.schema,
+      schema,
       database,
     })
     await def.handler(ctx, {})
@@ -59,9 +64,11 @@ export async function recordOperationsBundle(module: PortakiFullModule): Promise
 
   for (const [name, def] of Object.entries(module.data.commands) as [string, CommandDefinition][]) {
     const keys = commandParamKeys(name)
+    const recorded = await recordCommandSteps(def, module, database, keys, name)
     operations[name] = {
       scope: def.scope,
-      steps: await recordCommandSteps(def, module, database, keys, name),
+      steps: recorded.steps,
+      ...(recorded.events.length > 0 ? { events: recorded.events } : {}),
     }
   }
 
@@ -101,33 +108,48 @@ async function recordCommandSteps(
   database: ReturnType<typeof createRecordingModuleDb>['database'],
   paramKeys: readonly string[],
   commandName: string,
-): Promise<OperationStep[]> {
+): Promise<{
+  steps: OperationStep[]
+  events: { name: string; payload: Record<string, unknown> }[]
+}> {
   const allSteps: OperationStep[] = []
+  const publishedEvents: { name: string; payload: Record<string, unknown> }[] = []
 
   const run = async () => {
     database.calls.length = 0
+    publishedEvents.length = 0
     const ctx = createHandlerContext({
       moduleId: module.id,
       moduleVersion: module.version,
       tenantId: MOCK_TENANT,
       propertyId: MOCK_PROPERTY,
-      stayId: null,
+      stayId: commandUsesStay(commandName, def.scope) ? MOCK_STAY : null,
       scopes: [def.scope],
       config: {},
       schema: module.data!.schema,
       database,
+      onPublish: (event) => {
+        publishedEvents.push(event)
+      },
     })
     await def.handler(ctx, sampleCommandParams(commandName))
     allSteps.push(...toSteps(database.calls, paramKeys))
   }
 
   await run()
-  if (commandName.includes('save')) {
+  if (commandName.includes('save') || commandName.includes('submit')) {
     database.seedQueryOneResponses({ id: '00000000-0000-4000-8000-000000000099' })
     await run()
   }
 
-  return dedupeSteps(allSteps)
+  return { steps: dedupeSteps(allSteps), events: publishedEvents }
+}
+
+function commandUsesStay(commandName: string, scope: string): boolean {
+  if (scope.includes('stay') || scope.includes('checklist') || scope.includes('pre-arrival')) {
+    return true
+  }
+  return commandName.includes('complete') || commandName.includes('uncomplete')
 }
 
 function dedupeSteps(steps: OperationStep[]): OperationStep[] {

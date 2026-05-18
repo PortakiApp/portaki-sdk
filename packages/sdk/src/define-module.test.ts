@@ -22,18 +22,19 @@ describe('defineModule', () => {
     expect(mod.id).toBe('guest-only')
   })
 
-  it('whenQueriesWithoutSchema_thenThrows', () => {
-    expect(() =>
-      defineModule({
-        id: 'bad',
-        label: { fr: 'B', en: 'B' },
-        icon: 'box',
-        queries: {
-          'x.read': { scope: 'property:read', handler: async () => ({}) },
-        },
-        render: () => null,
-      }),
-    ).toThrow(/schema/)
+  it('whenQueriesWithoutSchema_thenAttachesConfigOnlyData', () => {
+    const mod = defineModule({
+      id: 'config-only',
+      label: { fr: 'C', en: 'C' },
+      icon: 'box',
+      queries: {
+        'config-only.read': { scope: 'host:property:read', handler: async () => ({}) },
+      },
+      renderHost: () => null,
+    })
+
+    expect(mod.data?.schema).toBeUndefined()
+    expect(mod.data?.queries['config-only.read']).toBeDefined()
   })
 
   it('whenSchemaWithQueries_thenAttachesData', () => {

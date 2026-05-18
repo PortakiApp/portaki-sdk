@@ -93,3 +93,19 @@ export function buildUpdate(
   }
   return { sql, params }
 }
+
+export function buildDelete(
+  table: TableDef,
+  conditions: readonly WhereClause[],
+): { sql: string; params: unknown[] } {
+  const params: unknown[] = []
+  let sql = `DELETE FROM ${table.tableName}`
+  if (conditions.length > 0) {
+    const whereParts = conditions.map((c) => {
+      params.push(valueForColumn(c.column, c.value))
+      return `${c.column.sqlName} = $${params.length}`
+    })
+    sql += ` WHERE ${whereParts.join(' AND ')}`
+  }
+  return { sql, params }
+}

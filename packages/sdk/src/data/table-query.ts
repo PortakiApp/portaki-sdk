@@ -2,7 +2,7 @@ import type { ModuleSchemaDef, TableDef } from '../schema/types.js'
 
 import { findColumn, rowToCamel } from './column-map.js'
 import type { ModuleDatabase } from './types.js'
-import { buildInsert, buildSelect, buildUpdate, type WhereClause } from './sql-builder.js'
+import { buildDelete, buildInsert, buildSelect, buildUpdate, type WhereClause } from './sql-builder.js'
 
 export class TableQuery {
   private readonly conditions: WhereClause[] = []
@@ -46,6 +46,11 @@ export class TableQuery {
 
   async update(values: Record<string, unknown>): Promise<number> {
     const { sql, params } = buildUpdate(this.table, values, this.conditions)
+    return this.database.execute(sql, params)
+  }
+
+  async delete(): Promise<number> {
+    const { sql, params } = buildDelete(this.table, this.conditions)
     return this.database.execute(sql, params)
   }
 }

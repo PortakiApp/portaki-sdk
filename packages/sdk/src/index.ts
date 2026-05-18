@@ -16,6 +16,14 @@ export { definePortakiModule } from './types/module'
 
 export { defineModule } from './define-module'
 export type { PortakiFullModule, PortakiFullModuleInput } from './define-module'
+export type {
+  EventHandler,
+  EventHandlerContext,
+  HostActionHandler,
+  HostExtensionContext,
+  HostModuleRunResult,
+  ModuleExtensionDefinition,
+} from './extension/types'
 
 export type { ColumnDef, ColumnType, IndexDef, ModuleSchemaDef, TableDef } from './schema/types'
 export { moduleSchema } from './schema/module-schema'
@@ -39,6 +47,7 @@ export type {
   HandlerScope,
   ModuleDataDefinition,
   ModuleDatabase,
+  ModulePublishedEvent,
   QueryDefinition,
   QueryHandler,
 } from './data/types'
