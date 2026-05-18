@@ -62,6 +62,7 @@ jobs:
               - '.github/actions/**'
             sdk_java:
               - 'sdk/java/**'
+              - 'sdk/java-test-support/**'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
 
@@ -114,9 +115,6 @@ jobs:
     needs: detect_changes
     if: needs.detect_changes.outputs.sdk_java == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sdk/java
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,3 +123,10 @@ jobs:
         uses: ./.github/actions/java-sdk-verify
         with:
           java-version: ${{ env.JAVA_VERSION }}
+          working-directory: sdk/java
+
+      - name: Java test support — Maven verify
+        uses: ./.github/actions/java-sdk-verify
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          working-directory: sdk/java-test-support
