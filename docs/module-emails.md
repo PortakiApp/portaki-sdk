@@ -205,4 +205,4 @@ Le livret applique l’action après résolution du séjour (router / `GuestAddo
 
 ## 8. Versionnement
 
-Introduit en **`portaki-module-sdk` / `@portaki/module-sdk` 0.7.0** (minor, rétrocompatible), consolidé en **1.0.0**. Les modules déclarent `requiresHostSdk: "1.0.0"` lorsqu’ils utilisent des e-mails.
+Introduit en **`portaki-module-sdk` / `@portaki/module-sdk` 0.7.0** (minor, rétrocompatible), consolidé en **1.0.0**. Les modules déclarent `requiresHostSdk: "1.0.0"` lorsqu’ils utilisent des e-mails. Le manifeste **`changelog[]`** / **`releaseNotesUrl`** est documenté en **1.1.0** — modules concernés : `requiresHostSdk: "1.1.0"`.
