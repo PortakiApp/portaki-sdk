@@ -8,7 +8,7 @@
 <h1 align="center">Portaki SDK</h1>
 
 <p align="center">
-  <strong>Monorepo officiel</strong> — <code>@portaki/sdk</code>, CLI, tests ; Java legacy pour backends JAR<br/>
+  <strong>Monorepo officiel</strong> — <code>@portaki/sdk</code>, <code>@portaki/cli</code>, tests ; Java legacy pour backends JAR<br/>
   <sub>pnpm workspace · modules catalogue dans <a href="https://github.com/PortakiApp/portaki-modules">portaki-modules</a></sub>
 </p>
 
@@ -19,8 +19,8 @@
 ```
 portaki-sdk/
   packages/
-    sdk/                 @portaki/sdk — UI, runtime, schema, backend, author
-    module-cli/          @portaki/module-cli
+    sdk/                 @portaki/sdk — defineModule, UI, schema, hooks
+    cli/                 @portaki/cli
     sdk-test-support/    @portaki/sdk-test-support (dev)
   examples/rules/
   schema/module.v1.json
@@ -31,12 +31,10 @@ portaki-sdk/
 
 | Subpath | Usage |
 |---------|--------|
-| `.` | `definePortakiModule`, composants UI |
-| `./runtime` | `usePortakiQuery`, `PortakiProvider`, slots |
-| `./server` | HMAC, Route Handlers |
-| `./schema` | DSL tables |
-| `./backend` | handlers, `ctx.db` |
-| `./author` | `defineModule` full-stack |
+| `.` | `defineModule`, schema DSL, UI, hooks, handler types |
+| `./runtime` | same hooks/slots (optional split import) |
+| `./server` | HMAC, Route Handlers (host Next app) |
+| `./build` | CLI-only (operation recording) |
 
 ## Module author deps
 
@@ -44,7 +42,7 @@ portaki-sdk/
 {
   "dependencies": { "@portaki/sdk": "^2.0.0" },
   "devDependencies": {
-    "@portaki/module-cli": "^0.1.0",
+    "@portaki/cli": "^0.1.0",
     "@portaki/sdk-test-support": "^2.0.0"
   }
 }
@@ -56,4 +54,7 @@ Voir **[docs/module-authoring.md](docs/module-authoring.md)**.
 
 ```bash
 pnpm install && pnpm test
+pnpm test:coverage   # SDK + CLI + test-support (seuils Vitest v8)
 ```
+
+Tests d'intégration CLI : `examples/rules` → `run-build` + binaire `portaki build`.

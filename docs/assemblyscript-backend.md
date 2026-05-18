@@ -33,4 +33,4 @@ No `portaki_gateway_dispatch` + JAR in the target architecture.
 ## Status
 
 - **Done**: schema DSL, `ctx.db` query builder (TS), migration bundle, hybrid manifest merge.
-- **Next**: AS codegen + `gateway.wasm` in `portaki-module build`, runtime host DB functions + apply `migrations.bundle.json` on deploy.
+- **Next**: AS codegen + `gateway.wasm` in `portaki build`, runtime host DB functions + apply `migrations.bundle.json` on deploy.

@@ -1,8 +1,8 @@
 # Dependencies & build outputs
 packages/sdk/node_modules/
 packages/sdk/dist/
-packages/module-cli/node_modules/
-packages/module-cli/dist/
+packages/cli/node_modules/
+packages/cli/dist/
 packages/sdk-test-support/node_modules/
 packages/sdk-test-support/dist/
 legacy/java/target/
@@ -26,6 +26,7 @@ node_modules/
 
 # Test / coverage
 coverage/
+packages/*/coverage/
 
 # Example build artifacts
 examples/**/.portaki/

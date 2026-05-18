@@ -14,6 +14,35 @@ export type {
 } from './types/module'
 export { definePortakiModule } from './types/module'
 
+export { defineModule } from './define-module'
+export type { PortakiFullModule, PortakiFullModuleInput } from './define-module'
+
+export type { ColumnDef, ColumnType, IndexDef, ModuleSchemaDef, TableDef } from './schema/types'
+export { moduleSchema } from './schema/module-schema'
+export { index, table, tenantPropertyIndex } from './schema/table'
+export {
+  boolean,
+  int,
+  jsonb,
+  propertyId,
+  tenantId,
+  text,
+  timestamptz,
+  uuid,
+  uuidPrimaryKey,
+} from './schema/columns'
+
+export type {
+  CommandDefinition,
+  CommandHandler,
+  HandlerContext,
+  HandlerScope,
+  ModuleDataDefinition,
+  ModuleDatabase,
+  QueryDefinition,
+  QueryHandler,
+} from './data/types'
+
 export { portakiModule, guestModule, hostModule, PortakiModuleBuilder } from './builder'
 
 export type {
@@ -64,7 +93,33 @@ export {
   ModuleConfigAlert,
 } from './components'
 
-/** Chargement dynamique du module par défaut (`definePortakiModule`). */
+export {
+  PortakiProvider,
+  usePortakiCommand,
+  usePortakiConfig,
+  usePortakiContext,
+  usePortakiModuleQuery,
+  usePortakiQuery,
+  portaki,
+  slotRegistry,
+  parsePortakiEmailAction,
+} from './runtime/index'
+export type {
+  PortakiProviderProps,
+  PortakiProviderValue,
+  PortakiEmailAction,
+  PortakiOpenModuleEmailAction,
+  DependencyQueryOptions,
+  PortakiContext,
+  PortakiError,
+  PortakiLang,
+  PropertyTheme,
+  QueryResult,
+  SlotDefinition,
+  SlotName,
+} from './runtime/index'
+
+/** Chargement dynamique du module par défaut (`definePortakiModule` ou `defineModule`). */
 export type PortakiModuleLoader = () => Promise<{
-  default: import('./types/module').PortakiModuleDefinition
+  default: import('./types/module').PortakiModuleDefinition | import('./define-module').PortakiFullModule
 }>

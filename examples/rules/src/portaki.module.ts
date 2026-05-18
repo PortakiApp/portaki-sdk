@@ -1,8 +1,8 @@
 /**
- * Reference full-stack module (guest + backend, no raw SQL).
+ * Reference module: guest UI + schema, queries, commands (no raw SQL).
  */
-import { defineModule } from '@portaki/sdk/author'
 import {
+  defineModule,
   index,
   jsonb,
   moduleSchema,
@@ -11,7 +11,7 @@ import {
   tenantId,
   timestamptz,
   uuidPrimaryKey,
-} from '@portaki/sdk/schema'
+} from '@portaki/sdk'
 
 const rulesSchema = moduleSchema([
   table('content', 't_e_module_rules_content', {

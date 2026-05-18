@@ -15,6 +15,7 @@ on:
       - "schema/**"
       - "pnpm-workspace.yaml"
       - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/ci-verify.yml"
       - ".github/actions/**"
   pull_request:
@@ -26,6 +27,7 @@ on:
       - "schema/**"
       - "pnpm-workspace.yaml"
       - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/ci-verify.yml"
       - ".github/actions/**"
 
@@ -45,8 +47,7 @@ jobs:
     name: detect-changes
     runs-on: ubuntu-latest
     outputs:
-      sdk_module_sdk: ${{ steps.paths.outputs.sdk_module_sdk }}
-      sdk_guest: ${{ steps.paths.outputs.sdk_guest }}
+      sdk_js: ${{ steps.paths.outputs.sdk_js }}
       sdk_java: ${{ steps.paths.outputs.sdk_java }}
     steps:
       - name: Checkout
@@ -57,15 +58,14 @@ jobs:
         id: paths
         with:
           filters: |
-            sdk_module_sdk:
-              - 'packages/module-sdk/**'
-              - 'packages/module-cli/**'
-              - 'packages/test-support/**'
-              - '.github/workflows/ci-verify.yml'
-              - '.github/actions/**'
-            sdk_guest:
-              - 'packages/guest/**'
+            sdk_js:
+              - 'packages/sdk/**'
+              - 'packages/cli/**'
+              - 'packages/sdk-test-support/**'
+              - 'examples/**'
               - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
             sdk_java:
@@ -74,34 +74,10 @@ jobs:
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
 
-  sdk_module_sdk:
-    name: sdk-module-sdk
+  sdk_js:
+    name: sdk-js
     needs: detect_changes
-    if: needs.detect_changes.outputs.sdk_module_sdk == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/module-sdk
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm workspace
-        uses: ./.github/actions/pnpm-workspace-setup
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          pnpm-version: 9.15.4
-
-      - name: Build and test @portaki/module-sdk
-        run: pnpm --filter @portaki/module-sdk run build && pnpm --filter @portaki/module-sdk test
-
-      - name: Test @portaki/module-cli
-        run: pnpm --filter @portaki/module-cli test
-
-  sdk_guest:
-    name: sdk-guest
-    needs: detect_changes
-    if: needs.detect_changes.outputs.sdk_guest == 'true'
+    if: needs.detect_changes.outputs.sdk_js == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -113,8 +89,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           pnpm-version: 9.15.4
 
-      - name: Build @portaki/sdk
-        run: pnpm --filter @portaki/sdk run build
+      - name: Build and test (coverage)
+        run: pnpm test:coverage
 
   sdk_java:
     name: sdk-java

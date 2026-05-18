@@ -1,0 +1,37 @@
+{
+  "name": "@portaki/cli",
+  "version": "0.1.0",
+  "description": "Portaki CLI — build modules (manifest, migration bundle, Wasm artifact)",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PortakiApp/portaki-sdk",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "bin": {
+    "portaki": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "test": "pnpm run build && vitest run",
+    "test:coverage": "pnpm run build && vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@portaki/sdk": "workspace:*",
+    "jiti": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@vitest/coverage-v8": "^3.0.5",
+    "typescript": "^5",
+    "vitest": "^3.0.5"
+  }
+}

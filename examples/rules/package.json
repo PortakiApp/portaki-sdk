@@ -2,7 +2,13 @@
   "name": "@portaki/example-rules",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build": "portaki build --entry src/portaki.module.ts --manifest portaki.module.json"
+  },
   "dependencies": {
     "@portaki/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@portaki/cli": "workspace:*"
   }
 }
