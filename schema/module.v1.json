@@ -295,7 +295,7 @@
       "properties": {
         "wasmUrl": {
           "type": "string",
-          "description": "Backend Wasm OCI/GHCR: oci://ghcr.io/<owner>/portaki-module-<id>:<semver> (gateway.wasm + backend.jar). Alternatives: artifacts://, https:// CDN."
+          "description": "Stable OCI image ref (no tag): oci://ghcr.io/<owner>/portaki-module-<id> — semver tag is portaki.module.json \"version\" (or property installedVersion at dispatch). Image contains gateway.wasm + backend.jar. Alternatives: artifacts://, https:// CDN."
         },
         "guestEsmUrl": {
           "type": "string",
