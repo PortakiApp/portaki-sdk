@@ -1,3 +1,17 @@
+/**
+ * @file module.ts
+ * @brief Guest and host UI contracts — module manifest, contexts, and `definePortakiModule`.
+ *
+ * @details
+ * Defines the presentation layer of a catalogue module: labels, navigation slot,
+ * render functions, and optional map overlays. For gateway persistence use
+ * {@link defineModule} which extends these types with `queries` / `commands`.
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup module_ui Module UI contracts
+ * @{
+ */
+
 import type { ReactNode } from 'react'
 
 import type { ModuleConfigSchema } from './config'
@@ -127,12 +141,21 @@ export type PortakiModuleDefinitionInput = Partial<
     | 'config'
   >
 
+/**
+ * @brief Defines UI surfaces for a Portaki module (guest livret and/or host workspace).
+ *
+ * @param def Catalogue metadata and React render functions.
+ * @returns Normalized {@link PortakiModuleDefinition} with inferred `surface` when omitted.
+ * @throws {Error} When neither `render` nor `renderHost` is provided.
+ *
+ * @remarks Prefer {@link defineModule} for new gateway modules so `portaki build` can emit bundles.
+ */
 export function definePortakiModule(def: PortakiModuleDefinitionInput): PortakiModuleDefinition {
   const description = def.description ?? { fr: '', en: '' }
   const version = def.version ?? '0.1.0'
   const navSlot = def.navSlot ?? 'section'
   if (!def.render && !def.renderHost) {
-    throw new Error('@portaki/module-sdk: definePortakiModule requires `render` and/or `renderHost`')
+    throw new Error('@portaki/sdk: definePortakiModule requires `render` and/or `renderHost`')
   }
   const render = def.render ?? (() => null)
   let surface: ModuleSurface | undefined = def.surface
@@ -147,3 +170,5 @@ export function definePortakiModule(def: PortakiModuleDefinitionInput): PortakiM
   }
   return { ...def, description, version, navSlot, render, surface }
 }
+
+/** @} */

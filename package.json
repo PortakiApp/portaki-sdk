@@ -10,6 +10,15 @@
     "build:cli": "pnpm --filter @portaki/cli build",
     "build:test-support": "pnpm --filter @portaki/sdk-test-support build",
     "test": "pnpm build:sdk && pnpm build:test-support && pnpm -r --if-present test",
-    "test:coverage": "pnpm build:sdk && pnpm build:test-support && pnpm --filter @portaki/sdk test:coverage && pnpm --filter @portaki/cli test:coverage && pnpm --filter @portaki/sdk-test-support test:coverage"
+    "test:coverage": "pnpm build:sdk && pnpm build:test-support && pnpm --filter @portaki/sdk test:coverage && pnpm --filter @portaki/cli test:coverage && pnpm --filter @portaki/sdk-test-support test:coverage",
+    "docs:sync": "node scripts/sync-docs-to-site.mjs",
+    "docs:api": "typedoc",
+    "docs:doxygen": "doxygen Doxyfile",
+    "docs:dev": "pnpm docs:sync && pnpm --filter @portaki/docs-site dev",
+    "docs:build": "pnpm docs:sync && pnpm docs:api && pnpm --filter @portaki/docs-site build"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typedoc": "^0.28.0"
   }
 }

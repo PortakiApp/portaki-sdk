@@ -1,3 +1,14 @@
+/**
+ * @file vitest-preset.ts
+ * @brief Vitest configuration preset for `@portaki/module-*` packages.
+ *
+ * @details Import via `@portaki/sdk-test-support/vitest` — not the main package entry.
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup sdk_test_support
+ * @{
+ */
+
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -33,8 +44,14 @@ function resolvePackageSrcEntry(moduleRoot: string, packageName: string, entry =
 }
 
 /**
- * Preset Vitest pour les packages `@portaki/module-*`.
- * Usage : `export default portakiModuleVitestConfig(import.meta.url)`
+ * @brief Returns a Vitest config rooted at the calling module package.
+ * @param moduleEntryUrl Pass `import.meta.url` from the module's `vitest.config.ts`.
+ *
+ * @example
+ * ```ts
+ * import portakiModuleVitestConfig from '@portaki/sdk-test-support/vitest'
+ * export default portakiModuleVitestConfig(import.meta.url)
+ * ```
  */
 export function portakiModuleVitestConfig(moduleEntryUrl: string) {
   const moduleRoot = dirname(fileURLToPath(moduleEntryUrl))
@@ -64,3 +81,5 @@ export function portakiModuleVitestConfig(moduleEntryUrl: string) {
 }
 
 export default portakiModuleVitestConfig
+
+/** @} */

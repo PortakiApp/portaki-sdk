@@ -1,3 +1,17 @@
+/**
+ * @file types.ts
+ * @brief Gateway handler contracts — scopes, context, query/command definitions.
+ *
+ * @details
+ * Query and command handlers receive {@link HandlerContext} with a schema-bound
+ * {@link ModuleDb}. At build time the CLI records SQL steps into `operations.bundle.json`;
+ * at runtime the platform executes those steps — handlers must not embed raw SQL strings.
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup module_gateway Gateway handlers
+ * @{
+ */
+
 import type { ModuleDb } from './table-query.js'
 import type { ModuleSchemaDef } from '../schema/types.js'
 
@@ -70,3 +84,5 @@ export type ModuleDataDefinition = {
   readonly queries: Readonly<Record<string, QueryDefinition>>
   readonly commands: Readonly<Record<string, CommandDefinition>>
 }
+
+/** @} */

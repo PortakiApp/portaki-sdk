@@ -1,0 +1,21 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Portaki SDK API",
+  "tsconfig": "tsconfig.typedoc.json",
+  "entryPoints": [
+    "packages/sdk/src/index.ts",
+    "packages/sdk/src/runtime/index.ts",
+    "packages/sdk/src/server/index.ts",
+    "packages/sdk/src/build/index.ts",
+    "packages/sdk-test-support/src/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "out": "docs-site/public/api",
+  "readme": "packages/sdk/README.md",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "sort": ["source-order"],
+  "navigation": {
+    "includeCategories": true
+  }
+}

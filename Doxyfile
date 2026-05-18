@@ -1,0 +1,50 @@
+# Doxygen configuration — Portaki SDK (TypeScript sources, JSDoc/TSDoc blocks)
+# Generate: doxygen Doxyfile  OR  pnpm docs:doxygen
+
+PROJECT_NAME           = "Portaki SDK"
+PROJECT_NUMBER         = 2.0.0
+PROJECT_BRIEF          = "Official module authoring SDK — @portaki/sdk, @portaki/cli, test support"
+OUTPUT_DIRECTORY       = build/doxygen
+CREATE_SUBDIRS         = YES
+OUTPUT_LANGUAGE        = English
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = YES
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = YES
+INHERIT_DOCS           = YES
+OPTIMIZE_OUTPUT_JAVA   = NO
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+USE_MDFILE_AS_MAINPAGE = README.md
+
+INPUT                  = packages/sdk/src \
+                         packages/cli/src \
+                         packages/sdk-test-support/src \
+                         README.md
+INPUT_ENCODING         = UTF-8
+FILE_PATTERNS          = *.ts *.tsx
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       = */dist/* \
+                         */node_modules/* \
+                         *.test.ts \
+                         *.test.tsx \
+                         */test/*
+
+EXTENSION_MAPPING      = ts=javascript tsx=javascript
+OPTIMIZE_OUTPUT_JS     = YES
+
+SOURCE_BROWSER         = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = YES

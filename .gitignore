@@ -28,3 +28,9 @@ packages/*/coverage/
 
 # Example build artifacts
 examples/**/.portaki/
+
+# Generated documentation
+build/doxygen/
+docs-site/public/api/
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@portaki/sdk": ["./packages/sdk/src/index.ts"],
+      "@portaki/sdk/*": ["./packages/sdk/src/*"]
+    }
+  },
+  "include": [
+    "packages/sdk/src/**/*.ts",
+    "packages/sdk/src/**/*.tsx",
+    "packages/sdk-test-support/src/**/*.ts",
+    "packages/sdk-test-support/src/**/*.tsx"
+  ]
+}

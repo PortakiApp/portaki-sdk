@@ -1,5 +1,18 @@
 /**
- * Reference module: guest UI + schema, queries, commands (no raw SQL).
+ * @file portaki.module.ts
+ * @brief Reference catalogue module — schema, gateway handlers, and `portaki build` output.
+ *
+ * @details
+ * Demonstrates `defineModule` with `moduleSchema`, property-scoped queries/commands,
+ * and TipTap JSON columns without hand-written SQL. Run `portaki build` from `examples/rules/`.
+ *
+ * @example
+ * ```bash
+ * cd examples/rules && pnpm exec portaki build
+ * ```
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup examples Examples
  */
 import {
   defineModule,

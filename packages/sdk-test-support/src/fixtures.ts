@@ -1,3 +1,12 @@
+/**
+ * @file fixtures.ts
+ * @brief Deterministic stay/property fixtures and mock module contexts for Vitest.
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup sdk_test_support
+ * @{
+ */
+
 import type { PortakiContext } from '@portaki/sdk/runtime'
 import type { HostModuleContext, LangCode, ModuleContext, PropertyData, StayData } from '@portaki/sdk'
 
@@ -93,3 +102,5 @@ export function createMockHostModuleContext(
     track: overrides.track ?? createSpyTrack(),
   }
 }
+
+/** @} */

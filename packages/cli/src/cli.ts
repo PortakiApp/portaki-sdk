@@ -1,4 +1,18 @@
 #!/usr/bin/env node
+/**
+ * @file cli.ts
+ * @brief `@portaki/cli` entry point — `portaki build` command.
+ *
+ * @details
+ * Loads the module author's `portaki.module.ts(x)`, then emits build artefacts under
+ * `.portaki/` (migrations, operations, extension bundle, hybrid manifest merge).
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @package @portaki/cli
+ * @addtogroup portaki_cli Portaki CLI
+ * @{
+ */
+
 import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 
@@ -7,6 +21,10 @@ import type { PortakiFullModule } from '@portaki/sdk'
 import { runBuild } from './build/run-build.js'
 import { loadModuleDefinition } from './build/load-module.js'
 
+/**
+ * @brief Returns true when the module declares Node extension handlers.
+ * @param module Resolved module from {@link loadModuleDefinition}.
+ */
 function hasModuleExtension(module: PortakiFullModule): boolean {
   return (
     Object.keys(module.hostActions ?? {}).length > 0 ||
@@ -14,6 +32,9 @@ function hasModuleExtension(module: PortakiFullModule): boolean {
   )
 }
 
+/**
+ * @brief CLI main — dispatches `portaki build`.
+ */
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -83,6 +104,9 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * @brief Prints CLI usage to stdout.
+ */
 function printHelp(): void {
   console.log(`@portaki/cli
 
@@ -93,6 +117,7 @@ Outputs:
   .portaki/migrations.bundle.json   — DDL for modules DB (gitignored, no .sql in repo)
   portaki.module.json               — hybrid merge (catalogue kept; queries/commands/database/scopes updated)
   .portaki/backend/artifact.json    — Wasm artifact metadata (platform bundle layout)
+  .portaki/extension.cjs            — Node host/event handlers when declared
 `)
 }
 
@@ -100,3 +125,5 @@ main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error)
   process.exit(1)
 })
+
+/** @} */

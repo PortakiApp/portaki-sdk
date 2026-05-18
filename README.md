@@ -49,6 +49,20 @@ portaki-sdk/
 
 Voir **[docs/module-authoring.md](docs/module-authoring.md)** · **[docs/getting-started.md](docs/getting-started.md)** · **[docs/deployment.md](docs/deployment.md)**.
 
+## Documentation (guides + API)
+
+| Commande | Sortie |
+|----------|--------|
+| `pnpm docs:dev` | Site VitePress local (`docs-site/`) |
+| `pnpm docs:build` | Build statique + TypeDoc API → prêt Vercel |
+| `pnpm docs:api` | Référence TypeScript → `docs-site/public/api/` |
+| `pnpm docs:doxygen` | HTML Doxygen → `build/doxygen/html/` (optionnel) |
+
+Conventions commentaires source : **[docs/code-documentation.md](docs/code-documentation.md)**.  
+Hébergement (GitBook, VitePress, Mintlify, …) : **[docs/hosting.md](docs/hosting.md)**.
+
+Référence exemple : **`examples/rules/`** (module gateway complet).
+
 ## Développement
 
 ```bash

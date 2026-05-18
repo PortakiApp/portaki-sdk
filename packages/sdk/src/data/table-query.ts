@@ -1,9 +1,25 @@
+/**
+ * @file table-query.ts
+ * @brief Fluent query builder for module gateway handlers — records SQL at build time.
+ *
+ * @details
+ * `TableQuery` methods compile to parameterised SQL via the CLI (`record-operations`).
+ * Handlers call `ctx.db.from('logicalName')` only; the platform executes the bundle at runtime.
+ *
+ * @copyright Portaki — SPDX-License-Identifier: MIT
+ * @addtogroup module_gateway
+ * @{
+ */
+
 import type { ModuleSchemaDef, TableDef } from '../schema/types.js'
 
 import { findColumn, rowToCamel } from './column-map.js'
 import type { ModuleDatabase } from './types.js'
 import { buildDelete, buildInsert, buildSelect, buildUpdate, type WhereClause } from './sql-builder.js'
 
+/**
+ * @brief Chainable SELECT / INSERT / UPDATE / DELETE for one logical table.
+ */
 export class TableQuery {
   private readonly conditions: WhereClause[] = []
 
@@ -55,10 +71,16 @@ export class TableQuery {
   }
 }
 
+/** @brief Schema-bound database facade exposed as `ctx.db` in handlers. */
 export type ModuleDb = {
   from(logicalTableName: string): TableQuery
 }
 
+/**
+ * @brief Binds a {@link ModuleSchemaDef} to a runtime {@link ModuleDatabase} implementation.
+ * @param schema Module table definitions from `moduleSchema()`.
+ * @param database Platform-injected executor (tests may use in-memory stubs).
+ */
 export function createModuleDb(schema: ModuleSchemaDef, database: ModuleDatabase): ModuleDb {
   return {
     from(logicalTableName: string): TableQuery {
@@ -70,3 +92,5 @@ export function createModuleDb(schema: ModuleSchemaDef, database: ModuleDatabase
     },
   }
 }
+
+/** @} */
