@@ -9,7 +9,10 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "sdk/**"
+      - "packages/**"
+      - "legacy/**"
+      - "examples/**"
+      - "schema/**"
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci-verify.yml"
@@ -17,7 +20,10 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - "sdk/**"
+      - "packages/**"
+      - "legacy/**"
+      - "examples/**"
+      - "schema/**"
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".github/workflows/ci-verify.yml"
@@ -52,17 +58,19 @@ jobs:
         with:
           filters: |
             sdk_module_sdk:
-              - 'sdk/module-sdk/**'
+              - 'packages/module-sdk/**'
+              - 'packages/module-cli/**'
+              - 'packages/test-support/**'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
             sdk_guest:
-              - 'sdk/guest/**'
+              - 'packages/guest/**'
               - 'pnpm-workspace.yaml'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
             sdk_java:
-              - 'sdk/java/**'
-              - 'sdk/java-test-support/**'
+              - 'legacy/java/**'
+              - 'legacy/java-test-support/**'
               - '.github/workflows/ci-verify.yml'
               - '.github/actions/**'
 
@@ -73,24 +81,22 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sdk/module-sdk
+        working-directory: packages/module-sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (sdk/module-sdk)
-        uses: ./.github/actions/nodejs-npm-sdk-javascript
+      - name: Setup pnpm workspace
+        uses: ./.github/actions/pnpm-workspace-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: 9.15.4
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Build and test @portaki/module-sdk
+        run: pnpm --filter @portaki/module-sdk run build && pnpm --filter @portaki/module-sdk test
 
-      - name: Build
-        run: npm run build
-
-      - name: Test (if defined)
-        run: npm run test --if-present
+      - name: Test @portaki/module-cli
+        run: pnpm --filter @portaki/module-cli test
 
   sdk_guest:
     name: sdk-guest
@@ -123,10 +129,10 @@ jobs:
         uses: ./.github/actions/java-sdk-verify
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          working-directory: sdk/java
+          working-directory: legacy/java
 
       - name: Java test support — Maven verify
         uses: ./.github/actions/java-sdk-verify
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          working-directory: sdk/java-test-support
+          working-directory: legacy/java-test-support

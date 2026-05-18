@@ -8,13 +8,29 @@ importers:
 
   .: {}
 
-  sdk/examples/rules:
+  examples/rules:
     dependencies:
-      '@portaki/module-sdk':
+      '@portaki/sdk':
         specifier: workspace:*
-        version: link:../../module-sdk
+        version: link:../../packages/sdk
 
-  sdk/guest:
+  packages/module-cli:
+    dependencies:
+      '@portaki/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      jiti:
+        specifier: ^2.4.2
+        version: 2.7.0
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(jsdom@26.1.0)
+
+  packages/sdk:
     dependencies:
       react:
         specifier: '>=18'
@@ -33,43 +49,11 @@ importers:
         specifier: ^3.0.5
         version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(jsdom@26.1.0)
 
-  sdk/module-cli:
-    dependencies:
-      '@portaki/module-sdk':
-        specifier: workspace:*
-        version: link:../module-sdk
-      jiti:
-        specifier: ^2.4.2
-        version: 2.7.0
-    devDependencies:
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(jsdom@26.1.0)
-
-  sdk/module-sdk:
-    dependencies:
-      react:
-        specifier: '>=18'
-        version: 19.2.6
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-      vitest:
-        specifier: ^3.0.5
-        version: 3.2.4(@types/node@22.19.19)(jiti@2.7.0)(jsdom@26.1.0)
-
-  sdk/module-test-support:
+  packages/sdk-test-support:
     dependencies:
       '@portaki/sdk':
         specifier: workspace:*
-        version: link:../guest
+        version: link:../sdk
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -77,9 +61,6 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
     devDependencies:
-      '@portaki/module-sdk':
-        specifier: workspace:*
-        version: link:../module-sdk
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1

@@ -11,7 +11,7 @@ on:
   push:
     branches: [main, master]
     paths:
-      - sdk/java/**
+      - legacy/java/**
 
 permissions:
   contents: read
@@ -34,12 +34,12 @@ jobs:
           java-version: "21"
 
       - name: Package SDK JAR
-        working-directory: sdk/java
+        working-directory: legacy/java
         run: mvn -q -B package -DskipTests
 
       - name: Resolve version
         id: meta
-        working-directory: sdk/java
+        working-directory: legacy/java
         run: |
           version="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout | tr -d '\r')"
           version="${version%-SNAPSHOT}"
@@ -58,7 +58,7 @@ jobs:
       - name: Build and push
         run: |
           set -euo pipefail
-          jar="$(find sdk/java/target -maxdepth 1 -name 'portaki-module-sdk-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)"
+          jar="$(find legacy/java/target -maxdepth 1 -name 'portaki-module-sdk-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)"
           build_dir="$(mktemp -d)"
           cp "${jar}" "${build_dir}/portaki-module-sdk.jar"
           printf '%s\n' 'FROM scratch' 'COPY portaki-module-sdk.jar /portaki-module-sdk.jar' > "${build_dir}/Dockerfile"

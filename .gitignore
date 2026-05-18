@@ -1,11 +1,12 @@
 # Dependencies & build outputs
-sdk/module-sdk/node_modules/
-sdk/module-sdk/dist/
-sdk/module-cli/node_modules/
-sdk/module-cli/dist/
-sdk/guest/node_modules/
-sdk/guest/dist/
-sdk/java/target/
+packages/sdk/node_modules/
+packages/sdk/dist/
+packages/module-cli/node_modules/
+packages/module-cli/dist/
+packages/sdk-test-support/node_modules/
+packages/sdk-test-support/dist/
+legacy/java/target/
+legacy/java-test-support/target/
 node_modules/
 **/target/
 
@@ -23,5 +24,8 @@ node_modules/
 *.iml
 .DS_Store
 
-# Test / coverage (future)
+# Test / coverage
 coverage/
+
+# Example build artifacts
+examples/**/.portaki/

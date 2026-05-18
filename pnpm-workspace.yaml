@@ -1,10 +1,5 @@
 packages:
-  - "sdk/guest"
-  - "sdk/module-sdk"
-  - "sdk/module-cli"
-  - "sdk/module-test-support"
-  - "sdk/examples/rules"
-
-# guest is @portaki/sdk
+  - "packages/*"
+  - "examples/*"
 
 # After clone: pnpm install && pnpm test

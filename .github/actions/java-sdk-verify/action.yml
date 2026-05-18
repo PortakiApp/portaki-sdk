@@ -11,7 +11,7 @@ inputs:
   working-directory:
     description: Répertoire du projet Maven (relatif au workspace)
     required: false
-    default: sdk/java
+    default: legacy/java
 
 runs:
   using: composite

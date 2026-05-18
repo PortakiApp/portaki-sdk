@@ -1,0 +1,8 @@
+{
+  "name": "@portaki/example-rules",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@portaki/sdk": "workspace:*"
+  }
+}

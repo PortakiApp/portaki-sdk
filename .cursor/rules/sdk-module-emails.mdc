@@ -1,8 +1,8 @@
 ---
 description: SDK — contrats e-mail module (LocalizedText, ModuleGuestEmailAction, @PortakiModuleEmail)
 globs:
-  - sdk/java/**/*
-  - sdk/module-sdk/**/*
+  - legacy/java/**/*
+  - packages/module-sdk/**/*
   - schema/module.v1.json
   - docs/module-emails.md
 alwaysApply: false

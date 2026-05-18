@@ -1,7 +1,7 @@
-name: Node.js + npm cache — sdk/module-sdk
+name: Node.js + npm cache — packages/sdk
 description: >
   Configure Node.js avec cache npm sur le package-lock du SDK JavaScript
-  (dépôt portaki-sdk, dossier sdk/module-sdk par défaut — paquet @portaki/module-sdk).
+  (dépôt portaki-sdk, dossier packages/sdk par défaut — paquet @portaki/sdk).
 
 inputs:
   node-version:
@@ -10,7 +10,7 @@ inputs:
   working-directory:
     description: Dossier du package npm (relatif au workspace)
     required: false
-    default: sdk/module-sdk
+    default: packages/sdk
   registry-url:
     description: Registry npm (vide = pas de registry-url dans setup-node)
     required: false

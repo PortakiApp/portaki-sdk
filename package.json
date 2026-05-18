@@ -6,8 +6,9 @@
   "scripts": {
     "lint": "pnpm -r lint",
     "build": "pnpm -r --if-present build",
-    "build:test-support": "pnpm --filter @portaki/module-test-support build",
-    "test": "pnpm build:test-support && pnpm -r --if-present test",
-    "test:java": "mvn -q -f sdk/java test && mvn -q -f sdk/java-test-support test"
+    "build:sdk": "pnpm --filter @portaki/sdk build",
+    "build:test-support": "pnpm --filter @portaki/sdk-test-support build",
+    "test": "pnpm build:sdk && pnpm build:test-support && pnpm -r --if-present test",
+    "test:java": "mvn -q -f legacy/java test && mvn -q -f legacy/java-test-support test"
   }
 }

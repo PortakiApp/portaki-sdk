@@ -6,11 +6,14 @@ Greenfield model: **one TypeScript module**, no hand-written SQL in git, no Java
 
 | Package | Role |
 |---------|------|
-| `@portaki/module-sdk` | Guest UI components + types |
-| `@portaki/module-sdk/schema` | Declarative tables (`table`, `uuid`, `jsonb`, …) |
-| `@portaki/module-sdk/gateway` | `GatewayContext`, `ModuleDatabase`, handler types |
-| `@portaki/module-sdk/module` | `defineModule({ … })` — guest + backend |
+| `@portaki/sdk` | Module UI (`definePortakiModule`), components, types |
+| `@portaki/sdk/runtime` | Livret invité : `usePortakiQuery`, `PortakiProvider`, slots |
+| `@portaki/sdk/server` | HMAC / Route Handlers Next |
+| `@portaki/sdk/schema` | Tables déclaratives (`table`, `uuid`, `jsonb`, …) |
+| `@portaki/sdk/backend` | Handlers, `GatewayContext`, `ModuleDatabase` |
+| `@portaki/sdk/author` | `defineModule({ … })` — guest + backend |
 | `@portaki/module-cli` | `portaki-module build` → `.portaki/` artifacts |
+| `@portaki/sdk-test-support` | Vitest / manifest (devDependencies) |
 
 ## Author layout
 
@@ -18,52 +21,62 @@ Greenfield model: **one TypeScript module**, no hand-written SQL in git, no Java
 my-module/
   src/
     portaki.module.ts    # default export defineModule(...)
-    RulesGuest.tsx
-  portaki.module.json    # catalogue metadata (name, tags, hostSurfaces) — merge backend slice from build
+    GuestView.tsx
+  portaki.module.json    # catalogue metadata — merge backend slice from build
   package.json
   .gitignore             # .portaki/
 ```
 
-## Data access (no raw SQL)
+## Dependencies (module)
 
-Handlers use the schema-bound API only:
+```json
+{
+  "dependencies": {
+    "@portaki/sdk": "^2.0.0"
+  },
+  "devDependencies": {
+    "@portaki/module-cli": "^0.1.0",
+    "@portaki/sdk-test-support": "^2.0.0"
+  }
+}
+```
+
+Dans le code :
+
+```ts
+import { defineModule, ModuleCard } from '@portaki/sdk'
+import { usePortakiQuery } from '@portaki/sdk/runtime'
+```
+
+## Data access (no raw SQL)
 
 ```ts
 const row = await ctx.db.from('content').where({ tenantId: ctx.tenantId, propertyId: ctx.propertyId }).one()
-await ctx.db.from('content').where({ tenantId, propertyId }).update({ contentFr, contentEn })
 ```
 
-SQL is generated inside the SDK / host — not written by module authors.
+`content` = nom logique dans `table('content', 't_e_module_…', …)` — pas le nom SQL physique.
 
-## Example (`src/portaki.module.ts`)
+## Example
 
-See `sdk/examples/rules/src/portaki.module.ts`.
+See `examples/rules/src/portaki.module.ts`.
 
 ## Build
 
 ```bash
-pnpm add -D @portaki/module-sdk @portaki/module-cli
+pnpm add -D @portaki/sdk @portaki/module-cli
 pnpm exec portaki-module build
 ```
 
-Generated:
+Generated (gitignored under `.portaki/`): `migrations.bundle.json`, `operations.bundle.json`, manifest merge.
 
-- `.portaki/migrations.bundle.json` — gitignored; platform applies on modules DB (private network)
-- **`portaki.module.json`** — hybrid merge: catalogue fields kept; `queries`, `commands`, `database`, `scopes` refreshed from code
-- `.portaki/backend/artifact.json` — Wasm metadata (AssemblyScript → `gateway.wasm`, next phase)
+## Subpath map (ex-« ponts »)
 
-Add `.portaki/` to `.gitignore`. Keep `portaki.module.json` in git for marketing / catalogue text.
+| Ancien | Nouveau |
+|--------|---------|
+| `@portaki/module-sdk` | `@portaki/sdk` |
+| `@portaki/sdk` (hooks seuls, v0.5) | `@portaki/sdk/runtime` |
+| `@portaki/module-sdk/gateway` | `@portaki/sdk/backend` |
+| `@portaki/module-sdk/module` | `@portaki/sdk/author` |
+| `@portaki/module-test-support` | `@portaki/sdk-test-support` |
 
-## Runtime (platform, not author)
-
-1. OCI image includes `gateway.wasm` + `migrations.bundle.json`
-2. Java Extism runtime loads Wasm, applies pending revisions with lock
-3. Host functions expose `ModuleDatabase` to Wasm (`portaki_db_*`)
-
-Phase 2: `@portaki/module-cli` compiles handlers to **`gateway.wasm`** via **AssemblyScript** — see `docs/assemblyscript-backend.md`.
-
-## Decisions (MVP)
-
-- **No `.sql` in module repos** — SQL only inside `migrations.bundle.json` at build time
-- **No FK** to `portaki-api` core tables (modules DB is separate)
-- **Atlas** optional in dev to lint generated SQL; authors use schema DSL only
+Vitest preset accepte encore `@portaki/module-sdk` en alias le temps de la migration du catalogue.

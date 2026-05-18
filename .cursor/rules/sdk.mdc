@@ -23,7 +23,7 @@ Contrats e-mail : `sdk-module-emails.mdc` · Wasm : workspace `portaki-module-pl
 
 ## Versionnement (semver)
 
-À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm ou Java, contrats manifeste), **bump la version** dans les fichiers concernés (`package.json` du SDK npm, `sdk/java/pom.xml` pour `app.portaki:portaki-module-sdk`) :
+À **chaque modification** du SDK (code, schéma `schema/module.v1.json`, API publique npm ou Java, contrats manifeste), **bump la version** dans les fichiers concernés (`package.json` du SDK npm, `legacy/java/pom.xml` pour `app.portaki:portaki-module-sdk`) :
 
 | Gravité | Bump | Exemples |
 |---------|------|----------|

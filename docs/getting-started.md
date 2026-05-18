@@ -1,10 +1,10 @@
 # Guide d’utilisation — Portaki SDK
 
-Ce document résume les concepts et les types exposés par les paquets du dépôt [`portaki-sdk`](https://github.com/portaki/portaki-sdk) : **`@portaki/module-sdk`** (`sdk/module-sdk/`), le pont invité **`@portaki/sdk`** (`sdk/guest/`), et le SDK Java (`sdk/java/`).
+Ce document résume les concepts et les types exposés par les paquets du dépôt [`portaki-sdk`](https://github.com/portaki/portaki-sdk) : **`@portaki/sdk`** (`packages/sdk/`), le pont invité **`@portaki/sdk`** (`packages/sdk/`), et le SDK Java (`legacy/java/`).
 
 ---
 
-## 1. SDK JavaScript module invité (`sdk/module-sdk/` — `@portaki/module-sdk`)
+## 1. SDK JavaScript module invité (`packages/sdk/` — `@portaki/sdk`)
 
 ### Rôle
 
@@ -24,7 +24,7 @@ Décrire un **module invité** : métadonnées de navigation, rendu React en fon
 ### Contraintes
 
 - **Peer dependency** : `react >= 18`.
-- Le point d’entrée publié est `sdk/module-sdk/dist/` (compilation `tsc`).
+- Le point d’entrée publié est `packages/sdk/dist/` (compilation `tsc`).
 
 ### Intégration dans une app hôte
 
@@ -32,7 +32,7 @@ L’hôte charge le bundle du module (par chargement dynamique) et consomme l’
 
 ---
 
-## 2. SDK Java (`sdk/java/`)
+## 2. SDK Java (`legacy/java/`)
 
 ### Rôle
 
