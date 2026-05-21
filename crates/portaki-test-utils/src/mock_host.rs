@@ -1,0 +1,195 @@
+//! In-memory [`portaki_sdk::host::HostBackend`] for unit tests.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use portaki_sdk::context::Context;
+use portaki_sdk::error::Result;
+use portaki_sdk::host::{with_host, HostBackend};
+
+use crate::fixtures::Property;
+
+/// Builder for a test invocation context + mock host backend.
+#[derive(Debug, Clone, Default)]
+pub struct MockContextBuilder {
+    context: Context,
+    translations: HashMap<String, String>,
+    kv: HashMap<String, Vec<u8>>,
+    connector_responses: HashMap<(String, String), String>,
+}
+
+impl MockContextBuilder {
+    /// Starts a guest surface context.
+    pub fn guest() -> Self {
+        let mut context = Context::with_capabilities(&["core.storage"]);
+        context.surface = Some("home.cards".to_string());
+        context.guest = Some(crate::fixtures::GuestIdentityFixture::default().into());
+        Self {
+            context,
+            ..Default::default()
+        }
+    }
+
+    /// Starts a host dashboard context.
+    pub fn host() -> Self {
+        let mut context = Context::with_capabilities(&["core.storage", "core.images"]);
+        context.surface = Some("main".to_string());
+        Self {
+            context,
+            ..Default::default()
+        }
+    }
+
+    /// Overrides the property fixture.
+    pub fn with_property(mut self, property: Property) -> Self {
+        property.apply(&mut self.context);
+        self
+    }
+
+    /// Sets effective capabilities on the context.
+    pub fn with_capabilities(mut self, capability_ids: &[&str]) -> Self {
+        self.context = Context::with_capabilities(capability_ids);
+        self
+    }
+
+    /// Registers an i18n translation for tests.
+    pub fn with_translation(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.translations.insert(key.into(), value.into());
+        self
+    }
+
+    /// Seeds the in-memory KV store.
+    pub fn with_kv(mut self, key: impl Into<String>, value: Vec<u8>) -> Self {
+        self.kv.insert(key.into(), value);
+        self
+    }
+
+    /// Registers a canned connector JSON response.
+    pub fn with_connector_response(
+        mut self,
+        connector_id: impl Into<String>,
+        operation: impl Into<String>,
+        json: impl Into<String>,
+    ) -> Self {
+        self.connector_responses
+            .insert((connector_id.into(), operation.into()), json.into());
+        self
+    }
+
+    /// Returns the built context (without installing the host backend).
+    pub fn context(&self) -> Context {
+        self.context.clone()
+    }
+
+    /// Builds the context and installs [`MockHostFunctions`] for the current thread.
+    pub fn build(self) -> (Context, Arc<MockHostFunctions>) {
+        let host = Arc::new(MockHostFunctions {
+            context: self.context.clone(),
+            translations: self.translations,
+            kv: Mutex::new(self.kv),
+            connector_responses: self.connector_responses,
+        });
+        (self.context, host)
+    }
+
+    /// Runs `f` with the mock host installed.
+    pub fn run<R, F: FnOnce(Context) -> R>(self, f: F) -> R {
+        let (ctx, host) = self.build();
+        with_host(host, ctx.clone(), || f(ctx))
+    }
+}
+
+/// Alias for the builder entry points.
+pub type MockContext = MockContextBuilder;
+
+/// In-memory host function implementation.
+pub struct MockHostFunctions {
+    context: Context,
+    translations: HashMap<String, String>,
+    kv: Mutex<HashMap<String, Vec<u8>>>,
+    connector_responses: HashMap<(String, String), String>,
+}
+
+impl HostBackend for MockHostFunctions {
+    fn context(&self) -> Result<Context> {
+        Ok(self.context.clone())
+    }
+
+    fn has_capability(&self, id: &str) -> Result<bool> {
+        Ok(self.context.has_capability(id))
+    }
+
+    fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        Ok(self.kv.lock().expect("kv lock").get(key).cloned())
+    }
+
+    fn kv_set(&self, key: &str, value: &[u8], _ttl_seconds: Option<u32>) -> Result<()> {
+        self.kv
+            .lock()
+            .expect("kv lock")
+            .insert(key.to_string(), value.to_vec());
+        Ok(())
+    }
+
+    fn kv_delete(&self, key: &str) -> Result<()> {
+        self.kv.lock().expect("kv lock").remove(key);
+        Ok(())
+    }
+
+    fn kv_list(&self, prefix: &str) -> Result<Vec<String>> {
+        Ok(self
+            .kv
+            .lock()
+            .expect("kv lock")
+            .keys()
+            .filter(|key| key.starts_with(prefix))
+            .cloned()
+            .collect())
+    }
+
+    fn i18n_translate(&self, key: &str, _vars_json: &str) -> Result<String> {
+        Ok(self
+            .translations
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string()))
+    }
+
+    fn log(&self, _level: &str, _message: &str, _fields_json: &str) -> Result<()> {
+        Ok(())
+    }
+
+    fn connector_call(
+        &self,
+        connector_id: &str,
+        operation: &str,
+        _args_json: &str,
+    ) -> Result<String> {
+        Ok(self
+            .connector_responses
+            .get(&(connector_id.to_string(), operation.to_string()))
+            .cloned()
+            .unwrap_or_else(|| "{}".to_string()))
+    }
+
+    fn emit_event(&self, _event_type: &str, _payload_json: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use portaki_sdk::host::{self, i18n::Vars};
+
+    use super::MockContext;
+
+    #[test]
+    fn mock_host_resolves_translations() {
+        MockContext::guest()
+            .with_translation("greeting", "Bonjour")
+            .run(|_ctx| {
+                let text = host::i18n::translate("greeting", &Vars::new()).expect("translate");
+                assert_eq!(text, "Bonjour");
+            });
+    }
+}

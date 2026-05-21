@@ -1,0 +1,16 @@
+[package]
+name = "portaki-test-utils"
+description = "Test harness for Portaki modules — mock host functions and SDUI assertions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+portaki-sdk = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
