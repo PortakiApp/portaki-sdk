@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/portaki-sdk",
+    "crates/portaki-sdk-macros",
+    "crates/portaki-connectors",
+    "crates/portaki-test-utils",
+    "crates/portaki-cli",
+]
+default-members = [
+    "crates/portaki-sdk",
+    "crates/portaki-sdk-macros",
+    "crates/portaki-connectors",
+    "crates/portaki-test-utils",
+    "crates/portaki-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/syntax-labs/portaki-sdk-rust"
+authors = ["Syntax Labs <support@syntax-labs.fr>"]
+rust-version = "1.75"
+
+[workspace.dependencies]
+portaki-sdk = { path = "crates/portaki-sdk", version = "0.1.0" }
+portaki-sdk-macros = { path = "crates/portaki-sdk-macros", version = "0.1.0" }
+portaki-connectors = { path = "crates/portaki-connectors", version = "0.1.0" }
+portaki-test-utils = { path = "crates/portaki-test-utils", version = "0.1.0" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "process", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
+glob = "0.3"
+tar = "0.4"
+flate2 = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+oci-distribution = "0.11"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
