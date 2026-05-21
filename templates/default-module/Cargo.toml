@@ -1,0 +1,21 @@
+[package]
+name = "{{MODULE_NAME}}"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+portaki-sdk = { path = "../../../crates/portaki-sdk" }
+portaki-connectors = { path = "../../../crates/portaki-connectors" }
+portaki-sdk-macros = { path = "../../../crates/portaki-sdk-macros" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+portaki-test-utils = { path = "../../../crates/portaki-test-utils" }
