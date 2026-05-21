@@ -1,0 +1,6 @@
+{
+  "module.displayName": "Sample module",
+  "module.description": "Portaki module scaffolded with portaki init",
+  "home.card.title": "Welcome",
+  "home.card.body": "Guest SDUI content"
+}

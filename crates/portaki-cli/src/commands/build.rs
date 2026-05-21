@@ -1,0 +1,99 @@
+//! `portaki build` — wasm build + manifest + i18n bundle.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+use anyhow::{Context, Result};
+use clap::Parser;
+
+use crate::manifest::{collect_emissions, find_emissions_dir, generate_manifest, write_manifest};
+
+#[derive(Debug, Parser)]
+/// Arguments for `portaki build`.
+pub struct BuildArgs {
+    /// Build in release mode.
+    #[arg(long)]
+    pub release: bool,
+    /// Skip `cargo build` (manifest-only refresh).
+    #[arg(long)]
+    pub manifest_only: bool,
+}
+
+/// Runs `portaki build`.
+pub async fn run(args: BuildArgs) -> Result<()> {
+    let module_root = std::env::current_dir().context("current_dir")?;
+    let out_dir = module_root.join("target/portaki");
+    std::fs::create_dir_all(&out_dir)?;
+
+    if !args.manifest_only {
+        let mut cmd = Command::new("cargo");
+        cmd.arg("build")
+            .arg("--target")
+            .arg("wasm32-unknown-unknown");
+        if args.release {
+            cmd.arg("--release");
+        }
+        let status = cmd.status().context("cargo build wasm32")?;
+        if !status.success() {
+            anyhow::bail!("cargo build failed");
+        }
+    }
+
+    let emissions_dir = find_emissions_dir(&module_root)
+        .context("no portaki-emissions found — run cargo build first")?;
+    let emissions = collect_emissions(&emissions_dir)?;
+
+    let i18n_dir = module_root.join("i18n");
+    let supported = read_supported_locales(&i18n_dir)
+        .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
+    let default_locale = supported
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "fr-FR".to_string());
+
+    let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
+    write_manifest(&manifest, &out_dir.join("manifest.json"))?;
+
+    bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
+
+    println!(
+        "Built manifest at {} and i18n bundle",
+        out_dir.join("manifest.json").display()
+    );
+    Ok(())
+}
+
+fn read_supported_locales(i18n_dir: &PathBuf) -> Option<Vec<String>> {
+    let entries = std::fs::read_dir(i18n_dir).ok()?;
+    let mut locales = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.ends_with(".json") {
+            locales.push(name.trim_end_matches(".json").to_string());
+        }
+    }
+    if locales.is_empty() {
+        None
+    } else {
+        locales.sort();
+        Some(locales)
+    }
+}
+
+fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<()> {
+    if !i18n_dir.exists() {
+        return Ok(());
+    }
+    let file = std::fs::File::create(dest)?;
+    let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+    let mut archive = tar::Builder::new(encoder);
+    for entry in std::fs::read_dir(i18n_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            archive.append_path_with_name(&path, path.file_name().unwrap())?;
+        }
+    }
+    archive.finish()?;
+    Ok(())
+}

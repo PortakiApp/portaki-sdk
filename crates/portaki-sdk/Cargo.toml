@@ -1,0 +1,25 @@
+[package]
+name = "portaki-sdk"
+description = "Portaki module SDK — host functions, SDUI catalog, and module authoring APIs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+portaki-sdk-macros = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[build-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+portaki-test-utils = { workspace = true }
+serde_json = { workspace = true }
