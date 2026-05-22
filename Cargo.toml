@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["templates"]
 members = [
     "crates/portaki-sdk",
     "crates/portaki-sdk-macros",

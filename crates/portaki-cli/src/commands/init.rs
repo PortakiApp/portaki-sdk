@@ -75,7 +75,13 @@ fn copy_template(source: &PathBuf, dest: &PathBuf, module_name: &str) -> Result<
             copy_template(&entry.path(), &target, module_name)?;
             continue;
         }
-        let text = fs::read_to_string(entry.path())?;
+        let source_path = entry.path();
+        let mut target_name = name.to_string();
+        if target_name == "Cargo.toml.template" {
+            target_name = "Cargo.toml".to_string();
+        }
+        let target = dest.join(&target_name);
+        let text = fs::read_to_string(&source_path)?;
         let rendered = text.replace("{{MODULE_NAME}}", module_name);
         fs::write(&target, rendered).with_context(|| format!("write {}", target.display()))?;
     }
