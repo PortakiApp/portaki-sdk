@@ -71,3 +71,16 @@ pub struct Visibility {
     /// Expression or capability gate evaluated by the shell.
     pub when: String,
 }
+
+/// Layout variant for the [`crate::sdui::primitives::Temperature`] primitive.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TempVariant {
+    /// Default inline temperature readout.
+    #[default]
+    Inline,
+    /// Prominent hero-style temperature (home cards).
+    Hero,
+    /// Compact readout for grids and lists.
+    Compact,
+}

@@ -1,4 +1,7 @@
-//! `portaki publish` — OCI push via ORAS-compatible layout (dry-run supported).
+//! `portaki publish` — OCI push via `oci-distribution` (ORAS-compatible layout).
+//!
+//! Authenticates with `SCW_SECRET_KEY` (Scaleway, username `nologin`) or Docker `~/.docker/config.json`.
+//! Expects `portaki build --release` output: `target/portaki/manifest.json`, release wasm, and `i18n/*.json`.
 
 use std::path::PathBuf;
 
@@ -39,9 +42,9 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         return Ok(());
     }
 
-    oci::push_artifact(&artifact_dir, &args.registry)
+    let manifest_url = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
         .await
-        .context("push OCI artifact — install oras CLI and authenticate to Scaleway")?;
-    println!("Published to {}", args.registry);
+        .context("push OCI artifact — set SCW_SECRET_KEY or docker login")?;
+    println!("Published to {} ({})", args.registry, manifest_url);
     Ok(())
 }

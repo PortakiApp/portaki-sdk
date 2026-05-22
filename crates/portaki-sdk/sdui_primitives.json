@@ -71,7 +71,7 @@
   {"name": "KeyValue", "serde_name": "KeyValue", "has_children": false, "extra_fields": ["key", "value"]},
   {"name": "CountdownTimer", "serde_name": "CountdownTimer", "has_children": false, "extra_fields": ["until"]},
   {"name": "WeatherIcon", "serde_name": "WeatherIcon", "has_children": false, "extra_fields": ["condition", "size"]},
-  {"name": "Temperature", "serde_name": "Temperature", "has_children": false, "extra_fields": ["value", "unit"]},
+  {"name": "Temperature", "serde_name": "Temperature", "has_children": false, "extra_fields": ["value", "unit"], "typed_fields": {"variant": "TempVariant"}},
   {"name": "TimeColumn", "serde_name": "TimeColumn", "has_children": false, "extra_fields": ["times"]},
   {"name": "DateColumn", "serde_name": "DateColumn", "has_children": false, "extra_fields": ["dates"]},
   {"name": "EmptyState", "serde_name": "EmptyState", "has_children": true, "extra_fields": ["title", "description", "icon"]},
