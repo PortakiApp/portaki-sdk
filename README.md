@@ -18,11 +18,31 @@ Rust SDK, CLI, connectors, and test utilities for [Portaki](https://github.com/s
 cargo build --workspace
 cargo test --workspace
 cargo run -p portaki-cli -- init my-module --template default
+cd my-module
+portaki build --release
+portaki lint
 ```
 
-## Branch
+## Publish (OCI)
 
-Agent B1 work targets `feature/B1-sdk-cli`.
+After `portaki build --release`, push to Scaleway Container Registry:
+
+```bash
+export SCW_SECRET_KEY="<scaleway-secret-key>"   # username is always nologin
+portaki publish --registry rg.fr-par.scw.cloud/portaki-modules
+```
+
+Alternatively, use `docker login rg.fr-par.scw.cloud` — credentials are read from `~/.docker/config.json`.
+
+`portaki publish --dry-run` validates `target/portaki/manifest.json`, wasm, and i18n bundles without pushing.
+
+CI may fall back to `oras push` if `portaki publish` fails; layer media types match the ORAS layout.
+
+## Macros (Phase 4)
+
+- `#[capability(required, id = "core.storage")]` — `id` required when the const value is not a string literal.
+- `#[entity_indexes(Entity)]` on `&["lat", "lng"]` — emits spatial index JSON for lat/lng pairs.
+- `Temperature::variant(TempVariant::Hero | Inline | Compact)` — optional SDUI layout hint for guest shells.
 
 ## License
 
