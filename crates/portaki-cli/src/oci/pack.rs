@@ -31,8 +31,19 @@ struct ArtifactManifest {
     version: String,
 }
 
-/// Reads module id/version from the packaged manifest.
-pub fn read_module_coordinates(artifact_dir: &Path) -> Result<ModuleCoordinates> {
+/// Reads module id/version from `portaki.module.json` (catalog) or build `manifest.json`.
+pub fn read_module_coordinates(module_root: &Path, artifact_dir: &Path) -> Result<ModuleCoordinates> {
+    let catalog_path = module_root.join("portaki.module.json");
+    if catalog_path.exists() {
+        let raw = std::fs::read_to_string(&catalog_path)
+            .with_context(|| format!("read {}", catalog_path.display()))?;
+        let manifest: ArtifactManifest =
+            serde_json::from_str(&raw).context("parse portaki.module.json")?;
+        return Ok(ModuleCoordinates {
+            id: manifest.id,
+            version: manifest.version,
+        });
+    }
     let manifest_path = artifact_dir.join("manifest.json");
     let raw = std::fs::read_to_string(&manifest_path)
         .with_context(|| format!("read {}", manifest_path.display()))?;
@@ -55,11 +66,17 @@ pub fn image_reference(registry: &str, coords: &ModuleCoordinates) -> Result<Str
 
 /// Discovers wasm + manifest + i18n layers under the module tree.
 pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Vec<PushLayer>> {
-    let coords = read_module_coordinates(artifact_dir)?;
+    let coords = read_module_coordinates(module_root, artifact_dir)?;
     let mut layers = Vec::new();
 
+    let catalog_manifest = module_root.join("portaki.module.json");
+    let manifest_layer_path = if catalog_manifest.exists() {
+        catalog_manifest
+    } else {
+        artifact_dir.join("manifest.json")
+    };
     layers.push(PushLayer {
-        path: artifact_dir.join("manifest.json"),
+        path: manifest_layer_path,
         media_type: MANIFEST_MEDIA.to_string(),
     });
 
@@ -140,12 +157,35 @@ mod tests {
             r#"{"id":"weather","version":"0.2.0"}"#,
         )
         .unwrap();
-        let coords = read_module_coordinates(dir.path()).unwrap();
+        let coords = read_module_coordinates(dir.path(), dir.path()).unwrap();
         assert_eq!(
             coords,
             ModuleCoordinates {
                 id: "weather".to_string(),
                 version: "0.2.0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn read_module_coordinates_prefers_portaki_module_json() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("portaki.module.json"),
+            r#"{"id":"weather","version":"1.3.2"}"#,
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("manifest.json"),
+            r#"{"id":"other","version":"0.1.0"}"#,
+        )
+        .unwrap();
+        let coords = read_module_coordinates(dir.path(), dir.path()).unwrap();
+        assert_eq!(
+            coords,
+            ModuleCoordinates {
+                id: "weather".to_string(),
+                version: "1.3.2".to_string(),
             }
         );
     }

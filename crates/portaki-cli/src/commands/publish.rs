@@ -31,7 +31,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         .artifact_dir
         .unwrap_or_else(|| module_root.join("target/portaki"));
 
-    oci::package_artifact(&artifact_dir).context("package OCI artifact")?;
+    oci::package_artifact_with_root(&module_root, &artifact_dir).context("package OCI artifact")?;
 
     if args.dry_run {
         println!(

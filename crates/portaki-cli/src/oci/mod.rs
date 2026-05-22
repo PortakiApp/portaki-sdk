@@ -11,9 +11,19 @@ use oci_distribution::Reference;
 
 /// Validates that required artifact files exist under `artifact_dir`.
 pub fn package_artifact(artifact_dir: &Path) -> Result<()> {
+    package_artifact_with_root(artifact_dir, artifact_dir)
+}
+
+pub fn package_artifact_with_root(module_root: &Path, artifact_dir: &Path) -> Result<()> {
+    if module_root.join("portaki.module.json").exists() {
+        return Ok(());
+    }
     let manifest = artifact_dir.join("manifest.json");
     if !manifest.exists() {
-        anyhow::bail!("missing {} — run portaki build first", manifest.display());
+        anyhow::bail!(
+            "missing portaki.module.json or {} — run portaki build first",
+            manifest.display()
+        );
     }
     Ok(())
 }
@@ -34,7 +44,7 @@ pub async fn push_artifact(
     package_artifact(artifact_dir)?;
 
     let layers = pack::collect_push_layers(module_root, artifact_dir)?;
-    let coords = pack::read_module_coordinates(artifact_dir)?;
+    let coords = pack::read_module_coordinates(module_root, artifact_dir)?;
     let image_ref = pack::image_reference(registry, &coords)?;
     let reference: Reference = image_ref
         .parse()
