@@ -15,11 +15,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&fn_name).unwrap(),
     );
 
-    let emission = crate::emit::write_emission(
-        "command",
-        &crate::emit::sanitize_key(&attrs.name),
-        quote::quote! { #json },
-    );
+    let emission =
+        crate::emit::write_emission("command", &crate::emit::sanitize_key(&attrs.name), &json);
     let output = quote::quote! {
         #emission
         #function_item

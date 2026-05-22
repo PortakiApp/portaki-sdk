@@ -146,11 +146,7 @@ pub fn expand_builtin(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.builtin).unwrap(),
     );
 
-    let emission = write_emission(
-        "connector_builtin",
-        &sanitize_key(&attrs.builtin),
-        quote! { #json },
-    );
+    let emission = write_emission("connector_builtin", &sanitize_key(&attrs.builtin), &json);
     let output: TokenStream2 = quote! {
         #emission
         #item
@@ -177,11 +173,7 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.credential_provider_id).unwrap(),
     );
 
-    let emission = write_emission(
-        "connector_custom",
-        &sanitize_key(&attrs.id),
-        quote! { #json },
-    );
+    let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);
     let output: TokenStream2 = quote! {
         #emission
         #struct_item
@@ -211,7 +203,7 @@ pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
         attrs.validator,
     );
 
-    let emission = write_emission("connector_op", &sanitize_key(&fn_name), quote! { #json });
+    let emission = write_emission("connector_op", &sanitize_key(&fn_name), &json);
     let output: TokenStream2 = quote! {
         #emission
         #function_item

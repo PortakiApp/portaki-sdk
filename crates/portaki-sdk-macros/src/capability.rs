@@ -92,11 +92,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.fallback_key).unwrap(),
     );
 
-    let emission = write_emission(
-        "capability",
-        &sanitize_key(&capability_id),
-        quote! { #json },
-    );
+    let emission = write_emission("capability", &sanitize_key(&capability_id), &json);
     let output: TokenStream2 = quote! {
         #emission
         #const_item

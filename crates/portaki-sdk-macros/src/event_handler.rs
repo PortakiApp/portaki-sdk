@@ -13,8 +13,11 @@ struct EventHandlerAttrs {
 impl Parse for EventHandlerAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let key: syn::Ident = input.parse()?;
-        if key != "type" {
-            return Err(syn::Error::new(key.span(), "expected type = \"...\""));
+        if key != "type" && key != "event_type" {
+            return Err(syn::Error::new(
+                key.span(),
+                "expected type = \"...\" or event_type = \"...\"",
+            ));
         }
         input.parse::<Token![=]>()?;
         let event_type: LitStr = input.parse()?;
@@ -39,11 +42,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&fn_name).unwrap(),
     );
 
-    let emission = write_emission(
-        "event_handler",
-        &sanitize_key(&attrs.event_type),
-        quote! { #json },
-    );
+    let emission = write_emission("event_handler", &sanitize_key(&attrs.event_type), &json);
     let output: TokenStream2 = quote! {
         #emission
         #function_item

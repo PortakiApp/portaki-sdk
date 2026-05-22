@@ -100,5 +100,5 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
         serde_json::to_string(&version).unwrap(),
     );
 
-    write_emission("module", &sanitize_key(&id), quote! { #json })
+    write_emission("module", &sanitize_key(&id), &json)
 }

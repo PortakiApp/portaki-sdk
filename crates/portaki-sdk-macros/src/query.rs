@@ -37,7 +37,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&fn_name).unwrap(),
     );
 
-    let emission = write_emission("query", &sanitize_key(&attrs.name), quote! { #json });
+    let emission = write_emission("query", &sanitize_key(&attrs.name), &json);
     let output: TokenStream2 = quote! {
         #emission
         #function_item

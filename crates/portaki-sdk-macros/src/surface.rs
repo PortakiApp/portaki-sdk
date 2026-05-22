@@ -75,7 +75,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let key = format!("{}_{}", attrs.context, attrs.id);
-    let emission = write_emission("surface", &sanitize_key(&key), quote! { #json });
+    let emission = write_emission("surface", &sanitize_key(&key), &json);
     let output: TokenStream2 = quote! {
         #emission
         #function_item
