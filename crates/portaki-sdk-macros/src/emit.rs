@@ -1,31 +1,20 @@
-//! Writes manifest emission fragments to `OUT_DIR/portaki-emissions/`.
+//! Writes manifest emission fragments to `OUT_DIR/portaki-emissions/` at macro expansion time.
+
+use std::fs;
+use std::path::PathBuf;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::LitStr;
 
-/// Generates a compile-time call that writes one JSON emission file.
-pub fn write_emission(kind: &str, key: &str, json_expr: TokenStream) -> TokenStream {
-    let kind_lit = LitStr::new(kind, proc_macro2::Span::call_site());
-    let key_lit = LitStr::new(key, proc_macro2::Span::call_site());
-
-    quote! {
-        const _: () = {
-            #[allow(unused_imports)]
-            use ::std::fs;
-            #[allow(unused_imports)]
-            use ::std::path::PathBuf;
-            let out_dir = match ::std::env::var("OUT_DIR") {
-                Ok(value) => value,
-                Err(_) => return,
-            };
-            let dir = PathBuf::from(out_dir).join("portaki-emissions");
-            let _ = fs::create_dir_all(&dir);
-            let payload = #json_expr;
-            let path = dir.join(concat!(#kind_lit, "-", #key_lit, ".json"));
-            let _ = fs::write(path, payload);
-        };
+/// Writes one JSON emission file during proc-macro expansion (when `OUT_DIR` is set).
+pub fn write_emission(kind: &str, key: &str, json: &str) -> TokenStream {
+    if let Ok(out_dir) = std::env::var("OUT_DIR") {
+        let dir = PathBuf::from(out_dir).join("portaki-emissions");
+        let _ = fs::create_dir_all(&dir);
+        let path = dir.join(format!("{kind}-{key}.json"));
+        let _ = fs::write(path, json);
     }
+    quote! {}
 }
 
 /// Sanitizes a string for use as a filename fragment.

@@ -59,7 +59,7 @@ pub fn expand_entity(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&fields).unwrap(),
     );
 
-    let emission = write_emission("entity", &sanitize_key(&name), quote! { #json });
+    let emission = write_emission("entity", &sanitize_key(&name), &json);
     let output: TokenStream2 = quote! {
         #emission
         #struct_item
@@ -82,11 +82,7 @@ pub fn expand_entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStrea
         serde_json::to_string(&entity_name).unwrap(),
     );
 
-    let emission = write_emission(
-        "entity_indexes",
-        &sanitize_key(&entity_name),
-        quote! { #json },
-    );
+    let emission = write_emission("entity_indexes", &sanitize_key(&entity_name), &json);
     let output: TokenStream2 = quote! {
         #emission
         #item
