@@ -10,10 +10,6 @@ use oci_distribution::client::{Client, Config};
 use oci_distribution::Reference;
 
 /// Validates that `portaki build` produced a publish manifest under `artifact_dir`.
-pub fn package_artifact(artifact_dir: &Path) -> Result<()> {
-    package_artifact_with_root(artifact_dir, artifact_dir)
-}
-
 pub fn package_artifact_with_root(_module_root: &Path, artifact_dir: &Path) -> Result<()> {
     let publish = pack::publish_manifest_path(artifact_dir);
     if !publish.exists() {
@@ -68,7 +64,8 @@ mod tests {
     #[test]
     fn package_artifact_requires_publish_manifest() {
         let dir = tempfile::tempdir().unwrap();
-        let err = package_artifact(dir.path()).unwrap_err();
+        let root = dir.path();
+        let err = package_artifact_with_root(root, root).unwrap_err();
         assert!(err.to_string().contains("publish-manifest.json"));
     }
 }
