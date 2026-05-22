@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::manifest::{collect_emissions, find_emissions_dir, generate_manifest, write_manifest};
+use crate::oci::pack;
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki build`.
@@ -25,6 +26,8 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     let out_dir = module_root.join("target/portaki");
     std::fs::create_dir_all(&out_dir)?;
 
+    let catalog_path = module_root.join("portaki.module.json");
+
     if !args.manifest_only {
         let mut cmd = Command::new("cargo");
         cmd.arg("build")
@@ -39,26 +42,31 @@ pub async fn run(args: BuildArgs) -> Result<()> {
         }
     }
 
-    let emissions_dir = find_emissions_dir(&module_root)
-        .context("no portaki-emissions found — run cargo build first")?;
-    let emissions = collect_emissions(&emissions_dir)?;
+    if let Some(emissions_dir) = find_emissions_dir(&module_root) {
+        let emissions = collect_emissions(&emissions_dir)?;
+        let i18n_dir = module_root.join("i18n");
+        let supported = read_supported_locales(&i18n_dir)
+            .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
+        let default_locale = supported
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "fr-FR".to_string());
 
-    let i18n_dir = module_root.join("i18n");
-    let supported = read_supported_locales(&i18n_dir)
-        .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
-    let default_locale = supported
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "fr-FR".to_string());
+        let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
+        write_manifest(&manifest, &out_dir.join("manifest.json"))?;
 
-    let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
-    write_manifest(&manifest, &out_dir.join("manifest.json"))?;
+        bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
+    } else if !catalog_path.exists() {
+        anyhow::bail!(
+            "no portaki.module.json and no SDK emissions — add portaki_module!(...) or a catalog manifest"
+        );
+    }
 
-    bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
+    let publish_path = pack::assemble_publish_manifest(&module_root, &out_dir)?;
 
     println!(
-        "Built manifest at {} and i18n bundle",
-        out_dir.join("manifest.json").display()
+        "Built publish manifest at {} (OCI layer source; edit portaki.module.json then rebuild)",
+        publish_path.display()
     );
     Ok(())
 }
