@@ -1,0 +1,5 @@
+error: #[capability] requires a string literal value or an explicit id = "..." attribute
+ --> tests/ui/capability-fail/const_path_without_id.rs:6:27
+  |
+6 | pub const STORAGE: &str = CAP_CORE_STORAGE;
+  |                           ^^^^^^^^^^^^^^^^

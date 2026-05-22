@@ -2,12 +2,14 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
+use syn::spanned::Spanned;
 use syn::{ItemConst, LitStr, Token};
 
 use crate::emit::{sanitize_key, write_emission};
 
 struct CapabilityAttrs {
     optional: bool,
+    capability_id: Option<String>,
     purpose_key: Option<String>,
     fallback_key: Option<String>,
 }
@@ -15,6 +17,7 @@ struct CapabilityAttrs {
 impl Parse for CapabilityAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut optional = false;
+        let mut capability_id = None;
         let mut purpose_key = None;
         let mut fallback_key = None;
 
@@ -44,6 +47,7 @@ impl Parse for CapabilityAttrs {
             let text = value.value();
 
             match key.to_string().as_str() {
+                "id" => capability_id = Some(text),
                 "purpose_key" => purpose_key = Some(text),
                 "fallback_key" => fallback_key = Some(text),
                 other => {
@@ -57,6 +61,7 @@ impl Parse for CapabilityAttrs {
 
         Ok(CapabilityAttrs {
             optional,
+            capability_id,
             purpose_key,
             fallback_key,
         })
@@ -68,13 +73,19 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = syn::parse_macro_input!(attr as CapabilityAttrs);
     let const_name = const_item.ident.to_string();
 
-    let capability_id = match &*const_item.expr {
-        syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Str(lit),
-            ..
-        }) => lit.value(),
-        _ => String::new(),
-    };
+    let capability_id = attrs
+        .capability_id
+        .or_else(|| capability_id_from_expr(&const_item.expr))
+        .unwrap_or_default();
+
+    if capability_id.is_empty() {
+        return syn::Error::new(
+            const_item.expr.span(),
+            "#[capability] requires a string literal value or an explicit id = \"...\" attribute",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let json = format!(
         r#"{{
@@ -99,4 +110,35 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     output.into()
+}
+
+fn capability_id_from_expr(expr: &syn::Expr) -> Option<String> {
+    match expr {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit),
+            ..
+        }) => Some(lit.value()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capability_id_from_expr;
+    use syn::parse_quote;
+
+    #[test]
+    fn capability_id_from_string_literal() {
+        let expr: syn::Expr = parse_quote! { "core.storage" };
+        assert_eq!(
+            capability_id_from_expr(&expr).as_deref(),
+            Some("core.storage")
+        );
+    }
+
+    #[test]
+    fn capability_id_from_path_is_none() {
+        let expr: syn::Expr = parse_quote! { OTHER_CONST };
+        assert!(capability_id_from_expr(&expr).is_none());
+    }
 }
