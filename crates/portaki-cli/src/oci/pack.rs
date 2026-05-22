@@ -32,7 +32,10 @@ struct ArtifactManifest {
 }
 
 /// Reads module id/version from `portaki.module.json` (catalog) or build `manifest.json`.
-pub fn read_module_coordinates(module_root: &Path, artifact_dir: &Path) -> Result<ModuleCoordinates> {
+pub fn read_module_coordinates(
+    module_root: &Path,
+    artifact_dir: &Path,
+) -> Result<ModuleCoordinates> {
     let catalog_path = module_root.join("portaki.module.json");
     if catalog_path.exists() {
         let raw = std::fs::read_to_string(&catalog_path)
