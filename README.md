@@ -29,6 +29,7 @@ After `portaki build --release`, push to Scaleway Container Registry:
 
 ```bash
 export SCW_SECRET_KEY="<scaleway-secret-key>"   # username is always nologin
+export PORTAKI_PUBLISH_VERSION="0.2.1"          # optional: fail if manifest version mismatches (CI sets from git tag)
 portaki publish --registry rg.fr-par.scw.cloud/portaki-modules
 ```
 

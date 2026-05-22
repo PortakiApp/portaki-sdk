@@ -78,9 +78,7 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
         .description_key
         .unwrap_or_else(|| "module.description".to_string());
     let author = attrs.author.unwrap_or_else(|| "Syntax Labs".to_string());
-    let version = attrs
-        .version
-        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    let version = attrs.version.unwrap_or_else(default_crate_version);
 
     let json = format!(
         r#"{{
@@ -101,4 +99,25 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     );
 
     write_emission("module", &sanitize_key(&id), &json)
+}
+
+/// Version of the crate being compiled (module), not the proc-macro crate.
+///
+/// `env!("CARGO_PKG_VERSION")` is wrong here: it is evaluated when `portaki-sdk-macros` is built
+/// (SDK workspace version), so every module would inherit e.g. `0.1.0`.
+fn default_crate_version() -> String {
+    std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_crate_version;
+
+    #[test]
+    fn default_crate_version_uses_compiling_crate_env() {
+        let version = default_crate_version();
+        assert!(!version.is_empty());
+        assert_ne!(version, "0.0.0");
+        assert_eq!(version, env!("CARGO_PKG_VERSION"));
+    }
 }
