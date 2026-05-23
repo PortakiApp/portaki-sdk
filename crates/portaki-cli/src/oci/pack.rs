@@ -342,10 +342,8 @@ mod tests {
         let layers = collect_push_layers(root.path(), &artifact).unwrap();
         assert_eq!(layers.len(), 2);
         assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
-        assert!(
-            layers
-                .iter()
-                .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA)
-        );
+        assert!(layers
+            .iter()
+            .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA));
     }
 }
