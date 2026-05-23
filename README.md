@@ -35,7 +35,12 @@ portaki publish --registry rg.fr-par.scw.cloud/portaki-modules
 
 Alternatively, use `docker login rg.fr-par.scw.cloud` — credentials are read from `~/.docker/config.json`.
 
-`portaki publish --dry-run` validates `target/portaki/manifest.json`, wasm, and i18n bundles without pushing.
+`portaki publish --dry-run` validates `target/portaki/publish-manifest.json`, wasm, optional SDK manifest, and i18n bundles without pushing.
+
+When both `portaki.module.json` (host catalog) and SDK emissions exist, publish pushes two manifest layers:
+
+- `application/vnd.portaki.manifest+json` — frozen `publish-manifest.json` (API, install, config schema)
+- `application/vnd.portaki.sdk.manifest+json` — `target/portaki/manifest.json` (surfaces, capabilities, i18n keys)
 
 CI may fall back to `oras push` if `portaki publish` fails; layer media types match the ORAS layout.
 

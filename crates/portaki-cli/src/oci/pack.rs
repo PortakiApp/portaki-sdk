@@ -7,12 +7,15 @@ use anyhow::{Context, Result};
 use oci_distribution::client::ImageLayer;
 use serde::Deserialize;
 
-const MANIFEST_MEDIA: &str = "application/vnd.portaki.manifest+json";
+pub const MANIFEST_MEDIA: &str = "application/vnd.portaki.manifest+json";
+pub const SDK_MANIFEST_MEDIA: &str = "application/vnd.portaki.sdk.manifest+json";
 const WASM_MEDIA: &str = "application/wasm";
 const I18N_MEDIA: &str = "application/vnd.portaki.i18n+json";
 
-/// OCI catalog layer written by `portaki build` — never push repo-root `portaki.module.json` directly.
+/// OCI host-catalog layer (`portaki.module.json` freeze) — consumed by API / install.
 pub const PUBLISH_MANIFEST: &str = "publish-manifest.json";
+/// SDK emissions manifest (`target/portaki/manifest.json`) — wasm surfaces, capabilities, i18n keys.
+pub const SDK_MANIFEST: &str = "manifest.json";
 
 /// One blob to upload with its OCI media type.
 #[derive(Debug, Clone)]
@@ -90,22 +93,30 @@ pub fn image_reference(registry: &str, coords: &ModuleCoordinates) -> Result<Str
     Ok(format!("{}/{}:{}", registry, coords.id, coords.version))
 }
 
-/// Discovers wasm + publish manifest + i18n layers under the module tree.
+/// Discovers wasm + publish manifest + optional SDK manifest + i18n layers.
 pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Vec<PushLayer>> {
     let coords = read_module_coordinates(module_root, artifact_dir)?;
     let mut layers = Vec::new();
 
-    let manifest_layer_path = publish_manifest_path(artifact_dir);
-    if !manifest_layer_path.exists() {
+    let catalog_layer_path = publish_manifest_path(artifact_dir);
+    if !catalog_layer_path.exists() {
         anyhow::bail!(
             "missing {} — run portaki build before publish",
-            manifest_layer_path.display()
+            catalog_layer_path.display()
         );
     }
     layers.push(PushLayer {
-        path: manifest_layer_path,
+        path: catalog_layer_path.clone(),
         media_type: MANIFEST_MEDIA.to_string(),
     });
+
+    let sdk_layer_path = artifact_dir.join(SDK_MANIFEST);
+    if sdk_layer_path.exists() && publish_layer_is_host_catalog_shape(&catalog_layer_path)? {
+        layers.push(PushLayer {
+            path: sdk_layer_path,
+            media_type: SDK_MANIFEST_MEDIA.to_string(),
+        });
+    }
 
     let wasm_path = find_wasm_artifact(module_root, &coords.id)?;
     layers.push(PushLayer {
@@ -130,6 +141,19 @@ pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Ve
     }
 
     Ok(layers)
+}
+
+/// Host catalog is identified by localized `name` map without `manifestVersion`.
+fn publish_layer_is_host_catalog_shape(path: &Path) -> Result<bool> {
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let root: serde_json::Value = serde_json::from_str(&raw).context("parse manifest json")?;
+    if root.get("manifestVersion").is_some() {
+        return Ok(false);
+    }
+    Ok(root
+        .get("name")
+        .and_then(|n| n.as_object())
+        .is_some_and(|m| !m.is_empty()))
 }
 
 /// Converts push layers to `oci-distribution` image layers (reads bytes from disk).
@@ -268,5 +292,60 @@ mod tests {
         assert_eq!(layers.len(), 2);
         assert_eq!(layers[0].path, artifact.join(PUBLISH_MANIFEST));
         assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
+    }
+
+    #[test]
+    fn collect_push_layers_includes_sdk_when_host_catalog_present() {
+        let root = tempdir().unwrap();
+        fs::write(
+            root.path().join("portaki.module.json"),
+            r#"{"id":"weather","version":"1.3.2","name":{"fr":"Météo","en":"Weather"},"description":{"fr":"d","en":"d"}}"#,
+        )
+        .unwrap();
+        let artifact = root.path().join("target/portaki");
+        fs::create_dir_all(&artifact).unwrap();
+        fs::write(
+            artifact.join(PUBLISH_MANIFEST),
+            r#"{"id":"weather","version":"1.3.2","name":{"fr":"Météo","en":"Weather"},"description":{"fr":"d","en":"d"}}"#,
+        )
+        .unwrap();
+        fs::write(
+            artifact.join(SDK_MANIFEST),
+            r#"{"manifestVersion":"1","id":"weather","version":"0.2.1","displayName":"module.name"}"#,
+        )
+        .unwrap();
+        let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+        fs::write(wasm_dir.join("weather.wasm"), b"\0asm").unwrap();
+
+        let layers = collect_push_layers(root.path(), &artifact).unwrap();
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
+        assert_eq!(layers[1].media_type, SDK_MANIFEST_MEDIA);
+        assert_eq!(layers[1].path, artifact.join(SDK_MANIFEST));
+    }
+
+    #[test]
+    fn collect_push_layers_sdk_only_single_manifest_layer() {
+        let root = tempdir().unwrap();
+        let artifact = root.path().join("target/portaki");
+        fs::create_dir_all(&artifact).unwrap();
+        fs::write(
+            artifact.join(PUBLISH_MANIFEST),
+            r#"{"manifestVersion":"1","id":"weather","version":"0.2.1"}"#,
+        )
+        .unwrap();
+        let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+        fs::write(wasm_dir.join("weather.wasm"), b"\0asm").unwrap();
+
+        let layers = collect_push_layers(root.path(), &artifact).unwrap();
+        assert_eq!(layers.len(), 2);
+        assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
+        assert!(
+            layers
+                .iter()
+                .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA)
+        );
     }
 }
