@@ -13,5 +13,6 @@ pub mod notifications;
 pub mod repo;
 pub mod runtime;
 pub mod time;
+pub mod wasm_getrandom;
 
 pub use runtime::{with_host, HostBackend};

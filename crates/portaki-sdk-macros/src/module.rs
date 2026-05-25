@@ -98,7 +98,25 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
         serde_json::to_string(&version).unwrap(),
     );
 
-    write_emission("module", &sanitize_key(&id), &json)
+    let emission = write_emission("module", &sanitize_key(&id), &json);
+
+    quote! {
+        #emission
+        #[cfg(target_arch = "wasm32")]
+        mod __portaki_wasm_getrandom {
+            #[no_mangle]
+            unsafe extern "Rust" fn __getrandom_v03_custom(
+                dest: *mut u8,
+                len: usize,
+            ) -> Result<(), ::portaki_sdk::host::wasm_getrandom::getrandom::Error> {
+                let buf = unsafe {
+                    core::ptr::write_bytes(dest, 0, len);
+                    core::slice::from_raw_parts_mut(dest, len)
+                };
+                ::portaki_sdk::host::wasm_getrandom::fill(buf)
+            }
+        }
+    }
 }
 
 /// Version of the crate being compiled (module), not the proc-macro crate.
