@@ -12,6 +12,11 @@ pub mod host;
 pub mod manifest;
 pub mod sdui;
 
+pub mod wasm;
+
+/// Re-export for `inventory::submit!` in wasm handler registration (macro-generated).
+pub use inventory;
+
 pub use context::{
     Context, DisplayPreferences, GuestContext, GuestIdentity, HostContext, PlanInfo,
     PropertyContext, Quota,

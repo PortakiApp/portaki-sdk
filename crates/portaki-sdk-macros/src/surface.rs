@@ -76,9 +76,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let key = format!("{}_{}", attrs.context, attrs.id);
     let emission = write_emission("surface", &sanitize_key(&key), &json);
+    let wasm_registration = crate::wasm_handler::register_surface(&fn_name, &function_item);
     let output: TokenStream2 = quote! {
         #emission
         #function_item
+        #wasm_registration
     };
 
     output.into()

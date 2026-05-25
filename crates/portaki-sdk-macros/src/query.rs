@@ -38,9 +38,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let emission = write_emission("query", &sanitize_key(&attrs.name), &json);
+    let wasm_registration =
+        crate::wasm_handler::register_query(&attrs.name, &fn_name, &function_item);
     let output: TokenStream2 = quote! {
         #emission
         #function_item
+        #wasm_registration
     };
 
     output.into()

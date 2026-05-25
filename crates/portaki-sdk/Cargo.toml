@@ -16,6 +16,10 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 getrandom = { workspace = true }
 chrono = { workspace = true }
+inventory = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+extism-pdk = "1.4"
 
 [build-dependencies]
 serde = { workspace = true }
