@@ -77,8 +77,8 @@ fn copy_template(source: &PathBuf, dest: &PathBuf, module_name: &str) -> Result<
         }
         let source_path = entry.path();
         let mut target_name = name.to_string();
-        if target_name == "Cargo.toml.template" {
-            target_name = "Cargo.toml".to_string();
+        if target_name.ends_with(".template") {
+            target_name = target_name.trim_end_matches(".template").to_string();
         }
         let target = dest.join(&target_name);
         let text = fs::read_to_string(&source_path)?;
