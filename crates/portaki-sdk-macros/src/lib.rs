@@ -12,6 +12,7 @@ mod event_handler;
 mod module;
 mod query;
 mod surface;
+mod wasm_handler;
 
 use proc_macro::TokenStream;
 

@@ -116,6 +116,21 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
                 ::portaki_sdk::host::wasm_getrandom::fill(buf)
             }
         }
+
+        #[cfg(target_arch = "wasm32")]
+        mod __portaki_wasm_exports {
+            use extism_pdk::{FnResult, plugin_fn};
+
+            #[plugin_fn]
+            pub fn portaki_query(input: String) -> FnResult<String> {
+                Ok(::portaki_sdk::wasm::dispatch::dispatch_query_json(&input)?)
+            }
+
+            #[plugin_fn]
+            pub fn portaki_command(input: String) -> FnResult<String> {
+                Ok(::portaki_sdk::wasm::dispatch::dispatch_command_json(&input)?)
+            }
+        }
     }
 }
 
