@@ -185,7 +185,8 @@ where
     if let Ok(host) = crate::host::runtime::backend() {
         let entity_json = serde_json::to_string(&data)?;
         let response_json = host.repo_create(entity_name, &entity_json)?;
-        return serde_json::from_str(&response_json).map_err(|e| PortakiError::Storage(e.to_string()));
+        return serde_json::from_str(&response_json)
+            .map_err(|e| PortakiError::Storage(e.to_string()));
     }
     let _ = entity_name;
     Err(PortakiError::Storage(
@@ -234,7 +235,8 @@ where
     if let Ok(host) = crate::host::runtime::backend() {
         let query_json = serde_json::to_string(&query)?;
         let response_json = host.repo_find(entity_name, &query_json)?;
-        return serde_json::from_str(&response_json).map_err(|e| PortakiError::Storage(e.to_string()));
+        return serde_json::from_str(&response_json)
+            .map_err(|e| PortakiError::Storage(e.to_string()));
     }
     let _ = entity_name;
     Ok(Page {

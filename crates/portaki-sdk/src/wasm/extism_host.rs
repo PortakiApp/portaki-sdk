@@ -40,10 +40,7 @@ impl HostBackend for ExtismHostBackend {
                 return Ok(true);
             }
         }
-        let result = self.dispatch_value(
-            "capabilities.has",
-            json!({ "id": id }),
-        )?;
+        let result = self.dispatch_value("capabilities.has", json!({ "id": id }))?;
         Ok(result
             .get("granted")
             .and_then(Value::as_bool)
@@ -165,10 +162,7 @@ impl HostBackend for ExtismHostBackend {
     }
 
     fn repo_delete(&self, entity: &str, id: &str) -> Result<bool> {
-        let result = self.dispatch_value(
-            "repo.delete",
-            json!({ "entity": entity, "id": id }),
-        )?;
+        let result = self.dispatch_value("repo.delete", json!({ "entity": entity, "id": id }))?;
         Ok(result
             .get("deleted")
             .and_then(Value::as_bool)
@@ -184,10 +178,7 @@ fn parse_response(response_json: &str) -> Result<Value> {
             .get("error")
             .and_then(Value::as_str)
             .unwrap_or("host_dispatch_error");
-        let message = root
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let message = root.get("message").and_then(Value::as_str).unwrap_or("");
         return Err(PortakiError::Host(format!("{code}: {message}")));
     }
     Ok(root
