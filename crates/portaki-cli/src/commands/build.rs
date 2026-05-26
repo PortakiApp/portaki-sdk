@@ -7,7 +7,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::manifest::{
-    collect_emissions, find_emissions_dir, generate_manifest, write_manifest, write_migration_bundle,
+    collect_emissions, find_emissions_dir, generate_manifest, write_manifest,
+    write_migration_bundle,
 };
 use crate::oci::pack;
 

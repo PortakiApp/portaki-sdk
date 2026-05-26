@@ -79,13 +79,15 @@ mod tests {
         let root = tempdir().unwrap();
         let migrations = root.path().join("db/migrations");
         fs::create_dir_all(&migrations).unwrap();
-        let mut first = fs::File::create(migrations.join("20260526100000_v1_baseline.sql")).unwrap();
+        let mut first =
+            fs::File::create(migrations.join("20260526100000_v1_baseline.sql")).unwrap();
         writeln!(first, "CREATE TABLE foo (id INT);").unwrap();
         let out = root.path().join("out");
         fs::create_dir_all(&out).unwrap();
 
-        let path =
-            write_migration_bundle(root.path(), &out, "weather", 1).unwrap().expect("bundle path");
+        let path = write_migration_bundle(root.path(), &out, "weather", 1)
+            .unwrap()
+            .expect("bundle path");
         assert!(path.ends_with("migrations.bundle.json"));
         let raw = fs::read_to_string(path).unwrap();
         assert!(raw.contains("\"module_id\": \"weather\""));
