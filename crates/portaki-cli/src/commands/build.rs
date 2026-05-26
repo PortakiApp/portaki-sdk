@@ -6,7 +6,9 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use clap::Parser;
 
-use crate::manifest::{collect_emissions, find_emissions_dir, generate_manifest, write_manifest};
+use crate::manifest::{
+    collect_emissions, find_emissions_dir, generate_manifest, write_manifest, write_migration_bundle,
+};
 use crate::oci::pack;
 
 #[derive(Debug, Parser)]
@@ -54,6 +56,22 @@ pub async fn run(args: BuildArgs) -> Result<()> {
 
         let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
         write_manifest(&manifest, &out_dir.join("manifest.json"))?;
+
+        let schema_version = manifest
+            .entities
+            .iter()
+            .map(|entity| entity.schema_version)
+            .max()
+            .unwrap_or(1);
+        if let Some(bundle_path) =
+            write_migration_bundle(&module_root, &out_dir, &manifest.id, schema_version)?
+        {
+            println!(
+                "Wrote migrations bundle at {} (applied on module install to schema module_{})",
+                bundle_path.display(),
+                manifest.id.replace('-', "_")
+            );
+        }
 
         bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
     } else if !catalog_path.exists() {
