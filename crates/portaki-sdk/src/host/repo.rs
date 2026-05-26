@@ -2,13 +2,13 @@
 
 #![allow(dead_code)]
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::{PortakiError, Result};
 
 /// Sort direction for queries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Direction {
     /// Ascending.
     Asc,
@@ -17,7 +17,7 @@ pub enum Direction {
 }
 
 /// Paginated query results.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Page<T> {
     /// Result items.
     pub items: Vec<T>,
@@ -26,7 +26,7 @@ pub struct Page<T> {
 }
 
 /// Fluent query builder (translated to SQL by the gateway).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Query<E> {
     filters: Vec<Filter>,
     order: Option<(String, Direction)>,
@@ -34,7 +34,7 @@ pub struct Query<E> {
     _entity: std::marker::PhantomData<E>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 enum Filter {
     Eq(String, serde_json::Value),
     Gte(String, serde_json::Value),
@@ -176,11 +176,19 @@ impl<E> Default for Repo<E> {
 }
 
 /// Creates a row (gateway persists in the module schema).
-pub fn create<E, Create, Entity>(_data: Create) -> Result<Entity>
+pub fn create<E, Create, Entity>(data: Create) -> Result<Entity>
 where
     Entity: DeserializeOwned,
+    Create: Serialize,
 {
-    let _ = std::any::type_name::<E>();
+    let entity_name = entity_type_name::<E>();
+    if let Ok(host) = crate::host::runtime::backend() {
+        let entity_json = serde_json::to_string(&data)?;
+        let response_json = host.repo_create(entity_name, &entity_json)?;
+        return serde_json::from_str(&response_json)
+            .map_err(|e| PortakiError::Storage(e.to_string()));
+    }
+    let _ = entity_name;
     Err(PortakiError::Storage(
         "repository create requires gateway — use MockHostFunctions in tests".into(),
     ))
@@ -198,8 +206,12 @@ where
 }
 
 /// Deletes a row by id.
-pub fn delete<E>(_id: Uuid) -> Result<bool> {
-    let _ = std::any::type_name::<E>();
+pub fn delete<E>(id: Uuid) -> Result<bool> {
+    let entity_name = entity_type_name::<E>();
+    if let Ok(host) = crate::host::runtime::backend() {
+        return host.repo_delete(entity_name, &id.to_string());
+    }
+    let _ = entity_name;
     Err(PortakiError::Storage(
         "repository delete requires gateway — use MockHostFunctions in tests".into(),
     ))
@@ -215,15 +227,27 @@ where
 }
 
 /// Runs a typed query.
-pub fn find<E, Entity>(_query: Query<E>) -> Result<Page<Entity>>
+pub fn find<E, Entity>(query: Query<E>) -> Result<Page<Entity>>
 where
     Entity: DeserializeOwned,
 {
-    let _ = std::any::type_name::<E>();
+    let entity_name = entity_type_name::<E>();
+    if let Ok(host) = crate::host::runtime::backend() {
+        let query_json = serde_json::to_string(&query)?;
+        let response_json = host.repo_find(entity_name, &query_json)?;
+        return serde_json::from_str(&response_json)
+            .map_err(|e| PortakiError::Storage(e.to_string()));
+    }
+    let _ = entity_name;
     Ok(Page {
         items: Vec::new(),
         total: Some(0),
     })
+}
+
+fn entity_type_name<E>() -> &'static str {
+    let full = std::any::type_name::<E>();
+    full.rsplit("::").next().unwrap_or(full)
 }
 
 /// Counts rows matching a query.

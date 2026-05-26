@@ -7,9 +7,14 @@ use crate::host::runtime::{with_host, HostBackend};
 use crate::wasm::envelope::WasmRequestEnvelope;
 use crate::wasm::registry;
 
-/// In-wasm host backend placeholder until Java Extism imports implement `host::*`.
+#[cfg(target_arch = "wasm32")]
+use crate::wasm::extism_host::ExtismHostBackend;
+
+/// In-wasm host backend placeholder for non-Extism test builds.
+#[cfg(not(target_arch = "wasm32"))]
 struct WasmHostBackend;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HostBackend for WasmHostBackend {
     fn context(&self) -> Result<crate::context::Context> {
         Err(PortakiError::HostNotConfigured)
@@ -57,6 +62,17 @@ impl HostBackend for WasmHostBackend {
     }
 }
 
+fn wasm_host_backend() -> Arc<dyn HostBackend> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        return Arc::new(ExtismHostBackend);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Arc::new(WasmHostBackend)
+    }
+}
+
 fn dispatch_envelope(input: &str) -> Result<String> {
     let envelope: WasmRequestEnvelope = serde_json::from_str(input)
         .map_err(|e| PortakiError::Host(format!("wasm_envelope_parse_failed: {e}")))?;
@@ -65,7 +81,7 @@ fn dispatch_envelope(input: &str) -> Result<String> {
         .ok_or_else(|| PortakiError::Host(format!("wasm_handler_not_found: {operation}")))?;
     let ctx = envelope.to_context(&operation)?;
     let params = envelope.params;
-    let backend = Arc::new(WasmHostBackend);
+    let backend = wasm_host_backend();
     let result = with_host(backend, ctx.clone(), || {
         (registration.dispatch)(ctx, params)
     })?;

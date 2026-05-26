@@ -47,6 +47,26 @@ pub trait HostBackend: Send + Sync {
 
     /// Emit a domain event.
     fn emit_event(&self, event_type: &str, payload_json: &str) -> Result<()>;
+
+    /// Current UTC time as ISO-8601 (Wasm host dispatch).
+    fn time_now_iso(&self) -> Result<String> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// Typed repository find (JSON page payload).
+    fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// Typed repository create (JSON entity payload).
+    fn repo_create(&self, _entity: &str, _entity_json: &str) -> Result<String> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// Typed repository delete by id.
+    fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
+        Err(PortakiError::HostNotConfigured)
+    }
 }
 
 /// Installs a host backend for the current thread (used by tests and `portaki dev`).

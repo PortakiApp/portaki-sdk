@@ -175,6 +175,22 @@ impl HostBackend for MockHostFunctions {
     fn emit_event(&self, _event_type: &str, _payload_json: &str) -> Result<()> {
         Ok(())
     }
+
+    fn time_now_iso(&self) -> Result<String> {
+        Ok(chrono::Utc::now().to_rfc3339())
+    }
+
+    fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
+        Ok(r#"{"items":[],"total":0}"#.to_string())
+    }
+
+    fn repo_create(&self, _entity: &str, entity_json: &str) -> Result<String> {
+        Ok(entity_json.to_string())
+    }
+
+    fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 #[cfg(test)]

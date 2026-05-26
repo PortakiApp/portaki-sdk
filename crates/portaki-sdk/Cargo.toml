@@ -19,6 +19,7 @@ chrono = { workspace = true }
 inventory = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+base64 = "0.22"
 extism-pdk = "1.4"
 
 [build-dependencies]
