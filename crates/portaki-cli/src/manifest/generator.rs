@@ -129,7 +129,10 @@ pub fn generate_manifest(
             "path": emission.data["path"],
         });
         if let Some(connector) = custom_connectors.last_mut() {
-            if let Some(ops) = connector.get_mut("operations").and_then(Value::as_array_mut) {
+            if let Some(ops) = connector
+                .get_mut("operations")
+                .and_then(Value::as_array_mut)
+            {
                 ops.push(operation);
             }
         }

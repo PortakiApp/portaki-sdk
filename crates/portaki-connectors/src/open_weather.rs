@@ -96,7 +96,10 @@ fn parse_current(raw: &serde_json::Value) -> SdkResult<CurrentWeather> {
         .unwrap_or("unknown")
         .to_ascii_lowercase();
     Ok(CurrentWeather {
-        temp_c: raw.pointer("/main/temp").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        temp_c: raw
+            .pointer("/main/temp")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0),
         humidity: raw
             .pointer("/main/humidity")
             .and_then(|v| v.as_u64())
