@@ -79,6 +79,7 @@ pub fn generate_manifest(
     let mut required_caps = Vec::new();
     let mut optional_caps = Vec::new();
     let mut builtin_connectors = Vec::new();
+    let mut custom_connectors: Vec<Value> = Vec::new();
 
     for emission in emissions {
         match emission.kind.as_str() {
@@ -105,7 +106,32 @@ pub fn generate_manifest(
                     builtin_connectors.push(id.to_string());
                 }
             }
+            "connector_custom" => {
+                custom_connectors.push(serde_json::json!({
+                    "id": emission.data["id"],
+                    "displayNameKey": emission.data["displayNameKey"],
+                    "baseUrl": emission.data["baseUrl"],
+                    "credentialProviderId": emission.data["credentialProviderId"],
+                    "operations": []
+                }));
+            }
             _ => {}
+        }
+    }
+
+    for emission in emissions {
+        if emission.kind != "connector_op" {
+            continue;
+        }
+        let operation = serde_json::json!({
+            "id": emission.data["fn"],
+            "method": emission.data["method"],
+            "path": emission.data["path"],
+        });
+        if let Some(connector) = custom_connectors.last_mut() {
+            if let Some(ops) = connector.get_mut("operations").and_then(Value::as_array_mut) {
+                ops.push(operation);
+            }
         }
     }
 
@@ -196,7 +222,7 @@ pub fn generate_manifest(
         },
         connectors: ManifestConnectors {
             builtin: builtin_connectors,
-            custom: Vec::new(),
+            custom: custom_connectors,
         },
         entities,
         surfaces: ManifestSurfaces {
