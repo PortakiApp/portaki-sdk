@@ -1,0 +1,86 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "group:recommended",
+    "group:rustMonorepo"
+  ],
+  "labels": ["dependencies"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 10am on monday"],
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+  "rangeStrategy": "bump",
+  "rebaseWhen": "behind-base-branch",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on sunday"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "GitHub Actions — groupe hebdo",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "schedule": ["before 10am on monday"]
+    },
+    {
+      "groupName": "Tokio",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["tokio"]
+    },
+    {
+      "groupName": "Serde",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["serde", "serde_json"]
+    },
+    {
+      "groupName": "Tracing",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["tracing", "tracing-subscriber"]
+    },
+    {
+      "groupName": "Clap",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["clap"]
+    },
+    {
+      "groupName": "Reqwest",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["reqwest"]
+    },
+    {
+      "groupName": "OCI distribution",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["oci-distribution"]
+    },
+    {
+      "groupName": "Extism PDK",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["extism-pdk"]
+    },
+    {
+      "groupName": "Portaki workspace crates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": [
+        "portaki-sdk",
+        "portaki-sdk-macros",
+        "portaki-connectors",
+        "portaki-test-utils"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Majors Rust — review manuelle",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "breaking"]
+    }
+  ]
+}
