@@ -1,4 +1,4 @@
-//! Registry authentication for OCI push (Scaleway + Docker config).
+//! Registry authentication for OCI push (GHCR + Docker config).
 
 use std::path::PathBuf;
 
@@ -17,20 +17,27 @@ pub fn resolve_registry_auth(registry: &str) -> Result<RegistryAuth> {
     }
 
     anyhow::bail!(
-        "no registry credentials: set SCW_SECRET_KEY (Scaleway secret key, username nologin) \
-         or log in with docker login to the registry"
+        "no registry credentials: set GITHUB_TOKEN / GHCR_TOKEN or log in with docker login ghcr.io"
     );
 }
 
 fn auth_from_env() -> Result<Option<RegistryAuth>> {
-    for key in [
-        "SCW_SECRET_KEY",
-        "SCALEWAY_API_KEY",
-        "SCALEWAY_REGISTRY_TOKEN",
-    ] {
-        if let Ok(password) = std::env::var(key) {
-            if !password.is_empty() {
-                return Ok(Some(RegistryAuth::Basic("nologin".to_string(), password)));
+    if let Ok(username) = std::env::var("PORTAKI_OCI_USERNAME") {
+        if !username.is_empty() {
+            if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GHCR_TOKEN")) {
+                if !token.is_empty() {
+                    return Ok(Some(RegistryAuth::Basic(username, token)));
+                }
+            }
+        }
+    }
+    for key in ["GITHUB_TOKEN", "GHCR_TOKEN"] {
+        if let Ok(token) = std::env::var(key) {
+            if !token.is_empty() {
+                let username = std::env::var("GITHUB_ACTOR")
+                    .or_else(|_| std::env::var("PORTAKI_OCI_USERNAME"))
+                    .unwrap_or_else(|_| "github".to_string());
+                return Ok(Some(RegistryAuth::Basic(username, token)));
             }
         }
     }
@@ -132,8 +139,8 @@ mod tests {
     #[test]
     fn registry_host_strips_path() {
         assert_eq!(
-            registry_host("rg.fr-par.scw.cloud/portaki-modules"),
-            "rg.fr-par.scw.cloud"
+            registry_host("ghcr.io/portakiapp/portaki-modules"),
+            "ghcr.io"
         );
     }
 

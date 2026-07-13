@@ -25,7 +25,7 @@ pub fn package_artifact_with_root(_module_root: &Path, artifact_dir: &Path) -> R
 /// - `module_root/target/wasm32-unknown-unknown/release/*.wasm`
 /// - `module_root/i18n/*.json` (optional)
 ///
-/// Authentication: `SCW_SECRET_KEY` (username `nologin`) or Docker `config.json` for the registry host.
+/// Authentication: `GITHUB_TOKEN` / `GHCR_TOKEN` or Docker `config.json` for the registry host.
 pub async fn push_artifact(
     module_root: &Path,
     artifact_dir: &Path,

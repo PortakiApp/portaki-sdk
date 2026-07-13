@@ -25,15 +25,15 @@ portaki lint
 
 ## Publish (OCI)
 
-After `portaki build --release`, push to Scaleway Container Registry:
+After `portaki build --release`, push to GitHub Container Registry:
 
 ```bash
-export SCW_SECRET_KEY="<scaleway-secret-key>"   # username is always nologin
+export GITHUB_TOKEN="<github-pat-with-write:packages>"
 export PORTAKI_PUBLISH_VERSION="0.2.1"          # optional: fail if manifest version mismatches (CI sets from git tag)
-portaki publish --registry rg.fr-par.scw.cloud/portaki-modules
+portaki publish --registry ghcr.io/portakiapp/portaki-modules
 ```
 
-Alternatively, use `docker login rg.fr-par.scw.cloud` — credentials are read from `~/.docker/config.json`.
+Alternatively, use `docker login ghcr.io` — credentials are read from `~/.docker/config.json`.
 
 `portaki publish --dry-run` validates `target/portaki/publish-manifest.json`, wasm, optional SDK manifest, and i18n bundles without pushing.
 

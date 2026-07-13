@@ -3,7 +3,7 @@
 //! Always runs `portaki build --release` first (unless `--skip-build`) so the OCI catalog layer
 //! comes from `target/portaki/publish-manifest.json`, not a hand-edited repo file at publish time.
 //!
-//! Authenticates with `SCW_SECRET_KEY` (Scaleway, username `nologin`) or Docker `~/.docker/config.json`.
+//! Authenticates with `GITHUB_TOKEN` / `GHCR_TOKEN` or Docker `~/.docker/config.json`.
 //!
 //! Set `PORTAKI_PUBLISH_VERSION` (e.g. from CI git tag `*-vX.Y.Z`) to fail fast if `publish-manifest.json`
 //! version does not match.
@@ -19,8 +19,8 @@ use crate::oci;
 #[derive(Debug, Parser)]
 /// Arguments for `portaki publish`.
 pub struct PublishArgs {
-    /// OCI registry (Scaleway Container Registry).
-    #[arg(long, default_value = "rg.fr-par.scw.cloud/portaki-modules")]
+    /// OCI registry prefix (GitHub Container Registry).
+    #[arg(long, default_value = "ghcr.io/portakiapp/portaki-modules")]
     pub registry: String,
     /// Validate packaging without pushing.
     #[arg(long)]
@@ -64,7 +64,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
 
     let manifest_url = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
         .await
-        .context("push OCI artifact — set SCW_SECRET_KEY or docker login")?;
+        .context("push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io")?;
     println!("Published to {} ({})", args.registry, manifest_url);
     Ok(())
 }

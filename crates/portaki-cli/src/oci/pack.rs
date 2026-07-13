@@ -271,10 +271,10 @@ mod tests {
             id: "weather".into(),
             version: "0.2.0".into(),
         };
-        let reference = image_reference("rg.fr-par.scw.cloud/portaki-modules", &coords).unwrap();
+        let reference = image_reference("ghcr.io/portakiapp/portaki-modules", &coords).unwrap();
         assert_eq!(
             reference,
-            "rg.fr-par.scw.cloud/portaki-modules/weather:0.2.0"
+            "ghcr.io/portakiapp/portaki-modules/weather:0.2.0"
         );
     }
 
