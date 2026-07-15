@@ -12,6 +12,8 @@ on:
   push:
     tags:
       - "v*"
+  # Resume a partial publish (e.g. after a mid-workspace failure) without retagging.
+  workflow_dispatch:
 
 concurrency:
   group: publish-crates.io

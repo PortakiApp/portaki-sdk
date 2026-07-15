@@ -51,6 +51,19 @@ cargo publish -p portaki-test-utils
 cargo publish -p portaki-cli
 ```
 
+Order matters: `portaki-test-utils` depends on `portaki-sdk`, so the SDK must
+publish first. Do **not** add `portaki-test-utils` as a `[dev-dependency]` of
+`portaki-sdk` — that creates a publish-time cycle (`cargo publish` resolves
+dev-deps from crates.io).
+
+### Resume a partial publish
+
+If a tag run published some crates then failed (e.g. cycle / index lag):
+
+1. Land the fix on `main` (versions stay at the release you’re finishing).
+2. Actions → **Publish crates.io** → **Run workflow** (`workflow_dispatch`).
+3. Already-published crate versions are skipped by `katyo/publish-crates`.
+
 4. For **each** crate → Settings → Trusted Publishing → Add:
    - Repository owner: `PortakiApp`
    - Repository name: `portaki-sdk`
