@@ -56,16 +56,28 @@ const CI_APP_ID_EFFECTIVE = Number.isFinite(CI_APP_ID) ? CI_APP_ID : 0;
 
 const MAIN_INTEGRATION_CHECKS = [{ context: CI_QUALITY_CHECK, integration_id: GITHUB_ACTIONS_APP_ID }];
 
-/** @param {'always' | 'pull_request'} [mode] */
-function ciAppBypass(mode = 'always') {
-  if (WITHOUT_CI_BYPASS || CI_APP_ID_EFFECTIVE <= 0) return [];
-  return [
+/**
+ * Org admins can always push/merge to main (solo / emergency).
+ * CI App bypasses for release-please tags + automated commits.
+ * @param {'always' | 'pull_request'} [mode]
+ */
+function bypassActors(mode = 'always') {
+  /** @type {{ actor_id: number | null, actor_type: string, bypass_mode: string }[]} */
+  const actors = [
     {
-      actor_id: CI_APP_ID_EFFECTIVE,
-      actor_type: 'Integration',
+      actor_id: null,
+      actor_type: 'OrganizationAdmin',
       bypass_mode: mode,
     },
   ];
+  if (!WITHOUT_CI_BYPASS && CI_APP_ID_EFFECTIVE > 0) {
+    actors.push({
+      actor_id: CI_APP_ID_EFFECTIVE,
+      actor_type: 'Integration',
+      bypass_mode: mode,
+    });
+  }
+  return actors;
 }
 
 function pullRequestRule() {
@@ -105,7 +117,7 @@ function buildRulesetDefinitions() {
     {
       name: RULESET_NAMES.integrity,
       target: 'branch',
-      bypass_actors: ciAppBypass(),
+      bypass_actors: bypassActors(),
       conditions: {
         ref_name: {
           include: branchRefs,
@@ -117,7 +129,7 @@ function buildRulesetDefinitions() {
     {
       name: RULESET_NAMES.main,
       target: 'branch',
-      bypass_actors: ciAppBypass('always'),
+      bypass_actors: bypassActors('always'),
       conditions: {
         ref_name: {
           include: ['refs/heads/main'],
@@ -133,7 +145,7 @@ function buildRulesetDefinitions() {
     {
       name: RULESET_NAMES.tags,
       target: 'tag',
-      bypass_actors: ciAppBypass(),
+      bypass_actors: bypassActors(),
       conditions: {
         ref_name: {
           include: ['refs/tags/v*'],
@@ -193,7 +205,13 @@ async function upsertRuleset(definition) {
   console.log(`→ Ruleset ${definition.name}`);
   console.log(`   target: ${definition.target}`);
   console.log(
-    `   bypass: ${definition.bypass_actors.length ? `Integration app ${CI_APP_ID_EFFECTIVE} (${definition.bypass_actors[0]?.bypass_mode ?? 'always'})` : 'none'}`,
+    `   bypass: ${
+      definition.bypass_actors.length
+        ? definition.bypass_actors
+            .map((a) => `${a.actor_type}${a.actor_id != null ? `:${a.actor_id}` : ''}(${a.bypass_mode})`)
+            .join(', ')
+        : 'none'
+    }`,
   );
   console.log(`   rules: ${definition.rules.map((rule) => rule.type).join(', ')}`);
 

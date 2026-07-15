@@ -43,7 +43,9 @@ Three active rulesets (`configure-repo-rulesets.mjs`):
 | `portaki-sdk: main integration` | `main` | PR + `quality` (strict) |
 | `portaki-sdk: release tags` | `refs/tags/v*` | creation reserved to CI bypass |
 
-**Bypass**: org CI GitHub App — tags `v*` (release-please).
+**Bypass**:
+- **OrganizationAdmin** — direct push / merge on `main` (emergency / solo)
+- **CI GitHub App** — tags `v*` + release-please commits
 
 > **Why not `GITHUB_TOKEN`?** Events from `GITHUB_TOKEN` do not trigger other workflows. release-please uses the **CI App** token so tag + GitHub Release can fan out.
 
