@@ -20,7 +20,7 @@ use crate::oci;
 /// Arguments for `portaki publish`.
 pub struct PublishArgs {
     /// OCI registry prefix (GitHub Container Registry).
-    #[arg(long, default_value = "ghcr.io/portakiapp/portaki-modules")]
+    #[arg(long, default_value = "ghcr.io/portakiapp")]
     pub registry: String,
     /// Validate packaging without pushing.
     #[arg(long)]
