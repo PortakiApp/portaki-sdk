@@ -106,7 +106,6 @@ When both `portaki.module.json` and SDK emissions exist, publish pushes two laye
 | Repository | Role |
 |------------|------|
 | [portaki-modules](https://github.com/PortakiApp/portaki-modules) | Official Wasm modules monorepo |
-| [portaki-platform](https://github.com/PortakiApp/portaki-platform) | Orchestrator + module runtime |
 | [portaki.app](https://portaki.app) | Product site |
 
 ## Contributing

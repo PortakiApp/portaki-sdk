@@ -9,7 +9,7 @@ use crate::context::{
 };
 use crate::error::{PortakiError, Result};
 
-/// Host → module request body (matches `WasmInvocationPayload` in portaki-module-runtime).
+/// Host → module request body (matches the Portaki Wasm invocation payload on the host).
 #[derive(Debug, Deserialize)]
 pub struct WasmRequestEnvelope {
     /// Query or surface handler name.

@@ -1,6 +1,6 @@
 //! OpenWeather built-in connector (`open-weather`).
 //!
-//! Typed client used by modules. Parses raw API JSON returned by module-runtime generic egress.
+//! Typed client used by modules. Parses raw OpenWeather JSON returned by host egress.
 
 use portaki_sdk::host::connectors;
 use portaki_sdk::Result as SdkResult;
