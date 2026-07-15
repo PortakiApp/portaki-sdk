@@ -21,7 +21,12 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/PortakiApp/portaki-sdk"
+homepage = "https://portaki.app"
+documentation = "https://github.com/PortakiApp/portaki-sdk#readme"
+readme = "README.md"
 authors = ["Syntax Labs <support@syntax-labs.fr>"]
+categories = ["wasm", "development-tools", "command-line-utilities"]
+keywords = ["portaki", "wasm", "extism", "oci", "module"]
 rust-version = "1.75"
 
 [workspace.dependencies]
