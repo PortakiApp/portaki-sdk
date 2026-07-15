@@ -33,7 +33,7 @@
 //! 3. Return [`Surface`] trees from render functions; call `host::*` for storage,
 //!    connectors, and logging.
 //! 4. Gate premium behaviour with `ctx.has_capability(...)` or
-//!   [`mod@capability`] constants.
+//!    [`mod@capability`] constants.
 //!
 //! ## Wasm target
 //!
