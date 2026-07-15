@@ -1,0 +1,41 @@
+name: Publish crates.io
+
+# Runs after release-please creates tag vX.Y.Z (push tag).
+# Auth: Trusted Publishing OIDC — rust-lang/crates-io-auth-action.
+# Workspace order: katyo/publish-crates (macros → sdk → … → cli).
+#
+# Bootstrap (once per crate, before OIDC works):
+#   1. Publish manually with a crates.io API token (see docs/RELEASE.md)
+#   2. crates.io → Settings → Trusted Publishing → Add GitHub
+#      owner: PortakiApp, repo: portaki-sdk, workflow: publish-crates.yml
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: publish-crates.io
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - uses: katyo/publish-crates@v2
+        with:
+          registry-token: ${{ steps.auth.outputs.token }}
+          # crates.io indexes slowly between interdependent workspace crates
+          publish-delay: 15000
