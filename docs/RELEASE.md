@@ -5,7 +5,7 @@
 1. Land Conventional Commits on `main` via rebase PR (`feat:`, `fix:`, …).
 2. **Release please** opens / updates a draft PR `chore: release X.Y.Z` with `CHANGELOG.md` + Cargo workspace version bumps.
 3. Review, merge (rebase) → git tag `vX.Y.Z` + GitHub Release.
-4. Tag push runs **Publish crates.io** → `cargo publish` for the workspace (OIDC).
+4. Tag push runs **Publish crates.io** → `cargo ws publish` for the workspace (OIDC).
 5. Downstream modules can depend on crates.io versions, or keep `git` + `branch` / `tag` until they switch.
 
 ## Version source of truth
@@ -31,7 +31,7 @@ Published crates (same semver):
 | `portaki-cli` | Binary `portaki` (`cargo install portaki-cli`) |
 
 Workflow: [`.github/workflows/publish-crates.yml`](../.github/workflows/publish-crates.yml)  
-Actions: `rust-lang/crates-io-auth-action` + `katyo/publish-crates`.
+Tools: `rust-lang/crates-io-auth-action` + [`cargo-workspaces`](https://github.com/pksunkara/cargo-workspaces) (`cargo ws publish`).
 
 ### First publish (bootstrap)
 
@@ -56,19 +56,19 @@ publish first. Do **not** add `portaki-test-utils` as a `[dev-dependency]` of
 `portaki-sdk` — that creates a publish-time cycle (`cargo publish` resolves
 dev-deps from crates.io).
 
+4. For **each** crate → Settings → Trusted Publishing → Add:
+   - Repository owner: `PortakiApp`
+   - Repository name: `portaki-sdk`
+   - Workflow filename: `publish-crates.yml`
+5. Later tags: OIDC only — no long-lived token in GitHub secrets.
+
 ### Resume a partial publish
 
 If a tag run published some crates then failed (e.g. cycle / index lag):
 
 1. Land the fix on `main` (versions stay at the release you’re finishing).
 2. Actions → **Publish crates.io** → **Run workflow** (`workflow_dispatch`).
-3. Already-published crate versions are skipped by `katyo/publish-crates`.
-
-4. For **each** crate → Settings → Trusted Publishing → Add:
-   - Repository owner: `PortakiApp`
-   - Repository name: `portaki-sdk`
-   - Workflow filename: `publish-crates.yml`
-5. Later tags: OIDC only — no long-lived token in GitHub secrets.
+3. Already-published crate versions are skipped by `cargo ws publish`.
 
 ## Secrets (GitHub)
 
