@@ -1,84 +1,168 @@
-//! OpenWeather built-in connector (`open-weather`).
+//! OpenWeather connector (`connector_id = "open-weather"`).
 //!
-//! Typed client used by modules. Parses raw OpenWeather JSON returned by host egress.
+//! Wraps [`portaki_sdk::host::connectors::call`] for the built-in OpenWeather
+//! integration. Raw provider JSON from host egress is normalized into
+//! [`CurrentWeather`] and [`ForecastResponse`]; [`OpenWeather::historical`]
+//! returns unparsed JSON.
+//!
+//! # Capabilities
+//!
+//! Requires one of:
+//!
+//! - `external.open-weather.pool` — platform-managed API key
+//! - `external.open-weather.byok` — property-supplied API key
+//!
+//! # Example
+//!
+//! ```no_run
+//! use portaki_connectors::open_weather::{CurrentArgs, ForecastArgs, OpenWeather};
+//!
+//! let current = OpenWeather::current(&CurrentArgs {
+//!     lat: 43.5513,
+//!     lng: 7.0128,
+//! })?;
+//!
+//! let forecast = OpenWeather::forecast(&ForecastArgs {
+//!     lat: 43.5513,
+//!     lng: 7.0128,
+//!     days: 5,
+//! })?;
+//! # Ok::<(), portaki_sdk::PortakiError>(())
+//! ```
+//!
+//! # Test stubbing
+//!
+//! Register canned JSON on a `portaki_test_utils::MockContext` (see that crate's docs):
+//!
+//! ```ignore
+//! use portaki_test_utils::MockContext;
+//!
+//! MockContext::guest()
+//!     .with_connector_response(
+//!         "open-weather",
+//!         "current",
+//!         r#"{"main":{"temp":21.5,"humidity":55},"weather":[{"main":"Clear"}]}"#,
+//!     )
+//!     .run(|_ctx| {
+//!         // OpenWeather::current(...) reads the stub above.
+//!     });
+//! ```
 
 use portaki_sdk::host::connectors;
 use portaki_sdk::Result as SdkResult;
 use serde::{Deserialize, Serialize};
 
-/// OpenWeather connector namespace.
+/// Namespace for OpenWeather host connector operations.
+///
+/// Zero-sized type; all methods are static. Thread-safe because each call
+/// delegates to the thread-local host backend installed by
+/// [`portaki_sdk::host::with_host`].
 pub struct OpenWeather;
 
-/// Current weather request.
+/// Arguments for [`OpenWeather::current`].
+///
+/// Coordinates use WGS-84 decimal degrees, matching OpenWeather `lat`/`lon`
+/// query parameters assembled by the gateway.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurrentArgs {
-    /// Latitude.
+    /// Latitude in decimal degrees (`-90.0` … `90.0`).
     pub lat: f64,
-    /// Longitude.
+    /// Longitude in decimal degrees (`-180.0` … `180.0`).
     pub lng: f64,
 }
 
-/// Forecast request.
+/// Arguments for [`OpenWeather::forecast`] and [`OpenWeather::historical`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastArgs {
-    /// Latitude.
+    /// Latitude in decimal degrees.
     pub lat: f64,
-    /// Longitude.
+    /// Longitude in decimal degrees.
     pub lng: f64,
-    /// Number of days (max 16 depending on plan).
+    /// Requested number of daily rows.
+    ///
+    /// Parsed forecast caps aggregation at 5 days regardless of plan; the host
+    /// may return up to 16 depending on subscription.
     pub days: u8,
 }
 
-/// Current weather snapshot.
+/// Normalized current-conditions snapshot.
+///
+/// Produced by [`OpenWeather::current`] from `/data/2.5/weather` JSON.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurrentWeather {
-    /// Temperature in Celsius.
+    /// Air temperature in degrees Celsius (`main.temp`).
     pub temp_c: f64,
-    /// Weather condition code.
+    /// Lowercased `weather[0].main` label (e.g. `"clear"`, `"clouds"`).
+    ///
+    /// Defaults to `"unknown"` when the field is absent.
     pub condition: String,
-    /// Humidity percent.
+    /// Relative humidity percent (`main.humidity`, `0`–`100`).
     pub humidity: u8,
 }
 
-/// Daily forecast row.
+/// Single aggregated forecast day.
+///
+/// Built by rolling up 3-hour `/data/2.5/forecast` list items that share the
+/// same calendar date (`dt_txt` prefix `YYYY-MM-DD`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastDay {
-    /// ISO date (`YYYY-MM-DD`).
+    /// Calendar date in `YYYY-MM-DD` form (UTC date extracted from `dt_txt`).
     pub date: String,
-    /// Min temperature Celsius.
+    /// Minimum `main.temp_min` across slots for this date.
     pub min_c: f64,
-    /// Max temperature Celsius.
+    /// Maximum `main.temp_max` across slots for this date.
     pub max_c: f64,
-    /// Condition id/summary.
+    /// Lowercased `weather[0].main` from the last slot processed for the date.
     pub condition: String,
 }
 
-/// Forecast response.
+/// Multi-day forecast bundle returned by [`OpenWeather::forecast`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastResponse {
-    /// Daily rows.
+    /// Daily rows, length ≤ `min(requested days, 5)` after local aggregation.
     pub days: Vec<ForecastDay>,
 }
 
 impl OpenWeather {
-    /// Current weather for coordinates.
+    /// Fetches current weather for `args` via `connectors::call("open-weather", "current", ...)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`portaki_sdk::PortakiError`] when the host backend is missing,
+    /// egress fails, or the response JSON cannot be parsed.
     pub fn current(args: &CurrentArgs) -> SdkResult<CurrentWeather> {
         let raw: serde_json::Value = connectors::call("open-weather", "current", args)?;
         parse_current(&raw)
     }
 
-    /// Multi-day forecast.
+    /// Fetches a multi-day forecast via `connectors::call("open-weather", "forecast", ...)`.
+    ///
+    /// Aggregates the provider list payload into at most five [`ForecastDay`] rows.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::current`].
     pub fn forecast(args: &ForecastArgs) -> SdkResult<ForecastResponse> {
         let raw: serde_json::Value = connectors::call("open-weather", "forecast", args)?;
         parse_forecast(&raw, args.days)
     }
 
-    /// Historical archive (simplified).
+    /// Fetches historical archive data as raw JSON.
+    ///
+    /// No response normalization — callers own schema mapping. Dispatches
+    /// `connectors::call("open-weather", "historical", args)`.
     pub fn historical(args: &ForecastArgs) -> SdkResult<serde_json::Value> {
         connectors::call("open-weather", "historical", args)
     }
 
-    /// Validates API key (stub).
+    /// Validates a BYOK API key before persistence (local stub).
+    ///
+    /// Accepts any non-empty trimmed string. Does not call OpenWeather.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`super::ConnectorError::InvalidCredentials`] when `api_key` is
+    /// empty or whitespace-only.
     pub fn validate_credentials(api_key: &str) -> super::Result<()> {
         if api_key.trim().is_empty() {
             return Err(super::ConnectorError::InvalidCredentials(

@@ -1,5 +1,8 @@
+//! `command` expansion — mutating gateway operations (same shape as `query`).
+
 use proc_macro::TokenStream;
 
+/// Expands `#[command(name = "…")]` on a handler function.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as syn::ItemFn);
     let attrs = syn::parse_macro_input!(attr as command_attrs::NamedOpAttrs);

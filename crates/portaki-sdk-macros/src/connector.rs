@@ -1,3 +1,9 @@
+//! Connector macros — built-in catalog references, custom HTTP connectors, and operations.
+//!
+//! [`expand_builtin`] (`connector`), [`expand_custom`] (`custom_connector`), and [`expand_op`]
+//! (`connector_op`). Custom connector ops are merged onto the last custom connector by
+//! `portaki-cli` manifest generation order.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -134,6 +140,7 @@ impl Parse for ConnectorOpAttrs {
     }
 }
 
+/// Expands `#[connector(builtin = "…")]`.
 pub fn expand_builtin(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = syn::parse_macro_input!(item as syn::Item);
     let attrs = syn::parse_macro_input!(attr as BuiltinConnectorAttrs);
@@ -155,6 +162,7 @@ pub fn expand_builtin(attr: TokenStream, item: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// Expands `#[custom_connector(…)]` on a marker struct.
 pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_item = syn::parse_macro_input!(item as ItemStruct);
     let attrs = syn::parse_macro_input!(attr as CustomConnectorAttrs);
@@ -182,6 +190,7 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// Expands `#[connector_op(…)]` on a function (HTTP op or `validator` stub).
 pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as ItemFn);
     let attrs = syn::parse_macro_input!(attr as ConnectorOpAttrs);

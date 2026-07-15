@@ -1,3 +1,5 @@
+//! `surface` expansion — host/guest SDUI renderers in the manifest and Wasm dispatch table.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -46,6 +48,7 @@ impl Parse for SurfaceAttrs {
     }
 }
 
+/// Expands `#[surface(host|guest, id = "…", …)]` on a render function.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as ItemFn);
     let attrs = syn::parse_macro_input!(attr as SurfaceAttrs);

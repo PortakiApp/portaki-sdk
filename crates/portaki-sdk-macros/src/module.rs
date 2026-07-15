@@ -1,3 +1,9 @@
+//! `portaki_module` / `portaki_module_decl` expansion — module identity + Wasm bootstrap.
+//!
+//! Parses `key = "value"` attributes (see [`crate::portaki_module`] for the full table).
+//! [`expand_invocation`] is the function-like macro path; [`expand`] additionally preserves a
+//! decorated `mod` item.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -53,11 +59,13 @@ impl Parse for ModuleAttrs {
     }
 }
 
+/// Expands `portaki_module!(…)` — emission + Wasm shims only.
 pub fn expand_invocation(attr: TokenStream) -> TokenStream {
     let attrs = syn::parse_macro_input!(attr as ModuleAttrs);
     emission_tokens(attrs).into()
 }
 
+/// Expands `#[portaki_module(…)] mod …` — emission + Wasm shims + passthrough `mod` item.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let module_item = syn::parse_macro_input!(item as ItemMod);
     let attrs = syn::parse_macro_input!(attr as ModuleAttrs);

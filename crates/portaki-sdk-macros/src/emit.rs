@@ -1,4 +1,10 @@
-//! Writes manifest emission fragments to `OUT_DIR/portaki-emissions/` at macro expansion time.
+//! Side-effect emission of JSON manifest fragments during proc-macro expansion.
+//!
+//! Every public macro in this crate calls [`write_emission`] to persist metadata when Cargo sets
+//! `OUT_DIR`. The emitted `quote! {}` is empty — authors never see runtime code from emissions.
+//!
+//! If `OUT_DIR` is unset (e.g. `rust-analyzer` expansion), writes are silently skipped; no error.
+//! Filename keys pass through [`sanitize_key`] (non `[A-Za-z0-9_-]` → `_`).
 
 use std::fs;
 use std::path::PathBuf;

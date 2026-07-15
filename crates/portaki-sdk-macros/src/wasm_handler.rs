@@ -1,4 +1,15 @@
-//! Generates wasm handler shims and `inventory` registration.
+//! Wasm dispatch shims and `inventory::submit!` registration for annotated handlers.
+//!
+//! Used by [`query`](crate::query), [`command`](crate::command), and [`surface`](crate::surface).
+//! Each shim:
+//!
+//! 1. Accepts `Context` + `serde_json::Value` params from the Extism entrypoint.
+//! 2. Deserializes typed args (queries/commands with a second parameter).
+//! 3. Invokes the author's function and serializes the return value.
+//! 4. Maps errors to `PortakiError::Host` with `wasm_params_invalid` / `wasm_handler_failed` prefixes.
+//!
+//! Registration is wrapped in `#[cfg(target_arch = "wasm32")]` so host `cargo test` builds do not
+//! require the `inventory` collector.
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};

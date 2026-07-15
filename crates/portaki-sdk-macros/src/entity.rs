@@ -1,3 +1,8 @@
+//! `entity` and `entity_indexes` expansion — Atlas entity schemas and index metadata.
+//!
+//! [`expand_entity`] serializes named struct fields to JSON. [`expand_entity_indexes`] parses the
+//! const array literal at compile time (see [`crate::entity_indexes`] for spatial vs field rules).
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -42,6 +47,7 @@ impl Parse for EntityAttrs {
     }
 }
 
+/// Expands `#[entity(schema_version = N)]` on a struct.
 pub fn expand_entity(attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_item = syn::parse_macro_input!(item as ItemStruct);
     let attrs = syn::parse_macro_input!(attr as EntityAttrs);
@@ -69,6 +75,7 @@ pub fn expand_entity(attr: TokenStream, item: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// Expands `#[entity_indexes(EntityType)]` on a `const` string-slice array.
 pub fn expand_entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
     let const_item = syn::parse_macro_input!(item as ItemConst);
     let entity_type = syn::parse_macro_input!(attr as syn::Type);

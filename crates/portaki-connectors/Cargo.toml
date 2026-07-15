@@ -1,6 +1,6 @@
 [package]
 name = "portaki-connectors"
-description = "Typed built-in connector operations for Portaki modules"
+description = "Typed built-in Portaki connector operations (OpenWeather, Mapbox, Places, Nominatim)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,14 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/portaki-connectors"
+categories = ["api-bindings", "wasm"]
+keywords = ["portaki", "connector", "weather", "mapbox", "wasm"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 portaki-sdk = { workspace = true }

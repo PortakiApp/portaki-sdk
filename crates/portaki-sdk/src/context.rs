@@ -1,112 +1,160 @@
-//! Invocation context types passed to surfaces, queries, and commands.
+//! Invocation context types injected by the gateway into every handler.
+//!
+//! [`Context`] is deserialized from the Wasm request envelope and passed to
+//! surface renderers, queries, commands, and event handlers. It is **read-only**
+//! from the module's perspective — modules cannot mutate plan, capabilities, or
+//! property metadata at runtime.
+//!
+//! ## Host vs guest surfaces
+//!
+//! - [`HostContext`] — property dashboard shell (owner/staff).
+//! - [`GuestContext`] — guest booklet shell; may include [`GuestIdentity`].
+//!
+//! Both are type aliases today; the distinction is enforced by which `render_*`
+//! symbol the gateway invokes and which manifest surface bucket (`host` / `guest`)
+//! declared the surface.
+//!
+//! ## Capability checks
+//!
+//! Prefer [`Context::has_capability`] over [`crate::host::capabilities::has`] in
+//! render paths — the context snapshot is already paid for and matches what the
+//! gateway used to authorize the invocation. Use host probes only when you need
+//! a fresh grant after a long-lived cache window.
+//!
+//! # Examples
+//!
+//! ```
+//! use portaki_sdk::context::{Context, HostContext};
+//! use portaki_sdk::capability::core;
+//!
+//! fn render(ctx: HostContext) -> bool {
+//!     ctx.has_capability(core::IMAGES)
+//! }
+//!
+//! let ctx = Context::with_capabilities(&[core::STORAGE, core::IMAGES]);
+//! assert!(render(ctx));
+//! ```
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Effective capability grant for the current property.
+/// Single effective capability grant attached to the current invocation.
+///
+/// The gateway resolves workspace plan + property overrides into this flat list
+/// before Wasm execution. Absence from `Context::capabilities` means the
+/// capability is not available — do not infer grants from config alone.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CapabilityGrant {
-    /// Capability identifier (e.g. `core.storage`).
+    /// Stable capability id (e.g. `core.storage`).
     pub id: String,
 }
 
-/// Quota usage returned by `host::capabilities::quota`.
+/// Quota snapshot for a metered capability.
+///
+/// Populated when the gateway exposes usage for billing-period limits.
+/// `value: None` means unlimited; `used` is always present when returned.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Quota {
     /// Granted limit (`None` = unlimited).
     pub value: Option<u64>,
-    /// Unit hint (`per_day`, `per_month`, …).
+    /// Unit hint for display (`per_day`, `per_month`, …).
     pub unit: Option<String>,
-    /// Current usage for the billing period.
+    /// Consumed units in the active billing period.
     pub used: u64,
 }
 
-/// Workspace plan summary attached to the invocation context.
+/// Workspace subscription summary for UI copy and entitlement messaging.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PlanInfo {
-    /// Public plan family (`free`, `starter`, …).
+    /// Plan family slug (`free`, `starter`, `pro`, …).
     pub family: String,
-    /// Human-readable plan name.
+    /// Localized marketing name — not an i18n key.
     pub display_name: String,
 }
 
-/// Property-level context injected by the gateway.
+/// Property metadata snapshot for locale, timezone, and map anchoring.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PropertyContext {
-    /// Property display name.
+    /// Display name shown in guest and host shells.
     pub name: String,
     /// Default locale (`fr-FR`).
     pub locale: String,
-    /// Property timezone (`Europe/Paris`).
+    /// IANA timezone (`Europe/Paris`).
     pub timezone: String,
-    /// Latitude.
+    /// Property latitude (WGS-84).
     pub lat: f64,
-    /// Longitude.
+    /// Property longitude (WGS-84).
     pub lng: f64,
-    /// Single-line address for display.
+    /// Single-line formatted address when geocoded.
     pub address: Option<String>,
 }
 
-/// Guest identity when rendering guest surfaces.
+/// Guest session identity on guest booklet surfaces.
+///
+/// `None` on host surfaces. Never treat `session_id` as authentication proof
+/// inside Wasm — the gateway already bound the session before invocation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GuestIdentity {
-    /// Opaque guest session id.
+    /// Opaque guest session identifier.
     pub session_id: Uuid,
-    /// Guest display name if known.
+    /// Known guest display name, if collected.
     pub display_name: Option<String>,
-    /// Guest locale override.
+    /// Guest locale override; falls back to property locale when `None`.
     pub locale: Option<String>,
 }
 
-/// Display preferences from the shell (light/dark, reduced motion, …).
+/// Shell accessibility and theme preferences from the client runtime.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DisplayPreferences {
-    /// Color scheme preference.
+    /// Preferred color scheme (`light`, `dark`, `system`).
     pub scheme: Option<String>,
-    /// High contrast requested.
+    /// High-contrast mode requested.
     pub high_contrast: bool,
-    /// Reduced motion requested.
+    /// Reduced motion requested — avoid gratuitous animation in SDUI.
     pub reduced_motion: bool,
 }
 
-/// Base invocation context for queries, commands, and host surfaces.
+/// Full invocation context for queries, commands, surfaces, and event handlers.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Context {
-    /// Tenant property id.
+    /// Tenant property identifier.
     pub property_id: Uuid,
-    /// Module identifier from the manifest.
+    /// Module slug from the manifest (`weather`, `poi`, …).
     pub module_id: String,
-    /// Semver of the running module artifact.
+    /// Semver of the Wasm artifact executing this invocation.
     pub module_version: String,
-    /// Resolved request locale.
+    /// Resolved request locale for i18n and formatting.
     pub locale: String,
-    /// Property timezone.
+    /// Property timezone for calendar math.
     pub timezone: String,
-    /// Effective plan for the workspace.
+    /// Effective workspace plan at invocation time.
     pub plan: PlanInfo,
-    /// Capabilities available for this invocation.
+    /// Capability grants available for this invocation.
     pub capabilities: Vec<CapabilityGrant>,
-    /// Surface id when rendering a surface (`None` for queries/commands).
+    /// Manifest surface id when rendering UI (`None` for queries/commands).
     pub surface: Option<String>,
-    /// Correlation id for logs and credential access audit.
+    /// Correlation id — attach to logs and credential audit trails.
     pub invocation_id: Uuid,
-    /// Shell display preferences.
+    /// Client display preferences.
     pub display: DisplayPreferences,
-    /// Guest identity (guest surfaces only).
+    /// Guest identity on guest surfaces only.
     pub guest: Option<GuestIdentity>,
-    /// Property metadata.
+    /// Property metadata bundle.
     pub property: PropertyContext,
 }
 
-/// Host dashboard surface context.
+/// Host dashboard invocation context.
 pub type HostContext = Context;
 
-/// Guest booklet surface context.
+/// Guest booklet invocation context.
 pub type GuestContext = Context;
 
 impl Context {
-    /// Builds a context with the given capability ids (test / mock helper).
+    /// Builds a test context with the given capability ids.
+    ///
+    /// Fills remaining fields from [`Default`]. Use inside unit tests and
+    /// `portaki dev` mocks — not in production handlers.
     pub fn with_capabilities(capability_ids: &[&str]) -> Self {
         Context {
             capabilities: capability_ids
@@ -127,7 +175,7 @@ impl Context {
         }
     }
 
-    /// Returns whether the effective capability set includes `capability_id`.
+    /// Returns whether `capability_id` is in the effective grant set.
     pub fn has_capability(&self, capability_id: &str) -> bool {
         self.capabilities
             .iter()
@@ -166,7 +214,7 @@ impl Default for Context {
     }
 }
 
-/// Clock snapshot for tests.
+/// Fixed UTC timestamp for deterministic tests (`2026-01-15T12:00:00Z`).
 pub fn fixed_now() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")
         .expect("valid fixture timestamp")

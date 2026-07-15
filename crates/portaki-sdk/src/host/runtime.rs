@@ -1,4 +1,52 @@
-//! Host function runtime dispatch (in-process mock or Wasm imports).
+//! Host function runtime — thread-local backend dispatch.
+//!
+//! Every `host::*` wrapper resolves the active [`HostBackend`] installed for the
+//! current thread. Production Wasm (target `wasm32`) uses
+//! `crate::wasm::extism_host::ExtismHostBackend`; tests and `portaki dev` inject
+//! mocks through [`with_host`].
+//!
+//! ## Contract
+//!
+//! - [`with_host`] sets both backend and [`crate::Context`] for the closure scope —
+//!   backends are cleared when the closure returns.
+//! - [`HostBackend`] methods are synchronous; async gateway work is hidden behind FFI.
+//! - Default trait methods return [`crate::error::PortakiError::HostNotConfigured`] —
+//!   mocks may omit overrides for unimplemented ops.
+//!
+//! ## What modules must not assume
+//!
+//! - Thread-local state does not propagate across spawned threads inside Wasm.
+//! - `context_or_load` prefers thread-local context, then calls `backend.context()`.
+//! - Native `cargo test` on non-wasm targets still needs `with_host` for host calls.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use portaki_sdk::context::Context;
+//! use portaki_sdk::host::runtime::{with_host, HostBackend};
+//! use portaki_sdk::error::{PortakiError, Result};
+//! use std::sync::Arc;
+//!
+//! struct NoopHost;
+//! impl HostBackend for NoopHost {
+//!     fn context(&self) -> Result<Context> { Ok(Context::default()) }
+//!     fn has_capability(&self, _: &str) -> Result<bool> { Ok(false) }
+//!     fn kv_get(&self, _: &str) -> Result<Option<Vec<u8>>> { Ok(None) }
+//!     fn kv_set(&self, _: &str, _: &[u8], _: Option<u32>) -> Result<()> { Ok(()) }
+//!     fn kv_delete(&self, _: &str) -> Result<()> { Ok(()) }
+//!     fn kv_list(&self, _: &str) -> Result<Vec<String>> { Ok(vec![]) }
+//!     fn i18n_translate(&self, key: &str, _: &str) -> Result<String> { Ok(key.into()) }
+//!     fn log(&self, _: &str, _: &str, _: &str) -> Result<()> { Ok(()) }
+//!     fn connector_call(&self, _: &str, _: &str, _: &str) -> Result<String> {
+//!         Err(PortakiError::HostNotConfigured)
+//!     }
+//!     fn emit_event(&self, _: &str, _: &str) -> Result<()> { Ok(()) }
+//! }
+//!
+//! with_host(Arc::new(NoopHost), Context::default(), || {
+//!     assert!(!portaki_sdk::host::capabilities::has("core.images").unwrap());
+//! });
+//! ```
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -11,33 +59,33 @@ thread_local! {
     static CTX: RefCell<Option<Context>> = const { RefCell::new(None) };
 }
 
-/// Backend implemented by the gateway (production) or test mocks.
+/// Gateway-facing host import surface implemented by Java dispatch or test mocks.
 pub trait HostBackend: Send + Sync {
-    /// Returns the current invocation context.
+    /// Loads the invocation [`Context`] when not already thread-local.
     fn context(&self) -> Result<Context>;
 
-    /// Capability probe.
+    /// Live capability probe — see [`crate::host::capabilities::has`].
     fn has_capability(&self, id: &str) -> Result<bool>;
 
-    /// KV get.
+    /// Reads a KV key scoped to property + module.
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>>;
 
-    /// KV set.
+    /// Writes a KV key with optional TTL seconds.
     fn kv_set(&self, key: &str, value: &[u8], ttl_seconds: Option<u32>) -> Result<()>;
 
-    /// KV delete.
+    /// Deletes a KV key.
     fn kv_delete(&self, key: &str) -> Result<()>;
 
-    /// KV list keys by prefix.
+    /// Lists KV keys sharing `prefix`.
     fn kv_list(&self, prefix: &str) -> Result<Vec<String>>;
 
-    /// i18n translate.
+    /// Resolves an i18n key with interpolated variables JSON.
     fn i18n_translate(&self, key: &str, vars_json: &str) -> Result<String>;
 
-    /// Structured log line.
+    /// Writes a structured log line (`level`, `message`, `fields_json`).
     fn log(&self, level: &str, message: &str, fields_json: &str) -> Result<()>;
 
-    /// Connector invocation (serialized args/response JSON).
+    /// Invokes a connector; returns serialized response JSON.
     fn connector_call(
         &self,
         connector_id: &str,
@@ -45,36 +93,39 @@ pub trait HostBackend: Send + Sync {
         args_json: &str,
     ) -> Result<String>;
 
-    /// Emit a domain event.
+    /// Publishes a domain event with JSON payload.
     fn emit_event(&self, event_type: &str, payload_json: &str) -> Result<()>;
 
-    /// Current UTC time as ISO-8601 (Wasm host dispatch).
+    /// Returns current UTC time as ISO-8601 (Wasm host dispatch).
     fn time_now_iso(&self) -> Result<String> {
         Err(PortakiError::HostNotConfigured)
     }
 
-    /// Typed repository find (JSON page payload).
+    /// Runs a typed repository find; returns serialized [`crate::host::repo::Page`] JSON.
     fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
         Err(PortakiError::HostNotConfigured)
     }
 
-    /// Typed repository create (JSON entity payload).
+    /// Creates a repository row; returns serialized entity JSON.
     fn repo_create(&self, _entity: &str, _entity_json: &str) -> Result<String> {
         Err(PortakiError::HostNotConfigured)
     }
 
-    /// Typed repository delete by id.
+    /// Deletes a repository row by id; returns whether a row was removed.
     fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
         Err(PortakiError::HostNotConfigured)
     }
 
-    /// Current module install / config readiness (orchestrator source of truth).
+    /// Returns module install/config readiness from the orchestrator.
     fn module_status(&self) -> Result<crate::host::module::ModuleStatus> {
         Err(PortakiError::HostNotConfigured)
     }
 }
 
-/// Installs a host backend for the current thread (used by tests and `portaki dev`).
+/// Installs `backend` and `context` for the current thread while `f` runs.
+///
+/// Always clears thread-local state when `f` returns — even on panic (drop order
+/// is handled by running cleanup after `f()`).
 pub fn with_host<F, R>(backend: Arc<dyn HostBackend>, context: Context, f: F) -> R
 where
     F: FnOnce() -> R,

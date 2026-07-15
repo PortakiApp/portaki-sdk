@@ -1,3 +1,5 @@
+//! `query` expansion — read-only gateway operations with Wasm JSON dispatch.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -22,6 +24,7 @@ impl Parse for NamedOpAttrs {
     }
 }
 
+/// Expands `#[query(name = "…")]` on a handler function.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as ItemFn);
     let attrs = syn::parse_macro_input!(attr as NamedOpAttrs);

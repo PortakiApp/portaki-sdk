@@ -1,3 +1,6 @@
 /target
 **/*.rs.bk
 Cargo.lock
+
+# Local editor / agent config — not part of the published tree
+.cursor/

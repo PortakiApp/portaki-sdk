@@ -1,6 +1,6 @@
 [package]
 name = "portaki-sdk"
-description = "Portaki module SDK — host functions, SDUI catalog, and module authoring APIs"
+description = "Authoring toolkit for Portaki Extism Wasm modules — host APIs, SDUI catalog, and manifest macros"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,14 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/portaki-sdk"
+categories = ["wasm", "api-bindings", "development-tools"]
+keywords = ["portaki", "wasm", "extism", "sdui", "module"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
 portaki-sdk-macros = { workspace = true }

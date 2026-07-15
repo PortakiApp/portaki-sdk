@@ -1,6 +1,6 @@
 [package]
 name = "portaki-test-utils"
-description = "Test harness for Portaki modules — mock host functions and SDUI assertions"
+description = "In-process mock host and SDUI assertions for Portaki module unit tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,14 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/portaki-test-utils"
+categories = ["development-tools::testing", "wasm"]
+keywords = ["portaki", "testing", "mock", "wasm", "sdui"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 portaki-sdk = { workspace = true }

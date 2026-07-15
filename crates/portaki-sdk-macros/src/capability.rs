@@ -1,3 +1,8 @@
+//! `capability` expansion — required/optional host capability dependencies.
+//!
+//! Resolves capability id from `id = "…"` or a string-literal const initializer. Cross-const
+//! references require an explicit `id` attribute.
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -68,6 +73,7 @@ impl Parse for CapabilityAttrs {
     }
 }
 
+/// Expands `#[capability(required|optional, …)]` on a `pub const` capability binding.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let const_item = syn::parse_macro_input!(item as ItemConst);
     let attrs = syn::parse_macro_input!(attr as CapabilityAttrs);

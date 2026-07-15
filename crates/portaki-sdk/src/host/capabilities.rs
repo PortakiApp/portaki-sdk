@@ -1,10 +1,39 @@
-//! `host::capabilities` — server-side capability checks (hint only in modules).
+//! Capability probes — server-side grant and quota hints.
+//!
+//! Prefer [`crate::Context::has_capability`] in surface renderers — the context
+//! snapshot is already on the stack. Use this module when you need a live probe
+//! after external state changes or when context is unavailable.
+//!
+//! ## Contract
+//!
+//! - [`has`] returns the effective grant for the **current property** at call time.
+//! - [`quota`] is a v1 stub — detailed metering is gateway-side; expect `None` today.
+//!
+//! ## What modules must not assume
+//!
+//! - A `true` from [`has`] does not bypass connector credential requirements.
+//! - Quota exhaustion may still fail host calls with [`crate::error::PortakiError::Host`]
+//!   even when the capability id is granted.
+//!
+//! # Examples
+//!
+//! ```
+//! use portaki_sdk::capability::core;
+//! use portaki_sdk::context::Context;
+//!
+//! // Prefer context checks in renderers:
+//! let ctx = Context::with_capabilities(&[core::IMAGES]);
+//! assert!(ctx.has_capability(core::IMAGES));
+//! ```
 
 use crate::context::Quota;
 use crate::error::Result;
 use crate::host::runtime::{backend, context_or_load};
 
-/// Returns whether the current property has `id` granted.
+/// Returns whether the current property has capability `id` granted.
+///
+/// Uses the installed [`crate::host::runtime::HostBackend`] when present;
+/// otherwise falls back to [`crate::Context::has_capability`] from thread-local context.
 pub fn has(id: &str) -> Result<bool> {
     if let Ok(host) = backend() {
         return host.has_capability(id);
@@ -12,7 +41,10 @@ pub fn has(id: &str) -> Result<bool> {
     Ok(context_or_load()?.has_capability(id))
 }
 
-/// Returns quota usage for a quota-style capability, if applicable.
+/// Returns quota usage for a metered capability, when the gateway exposes it.
+///
+/// Currently returns `Ok(None)` in module builds — quota plumbing is deferred to
+/// gateway releases. Do not branch production logic on `Some` yet.
 pub fn quota(id: &str) -> Result<Option<Quota>> {
     let _ = id;
     // Detailed quota plumbing is gateway-side; modules receive hints via context in v1.

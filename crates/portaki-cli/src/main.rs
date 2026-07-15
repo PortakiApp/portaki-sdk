@@ -1,4 +1,28 @@
-//! `portaki` CLI — module authoring toolchain.
+//! `portaki` — command-line toolchain for Portaki Extism Wasm modules.
+//!
+//! # Role
+//!
+//! Authors write modules against [`portaki_sdk`]. At build time this binary:
+//!
+//! 1. Compiles the crate to `wasm32-unknown-unknown`
+//! 2. Reads proc-macro JSON under `OUT_DIR/portaki-emissions/`
+//! 3. Merges emissions (+ optional hand-written `portaki.module.json`) into `manifest.json`
+//! 4. Packages Wasm + manifests for OCI push (`portaki publish`)
+//!
+//! # Commands
+//!
+//! | Command | Contract |
+//! |---------|----------|
+//! | `init` | Scaffold a module crate from a template |
+//! | `build` | Produce Wasm + merged manifest (+ i18n bundle when present) |
+//! | `lint` | Validate capability ids, connector bindings, i18n keys |
+//! | `test` | Forward to `cargo test` in the module crate |
+//! | `publish` | Push OCI layers to a container registry |
+//! | `catalog` | Dump the SDUI primitive catalog the host understands |
+//! | `inspect` | Fetch and summarize a published OCI artifact |
+//! | `docs` / `dev` | Docs helper / local mock gateway (evolve with the SDK) |
+//!
+//! Install: `cargo install portaki-cli`. Requires `rustup target add wasm32-unknown-unknown`.
 
 mod commands;
 mod manifest;

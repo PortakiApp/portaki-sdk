@@ -1,3 +1,5 @@
+//! `event_handler` expansion — platform event subscriptions (manifest only, no Wasm inventory).
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -27,6 +29,7 @@ impl Parse for EventHandlerAttrs {
     }
 }
 
+/// Expands `#[event_handler(event_type = "…")]` on a handler function.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as ItemFn);
     let attrs = syn::parse_macro_input!(attr as EventHandlerAttrs);
