@@ -2,7 +2,7 @@ name: Publish crates.io
 
 # Runs after release-please creates tag vX.Y.Z (push tag).
 # Auth: Trusted Publishing OIDC — rust-lang/crates-io-auth-action.
-# Workspace order: katyo/publish-crates (macros → sdk → … → cli).
+# Workspace order: cargo-workspaces (topological `cargo ws publish`).
 #
 # Bootstrap (once per crate, before OIDC works):
 #   1. Publish manually with a crates.io API token (see docs/RELEASE.md)
@@ -33,11 +33,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-workspaces
+        run: cargo install cargo-workspaces --version 0.4.2 --locked
+
       - id: auth
         uses: rust-lang/crates-io-auth-action@v1
 
-      - uses: katyo/publish-crates@v2
-        with:
-          registry-token: ${{ steps.auth.outputs.token }}
-          # crates.io indexes slowly between interdependent workspace crates
-          publish-delay: 15000
+      - name: Publish workspace crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          cargo ws publish \
+            --publish-as-is \
+            --publish-interval 15 \
+            --yes
