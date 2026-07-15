@@ -2,22 +2,55 @@ name: ci
 
 on:
   push:
-    branches: [main, feature/B1-sdk-cli]
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   rust:
+    name: rust
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
       - name: fmt
         run: cargo fmt --all -- --check
+
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
       - name: test
         run: cargo test --workspace
+
       - name: doc
         run: cargo doc --workspace --no-deps
+
+  quality:
+    name: quality
+    needs: [rust]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Quality gate
+        env:
+          RUST: ${{ needs.rust.result }}
+        run: |
+          if [ "$RUST" != "success" ]; then
+            echo "Quality gate failed: rust=$RUST"
+            exit 1
+          fi
+          echo "Quality gate passed."

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "263c3c43e4e73e3060eb1d47a48536b700670ef8",
+  "label": "pending release",
+  "release-label": "released",
+  "always-update": true,
+  "draft-pull-request": true,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "Release candidate for Portaki SDK",
+  "pull-request-footer": "## Before merge\n\n- [ ] CHANGELOG is readable for module authors\n- [ ] Version bump covers `workspace.package` + path deps\n- [ ] Downstream modules CI can resolve the new git tag / main\n\nWorkflow: [docs/RELEASE.md](./docs/RELEASE.md)",
+  "packages": {
+    ".": {
+      "changelog-path": "CHANGELOG.md",
+      "release-type": "simple",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "include-v-in-release-name": true,
+      "exclude-paths": [".github", "docs", "templates"],
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.portaki-sdk.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.portaki-sdk-macros.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.portaki-connectors.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.dependencies.portaki-test-utils.version"
+        }
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "revert", "section": "Reverts" },
+        { "type": "docs", "section": "Documentation", "hidden": true },
+        { "type": "style", "section": "Styling", "hidden": true },
+        { "type": "chore", "section": "Miscellaneous", "hidden": true },
+        { "type": "refactor", "section": "Miscellaneous", "hidden": true },
+        { "type": "test", "section": "Miscellaneous", "hidden": true },
+        { "type": "build", "section": "Miscellaneous", "hidden": true },
+        { "type": "ci", "section": "Miscellaneous", "hidden": true }
+      ]
+    }
+  }
+}

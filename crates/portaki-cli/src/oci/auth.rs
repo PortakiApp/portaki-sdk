@@ -24,7 +24,9 @@ pub fn resolve_registry_auth(registry: &str) -> Result<RegistryAuth> {
 fn auth_from_env() -> Result<Option<RegistryAuth>> {
     if let Ok(username) = std::env::var("PORTAKI_OCI_USERNAME") {
         if !username.is_empty() {
-            if let Ok(token) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GHCR_TOKEN")) {
+            if let Ok(token) =
+                std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GHCR_TOKEN"))
+            {
                 if !token.is_empty() {
                     return Ok(Some(RegistryAuth::Basic(username, token)));
                 }
