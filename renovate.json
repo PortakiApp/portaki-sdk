@@ -5,7 +5,7 @@
     ":dependencyDashboard",
     ":semanticCommits",
     "group:recommended",
-    "group:rustMonorepo"
+    "group:monorepos"
   ],
   "labels": ["dependencies"],
   "timezone": "Europe/Paris",
