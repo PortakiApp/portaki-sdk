@@ -168,6 +168,12 @@ impl HostBackend for ExtismHostBackend {
             .and_then(Value::as_bool)
             .unwrap_or(false))
     }
+
+    fn module_status(&self) -> Result<crate::host::module::ModuleStatus> {
+        let result = self.dispatch_value("module.status", json!({}))?;
+        serde_json::from_value(result)
+            .map_err(|e| PortakiError::Host(format!("module_status_parse_failed: {e}")))
+    }
 }
 
 fn parse_response(response_json: &str) -> Result<Value> {

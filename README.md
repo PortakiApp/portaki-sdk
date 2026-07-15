@@ -25,6 +25,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#publish-oci--ghcr">Publish</a> ·
   <a href="#workspace-crates">Crates</a> ·
+  <a href="docs/connectors-and-credentials.md">Connectors & credentials</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
@@ -44,6 +45,12 @@ Official modules are published from [`portaki-modules`](https://github.com/Porta
 - **Connectors** — typed clients for OpenWeather, Google Places, Mapbox, OSM, …
 - **Testable** — `MockContext` and in-memory host functions without a full runtime
 - **OCI-native** — push to GHCR with dash-named packages (listed by the GitHub Packages API)
+
+## Connectors and credentials
+
+Declare pool + BYOK with `#[custom_connector(... credential_provider_id = "...")]` and `external.<provider>.pool` / `.byok` capabilities. The orchestrator derives which module needs which key from the published manifest — no dashboard hardcoding.
+
+See **[docs/connectors-and-credentials.md](./docs/connectors-and-credentials.md)** (weather is the reference module).
 
 ## Workspace crates
 

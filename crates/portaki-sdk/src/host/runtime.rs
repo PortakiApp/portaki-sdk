@@ -67,6 +67,11 @@ pub trait HostBackend: Send + Sync {
     fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
         Err(PortakiError::HostNotConfigured)
     }
+
+    /// Current module install / config readiness (orchestrator source of truth).
+    fn module_status(&self) -> Result<crate::host::module::ModuleStatus> {
+        Err(PortakiError::HostNotConfigured)
+    }
 }
 
 /// Installs a host backend for the current thread (used by tests and `portaki dev`).

@@ -9,6 +9,7 @@ pub mod i18n;
 pub mod images;
 pub mod kv;
 pub mod log;
+pub mod module;
 pub mod notifications;
 pub mod repo;
 pub mod runtime;

@@ -191,6 +191,16 @@ impl HostBackend for MockHostFunctions {
     fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
         Ok(true)
     }
+
+    fn module_status(&self) -> Result<portaki_sdk::host::module::ModuleStatus> {
+        Ok(portaki_sdk::host::module::ModuleStatus {
+            active: true,
+            workspace_enabled: true,
+            incomplete: false,
+            requires_config: false,
+            missing_required_keys: Vec::new(),
+        })
+    }
 }
 
 #[cfg(test)]
