@@ -46,7 +46,7 @@ pub fn run(args: InitArgs) -> Result<()> {
 
     if !template_dir.exists() {
         bail!(
-            "template not found: {} (run from portaki-sdk-rust checkout)",
+            "template not found: {} (run from portaki-sdk checkout)",
             template_dir.display()
         );
     }

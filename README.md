@@ -1,4 +1,4 @@
-# portaki-sdk-rust
+# portaki-sdk
 
 Rust SDK, CLI, connectors, and test utilities for [Portaki](https://github.com/syntax-labs) Wasm modules.
 
