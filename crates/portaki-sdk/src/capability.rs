@@ -83,7 +83,7 @@ pub mod external {
     pub const OSM_POOL: &str = "external.osm.pool";
 }
 
-/// AI roadmap capabilities (declared for manifest linting; not yet plan-mapped).
+/// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).
 pub mod ai {
     /// Inline text suggestion generation.
     pub const TEXT_SUGGESTIONS: &str = "ai.text.suggestions";
@@ -91,6 +91,8 @@ pub mod ai {
     pub const TRANSLATION: &str = "ai.translation";
     /// Generative image creation.
     pub const IMAGE_GENERATION: &str = "ai.image.generation";
+    /// Guest booklet Q&A assistant (grounded on stay content).
+    pub const GUEST_ASSISTANT: &str = "ai.guest.assistant";
 }
 
 /// Exhaustive list of known capability ids for compile-time validation and CLI linting.
@@ -121,6 +123,7 @@ pub const ALL: &[&str] = &[
     ai::TEXT_SUGGESTIONS,
     ai::TRANSLATION,
     ai::IMAGE_GENERATION,
+    ai::GUEST_ASSISTANT,
 ];
 
 /// Returns `true` when `id` is a registered platform capability string.
