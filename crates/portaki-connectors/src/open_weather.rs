@@ -292,11 +292,9 @@ fn parse_forecast(raw: &serde_json::Value, days: u8) -> SdkResult<ForecastRespon
             max_c: max,
             condition,
             precip_chance_pct: max_pop.map(|pop| (pop.clamp(0.0, 1.0) * 100.0).round() as u8),
-            humidity_avg: if humidity_count == 0 {
-                None
-            } else {
-                Some((humidity_sum / humidity_count) as u8)
-            },
+            humidity_avg: humidity_sum
+                .checked_div(humidity_count)
+                .map(|avg| avg as u8),
             wind_speed_ms_max: wind_max,
         });
     }
