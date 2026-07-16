@@ -1,9 +1,9 @@
 [
-  {"name": "Stack", "serde_name": "Stack", "has_children": true},
-  {"name": "Grid", "serde_name": "Grid", "has_children": true, "extra_fields": ["columns"]},
+  {"name": "Stack", "serde_name": "Stack", "has_children": true, "extra_fields": ["direction", "gap"]},
+  {"name": "Grid", "serde_name": "Grid", "has_children": true, "extra_fields": ["columns", "gap"]},
   {"name": "Group", "serde_name": "Group", "has_children": true},
   {"name": "Section", "serde_name": "Section", "has_children": true, "extra_fields": ["title", "subtitle"]},
-  {"name": "Card", "serde_name": "Card", "has_children": true, "extra_fields": ["title", "footer"]},
+  {"name": "Card", "serde_name": "Card", "has_children": true, "extra_fields": ["title", "footer", "icon", "action"]},
   {"name": "SurfacePrimitive", "serde_name": "Surface", "has_children": true},
   {"name": "Hero", "serde_name": "Hero", "has_children": true, "extra_fields": ["title", "subtitle", "illustration"]},
   {"name": "Modal", "serde_name": "Modal", "has_children": true, "extra_fields": ["title"]},
