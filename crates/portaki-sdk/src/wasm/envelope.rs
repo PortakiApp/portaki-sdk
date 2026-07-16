@@ -44,7 +44,7 @@ pub struct WasmContextEnvelope {
     /// Effective capability ids (orchestrator passes as scopes).
     #[serde(default)]
     pub scopes: Vec<String>,
-    /// Module config JSON blob.
+    /// Module / property context JSON blob (orchestrator serializes `propertyContext` here).
     #[serde(rename = "configJson", default)]
     pub config_json: String,
     /// Request locale (`fr-FR`).
@@ -90,12 +90,13 @@ impl WasmRequestEnvelope {
             .clone()
             .unwrap_or_else(|| "Europe/Paris".to_string());
         let property_locale = locale.clone();
+        let property = property_from_config_json(&ctx.config_json, property_locale, timezone.clone());
         Ok(Context {
             property_id,
             module_id: ctx.module_id.clone(),
             module_version: ctx.module_version.clone(),
             locale,
-            timezone: timezone.clone(),
+            timezone,
             plan: PlanInfo {
                 family: "starter".to_string(),
                 display_name: "Starter".to_string(),
@@ -109,15 +110,43 @@ impl WasmRequestEnvelope {
                 display_name: None,
                 locale: None,
             }),
-            property: PropertyContext {
-                name: "Property".to_string(),
-                locale: property_locale,
-                timezone,
-                lat: 48.8566,
-                lng: 2.3522,
-                address: None,
-            },
+            property,
         })
+    }
+}
+
+fn property_from_config_json(config_json: &str, locale: String, timezone: String) -> PropertyContext {
+    let parsed: Value = if config_json.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(config_json).unwrap_or(Value::Null)
+    };
+    let name = parsed
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Property")
+        .to_string();
+    let address = parsed
+        .get("address")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let lat = parsed
+        .get("lat")
+        .and_then(Value::as_f64)
+        .unwrap_or(48.8566);
+    let lng = parsed
+        .get("lng")
+        .and_then(Value::as_f64)
+        .unwrap_or(2.3522);
+    PropertyContext {
+        name,
+        locale,
+        timezone,
+        lat,
+        lng,
+        address,
     }
 }
 
@@ -142,5 +171,27 @@ mod tests {
         let ctx = envelope.to_context("getCurrent").expect("context");
         assert_eq!(ctx.module_id, "weather");
         assert_eq!(ctx.capabilities.len(), 1);
+        assert!((ctx.property.lat - 48.8566).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn reads_property_coordinates_from_config_json() {
+        let raw = r#"{
+            "query": "getCurrent",
+            "params": {},
+            "context": {
+                "moduleId": "weather",
+                "moduleVersion": "0.3.7",
+                "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                "scopes": ["external.open-weather.byok"],
+                "configJson": "{\"name\":\"Vayoux\",\"lat\":45.764,\"lng\":4.8357,\"address\":\"Lyon\"}"
+            }
+        }"#;
+        let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
+        let ctx = envelope.to_context("getCurrent").expect("context");
+        assert_eq!(ctx.property.name, "Vayoux");
+        assert_eq!(ctx.property.address.as_deref(), Some("Lyon"));
+        assert!((ctx.property.lat - 45.764).abs() < f64::EPSILON);
+        assert!((ctx.property.lng - 4.8357).abs() < f64::EPSILON);
     }
 }
