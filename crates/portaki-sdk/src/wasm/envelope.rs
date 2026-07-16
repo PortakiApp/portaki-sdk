@@ -90,7 +90,8 @@ impl WasmRequestEnvelope {
             .clone()
             .unwrap_or_else(|| "Europe/Paris".to_string());
         let property_locale = locale.clone();
-        let property = property_from_config_json(&ctx.config_json, property_locale, timezone.clone());
+        let property =
+            property_from_config_json(&ctx.config_json, property_locale, timezone.clone());
         Ok(Context {
             property_id,
             module_id: ctx.module_id.clone(),
@@ -116,7 +117,11 @@ impl WasmRequestEnvelope {
     }
 }
 
-fn property_from_config_json(config_json: &str, locale: String, timezone: String) -> PropertyContext {
+fn property_from_config_json(
+    config_json: &str,
+    locale: String,
+    timezone: String,
+) -> PropertyContext {
     let parsed: Value = if config_json.is_empty() {
         Value::Null
     } else {
@@ -133,14 +138,8 @@ fn property_from_config_json(config_json: &str, locale: String, timezone: String
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    let lat = parsed
-        .get("lat")
-        .and_then(Value::as_f64)
-        .unwrap_or(48.8566);
-    let lng = parsed
-        .get("lng")
-        .and_then(Value::as_f64)
-        .unwrap_or(2.3522);
+    let lat = parsed.get("lat").and_then(Value::as_f64).unwrap_or(48.8566);
+    let lng = parsed.get("lng").and_then(Value::as_f64).unwrap_or(2.3522);
     PropertyContext {
         name,
         locale,

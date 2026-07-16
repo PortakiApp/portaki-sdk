@@ -300,7 +300,10 @@ fn parse_forecast(raw: &serde_json::Value, days: u8) -> SdkResult<ForecastRespon
             wind_speed_ms_max: wind_max,
         });
     }
-    Ok(ForecastResponse { days: rows, city_name })
+    Ok(ForecastResponse {
+        days: rows,
+        city_name,
+    })
 }
 
 #[cfg(test)]
