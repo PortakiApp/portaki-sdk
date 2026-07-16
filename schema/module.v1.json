@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "title": "Portaki module catalogue manifest (portaki.module.json)",
+  "type": "object",
+  "required": ["id", "name", "description", "version", "author", "icon", "type"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "name": { "$ref": "#/$defs/i18nStringMap" },
+    "description": { "$ref": "#/$defs/i18nStringMap" },
+    "details": { "$ref": "#/$defs/i18nStringMap" },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
+    },
+    "author": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "icon": { "type": "string" },
+    "type": { "type": "string" },
+    "license": { "type": "string" },
+    "requiresHostSdk": {
+      "type": "string",
+      "description": "Minimum host SDK semver required by this module."
+    },
+    "hostSurfaces": {
+      "type": "array",
+      "description": "Host dashboard navigable surfaces (property workspace tabs, stats cards, …).",
+      "items": { "$ref": "#/$defs/hostSurface" }
+    },
+    "guestSurfaces": {
+      "type": "array",
+      "description": "Guest booklet URL routes beyond the implicit home.card (path may include :params).",
+      "items": { "$ref": "#/$defs/guestSurface" }
+    }
+  },
+  "$defs": {
+    "i18nStringMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "hostSurface": {
+      "type": "object",
+      "required": ["type", "pathSegment", "label"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "e.g. property-workspace-tab, property-stats-card"
+        },
+        "pathSegment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "URL segment under /dashboard/listings/[id]/"
+        },
+        "label": { "$ref": "#/$defs/i18nStringMap" },
+        "icon": { "type": "string" },
+        "hostUi": {
+          "type": "object",
+          "properties": {
+            "designId": { "type": "string" }
+          }
+        }
+      }
+    },
+    "guestSurface": {
+      "type": "object",
+      "required": ["surfaceId", "path"],
+      "properties": {
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Wasm/guest surface id (e.g. explore.detail, explore.item)"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Guest URL path under /p/[accessKey]/ (e.g. appliances, appliances/:deviceId)"
+        },
+        "labelKey": {
+          "type": "string",
+          "description": "i18n key for booklet nav label (e.g. nav.appliances)"
+        }
+      }
+    }
+  }
+}

@@ -111,6 +111,7 @@ impl WasmRequestEnvelope {
                 locale: None,
             }),
             property,
+            input: self.params.clone(),
         })
     }
 }

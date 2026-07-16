@@ -37,6 +37,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 /// Single effective capability grant attached to the current invocation.
@@ -142,6 +143,9 @@ pub struct Context {
     pub guest: Option<GuestIdentity>,
     /// Property metadata bundle.
     pub property: PropertyContext,
+    /// Surface/query/command input params from the host (route params, overlay args, …).
+    #[serde(default)]
+    pub input: Value,
 }
 
 /// Host dashboard invocation context.
@@ -210,6 +214,7 @@ impl Default for Context {
                 lng: 7.01,
                 address: None,
             },
+            input: Value::Null,
         }
     }
 }

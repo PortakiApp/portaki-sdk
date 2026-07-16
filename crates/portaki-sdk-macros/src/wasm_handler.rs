@@ -55,14 +55,34 @@ fn register_handler(names: &[&str], kind: HandlerKind, function_item: &ItemFn) -
 
     let invoke = match kind {
         HandlerKind::Surface => {
-            let surface_call = if returns_result(function_item) {
-                quote! { #fn_ident(ctx)? }
-            } else {
-                quote! { #fn_ident(ctx) }
-            };
-            quote! {
-                let surface = #surface_call;
-                ::serde_json::to_value(surface)
+            let (ctx_ty, args_ty) = parse_query_command_sig(function_item);
+            match args_ty {
+                Some(args_ty) => {
+                    let surface_call = if returns_result(function_item) {
+                        quote! { #fn_ident(ctx, args)? }
+                    } else {
+                        quote! { #fn_ident(ctx, args) }
+                    };
+                    quote! {
+                        let ctx: #ctx_ty = ctx;
+                        let args: #args_ty = ::serde_json::from_value(params)
+                            .map_err(|e| ::portaki_sdk::error::PortakiError::Host(format!("wasm_params_invalid: {e}")))?;
+                        let surface = #surface_call;
+                        ::serde_json::to_value(surface)
+                    }
+                }
+                None => {
+                    let surface_call = if returns_result(function_item) {
+                        quote! { #fn_ident(ctx)? }
+                    } else {
+                        quote! { #fn_ident(ctx) }
+                    };
+                    quote! {
+                        let ctx: #ctx_ty = ctx;
+                        let surface = #surface_call;
+                        ::serde_json::to_value(surface)
+                    }
+                }
             }
         }
         HandlerKind::Query | HandlerKind::Command => {
