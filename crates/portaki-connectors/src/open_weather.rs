@@ -98,6 +98,8 @@ pub struct CurrentWeather {
     pub condition: String,
     /// Relative humidity percent (`main.humidity`, `0`–`100`).
     pub humidity: u8,
+    /// Wind speed in meters per second (`wind.speed`), when present.
+    pub wind_speed_ms: Option<f64>,
 }
 
 /// Single aggregated forecast day.
@@ -114,6 +116,8 @@ pub struct ForecastDay {
     pub max_c: f64,
     /// Lowercased `weather[0].main` from the last slot processed for the date.
     pub condition: String,
+    /// Peak precipitation probability percent (`pop` × 100), when present.
+    pub precip_chance_pct: Option<u8>,
 }
 
 /// Multi-day forecast bundle returned by [`OpenWeather::forecast`].
@@ -188,6 +192,7 @@ fn parse_current(raw: &serde_json::Value) -> SdkResult<CurrentWeather> {
             .pointer("/main/humidity")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u8,
+        wind_speed_ms: raw.pointer("/wind/speed").and_then(|v| v.as_f64()),
         condition,
     })
 }
@@ -216,6 +221,7 @@ fn parse_forecast(raw: &serde_json::Value, days: u8) -> SdkResult<ForecastRespon
         let mut min = f64::MAX;
         let mut max = f64::MIN;
         let mut condition = String::from("clouds");
+        let mut max_pop: Option<f64> = None;
         for item in items {
             let item_min = item
                 .pointer("/main/temp_min")
@@ -230,12 +236,16 @@ fn parse_forecast(raw: &serde_json::Value, days: u8) -> SdkResult<ForecastRespon
             if let Some(main) = item.pointer("/weather/0/main").and_then(|v| v.as_str()) {
                 condition = main.to_ascii_lowercase();
             }
+            if let Some(pop) = item.get("pop").and_then(|v| v.as_f64()) {
+                max_pop = Some(max_pop.map_or(pop, |current| current.max(pop)));
+            }
         }
         rows.push(ForecastDay {
             date,
             min_c: min,
             max_c: max,
             condition,
+            precip_chance_pct: max_pop.map(|pop| (pop.clamp(0.0, 1.0) * 100.0).round() as u8),
         });
     }
     Ok(ForecastResponse { days: rows })
@@ -255,5 +265,31 @@ mod tests {
         assert_eq!(parsed.temp_c, 18.5);
         assert_eq!(parsed.humidity, 70);
         assert_eq!(parsed.condition, "clear");
+        assert!(parsed.wind_speed_ms.is_none());
+    }
+
+    #[test]
+    fn parse_forecast_aggregates_precip_chance() {
+        let raw = serde_json::json!({
+            "list": [
+                {
+                    "dt_txt": "2026-07-17 09:00:00",
+                    "main": { "temp_min": 18.0, "temp_max": 22.0 },
+                    "weather": [{ "main": "Rain" }],
+                    "pop": 0.4
+                },
+                {
+                    "dt_txt": "2026-07-17 12:00:00",
+                    "main": { "temp_min": 19.0, "temp_max": 24.0 },
+                    "weather": [{ "main": "Clouds" }],
+                    "pop": 0.75
+                }
+            ]
+        });
+        let parsed = parse_forecast(&raw, 5).expect("parse");
+        assert_eq!(parsed.days.len(), 1);
+        assert_eq!(parsed.days[0].date, "2026-07-17");
+        assert_eq!(parsed.days[0].precip_chance_pct, Some(75));
+        assert_eq!(parsed.days[0].condition, "clouds");
     }
 }
