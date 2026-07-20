@@ -95,6 +95,15 @@ pub mod ai {
     pub const GUEST_ASSISTANT: &str = "ai.guest.assistant";
 }
 
+/// Guest access composition capabilities (smart locks, future access providers).
+pub mod access {
+    /// Smart-lock provider contract (`getGuestCredential`, `unlock`).
+    ///
+    /// Declared by lock provider modules. Consumer modules bind a provider by
+    /// module id when an installed module satisfies this capability.
+    pub const SMART_LOCK: &str = "access.smart_lock";
+}
+
 /// Exhaustive list of known capability ids for compile-time validation and CLI linting.
 pub const ALL: &[&str] = &[
     core::PROPERTIES,
@@ -124,6 +133,7 @@ pub const ALL: &[&str] = &[
     ai::TRANSLATION,
     ai::IMAGE_GENERATION,
     ai::GUEST_ASSISTANT,
+    access::SMART_LOCK,
 ];
 
 /// Returns `true` when `id` is a registered platform capability string.
@@ -136,6 +146,7 @@ pub fn is_known(id: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::access;
     use super::core;
     use super::external;
     use super::ALL;
@@ -144,7 +155,9 @@ mod tests {
     fn capability_ids_match_java_enum() {
         assert!(ALL.contains(&core::STORAGE));
         assert!(ALL.contains(&external::OPEN_WEATHER_POOL));
+        assert!(ALL.contains(&access::SMART_LOCK));
         assert_eq!(core::PROPERTIES, "core.properties");
         assert_eq!(external::GOOGLE_PLACES_BYOK, "external.google-places.byok");
+        assert_eq!(access::SMART_LOCK, "access.smart_lock");
     }
 }

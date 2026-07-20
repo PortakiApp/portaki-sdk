@@ -59,7 +59,7 @@ pub use inventory;
 
 pub use context::{
     Context, DisplayPreferences, GuestContext, GuestIdentity, HostContext, PlanInfo,
-    PropertyContext, Quota,
+    PropertyContext, Quota, StayContext,
 };
 pub use error::{PortakiError, Result};
 pub use portaki_sdk_macros::{
@@ -90,7 +90,7 @@ pub use sdui::{action::Action, component::Component, surface::Surface};
 /// ```
 pub mod prelude {
     pub use crate::capability;
-    pub use crate::context::{Context, GuestContext, HostContext};
+    pub use crate::context::{Context, GuestContext, HostContext, StayContext};
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
     pub use crate::sdui::component::Component;

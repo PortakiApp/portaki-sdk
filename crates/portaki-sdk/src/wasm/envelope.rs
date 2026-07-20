@@ -4,8 +4,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
+use chrono::{DateTime, Utc};
+
 use crate::context::{
     CapabilityGrant, Context, DisplayPreferences, GuestIdentity, PlanInfo, PropertyContext,
+    StayContext,
 };
 use crate::error::{PortakiError, Result};
 
@@ -41,6 +44,15 @@ pub struct WasmContextEnvelope {
     /// Stay id for guest invocations.
     #[serde(rename = "stayId", default)]
     pub stay_id: Option<Uuid>,
+    /// Stay check-in instant (UTC ISO-8601) for guest reveal policies.
+    #[serde(rename = "checkinAt", default)]
+    pub checkin_at: Option<String>,
+    /// Stay check-out instant (UTC ISO-8601) for guest reveal policies.
+    #[serde(rename = "checkoutAt", default)]
+    pub checkout_at: Option<String>,
+    /// Property IANA timezone (`Europe/Paris`) — preferred over [`Self::timezone`].
+    #[serde(rename = "propertyTimezone", default)]
+    pub property_timezone: Option<String>,
     /// Effective capability ids (orchestrator passes as scopes).
     #[serde(default)]
     pub scopes: Vec<String>,
@@ -50,7 +62,7 @@ pub struct WasmContextEnvelope {
     /// Request locale (`fr-FR`).
     #[serde(default)]
     pub locale: Option<String>,
-    /// Property timezone (`Europe/Paris`).
+    /// Property timezone (`Europe/Paris`) — legacy alias; prefer `propertyTimezone`.
     #[serde(default)]
     pub timezone: Option<String>,
 }
@@ -86,12 +98,18 @@ impl WasmRequestEnvelope {
             .collect();
         let locale = ctx.locale.clone().unwrap_or_else(|| "fr-FR".to_string());
         let timezone = ctx
-            .timezone
+            .property_timezone
             .clone()
+            .or_else(|| ctx.timezone.clone())
             .unwrap_or_else(|| "Europe/Paris".to_string());
         let property_locale = locale.clone();
         let property =
             property_from_config_json(&ctx.config_json, property_locale, timezone.clone());
+        let stay = ctx.stay_id.map(|stay_id| StayContext {
+            stay_id,
+            checkin_at: parse_instant_opt(ctx.checkin_at.as_deref()),
+            checkout_at: parse_instant_opt(ctx.checkout_at.as_deref()),
+        });
         Ok(Context {
             property_id,
             module_id: ctx.module_id.clone(),
@@ -111,10 +129,21 @@ impl WasmRequestEnvelope {
                 display_name: None,
                 locale: None,
             }),
+            stay,
             property,
             input: self.params.clone(),
         })
     }
+}
+
+fn parse_instant_opt(raw: Option<&str>) -> Option<DateTime<Utc>> {
+    let value = raw?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
 }
 
 fn property_from_config_json(
@@ -193,5 +222,46 @@ mod tests {
         assert_eq!(ctx.property.address.as_deref(), Some("Lyon"));
         assert!((ctx.property.lat - 45.764).abs() < f64::EPSILON);
         assert!((ctx.property.lng - 4.8357).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn reads_guest_stay_window_and_property_timezone() {
+        let raw = r#"{
+            "query": "render_guest_home_cards",
+            "params": {},
+            "context": {
+                "moduleId": "example-module",
+                "moduleVersion": "0.2.0",
+                "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                "stayId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "checkinAt": "2026-07-20T14:00:00Z",
+                "checkoutAt": "2026-07-25T10:00:00Z",
+                "propertyTimezone": "Europe/Paris",
+                "scopes": ["core.storage"]
+            }
+        }"#;
+        let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
+        let ctx = envelope
+            .to_context("render_guest_home_cards")
+            .expect("context");
+        let stay = ctx.stay.expect("stay");
+        assert_eq!(
+            stay.stay_id.to_string(),
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        );
+        assert_eq!(
+            stay.checkin_at
+                .expect("checkin")
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            "2026-07-20T14:00:00Z"
+        );
+        assert_eq!(
+            stay.checkout_at
+                .expect("checkout")
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            "2026-07-25T10:00:00Z"
+        );
+        assert_eq!(ctx.timezone, "Europe/Paris");
+        assert_eq!(ctx.property.timezone, "Europe/Paris");
     }
 }

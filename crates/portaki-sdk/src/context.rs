@@ -105,6 +105,21 @@ pub struct GuestIdentity {
     pub locale: Option<String>,
 }
 
+/// Stay window injected on guest booklet invocations.
+///
+/// Used for timed secret reveal (e.g. access codes). Instants are UTC ISO-8601
+/// from the gateway; calendar math for local-time policies uses
+/// [`Context::timezone`] / [`PropertyContext::timezone`] (`propertyTimezone`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StayContext {
+    /// Stay identifier for the current guest booklet session.
+    pub stay_id: Uuid,
+    /// Check-in instant (UTC), when the gateway loaded a stay.
+    pub checkin_at: Option<DateTime<Utc>>,
+    /// Check-out instant (UTC), when the gateway loaded a stay.
+    pub checkout_at: Option<DateTime<Utc>>,
+}
+
 /// Shell accessibility and theme preferences from the client runtime.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DisplayPreferences {
@@ -141,6 +156,9 @@ pub struct Context {
     pub display: DisplayPreferences,
     /// Guest identity on guest surfaces only.
     pub guest: Option<GuestIdentity>,
+    /// Stay window on guest surfaces (`None` on host / when stay id is absent).
+    #[serde(default)]
+    pub stay: Option<StayContext>,
     /// Property metadata bundle.
     pub property: PropertyContext,
     /// Surface/query/command input params from the host (route params, overlay args, …).
@@ -206,6 +224,7 @@ impl Default for Context {
             invocation_id: Uuid::new_v4(),
             display: DisplayPreferences::default(),
             guest: None,
+            stay: None,
             property: PropertyContext {
                 name: "Test Property".to_string(),
                 locale: "fr-FR".to_string(),
