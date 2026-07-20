@@ -23,12 +23,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
 
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         continue-on-error: true
         with:
           token: ${{ steps.app-token.outputs.token }}
