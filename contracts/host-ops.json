@@ -1,0 +1,19 @@
+{
+  "description": "Wire ids for portaki_host_dispatch — must match RustHostOperationId and ExtismHostBackend",
+  "ops": [
+    "kv.get",
+    "kv.set",
+    "kv.delete",
+    "kv.list",
+    "time.now",
+    "connector.call",
+    "capabilities.has",
+    "i18n.translate",
+    "log",
+    "repo.find",
+    "repo.create",
+    "repo.delete",
+    "module.status",
+    "events.emit"
+  ]
+}
