@@ -24,7 +24,10 @@ jobs:
         with:
           components: rustfmt
 
+      # fmt does not build — skip target cache
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: fmt
         run: cargo fmt --all -- --check
@@ -61,6 +64,11 @@ jobs:
 
       - name: doc
         run: cargo doc --workspace --no-deps
+
+      # trybuild nests under target/tests/; rust-cache cleanup ENOENT on target/tests/target
+      - name: Clean trybuild artifacts
+        if: always()
+        run: rm -rf target/tests
 
   quality:
     name: quality
