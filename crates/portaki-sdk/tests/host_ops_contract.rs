@@ -39,10 +39,7 @@ fn host_ops_contract_matches_extism_host_backend() {
     for line in src.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("self.dispatch_value(\"") {
-            let op = rest
-                .split('"')
-                .next()
-                .expect("dispatch_value op literal");
+            let op = rest.split('"').next().expect("dispatch_value op literal");
             assert!(
                 contract.contains(op),
                 "ExtismHostBackend dispatches {op:?} not listed in contracts/host-ops.json"
@@ -57,5 +54,9 @@ fn host_ops_contract_is_non_empty_unique() {
     assert!(!ops.is_empty());
     let raw = fs::read_to_string(contract_path()).unwrap();
     let contract: HostOpsContract = serde_json::from_str(&raw).unwrap();
-    assert_eq!(contract.ops.len(), ops.len(), "duplicate ops in host-ops.json");
+    assert_eq!(
+        contract.ops.len(),
+        ops.len(),
+        "duplicate ops in host-ops.json"
+    );
 }
