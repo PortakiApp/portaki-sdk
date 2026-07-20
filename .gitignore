@@ -2,5 +2,13 @@
 **/*.rs.bk
 Cargo.lock
 
-# Local editor / agent config — not part of the published tree
+# AI agent / Cursor tooling (local only — never commit)
 .cursor/
+.claude/
+.cursorrules
+AGENTS.md
+CLAUDE.md
+.codex/
+.continue/
+.windsurf/
+.aider*
