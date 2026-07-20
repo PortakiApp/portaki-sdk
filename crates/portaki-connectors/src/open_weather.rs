@@ -173,7 +173,7 @@ impl OpenWeather {
         connectors::call("open-weather", "historical", args)
     }
 
-    /// Validates a BYOK API key before persistence (local stub).
+    /// Local format check for a BYOK API key before persistence.
     ///
     /// Accepts any non-empty trimmed string. Does not call OpenWeather.
     ///

@@ -17,7 +17,7 @@
 //!
 //! - Granting a capability does not imply unlimited usage — check quotas where relevant.
 //! - `external.*.pool` vs `external.*.byok` are mutually exclusive credential paths;
-//!   use [`crate::host::credentials`] rather than branching on capability strings alone.
+//!   branch on these capability ids (and connector errors), not invent ad-hoc probes.
 //! - `ai::*` entries are roadmap placeholders — do not depend on them in production paths yet.
 //!
 //! # Examples

@@ -14,9 +14,7 @@
 //!
 //! - [`typed::create`] is an **upsert on primary key** at runtime (`INSERT … ON CONFLICT (id)
 //!   DO UPDATE`). Prefer `create` for save/replace paths — do not delete-then-create.
-//! - [`typed::update`] and [`typed::find_by_id`] are stubs until gateway wiring lands; use
-//!   [`typed::create`] for upserts instead of `update`.
-//! - [`typed::count`] returns `0` without a backend — do not use in production paths yet.
+//! - There is no separate partial-update API — use [`typed::create`] for upserts.
 //! - Cross-module joins are unsupported — denormalize or use queries/commands.
 //!
 //! # Examples
@@ -143,6 +141,12 @@ impl<E> Query<E> {
         self.limit = Some(limit);
         self
     }
+
+    /// Clears any page limit (used by [`count`]).
+    fn without_limit(mut self) -> Self {
+        self.limit = None;
+        self
+    }
 }
 
 /// Equality / comparison filter helpers.
@@ -224,50 +228,25 @@ where
     Create: Serialize,
 {
     let entity_name = entity_type_name::<E>();
-    if let Ok(host) = crate::host::runtime::backend() {
-        let entity_json = serde_json::to_string(&data)?;
-        let response_json = host.repo_create(entity_name, &entity_json)?;
-        return serde_json::from_str(&response_json)
-            .map_err(|e| PortakiError::Storage(e.to_string()));
-    }
-    let _ = entity_name;
-    Err(PortakiError::Storage(
-        "repository create requires gateway — use MockHostFunctions in tests".into(),
-    ))
-}
-
-/// Updates a row by id.
-///
-/// Stub — use [`create`] for upsert-on-PK instead.
-pub fn update<E, Update, Entity>(_id: Uuid, _partial: Update) -> Result<Entity>
-where
-    Entity: DeserializeOwned,
-{
-    let _ = std::any::type_name::<E>();
-    Err(PortakiError::Storage(
-        "repository update is a stub — use repo::create (upsert on PK) instead".into(),
-    ))
+    let host = crate::host::runtime::backend()?;
+    let entity_json = serde_json::to_string(&data)?;
+    let response_json = host.repo_create(entity_name, &entity_json)?;
+    serde_json::from_str(&response_json).map_err(|e| PortakiError::Storage(e.to_string()))
 }
 
 /// Deletes a row by id.
 pub fn delete<E>(id: Uuid) -> Result<bool> {
     let entity_name = entity_type_name::<E>();
-    if let Ok(host) = crate::host::runtime::backend() {
-        return host.repo_delete(entity_name, &id.to_string());
-    }
-    let _ = entity_name;
-    Err(PortakiError::Storage(
-        "repository delete requires gateway — use MockHostFunctions in tests".into(),
-    ))
+    crate::host::runtime::backend()?.repo_delete(entity_name, &id.to_string())
 }
 
-/// Finds a row by id.
-pub fn find_by_id<E, Entity>(_id: Uuid) -> Result<Option<Entity>>
+/// Finds a row by id via [`find`] with an equality filter on `id`.
+pub fn find_by_id<E, Entity>(id: Uuid) -> Result<Option<Entity>>
 where
     Entity: DeserializeOwned,
 {
-    let _ = std::any::type_name::<E>();
-    Ok(None)
+    let page = find::<E, Entity>(Query::new().r#where(eq("id", id)).limit(1))?;
+    Ok(page.items.into_iter().next())
 }
 
 /// Runs a typed query.
@@ -276,17 +255,10 @@ where
     Entity: DeserializeOwned,
 {
     let entity_name = entity_type_name::<E>();
-    if let Ok(host) = crate::host::runtime::backend() {
-        let query_json = serde_json::to_string(&query)?;
-        let response_json = host.repo_find(entity_name, &query_json)?;
-        return serde_json::from_str(&response_json)
-            .map_err(|e| PortakiError::Storage(e.to_string()));
-    }
-    let _ = entity_name;
-    Ok(Page {
-        items: Vec::new(),
-        total: Some(0),
-    })
+    let host = crate::host::runtime::backend()?;
+    let query_json = serde_json::to_string(&query)?;
+    let response_json = host.repo_find(entity_name, &query_json)?;
+    serde_json::from_str(&response_json).map_err(|e| PortakiError::Storage(e.to_string()))
 }
 
 fn entity_type_name<E>() -> &'static str {
@@ -294,16 +266,17 @@ fn entity_type_name<E>() -> &'static str {
     full.rsplit("::").next().unwrap_or(full)
 }
 
-/// Counts rows matching a query.
-pub fn count<E>(_query: Query<E>) -> Result<u64> {
-    Ok(0)
+/// Counts rows matching a query (uses gateway `Page.total`, without a page limit).
+pub fn count<E>(query: Query<E>) -> Result<u64> {
+    let page: Page<serde_json::Value> = find(query.without_limit())?;
+    page.total.ok_or_else(|| {
+        PortakiError::Storage("repository count requires gateway total — none returned".into())
+    })
 }
 
 /// Repository free functions and types — primary module authoring API.
 pub mod typed {
-    pub use super::{
-        count, create, delete, find, find_by_id, update, Direction, Page, Query, Repo,
-    };
+    pub use super::{count, create, delete, find, find_by_id, Direction, Page, Query, Repo};
 }
 
 /// Returns a [`Repo`] marker for entity `E` (alias for [`typed::Repo::new`]).

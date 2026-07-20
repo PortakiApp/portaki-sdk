@@ -1,7 +1,7 @@
 //! Host function wrappers — the module's only supported API to platform services.
 //!
 //! Each submodule maps to a **host import family** implemented by the Java gateway
-//! (production) or [`runtime::HostBackend`] mocks (tests, `portaki dev`). Calls are
+//! (production) or [`runtime::HostBackend`] mocks (tests). Calls are
 //! synchronous from the module's perspective and return [`crate::error::Result`].
 //!
 //! ## Contract
@@ -11,9 +11,9 @@
 //! | [`kv`] | Store small opaque blobs scoped to property + module | Store secrets (keys are linted) |
 //! | [`repo`] | CRUD module-owned entities via typed builders | Issue SQL or access other modules' tables |
 //! | [`connectors`] | Invoke declared connector operations | Open raw HTTP clients |
-//! | [`credentials`] | Obtain opaque handles for connector egress | Read cleartext tokens in Wasm |
 //! | [`capabilities`] | Probe grants (hint); prefer `Context::has_capability` | Assume optional capabilities are present |
 //! | [`module`] | Read install/config readiness from orchestrator | Mutate enablement or config |
+//! | [`events`] | Emit declared domain events | Assume delivery without checking `Result` |
 //!
 //! ## Thread-local runtime
 //!
@@ -48,15 +48,12 @@
 
 pub mod capabilities;
 pub mod connectors;
-pub mod credentials;
 pub mod events;
 pub mod geo;
 pub mod i18n;
-pub mod images;
 pub mod kv;
 pub mod log;
 pub mod module;
-pub mod notifications;
 pub mod repo;
 pub mod runtime;
 pub mod time;

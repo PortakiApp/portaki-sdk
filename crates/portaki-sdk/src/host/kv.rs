@@ -8,7 +8,7 @@
 //!
 //! - Keys are module-private — the gateway namespaces by property and module id.
 //! - Values are opaque byte blobs — serialize JSON or protobuf yourself.
-//! - [`set`] rejects secret-like key names — use [`super::credentials`] instead.
+//! - [`set`] rejects secret-like key names — never store API tokens in KV.
 //! - [`atomic_set`] provides compare-and-set for lightweight coordination.
 //!
 //! ## What modules must not assume
@@ -58,8 +58,8 @@ pub fn get(key: &str) -> Result<Option<Vec<u8>>> {
 
 /// Stores `value` with optional TTL in seconds.
 ///
-/// Returns an error when `key` matches secret-like substrings — use
-/// [`super::credentials`] for API tokens.
+/// Returns an error when `key` matches secret-like substrings — never store
+/// API tokens in KV (gateway holds connector secrets).
 pub fn set(key: &str, value: &[u8], ttl_seconds: Option<u32>) -> Result<()> {
     lint_key(key)?;
     backend()?.kv_set(key, value, ttl_seconds)
@@ -102,7 +102,7 @@ fn lint_key(key: &str) -> Result<()> {
         .any(|fragment| lower.contains(fragment))
     {
         return Err(PortakiError::Host(format!(
-            "kv key '{key}' looks like a secret — use host::credentials instead"
+            "kv key '{key}' looks like a secret — do not store credentials in KV"
         )));
     }
     Ok(())

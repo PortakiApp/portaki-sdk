@@ -1,4 +1,4 @@
-//! Capability probes — server-side grant and quota hints.
+//! Capability probes — server-side grant hints.
 //!
 //! Prefer [`crate::Context::has_capability`] in surface renderers — the context
 //! snapshot is already on the stack. Use this module when you need a live probe
@@ -7,7 +7,8 @@
 //! ## Contract
 //!
 //! - [`has`] returns the effective grant for the **current property** at call time.
-//! - [`quota`] is a v1 stub — detailed metering is gateway-side; expect `None` today.
+//! - Metering / quota values are enforced gateway-side; they are not exposed as a
+//!   host probe in this SDK version.
 //!
 //! ## What modules must not assume
 //!
@@ -26,7 +27,6 @@
 //! assert!(ctx.has_capability(core::IMAGES));
 //! ```
 
-use crate::context::Quota;
 use crate::error::Result;
 use crate::host::runtime::{backend, context_or_load};
 
@@ -39,14 +39,4 @@ pub fn has(id: &str) -> Result<bool> {
         return host.has_capability(id);
     }
     Ok(context_or_load()?.has_capability(id))
-}
-
-/// Returns quota usage for a metered capability, when the gateway exposes it.
-///
-/// Currently returns `Ok(None)` in module builds — quota plumbing is deferred to
-/// gateway releases. Do not branch production logic on `Some` yet.
-pub fn quota(id: &str) -> Result<Option<Quota>> {
-    let _ = id;
-    // Detailed quota plumbing is gateway-side; modules receive hints via context in v1.
-    Ok(None)
 }

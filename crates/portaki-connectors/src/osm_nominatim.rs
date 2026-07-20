@@ -61,12 +61,10 @@ impl OsmNominatim {
         )
     }
 
-    /// Credential check for install-time validation (no-op stub).
+    /// Install-time credential check for OSM Nominatim.
     ///
-    /// Pool usage needs no token. BYOK email strings are accepted without
-    /// format validation. Always returns `Ok(())`.
-    pub fn validate_credentials(token: &str) -> super::Result<()> {
-        let _ = token;
+    /// Pool usage needs no token — always succeeds. Does not call Nominatim.
+    pub fn validate_credentials(_token: &str) -> super::Result<()> {
         Ok(())
     }
 }

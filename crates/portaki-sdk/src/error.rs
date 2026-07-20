@@ -10,7 +10,7 @@
 //! |---------|---------------|-----------------|
 //! | [`PortakiError::HostNotConfigured`] | Missing mock in tests / dev | Install [`crate::host::runtime::with_host`] |
 //! | [`PortakiError::CapabilityNotAvailable`] | Plan gate or missing optional cap | Fallback UX |
-//! | [`PortakiError::CredentialMissing`] | BYOK not configured | Call [`crate::host::credentials::request_setup`] |
+//! | [`PortakiError::CredentialMissing`] | BYOK not configured for a connector | Surface setup UX / degrade connector path |
 //! | [`PortakiError::Storage`] | KV/repo failure | Retry or degrade read path |
 //! | [`PortakiError::Connector`] | External API failure | Show connector error state |
 //!

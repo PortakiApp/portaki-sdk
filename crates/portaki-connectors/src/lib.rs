@@ -14,8 +14,8 @@
 //!    while still using these types at runtime.
 //!
 //! Credential validation helpers ([`OpenWeather::validate_credentials`], etc.) are
-//! local stubs used during module install / BYOK configuration — they do not hit
-//! the network.
+//! **local format checks** used during module install / BYOK configuration — they
+//! do not call the provider network.
 //!
 //! # Connector IDs and operations
 //!

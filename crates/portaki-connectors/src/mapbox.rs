@@ -104,7 +104,7 @@ impl Mapbox {
         connectors::call("mapbox", "static_map", args)
     }
 
-    /// Validates a Mapbox access token (local stub).
+    /// Local format check for a Mapbox access token (non-empty).
     ///
     /// # Errors
     ///

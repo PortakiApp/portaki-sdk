@@ -17,8 +17,8 @@
 //!
 //! ## What modules must not assume
 //!
-//! - **Secrets in Wasm**: never embed API keys. Use [`host::credentials`] handles
-//!   and [`host::connectors`] for egress.
+//! - **Secrets in Wasm**: never embed API keys. Use [`host::connectors`] for egress
+//!   (the gateway injects pool/BYOK secrets at the boundary).
 //! - **Raw HTTP / SQL**: blocked by platform policy; use connectors and `host::repo`.
 //! - **Cross-invocation memory**: Wasm instances are ephemeral — persist via
 //!   `host::kv` or entity storage.

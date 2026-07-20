@@ -108,7 +108,7 @@ impl GooglePlaces {
         )
     }
 
-    /// Validates a BYOK API key (local stub).
+    /// Local format check for a BYOK API key.
     ///
     /// Accepts any non-empty trimmed string; does not call Google.
     ///

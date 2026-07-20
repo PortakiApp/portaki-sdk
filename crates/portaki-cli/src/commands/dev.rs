@@ -1,23 +1,23 @@
-//! `portaki dev` — local mock gateway (minimal stub in v0.1).
+//! `portaki dev` — local mock gateway (not implemented yet).
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki dev`.
 pub struct DevArgs {
-    /// HTTP port for the mock gateway.
+    /// HTTP port that would be used once the mock gateway lands.
     #[arg(long, default_value_t = 3838)]
     pub port: u16,
 }
 
-/// Runs `portaki dev` (prints instructions until the mock gateway is fully wired).
+/// Runs `portaki dev`.
+///
+/// Fails clearly until a real local gateway exists — does not pretend to listen.
 pub async fn run(args: DevArgs) -> Result<()> {
-    println!(
-        "portaki dev: mock gateway listening on http://127.0.0.1:{} (stub — use portaki-test-utils in unit tests)",
+    bail!(
+        "portaki dev is not implemented yet (requested port {}). \
+         Use portaki-test-utils::MockContext in unit tests instead.",
         args.port
     );
-    println!("Press Ctrl+C to stop.");
-    tokio::signal::ctrl_c().await?;
-    Ok(())
 }

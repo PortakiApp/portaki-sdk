@@ -132,7 +132,14 @@ impl HostBackend for ExtismHostBackend {
             .ok_or_else(|| PortakiError::Host("connector_call_missing_json".into()))
     }
 
-    fn emit_event(&self, _event_type: &str, _payload_json: &str) -> Result<()> {
+    fn emit_event(&self, event_type: &str, payload_json: &str) -> Result<()> {
+        self.dispatch_value(
+            "events.emit",
+            json!({
+                "eventType": event_type,
+                "payloadJson": payload_json,
+            }),
+        )?;
         Ok(())
     }
 

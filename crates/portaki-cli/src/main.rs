@@ -43,7 +43,7 @@ struct Cli {
 enum Command {
     /// Scaffold a new module from a template.
     Init(commands::init::InitArgs),
-    /// Local mock gateway + file watcher (stub in v0.1).
+    /// Local mock gateway (not implemented — use portaki-test-utils).
     Dev(commands::dev::DevArgs),
     /// Build wasm32 artifact, manifest, and i18n bundle.
     Build(commands::build::BuildArgs),
@@ -53,7 +53,7 @@ enum Command {
     Test(commands::test::TestArgs),
     /// Push OCI artifact to Scaleway Container Registry.
     Publish(commands::publish::PublishArgs),
-    /// Open local SDK documentation (prints instructions in v0.1).
+    /// Print how to open local SDK documentation (no docs server).
     Docs(commands::docs::DocsArgs),
     /// Dump the SDUI catalog specification.
     Catalog(commands::catalog::CatalogArgs),

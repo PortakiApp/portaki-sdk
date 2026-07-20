@@ -74,7 +74,7 @@ portaki lint
 
 | Surface | Role |
 |---------|------|
-| `host::*` | Typed host wrappers — KV, repo, connectors, credentials, i18n, geo, … |
+| `host::*` | Typed host wrappers — KV, repo, connectors, events, i18n, geo, … |
 | `sdui::*` | Surfaces, components, actions the shell can render |
 | `capability::*` | Capability ids checked by the orchestrator and `portaki lint` |
 | Proc-macros | `portaki_module!`, `#[surface]`, `#[query]`, `#[command]`, … |
