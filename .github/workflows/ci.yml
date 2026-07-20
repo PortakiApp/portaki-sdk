@@ -3,61 +3,65 @@ name: ci
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/CI.md"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/CI.md"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  fmt:
-    name: fmt
+  push-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    outputs:
+      skip_quality: ${{ steps.resolve.outputs.skip_quality }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve CI skip
+        id: resolve
+        uses: actions/github-script@v8
+        with:
+          script: |
+            if (context.eventName === 'pull_request') {
+              core.setOutput('skip_quality', 'false');
+              return;
+            }
+            const detectPostMergePush = require('./.github/scripts/detect-post-merge-push.cjs');
+            await detectPostMergePush({ github, context, core });
+
+  # One runner for fmt+clippy+test — parallel subjects ×3 billed minutes without much wall-clock win.
+  rust:
+    name: rust
+    needs: push-source
+    if: needs.push-source.outputs.skip_quality != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
-      # fmt does not build — skip target cache
       - uses: Swatinem/rust-cache@v2
-        with:
-          cache-targets: false
 
       - name: fmt
         run: cargo fmt --all -- --check
 
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@v2
-
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
 
       - name: test
         run: cargo test --workspace
@@ -72,22 +76,22 @@ jobs:
 
   quality:
     name: quality
-    needs: [fmt, clippy, test]
+    needs: [push-source, rust]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - name: Quality gate
         env:
-          FMT: ${{ needs.fmt.result }}
-          CLIPPY: ${{ needs.clippy.result }}
-          TEST: ${{ needs.test.result }}
+          SKIP: ${{ needs.push-source.outputs.skip_quality }}
+          RUST: ${{ needs.rust.result }}
         run: |
-          for job in FMT CLIPPY TEST; do
-            result="$(eval echo \$$job)"
-            if [ "$result" != "success" ]; then
-              echo "Quality gate failed: $job=$result"
-              exit 1
-            fi
-          done
+          if [ "$SKIP" = "true" ]; then
+            echo "Quality gate skipped — post-merge push (CI already ran on PR)."
+            exit 0
+          fi
+          if [ "$RUST" != "success" ]; then
+            echo "Quality gate failed: rust=$RUST"
+            exit 1
+          fi
           echo "Quality gate passed."
