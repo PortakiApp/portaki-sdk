@@ -13,8 +13,24 @@ permissions:
   contents: read
 
 jobs:
-  rust:
-    name: rust
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -22,15 +38,23 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: fmt
-        run: cargo fmt --all -- --check
-
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: test
         run: cargo test --workspace
@@ -40,17 +64,22 @@ jobs:
 
   quality:
     name: quality
-    needs: [rust]
+    needs: [fmt, clippy, test]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - name: Quality gate
         env:
-          RUST: ${{ needs.rust.result }}
+          FMT: ${{ needs.fmt.result }}
+          CLIPPY: ${{ needs.clippy.result }}
+          TEST: ${{ needs.test.result }}
         run: |
-          if [ "$RUST" != "success" ]; then
-            echo "Quality gate failed: rust=$RUST"
-            exit 1
-          fi
+          for job in FMT CLIPPY TEST; do
+            result="$(eval echo \$$job)"
+            if [ "$result" != "success" ]; then
+              echo "Quality gate failed: $job=$result"
+              exit 1
+            fi
+          done
           echo "Quality gate passed."
