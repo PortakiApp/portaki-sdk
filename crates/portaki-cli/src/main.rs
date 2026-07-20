@@ -14,7 +14,7 @@
 //! | Command | Contract |
 //! |---------|----------|
 //! | `init` | Scaffold a module crate from a template |
-//! | `build` | Produce Wasm + merged manifest (+ i18n bundle when present) |
+//! | `build` | Produce Wasm + merged manifest (+ migrations/operations bundles + i18n) |
 //! | `lint` | Validate capability ids, connector bindings, i18n keys |
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `publish` | Push OCI layers to a container registry |

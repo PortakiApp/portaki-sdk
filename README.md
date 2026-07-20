@@ -103,10 +103,13 @@ Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>` (dash, not
 
 `portaki publish --dry-run` validates the artifact without pushing.
 
-When both `portaki.module.json` and SDK emissions exist, publish pushes two layers:
+When both `portaki.module.json` and SDK emissions exist, publish pushes catalog + SDK layers
+(plus optional migrations / operations / i18n / wasm):
 
 - `application/vnd.portaki.manifest+json` — host catalog (`publish-manifest.json`)
 - `application/vnd.portaki.sdk.manifest+json` — SDK emissions (`manifest.json`)
+- `application/vnd.portaki.migrations+json` — `migrations.bundle.json` (when `db/migrations/` exists)
+- `application/vnd.portaki.operations+json` — `operations.bundle.json` v2 schema from `#[entity]` (typed-repo upsert)
 
 ## Related repositories
 

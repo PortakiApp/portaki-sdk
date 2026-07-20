@@ -12,7 +12,10 @@
 //!
 //! ## What modules must not assume
 //!
-//! - [`typed::update`] and [`typed::find_by_id`] are stubs until gateway wiring lands.
+//! - [`typed::create`] is an **upsert on primary key** at runtime (`INSERT … ON CONFLICT (id)
+//!   DO UPDATE`). Prefer `create` for save/replace paths — do not delete-then-create.
+//! - [`typed::update`] and [`typed::find_by_id`] are stubs until gateway wiring lands; use
+//!   [`typed::create`] for upserts instead of `update`.
 //! - [`typed::count`] returns `0` without a backend — do not use in production paths yet.
 //! - Cross-module joins are unsupported — denormalize or use queries/commands.
 //!
@@ -212,6 +215,9 @@ impl<E> Default for Repo<E> {
 }
 
 /// Creates a row in the module schema and returns the persisted entity.
+///
+/// At runtime this is an upsert on the primary key (`id`): re-calling create with the same
+/// `id` updates non-key columns. Prefer this over delete-then-create.
 pub fn create<E, Create, Entity>(data: Create) -> Result<Entity>
 where
     Entity: DeserializeOwned,
@@ -231,13 +237,15 @@ where
 }
 
 /// Updates a row by id.
+///
+/// Stub — use [`create`] for upsert-on-PK instead.
 pub fn update<E, Update, Entity>(_id: Uuid, _partial: Update) -> Result<Entity>
 where
     Entity: DeserializeOwned,
 {
     let _ = std::any::type_name::<E>();
     Err(PortakiError::Storage(
-        "repository update requires gateway — use MockHostFunctions in tests".into(),
+        "repository update is a stub — use repo::create (upsert on PK) instead".into(),
     ))
 }
 

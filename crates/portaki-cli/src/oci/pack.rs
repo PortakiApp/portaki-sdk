@@ -13,6 +13,8 @@ const WASM_MEDIA: &str = "application/wasm";
 const I18N_MEDIA: &str = "application/vnd.portaki.i18n+json";
 const MIGRATIONS_BUNDLE_MEDIA: &str = "application/vnd.portaki.migrations+json";
 pub const MIGRATIONS_BUNDLE: &str = "migrations.bundle.json";
+const OPERATIONS_BUNDLE_MEDIA: &str = "application/vnd.portaki.operations+json";
+pub const OPERATIONS_BUNDLE: &str = "operations.bundle.json";
 
 /// OCI host-catalog layer (`portaki.module.json` freeze) — consumed by API / install.
 pub const PUBLISH_MANIFEST: &str = "publish-manifest.json";
@@ -137,6 +139,14 @@ pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Ve
         layers.push(PushLayer {
             path: migrations_path,
             media_type: MIGRATIONS_BUNDLE_MEDIA.to_string(),
+        });
+    }
+
+    let operations_path = artifact_dir.join(OPERATIONS_BUNDLE);
+    if operations_path.is_file() {
+        layers.push(PushLayer {
+            path: operations_path,
+            media_type: OPERATIONS_BUNDLE_MEDIA.to_string(),
         });
     }
 

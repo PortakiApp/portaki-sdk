@@ -8,7 +8,7 @@ use clap::Parser;
 
 use crate::manifest::{
     collect_emissions, find_emissions_dir, generate_manifest, write_manifest,
-    write_migration_bundle,
+    write_migration_bundle, write_operations_bundle,
 };
 use crate::oci::pack;
 
@@ -74,6 +74,20 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             );
         }
 
+        let module_version = catalog_module_version(&catalog_path).unwrap_or(manifest.version.clone());
+        if let Some(bundle_path) = write_operations_bundle(
+            &out_dir,
+            &manifest.id,
+            &module_version,
+            schema_version,
+            &manifest.entities,
+        )? {
+            println!(
+                "Wrote operations bundle v2 at {} (schema.tables for typed-repo upsert)",
+                bundle_path.display()
+            );
+        }
+
         bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
     } else if !catalog_path.exists() {
         anyhow::bail!(
@@ -88,6 +102,15 @@ pub async fn run(args: BuildArgs) -> Result<()> {
         publish_path.display()
     );
     Ok(())
+}
+
+fn catalog_module_version(catalog_path: &std::path::Path) -> Option<String> {
+    let raw = std::fs::read_to_string(catalog_path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    value
+        .get("version")
+        .and_then(|version| version.as_str())
+        .map(str::to_string)
 }
 
 fn read_supported_locales(i18n_dir: &PathBuf) -> Option<Vec<String>> {
