@@ -97,7 +97,10 @@ fn entity_to_table(module_id: &str, entity: &ManifestEntity) -> TableDef {
         if field_name.is_empty() {
             continue;
         }
-        let rust_type = field.get("type").and_then(Value::as_str).unwrap_or("String");
+        let rust_type = field
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("String");
         let (column_type, nullable) = rust_type_to_sql(rust_type);
         let sql_name = to_snake_case(field_name);
         let name = snake_to_camel(&sql_name);

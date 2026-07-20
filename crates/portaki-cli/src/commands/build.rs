@@ -74,7 +74,8 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             );
         }
 
-        let module_version = catalog_module_version(&catalog_path).unwrap_or(manifest.version.clone());
+        let module_version =
+            catalog_module_version(&catalog_path).unwrap_or(manifest.version.clone());
         if let Some(bundle_path) = write_operations_bundle(
             &out_dir,
             &manifest.id,
