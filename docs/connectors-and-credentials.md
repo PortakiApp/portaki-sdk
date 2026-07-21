@@ -100,6 +100,8 @@ Response: `{ providerId, token, source: "byok" | "platform" }`.
 
 Only providers with `CredentialProvider.clientExposable == true` are allowed. OpenWeather / Google Places stay egress-only — calling the client-token route for them returns `client_token_not_exposable`.
 
+**Mapbox platform pool env (orchestrator):** `MAPBOX_ACCESS_TOKEN` (preferred) or `MAPBOX_POOL_TOKEN` (same name as module-runtime egress). Plan coverage `PLAN_POOL` / UI “pool included” only grants entitlement — without one of those env vars the API returns `client_token_unavailable`.
+
 Legacy alias (deprecated): `GET /api/v1/workspace/mapbox-access-token` → same Mapbox resolution.
 
 ## Author checklist
