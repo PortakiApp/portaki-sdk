@@ -87,6 +87,21 @@ When there is no `portaki.module.json`, publish copies this SDK manifest as the 
 | **Module runtime** (egress) | Same connector metadata + workspace secret / pool env | Inject key at HTTP call time; fail with `connector_credential_missing` if neither is available |
 | **Dashboard** | Orchestrator readiness APIs | Intégrations UI + module banners — no hardcoded module lists |
 
+## Browser-safe client tokens
+
+Some providers expose a **public** token meant for browser SDKs (today: Mapbox `pk.*`). Those are **not** injected at module egress — frontends resolve them via:
+
+| Audience | Endpoint |
+|----------|----------|
+| Host (dashboard / mobile) | `GET /api/v1/workspace/client-tokens/{providerId}` |
+| Guest (stay-scoped) | `GET /api/v1/guest/{slug}/{accessCode}/client-tokens/{providerId}` |
+
+Response: `{ providerId, token, source: "byok" | "platform" }`.
+
+Only providers with `CredentialProvider.clientExposable == true` are allowed. OpenWeather / Google Places stay egress-only — calling the client-token route for them returns `client_token_not_exposable`.
+
+Legacy alias (deprecated): `GET /api/v1/workspace/mapbox-access-token` → same Mapbox resolution.
+
 ## Author checklist
 
 - [ ] `credential_provider_id` matches an orchestrator `CredentialProvider` id

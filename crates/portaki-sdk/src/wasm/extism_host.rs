@@ -181,6 +181,22 @@ impl HostBackend for ExtismHostBackend {
         serde_json::from_value(result)
             .map_err(|e| PortakiError::Host(format!("module_status_parse_failed: {e}")))
     }
+
+    fn module_list_by_capability(
+        &self,
+        capability_id: &str,
+    ) -> Result<Vec<crate::host::module::ModulePeer>> {
+        let result = self.dispatch_value(
+            "module.listByCapability",
+            json!({ "capabilityId": capability_id }),
+        )?;
+        let modules = result
+            .get("modules")
+            .cloned()
+            .unwrap_or(Value::Array(Vec::new()));
+        serde_json::from_value(modules)
+            .map_err(|e| PortakiError::Host(format!("module_list_by_capability_parse_failed: {e}")))
+    }
 }
 
 fn parse_response(response_json: &str) -> Result<Value> {

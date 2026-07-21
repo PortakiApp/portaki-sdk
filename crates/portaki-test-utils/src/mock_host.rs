@@ -250,6 +250,13 @@ impl HostBackend for MockHostFunctions {
             missing_required_keys: Vec::new(),
         })
     }
+
+    fn module_list_by_capability(
+        &self,
+        _capability_id: &str,
+    ) -> Result<Vec<portaki_sdk::host::module::ModulePeer>> {
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(test)]

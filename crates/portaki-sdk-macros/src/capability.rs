@@ -14,6 +14,7 @@ use crate::emit::{sanitize_key, write_emission};
 
 struct CapabilityAttrs {
     optional: bool,
+    provided: bool,
     capability_id: Option<String>,
     purpose_key: Option<String>,
     fallback_key: Option<String>,
@@ -22,6 +23,7 @@ struct CapabilityAttrs {
 impl Parse for CapabilityAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut optional = false;
+        let mut provided = false;
         let mut capability_id = None;
         let mut purpose_key = None;
         let mut fallback_key = None;
@@ -42,6 +44,11 @@ impl Parse for CapabilityAttrs {
                 if key == "required" && !lookahead.peek(Token![=]) {
                     input.parse::<syn::Ident>()?;
                     optional = false;
+                    continue;
+                }
+                if key == "provided" && !lookahead.peek(Token![=]) {
+                    input.parse::<syn::Ident>()?;
+                    provided = true;
                     continue;
                 }
             }
@@ -66,6 +73,7 @@ impl Parse for CapabilityAttrs {
 
         Ok(CapabilityAttrs {
             optional,
+            provided,
             capability_id,
             purpose_key,
             fallback_key,
@@ -99,12 +107,14 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
   "const": {},
   "id": {},
   "optional": {},
+  "provided": {},
   "purposeKey": {},
   "fallbackKey": {}
 }}"#,
         serde_json::to_string(&const_name).unwrap(),
         serde_json::to_string(&capability_id).unwrap(),
         attrs.optional,
+        attrs.provided,
         serde_json::to_string(&attrs.purpose_key).unwrap(),
         serde_json::to_string(&attrs.fallback_key).unwrap(),
     );

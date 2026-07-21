@@ -120,6 +120,14 @@ pub trait HostBackend: Send + Sync {
     fn module_status(&self) -> Result<crate::host::module::ModuleStatus> {
         Err(PortakiError::HostNotConfigured)
     }
+
+    /// Lists peer modules on this property that provide `capability_id`.
+    fn module_list_by_capability(
+        &self,
+        _capability_id: &str,
+    ) -> Result<Vec<crate::host::module::ModulePeer>> {
+        Err(PortakiError::HostNotConfigured)
+    }
 }
 
 /// Installs `backend` and `context` for the current thread while `f` runs.

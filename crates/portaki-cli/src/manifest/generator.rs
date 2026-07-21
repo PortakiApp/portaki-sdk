@@ -78,15 +78,21 @@ pub fn generate_manifest(
 
     let mut required_caps = Vec::new();
     let mut optional_caps = Vec::new();
+    let mut provided_caps = Vec::new();
     let mut builtin_connectors = Vec::new();
     let mut custom_connectors: Vec<Value> = Vec::new();
 
     for emission in emissions {
         match emission.kind.as_str() {
             "capability" => {
-                if emission.data["optional"].as_bool().unwrap_or(false) {
+                let id = emission.data["id"].as_str().unwrap_or_default().to_string();
+                if emission.data["provided"].as_bool().unwrap_or(false) {
+                    if !id.is_empty() {
+                        provided_caps.push(id);
+                    }
+                } else if emission.data["optional"].as_bool().unwrap_or(false) {
                     optional_caps.push(ManifestOptionalCapability {
-                        id: emission.data["id"].as_str().unwrap_or_default().to_string(),
+                        id,
                         purpose_key: emission.data["purposeKey"]
                             .as_str()
                             .unwrap_or("capability.purpose")
@@ -96,9 +102,8 @@ pub fn generate_manifest(
                             .unwrap_or("capability.fallback")
                             .to_string(),
                     });
-                } else {
-                    required_caps
-                        .push(emission.data["id"].as_str().unwrap_or_default().to_string());
+                } else if !id.is_empty() {
+                    required_caps.push(id);
                 }
             }
             "connector_builtin" => {
@@ -222,6 +227,7 @@ pub fn generate_manifest(
         capabilities: ManifestCapabilities {
             required: required_caps,
             optional: optional_caps,
+            provided: provided_caps,
         },
         connectors: ManifestConnectors {
             builtin: builtin_connectors,

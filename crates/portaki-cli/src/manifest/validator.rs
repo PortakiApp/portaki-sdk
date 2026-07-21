@@ -16,6 +16,7 @@ pub fn validate_manifest(manifest: &ModuleManifest, i18n_dir: &Path) -> Result<(
         .required
         .iter()
         .chain(manifest.capabilities.optional.iter().map(|c| &c.id))
+        .chain(manifest.capabilities.provided.iter())
     {
         if !is_known(capability_id) {
             bail!("unknown capability id in manifest: {capability_id}");
@@ -127,6 +128,7 @@ mod tests {
             capabilities: ManifestCapabilities {
                 required: vec!["not.a.real.capability".into()],
                 optional: vec![],
+                provided: vec![],
             },
             connectors: ManifestConnectors::default(),
             entities: vec![],

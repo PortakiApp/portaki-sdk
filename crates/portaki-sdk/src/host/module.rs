@@ -1,4 +1,4 @@
-//! Module install and configuration readiness snapshot.
+//! Module install readiness and peer discovery by capability.
 //!
 //! Surfaces that require owner setup (API keys, required config fields) should call
 //! [`status`] and render an empty state when [`ModuleStatus::is_ready`] is `false`.
@@ -9,6 +9,8 @@
 //! - [`status`] is authoritative for the **current** property + workspace + module triple.
 //! - `incomplete` mirrors dashboard publication readiness (required config keys empty).
 //! - `missing_required_keys` lists manifest config field keys still unset.
+//! - [`list_by_capability`] returns peer modules installed on the same property that
+//!   declare `capabilities.provided` containing the requested id (e.g. `access.smart_lock`).
 //!
 //! ## What modules must not assume
 //!
@@ -61,10 +63,28 @@ impl ModuleStatus {
     }
 }
 
+/// Peer module installed on the current property that provides a capability.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModulePeer {
+    /// Catalog / install module id (e.g. `nuki`).
+    pub module_id: String,
+    /// Localized display name when available (fallback: module id).
+    #[serde(default)]
+    pub display_name: String,
+}
+
 /// Fetches the current module status from the gateway orchestrator.
 ///
 /// Requires an installed [`crate::host::runtime::HostBackend`] — unavailable in bare
 /// unit tests without [`crate::host::runtime::with_host`].
 pub fn status() -> Result<ModuleStatus> {
     backend()?.module_status()
+}
+
+/// Lists workspace-enabled, property-active peer modules that provide `capability_id`.
+///
+/// Provider modules declare the id under `capabilities.provided` in their SDK manifest.
+pub fn list_by_capability(capability_id: &str) -> Result<Vec<ModulePeer>> {
+    backend()?.module_list_by_capability(capability_id)
 }

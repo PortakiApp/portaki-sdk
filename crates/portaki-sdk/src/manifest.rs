@@ -89,6 +89,9 @@ pub struct ManifestCapabilities {
     /// Optional capabilities with UX copy for purpose and fallback states.
     #[serde(default)]
     pub optional: Vec<ManifestOptionalCapability>,
+    /// Capabilities this module **provides** for peer discovery (e.g. `access.smart_lock`).
+    #[serde(default)]
+    pub provided: Vec<String>,
 }
 
 /// Optional capability entry with i18n keys for setup and degraded UX.
