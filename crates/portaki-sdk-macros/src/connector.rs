@@ -35,6 +35,8 @@ struct CustomConnectorAttrs {
     display_name_key: Option<String>,
     base_url: Option<String>,
     credential_provider_id: Option<String>,
+    /// Optional egress auth: `bearer` | `query_appid` | `query_key` | `none`.
+    auth: Option<String>,
 }
 
 impl Parse for CustomConnectorAttrs {
@@ -43,6 +45,7 @@ impl Parse for CustomConnectorAttrs {
         let mut display_name_key = None;
         let mut base_url = None;
         let mut credential_provider_id = None;
+        let mut auth = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -55,6 +58,7 @@ impl Parse for CustomConnectorAttrs {
                 "display_name_key" => display_name_key = Some(text),
                 "base_url" => base_url = Some(text),
                 "credential_provider_id" => credential_provider_id = Some(text),
+                "auth" => auth = Some(text),
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -73,6 +77,7 @@ impl Parse for CustomConnectorAttrs {
             display_name_key,
             base_url,
             credential_provider_id,
+            auth,
         })
     }
 }
@@ -173,12 +178,14 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
   "id": {},
   "displayNameKey": {},
   "baseUrl": {},
-  "credentialProviderId": {}
+  "credentialProviderId": {},
+  "auth": {}
 }}"#,
         serde_json::to_string(&attrs.id).unwrap(),
         serde_json::to_string(&attrs.display_name_key).unwrap(),
         serde_json::to_string(&attrs.base_url).unwrap(),
         serde_json::to_string(&attrs.credential_provider_id).unwrap(),
+        serde_json::to_string(&attrs.auth).unwrap(),
     );
 
     let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);

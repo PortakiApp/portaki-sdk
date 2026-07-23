@@ -107,6 +107,9 @@ pub enum CapabilityId {
     /// OpenStreetMap / Nominatim — platform-managed pool.
     #[serde(rename = "external.osm.pool")]
     OsmPool,
+    /// Nuki Web API — property-owned access token (BYOK only).
+    #[serde(rename = "external.nuki.byok")]
+    NukiByok,
     /// Inline text suggestion generation.
     #[serde(rename = "ai.text.suggestions")]
     TextSuggestions,
@@ -151,6 +154,7 @@ impl CapabilityId {
             Self::OpenWeatherPool => "external.open-weather.pool",
             Self::OpenWeatherByok => "external.open-weather.byok",
             Self::OsmPool => "external.osm.pool",
+            Self::NukiByok => "external.nuki.byok",
             Self::TextSuggestions => "ai.text.suggestions",
             Self::Translation => "ai.translation",
             Self::ImageGeneration => "ai.image.generation",
@@ -184,6 +188,7 @@ impl CapabilityId {
         Self::OpenWeatherPool,
         Self::OpenWeatherByok,
         Self::OsmPool,
+        Self::NukiByok,
         Self::TextSuggestions,
         Self::Translation,
         Self::ImageGeneration,
@@ -237,6 +242,7 @@ impl FromStr for CapabilityId {
             "external.open-weather.pool" => Ok(Self::OpenWeatherPool),
             "external.open-weather.byok" => Ok(Self::OpenWeatherByok),
             "external.osm.pool" => Ok(Self::OsmPool),
+            "external.nuki.byok" => Ok(Self::NukiByok),
             "ai.text.suggestions" => Ok(Self::TextSuggestions),
             "ai.translation" => Ok(Self::Translation),
             "ai.image.generation" => Ok(Self::ImageGeneration),
@@ -328,6 +334,8 @@ pub mod external {
     pub const OPEN_WEATHER_BYOK: CapabilityId = CapabilityId::OpenWeatherByok;
     /// OpenStreetMap / Nominatim — platform-managed pool.
     pub const OSM_POOL: CapabilityId = CapabilityId::OsmPool;
+    /// Nuki Web API — property-owned access token (BYOK only).
+    pub const NUKI_BYOK: CapabilityId = CapabilityId::NukiByok;
 }
 
 /// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).

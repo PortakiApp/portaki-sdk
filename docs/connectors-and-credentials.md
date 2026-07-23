@@ -42,12 +42,15 @@ Prefer the constants in `portaki_sdk::capability::external::*` so ids stay align
 
 ### Known providers
 
-| `credential_provider_id` | Pool capability | BYOK capability |
-|--------------------------|-----------------|-----------------|
-| `open-weather` | `external.open-weather.pool` | `external.open-weather.byok` |
-| `mapbox` | `external.mapbox.pool` | `external.mapbox.byok` |
-| `google-places` | `external.google-places.pool` | `external.google-places.byok` |
-| `osm` | `external.osm.pool` | — (no BYOK today) |
+| `credential_provider_id` | Pool capability | BYOK capability | Egress auth |
+|--------------------------|-----------------|-----------------|-------------|
+| `open-weather` | `external.open-weather.pool` | `external.open-weather.byok` | `query_appid` (default) |
+| `mapbox` | `external.mapbox.pool` | `external.mapbox.byok` | `bearer` |
+| `google-places` | `external.google-places.pool` | `external.google-places.byok` | `query_key` |
+| `osm` / `osm-nominatim` | `external.osm.pool` | — | `none` |
+| `nuki` | — | `external.nuki.byok` | `bearer` |
+
+Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_connector]` overrides the provider default. Paths may include `{argName}` templates; matching args are consumed from the JSON object. `POST` / `PUT` / `PATCH` send remaining args as a JSON body (empty → `{}`).
 
 ## What ends up in the manifest
 

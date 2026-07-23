@@ -117,13 +117,19 @@ pub fn generate_manifest(
                 }
             }
             "connector_custom" => {
-                custom_connectors.push(serde_json::json!({
+                let mut connector = serde_json::json!({
                     "id": emission.data["id"],
                     "displayNameKey": emission.data["displayNameKey"],
                     "baseUrl": emission.data["baseUrl"],
                     "credentialProviderId": emission.data["credentialProviderId"],
                     "operations": []
-                }));
+                });
+                if let Some(auth) = emission.data.get("auth").filter(|v| !v.is_null()) {
+                    if let Some(obj) = connector.as_object_mut() {
+                        obj.insert("auth".to_string(), auth.clone());
+                    }
+                }
+                custom_connectors.push(connector);
             }
             _ => {}
         }
