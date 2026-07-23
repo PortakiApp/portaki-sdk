@@ -402,7 +402,7 @@ mod tests {
         let peer = ModuleId::from_static("nuki");
         let cmd = Action::command(
             &peer,
-            OperationName::new("unlock"),
+            crate::contracts::smart_lock::UNLOCK,
             crate::sdui::action::EmptyArgs {},
         );
         match cmd {

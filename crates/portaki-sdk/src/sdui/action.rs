@@ -28,28 +28,21 @@
 //! # Examples
 //!
 //! ```
-//! use portaki_sdk::ids::{ModuleId, OperationName, SurfaceId};
+//! use portaki_sdk::contracts::smart_lock;
+//! use portaki_sdk::ids::{ModuleId, SurfaceId};
 //! use portaki_sdk::sdui::action::{
 //!     json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation,
 //! };
 //! use serde::Serialize;
 //!
 //! #[derive(Serialize)]
-//! struct RefreshArgs {
-//!     force: bool,
-//! }
-//!
-//! #[derive(Serialize)]
 //! struct DetailParams {
 //!     id: String,
 //! }
 //!
-//! let module = ModuleId::from_static("weather");
-//! let cmd = Action::command(
-//!     &module,
-//!     OperationName::new("refresh"),
-//!     RefreshArgs { force: true },
-//! );
+//! // Prefer catalog / contract consts — not OperationName::new at call sites.
+//! let module = ModuleId::from_static("nuki");
+//! let cmd = Action::command(&module, smart_lock::UNLOCK, EmptyArgs {});
 //! let nav = Action::navigate(
 //!     SurfaceId::new("detail"),
 //!     Some(json_value(DetailParams {
@@ -68,7 +61,6 @@
 //! assert!(matches!(nav, Action::Navigate { .. }));
 //! assert!(matches!(path_nav, Action::Navigate { .. }));
 //! assert!(matches!(overlay, Action::OpenOverlay { .. }));
-//! let _ = EmptyArgs {};
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -368,10 +360,11 @@ mod tests {
             item_id: String,
         }
 
+        const COMPLETE_ITEM: OperationName = OperationName::new("completeItem");
         let module = ModuleId::from_static("checklist");
         let action = Action::command(
             &module,
-            OperationName::new("completeItem"),
+            COMPLETE_ITEM,
             Args {
                 item_id: "abc".into(),
             },

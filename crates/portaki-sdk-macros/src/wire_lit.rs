@@ -21,7 +21,10 @@ impl Parse for WireLit {
             .ok_or_else(|| {
                 syn::Error::new_spanned(
                     &expr,
-                    "expected a string literal or Type::new(\"…\") (e.g. SurfaceId::new(\"home.card\"))",
+                    "expected a string literal or Type::new(\"…\") \
+                     (e.g. SurfaceId::new(\"home.card\")); \
+                     bare ids::CONST paths are not supported — \
+                     proc-macro OUT_DIR emissions need the wire string at expand time",
                 )
             })
     }

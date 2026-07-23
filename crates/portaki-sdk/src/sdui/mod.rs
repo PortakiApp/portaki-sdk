@@ -36,12 +36,8 @@
 //! use portaki_sdk::sdui::action::Action;
 //!
 //! fn render(ctx: HostContext) -> Surface {
-//!     use portaki_sdk::ids::OperationName;
-//!     let refresh = Action::command(
-//!         &ctx.module_id,
-//!         OperationName::new("refresh"),
-//!         EmptyArgs {},
-//!     );
+//!     // Call sites: module `ids::*` or `contracts::*` OperationName consts.
+//!     let refresh = Action::command(&ctx.module_id, ids::UPDATE_CONFIG, EmptyArgs {});
 //!     Surface::new(
 //!         Card::new()
 //!             .child(Stack::new().child(Text::new()))

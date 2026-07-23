@@ -6,10 +6,19 @@ boundary. Wire format stays a JSON string (`AsRef<str>` / serde transparent).
 ## Rule
 
 1. **Declare once** — string literal only in `define_*!`, `#[surface(id = …)]` /
-   `#[command(name = …)]` / `#[event_handler(event_type = …)]`, or `Type::new` /
-   `ModuleId::from_static` in tests and define macros.
+   `#[command(name = …)]` / `#[query(name = …)]` / `#[event_handler(event_type = …)]`,
+   or `Type::new("…")` / `ModuleId::from_static` in tests and define macros.
+   Proc-macros need the wire string at expand time (OUT_DIR emissions) — they
+   **cannot** take a bare `ids::CONST` path. Prefer `SurfaceId::new("…")` /
+   `OperationName::new("…")` / `EventType::new("…")` when you want the typed
+   constructor at the declaration site; keep the same wire string as `ids`.
 2. **Use typed consts** everywhere else — `ids::HOME_CARD`, `UPDATE_CONFIG`,
    `contracts::shell::SURFACE_INPUT`, never inline `"home.card"` at call sites.
+3. **Catalog completeness** — every module `ids.rs` lists all surfaces
+   (`define_surface_ids!`), commands **and** queries (`define_operation_names!`),
+   and emitted / subscribed events (`define_event_types!`). Peer / platform
+   protocols also live in [`contracts`](../crates/portaki-sdk/src/contracts);
+   module ids may mirror them with an equality test.
 
 ## Catalogs
 
@@ -65,6 +74,8 @@ Action::emit(shell::SURFACE_INPUT, Some(payload));
 
 #[event_handler(event_type = "core.booking.confirmed")] // declaration site
 fn on_booking(ctx: Context, event: BookingConfirmedEvent) -> Result<()> { /* … */ }
+// Prefer `contracts::platform::BOOKING_CONFIRMED` (or mirrored `ids::BOOKING_CONFIRMED`)
+// at any non-macro use site.
 let _ = platform::BOOKING_CONFIRMED;
 ```
 
