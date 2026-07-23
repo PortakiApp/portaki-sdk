@@ -12,9 +12,7 @@ impl Parse for WireLit {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         if input.peek(LitStr) {
             let lit: LitStr = input.parse()?;
-            return Ok(Self {
-                value: lit.value(),
-            });
+            return Ok(Self { value: lit.value() });
         }
 
         let expr: Expr = input.parse()?;
@@ -57,19 +55,13 @@ mod tests {
     #[test]
     fn extracts_string_literal() {
         let expr: syn::Expr = parse_quote! { "home.card" };
-        assert_eq!(
-            wire_string_from_expr(&expr).as_deref(),
-            Some("home.card")
-        );
+        assert_eq!(wire_string_from_expr(&expr).as_deref(), Some("home.card"));
     }
 
     #[test]
     fn extracts_new_call() {
         let expr: syn::Expr = parse_quote! { SurfaceId::new("home.card") };
-        assert_eq!(
-            wire_string_from_expr(&expr).as_deref(),
-            Some("home.card")
-        );
+        assert_eq!(wire_string_from_expr(&expr).as_deref(), Some("home.card"));
     }
 
     #[test]

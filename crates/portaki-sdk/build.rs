@@ -51,8 +51,7 @@ fn main() {
         generated.push_str(&format!(
             "/// SDUI primitive `{serde_name}` — see PORTAKI_PLATFORM.md §5.\n"
         ));
-        generated
-            .push_str("#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]\n");
+        generated.push_str("#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]\n");
         generated.push_str(&format!("pub struct {struct_name} {{\n"));
         generated.push_str(common_field_defs());
         for (field, ty) in fields {

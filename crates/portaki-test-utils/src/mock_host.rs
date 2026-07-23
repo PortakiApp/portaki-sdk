@@ -85,7 +85,10 @@ impl MockContextBuilder {
     ///
     /// Preserves surface and guest set by [`Self::guest`] / [`Self::host`] only when
     /// those fields were not cleared by the new context.
-    pub fn with_capabilities(mut self, capability_ids: &[portaki_sdk::capability::CapabilityId]) -> Self {
+    pub fn with_capabilities(
+        mut self,
+        capability_ids: &[portaki_sdk::capability::CapabilityId],
+    ) -> Self {
         self.context = Context::with_capabilities(capability_ids);
         self
     }
@@ -169,11 +172,7 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn has_capability(&self, id: &str) -> Result<bool> {
-        Ok(self
-            .context
-            .capabilities
-            .iter()
-            .any(|grant| grant.id == id))
+        Ok(self.context.capabilities.iter().any(|grant| grant.id == id))
     }
 
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {

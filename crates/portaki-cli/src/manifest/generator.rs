@@ -91,9 +91,8 @@ pub fn generate_manifest(
                 if id_raw.is_empty() {
                     continue;
                 }
-                let id = CapabilityId::from_str(id_raw).with_context(|| {
-                    format!("unknown capability id in emission: {id_raw}")
-                })?;
+                let id = CapabilityId::from_str(id_raw)
+                    .with_context(|| format!("unknown capability id in emission: {id_raw}"))?;
                 if emission.data["provided"].as_bool().unwrap_or(false) {
                     provided_caps.push(id);
                 } else if emission.data["optional"].as_bool().unwrap_or(false) {

@@ -120,9 +120,7 @@ pub struct Visibility {
 impl Visibility {
     /// Builds a visibility gate from an expression.
     pub fn when(expr: impl Into<VisibilityExpr>) -> Self {
-        Self {
-            when: expr.into(),
-        }
+        Self { when: expr.into() }
     }
 }
 
@@ -439,9 +437,8 @@ impl RichTextDoc {
 
     /// Serializes to a JSON string for editor / storage fields.
     pub fn to_json_string(&self) -> String {
-        serde_json::to_string(self).unwrap_or_else(|_| {
-            r#"{"type":"doc","content":[{"type":"paragraph"}]}"#.to_string()
-        })
+        serde_json::to_string(self)
+            .unwrap_or_else(|_| r#"{"type":"doc","content":[{"type":"paragraph"}]}"#.to_string())
     }
 }
 
