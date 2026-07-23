@@ -67,7 +67,10 @@ fn ensure_serde_derives(input: &mut DeriveInput, mode: WireMode) {
         WireMode::DeserializeOnly => parse_quote! { ::serde::Deserialize },
     };
 
-    if let Some(derive_attr) = input.attrs.iter_mut().find(|attr| attr.path().is_ident("derive"))
+    if let Some(derive_attr) = input
+        .attrs
+        .iter_mut()
+        .find(|attr| attr.path().is_ident("derive"))
     {
         if let Meta::List(list) = &mut derive_attr.meta {
             if !list.tokens.is_empty() {
@@ -125,7 +128,10 @@ fn ensure_rename_all_camel_case(attrs: &mut Vec<Attribute>) {
 
     // `serde` derive helpers must appear *after* `#[derive(Serialize, Deserialize)]`
     // (`legacy_derive_helpers` / rust-lang#79202).
-    if let Some(pos) = attrs.iter().rposition(|attr| attr.path().is_ident("derive")) {
+    if let Some(pos) = attrs
+        .iter()
+        .rposition(|attr| attr.path().is_ident("derive"))
+    {
         attrs.insert(pos + 1, rename);
     } else {
         attrs.push(rename);
@@ -188,7 +194,10 @@ mod tests {
         assert!(rendered.contains("camelCase"));
         let derive_pos = rendered.find("derive").expect("derive");
         let rename_pos = rendered.find("rename_all").expect("rename_all");
-        assert!(derive_pos < rename_pos, "rename_all must follow derive: {rendered}");
+        assert!(
+            derive_pos < rename_pos,
+            "rename_all must follow derive: {rendered}"
+        );
     }
 
     #[test]
