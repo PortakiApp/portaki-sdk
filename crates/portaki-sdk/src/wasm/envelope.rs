@@ -11,6 +11,7 @@ use crate::context::{
     StayContext,
 };
 use crate::error::{PortakiError, Result};
+use crate::ids::ModuleId;
 
 /// Host → module request body (matches the Portaki Wasm invocation payload on the host).
 #[derive(Debug, Deserialize)]
@@ -112,7 +113,7 @@ impl WasmRequestEnvelope {
         });
         Ok(Context {
             property_id,
-            module_id: ctx.module_id.clone(),
+            module_id: ModuleId::new(ctx.module_id.clone()),
             module_version: ctx.module_version.clone(),
             locale,
             timezone,

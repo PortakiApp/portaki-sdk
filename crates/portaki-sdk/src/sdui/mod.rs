@@ -5,6 +5,13 @@
 //! booklet) deserialize the JSON payload and render native widgets — modules never
 //! ship JSX, Flutter, or CSS.
 //!
+//! ## Host vs guest
+//!
+//! Primitives, tokens, and [`Action`] are **shared** — there is no `sdui::host` /
+//! `sdui::guest` type split. Shells differ at **surface registration**
+//! (`#[surface(guest, …)]` vs `#[surface(host, …)]`) and at the Wasm crate layout
+//! (`guest/` vs `host/` folders). See `docs/module-layout.md` in the SDK repo.
+//!
 //! ## Contract
 //!
 //! - Primitives and enums serialize to the schema version pinned in
@@ -29,7 +36,12 @@
 //! use portaki_sdk::sdui::action::Action;
 //!
 //! fn render(ctx: HostContext) -> Surface {
-//!     let refresh = Action::command(&ctx.module_id, "refresh", serde_json::json!({}));
+//!     use portaki_sdk::ids::OperationName;
+//!     let refresh = Action::command(
+//!         &ctx.module_id,
+//!         OperationName::new("refresh"),
+//!         EmptyArgs {},
+//!     );
 //!     Surface::new(
 //!         Card::new()
 //!             .child(Stack::new().child(Text::new()))
@@ -44,7 +56,11 @@ pub mod component;
 pub mod primitives;
 pub mod surface;
 
-pub use action::Action;
-pub use common::{Animation, Emphasis, SurfaceLevel, Tone, Visibility};
+pub use action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation};
+pub use common::{
+    Animation, AnimationKind, ButtonVariant, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint,
+    MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, RichTextDoc, StackDirection,
+    SurfaceLevel, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
+};
 pub use component::Component;
 pub use surface::Surface;

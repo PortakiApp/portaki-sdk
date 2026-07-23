@@ -22,6 +22,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::capability::CapabilityId;
+
 /// Top-level module manifest embedded in the OCI artifact as `manifest.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -85,20 +87,20 @@ pub struct UiSchemaVersions {
 pub struct ManifestCapabilities {
     /// Capability ids that must be granted or installation fails.
     #[serde(default)]
-    pub required: Vec<String>,
+    pub required: Vec<CapabilityId>,
     /// Optional capabilities with UX copy for purpose and fallback states.
     #[serde(default)]
     pub optional: Vec<ManifestOptionalCapability>,
     /// Capabilities this module **provides** for peer discovery (e.g. `access.smart_lock`).
     #[serde(default)]
-    pub provided: Vec<String>,
+    pub provided: Vec<CapabilityId>,
 }
 
 /// Optional capability entry with i18n keys for setup and degraded UX.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ManifestOptionalCapability {
     /// Capability id from [`mod@crate::capability`].
-    pub id: String,
+    pub id: CapabilityId,
     /// i18n key explaining why the module wants this capability.
     pub purpose_key: String,
     /// i18n key shown when the capability is unavailable at runtime.

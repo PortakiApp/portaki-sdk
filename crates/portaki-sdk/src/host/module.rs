@@ -34,8 +34,10 @@
 
 use serde::Deserialize;
 
+use crate::capability::CapabilityId;
 use crate::error::Result;
 use crate::host::runtime::backend;
+use crate::ids::ModuleId;
 
 /// Orchestrator snapshot of module enablement and config completeness.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -68,7 +70,7 @@ impl ModuleStatus {
 #[serde(rename_all = "camelCase")]
 pub struct ModulePeer {
     /// Catalog / install module id (e.g. `nuki`).
-    pub module_id: String,
+    pub module_id: ModuleId,
     /// Localized display name when available (fallback: module id).
     #[serde(default)]
     pub display_name: String,
@@ -85,6 +87,7 @@ pub fn status() -> Result<ModuleStatus> {
 /// Lists workspace-enabled, property-active peer modules that provide `capability_id`.
 ///
 /// Provider modules declare the id under `capabilities.provided` in their SDK manifest.
-pub fn list_by_capability(capability_id: &str) -> Result<Vec<ModulePeer>> {
-    backend()?.module_list_by_capability(capability_id)
+/// Pass [`crate::CapabilityId`] / [`crate::contracts::smart_lock::CAPABILITY`].
+pub fn list_by_capability(capability_id: CapabilityId) -> Result<Vec<ModulePeer>> {
+    backend()?.module_list_by_capability(capability_id.as_str())
 }

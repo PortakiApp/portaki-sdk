@@ -7,6 +7,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{ItemFn, LitStr, Token};
 
 use crate::emit::{sanitize_key, write_emission};
+use crate::wire_lit::WireLit;
 
 struct SurfaceAttrs {
     context: String,
@@ -25,10 +26,13 @@ impl Parse for SurfaceAttrs {
         input.parse::<Token![,]>()?;
         let id_key: syn::Ident = input.parse()?;
         if id_key != "id" {
-            return Err(syn::Error::new(id_key.span(), "expected id = \"...\""));
+            return Err(syn::Error::new(
+                id_key.span(),
+                "expected id = \"...\" or id = SurfaceId::new(\"...\")",
+            ));
         }
         input.parse::<Token![=]>()?;
-        let id: LitStr = input.parse()?;
+        let id: WireLit = input.parse()?;
 
         let mut display_name_key = None;
         if input.peek(Token![,]) {
@@ -42,7 +46,7 @@ impl Parse for SurfaceAttrs {
 
         Ok(SurfaceAttrs {
             context,
-            id: id.value(),
+            id: id.value,
             display_name_key,
         })
     }

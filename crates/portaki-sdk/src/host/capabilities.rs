@@ -27,6 +27,7 @@
 //! assert!(ctx.has_capability(core::IMAGES));
 //! ```
 
+use crate::capability::CapabilityId;
 use crate::error::Result;
 use crate::host::runtime::{backend, context_or_load};
 
@@ -34,9 +35,9 @@ use crate::host::runtime::{backend, context_or_load};
 ///
 /// Uses the installed [`crate::host::runtime::HostBackend`] when present;
 /// otherwise falls back to [`crate::Context::has_capability`] from thread-local context.
-pub fn has(id: &str) -> Result<bool> {
+pub fn has(id: CapabilityId) -> Result<bool> {
     if let Ok(host) = backend() {
-        return host.has_capability(id);
+        return host.has_capability(id.as_str());
     }
     Ok(context_or_load()?.has_capability(id))
 }

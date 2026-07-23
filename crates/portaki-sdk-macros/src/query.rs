@@ -4,9 +4,10 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{ItemFn, LitStr, Token};
+use syn::{ItemFn, Token};
 
 use crate::emit::{sanitize_key, write_emission};
+use crate::wire_lit::WireLit;
 
 struct NamedOpAttrs {
     name: String,
@@ -16,11 +17,14 @@ impl Parse for NamedOpAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let key: syn::Ident = input.parse()?;
         if key != "name" {
-            return Err(syn::Error::new(key.span(), "expected name = \"...\""));
+            return Err(syn::Error::new(
+                key.span(),
+                "expected name = \"...\" or name = OperationName::new(\"...\")",
+            ));
         }
         input.parse::<Token![=]>()?;
-        let name: LitStr = input.parse()?;
-        Ok(NamedOpAttrs { name: name.value() })
+        let name: WireLit = input.parse()?;
+        Ok(NamedOpAttrs { name: name.value })
     }
 }
 

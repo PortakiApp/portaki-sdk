@@ -1,8 +1,6 @@
-use portaki_sdk::capability;
+use portaki_sdk::capability::{self, CapabilityId};
 
-const CAP_CORE_STORAGE: &str = "core.storage";
-
-#[capability(required, id = "core.storage")]
-pub const STORAGE: &str = CAP_CORE_STORAGE;
+#[portaki_sdk::capability(required, id = "core.storage")]
+pub const STORAGE: CapabilityId = capability::core::STORAGE;
 
 fn main() {}

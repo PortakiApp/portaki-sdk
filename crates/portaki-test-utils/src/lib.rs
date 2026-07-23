@@ -27,11 +27,12 @@
 //! # Example
 //!
 //! ```
+//! use portaki_sdk::capability::{core, external};
 //! use portaki_test_utils::{MockContext, Property};
 //!
 //! MockContext::guest()
 //!     .with_property(Property::default())
-//!     .with_capabilities(&["core.storage", "external.open-weather.pool"])
+//!     .with_capabilities(&[core::STORAGE, external::OPEN_WEATHER_POOL])
 //!     .with_connector_response(
 //!         "open-weather",
 //!         "current",

@@ -17,12 +17,16 @@
 //! use portaki_sdk::sdui::surface::Surface;
 //! use portaki_sdk::sdui::primitives::{Stack, Text};
 //!
+//! use portaki_sdk::ids::convention;
+//!
 //! let surface = Surface::new(Stack::new().child(Text::new()))
-//!     .with_id("main");
+//!     .with_id(convention::HOST_MAIN);
 //! assert_eq!(surface.id.as_deref(), Some("main"));
 //! ```
 
 use serde::{Deserialize, Serialize};
+
+use crate::ids::SurfaceId;
 
 use super::component::Component;
 
@@ -46,8 +50,10 @@ impl Surface {
     }
 
     /// Sets the surface id — primarily for tests and navigation debugging.
-    pub fn with_id(mut self, id: impl Into<String>) -> Self {
-        self.id = Some(id.into());
+    ///
+    /// Requires a [`SurfaceId`] (module catalog or [`crate::ids::convention`]).
+    pub fn with_id(mut self, id: SurfaceId) -> Self {
+        self.id = Some(id.as_str().to_string());
         self
     }
 }

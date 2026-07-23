@@ -18,7 +18,8 @@ pub fn validate_manifest(manifest: &ModuleManifest, i18n_dir: &Path) -> Result<(
         .chain(manifest.capabilities.optional.iter().map(|c| &c.id))
         .chain(manifest.capabilities.provided.iter())
     {
-        if !is_known(capability_id) {
+        // Typed as [`CapabilityId`]; still guard for defensive CLI use.
+        if !is_known(capability_id.as_str()) {
             bail!("unknown capability id in manifest: {capability_id}");
         }
     }
@@ -109,7 +110,12 @@ mod tests {
     };
 
     #[test]
-    fn rejects_unknown_capability() {
+    fn rejects_unknown_capability_string() {
+        assert!(!is_known("not.a.real.capability"));
+    }
+
+    #[test]
+    fn accepts_known_required_capability() {
         let manifest = ModuleManifest {
             manifest_version: "1".into(),
             id: "test".into(),
@@ -126,7 +132,7 @@ mod tests {
                 guest: "1".into(),
             },
             capabilities: ManifestCapabilities {
-                required: vec!["not.a.real.capability".into()],
+                required: vec![portaki_sdk::capability::CapabilityId::Storage],
                 optional: vec![],
                 provided: vec![],
             },
@@ -151,6 +157,6 @@ mod tests {
         )
         .expect("write");
 
-        assert!(validate_manifest(&manifest, &i18n).is_err());
+        assert!(validate_manifest(&manifest, &i18n).is_ok());
     }
 }

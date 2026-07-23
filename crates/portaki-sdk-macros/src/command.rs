@@ -33,7 +33,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 mod command_attrs {
     use syn::parse::{Parse, ParseStream};
-    use syn::{LitStr, Token};
+    use syn::Token;
+
+    use crate::wire_lit::WireLit;
 
     pub struct NamedOpAttrs {
         pub name: String,
@@ -43,11 +45,14 @@ mod command_attrs {
         fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
             let key: syn::Ident = input.parse()?;
             if key != "name" {
-                return Err(syn::Error::new(key.span(), "expected name = \"...\""));
+                return Err(syn::Error::new(
+                    key.span(),
+                    "expected name = \"...\" or name = OperationName::new(\"...\")",
+                ));
             }
             input.parse::<Token![=]>()?;
-            let name: LitStr = input.parse()?;
-            Ok(NamedOpAttrs { name: name.value() })
+            let name: WireLit = input.parse()?;
+            Ok(NamedOpAttrs { name: name.value })
         }
     }
 }

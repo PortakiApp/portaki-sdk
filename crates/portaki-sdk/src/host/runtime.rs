@@ -22,9 +22,10 @@
 //! # Examples
 //!
 //! ```no_run
+//! use portaki_sdk::capability::core;
 //! use portaki_sdk::context::Context;
-//! use portaki_sdk::host::runtime::{with_host, HostBackend};
 //! use portaki_sdk::error::{PortakiError, Result};
+//! use portaki_sdk::host::runtime::{with_host, HostBackend};
 //! use std::sync::Arc;
 //!
 //! struct NoopHost;
@@ -44,7 +45,7 @@
 //! }
 //!
 //! with_host(Arc::new(NoopHost), Context::default(), || {
-//!     assert!(!portaki_sdk::host::capabilities::has("core.images").unwrap());
+//!     assert!(!portaki_sdk::host::capabilities::has(core::IMAGES).unwrap());
 //! });
 //! ```
 

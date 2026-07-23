@@ -40,6 +40,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::capability::CapabilityId;
+use crate::ids::ModuleId;
+
 /// Single effective capability grant attached to the current invocation.
 ///
 /// The gateway resolves workspace plan + property overrides into this flat list
@@ -137,7 +140,7 @@ pub struct Context {
     /// Tenant property identifier.
     pub property_id: Uuid,
     /// Module slug from the manifest (`weather`, `poi`, …).
-    pub module_id: String,
+    pub module_id: ModuleId,
     /// Semver of the Wasm artifact executing this invocation.
     pub module_version: String,
     /// Resolved request locale for i18n and formatting.
@@ -177,12 +180,12 @@ impl Context {
     ///
     /// Fills remaining fields from [`Default`]. Use inside unit tests and
     /// `portaki dev` mocks — not in production handlers.
-    pub fn with_capabilities(capability_ids: &[&str]) -> Self {
+    pub fn with_capabilities(capability_ids: &[CapabilityId]) -> Self {
         Context {
             capabilities: capability_ids
                 .iter()
                 .map(|id| CapabilityGrant {
-                    id: (*id).to_string(),
+                    id: id.as_str().to_string(),
                 })
                 .collect(),
             property: PropertyContext {
@@ -198,10 +201,9 @@ impl Context {
     }
 
     /// Returns whether `capability_id` is in the effective grant set.
-    pub fn has_capability(&self, capability_id: &str) -> bool {
-        self.capabilities
-            .iter()
-            .any(|grant| grant.id == capability_id)
+    pub fn has_capability(&self, capability_id: CapabilityId) -> bool {
+        let id = capability_id.as_str();
+        self.capabilities.iter().any(|grant| grant.id == id)
     }
 }
 
@@ -209,7 +211,7 @@ impl Default for Context {
     fn default() -> Self {
         Self {
             property_id: Uuid::nil(),
-            module_id: "test-module".to_string(),
+            module_id: ModuleId::from_static("test-module"),
             module_version: "0.0.0".to_string(),
             locale: "fr-FR".to_string(),
             timezone: "Europe/Paris".to_string(),

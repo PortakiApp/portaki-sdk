@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.0.1...v2.1.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ids:** boundary builders no longer accept bare `&str` / `String` where a
+  typed id exists. Use [`SurfaceId`], [`OperationName`], [`ModuleId`],
+  [`EventType`], [`CapabilityId`], [`NavigateTarget`].
+* **action:** `Action::command(module_id, name, args)` takes `&ModuleId` +
+  [`OperationName`] (not `impl Into<String>`).
+* **action:** `Action::open_overlay(..., surface_render, ...)` takes
+  [`SurfaceId`] only.
+* **action:** `Action::navigate(to, params)` takes
+  [`NavigateTarget`] / [`SurfaceId`] (via `From`) — not free `String`.
+  Dynamic shell routes use `NavigateTarget::path(...)`.
+* **action:** `Action::emit(event, payload)` takes [`EventType`] only.
+* **surface:** `Surface::with_id` takes [`SurfaceId`] only.
+* **host:** `events::emit` takes [`EventType`] only.
+* **host:** `module::list_by_capability` and `capabilities::has` take
+  [`CapabilityId`] only.
+* **context:** `Context::has_capability` takes [`CapabilityId`] only;
+  `Context::module_id` is [`ModuleId`].
+* **ids:** removed `From<&str>` / `From<String>` for [`ModuleId`]. Construct
+  with `ModuleId::new` / `ModuleId::from_static` at declaration / test sites.
+
+### Features
+
+* **ids:** newtypes [`SurfaceId`], [`OperationName`], [`ModuleId`],
+  [`EventType`] (serde string wire) plus
+  `define_surface_ids!` / `define_operation_names!` / `define_event_types!`
+* **ids:** shared booklet conventions under [`ids::convention`]
+  (`HOME_CARD`, `EXPLORE_DETAIL`, `HOST_MAIN`)
+* **action:** [`NavigateTarget`] (`Surface` | `Path`) for typed navigation
+* **contracts:** SDK-owned cross-module catalogs —
+  `contracts::smart_lock` (capability + `unlock` / `getGuestCredential`),
+  `contracts::shell::SURFACE_INPUT`, `contracts::platform::BOOKING_CONFIRMED`
+* **macros:** `#[surface]` / `#[command]` / `#[query]` / `#[event_handler]`
+  accept `Type::new("…")` wire literals in addition to bare `"…"`
+
+### Documentation
+
+* **docs:** [typed-ids.md](docs/typed-ids.md) — declare once, typed consts at
+  every use site
+* **docs:** [module-layout.md](docs/module-layout.md) — SDK crate modules
+  and Wasm module `guest/` / `host/` / `connectors` / `ids` conventions
+* **templates:** empty-module ships `ids.rs` + layout notes aligned with
+  guest/host/`ids` conventions
+
+### Refactor
+
+* **organization:** default module template splits guest / host surfaces and
+  documents `ids.rs` catalogs (see module-layout)
+
+## [2.0.1](https://github.com/PortakiApp/portaki-sdk/compare/v2.0.0...v2.0.1) (2026-07-23)
+
+
+### Features
+
+* **action:** `Action::command` takes `impl Serialize` (typed DTOs / [`EmptyArgs`])
+* **action:** add [`EmptyArgs`] (`{}`) and [`json_value`] for navigate/emit payloads
+
+## [2.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v1.0.0...v2.0.0) (2026-07-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdui:** generated primitive props are typed (`String`, `bool`, `f64`/`u32`,
+  `Action`, closed enums, nested structs). Scalar / action setters no longer
+  accept `serde_json::Value` — drop `json!` on the common authoring path.
+* **capability:** `capability::*` constants are now [`CapabilityId`] (serde
+  string wire). `Context::with_capabilities` takes `&[CapabilityId]`. Manifest
+  `capabilities.required` / `optional[].id` / `provided` deserialize as
+  `CapabilityId`.
+* **action:** `Action::OpenOverlay.presentation` is [`OverlayPresentation`]
+  (not a raw string). Prefer `Action::open_overlay(...)`.
+* **action:** `Action::OpenOverlay.args` is [`OverlayArgs`] (not
+  `serde_json::Value`). Prefer `OverlayArgs::new().icon(...).title(...)`.
+* **email:** guest-stay modules should filter on [`EmailTemplateKey`] instead of
+  ad-hoc template strings.
+
+### Features
+
+* **capability:** add closed `CapabilityId` catalog with `as_str` / `FromStr`
+* **email:** add `EmailTemplateKey`, `EmailContextArgs`, contribution docs
+* **sdui:** typed codegen from `sdui_primitives.json` (`fields` map)
+* **sdui:** nested types — `MapViewport`, `MapMarker`, `ChoiceOption`,
+  `TemperatureUnit`, `RichTextDoc`, animation / visibility enums
+* **action:** `OverlayPresentation`, `OverlayArgs`, `Action::open_overlay`
+
 ## [1.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v0.2.1...v1.0.0) (2026-07-21)
 
 

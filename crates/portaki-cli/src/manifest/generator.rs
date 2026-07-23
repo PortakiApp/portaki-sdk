@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use portaki_sdk::capability::CapabilityId;
 use portaki_sdk::manifest::{
     ManifestAuthor, ManifestCapabilities, ManifestCommand, ManifestConnectors, ManifestEntity,
     ManifestEventSubscription, ManifestEvents, ManifestI18n, ManifestOptionalCapability,
@@ -11,6 +12,7 @@ use portaki_sdk::manifest::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use std::str::FromStr;
 use walkdir::WalkDir;
 
 /// One emission file produced by proc-macros during `cargo build`.
@@ -85,11 +87,15 @@ pub fn generate_manifest(
     for emission in emissions {
         match emission.kind.as_str() {
             "capability" => {
-                let id = emission.data["id"].as_str().unwrap_or_default().to_string();
+                let id_raw = emission.data["id"].as_str().unwrap_or_default();
+                if id_raw.is_empty() {
+                    continue;
+                }
+                let id = CapabilityId::from_str(id_raw).with_context(|| {
+                    format!("unknown capability id in emission: {id_raw}")
+                })?;
                 if emission.data["provided"].as_bool().unwrap_or(false) {
-                    if !id.is_empty() {
-                        provided_caps.push(id);
-                    }
+                    provided_caps.push(id);
                 } else if emission.data["optional"].as_bool().unwrap_or(false) {
                     optional_caps.push(ManifestOptionalCapability {
                         id,
@@ -102,7 +108,7 @@ pub fn generate_manifest(
                             .unwrap_or("capability.fallback")
                             .to_string(),
                     });
-                } else if !id.is_empty() {
+                } else {
                     required_caps.push(id);
                 }
             }

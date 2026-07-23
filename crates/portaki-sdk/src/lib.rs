@@ -34,6 +34,10 @@
 //!    connectors, and logging.
 //! 4. Gate premium behaviour with `ctx.has_capability(...)` or
 //!    [`mod@capability`] constants.
+//! 5. Prefer [`ids`] newtypes and [`contracts`] for cross-boundary names
+//!    (surfaces, commands, events, peer ops) instead of free string literals.
+//! 6. Keep Wasm crate folders strict: `guest/` / `host/` / `connectors` / `ids`
+//!    (see repo `docs/module-layout.md`).
 //!
 //! ## Wasm target
 //!
@@ -44,8 +48,11 @@
 
 pub mod capability;
 pub mod context;
+pub mod contracts;
+pub mod email;
 pub mod error;
 pub mod host;
+pub mod ids;
 pub mod manifest;
 pub mod sdui;
 
@@ -57,16 +64,23 @@ pub mod wasm;
 /// shims submit [`wasm::HandlerRegistration`] entries at link time.
 pub use inventory;
 
+pub use capability::CapabilityId;
 pub use context::{
     Context, DisplayPreferences, GuestContext, GuestIdentity, HostContext, PlanInfo,
     PropertyContext, Quota, StayContext,
 };
+pub use email::{EmailContextArgs, EmailContextContribution, EmailTemplateKey};
 pub use error::{PortakiError, Result};
+pub use ids::{EventType, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
     capability, command, connector, connector_op, custom_connector, entity, entity_indexes,
     event_handler, portaki_module_decl as portaki_module, query, surface,
 };
-pub use sdui::{action::Action, component::Component, surface::Surface};
+pub use sdui::{
+    action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
+    component::Component,
+    surface::Surface,
+};
 
 /// Commonly used imports for module handler code.
 ///
@@ -82,21 +96,33 @@ pub use sdui::{action::Action, component::Component, surface::Surface};
 /// #[surface(guest, id = "home.card")]
 /// fn render_home(ctx: GuestContext) -> Surface {
 ///     if !ctx.has_capability(capability::core::STORAGE) {
-///         return Surface::new(Text::new().text(serde_json::json!("i18n:capability.missing")));
+///         return Surface::new(Text::new().text("i18n:capability.missing"));
 ///     }
 ///     log_info!("rendering home", surface = "home.card");
 ///     Surface::new(Card::new().child(Stack::new().child(Text::new())))
 /// }
 /// ```
 pub mod prelude {
-    pub use crate::capability;
+    pub use crate::capability::{self, CapabilityId};
     pub use crate::context::{Context, GuestContext, HostContext, StayContext};
+    pub use crate::contracts;
+    pub use crate::email::{EmailContextArgs, EmailTemplateKey};
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
+    pub use crate::ids::{self, EventType, ModuleId, OperationName, SurfaceId};
+    pub use crate::sdui::action::{
+        json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation,
+    };
+    pub use crate::sdui::common::{
+        ButtonVariant, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint, MapInteractionMode,
+        MapMarker, MapMarkerKind, MapViewport, StackDirection, TempVariant, TemperatureUnit,
+        TextVariant, Tone,
+    };
     pub use crate::sdui::component::Component;
     pub use crate::sdui::surface::Surface;
     pub use crate::{
-        command, connector, connector_op, custom_connector, entity, entity_indexes, event_handler,
+        command, connector, connector_op, custom_connector, define_event_types,
+        define_operation_names, define_surface_ids, entity, entity_indexes, event_handler,
         portaki_module, query, surface,
     };
     pub use crate::{log_info, t};

@@ -94,6 +94,8 @@ Monorepo: [`PortakiApp/portaki-sdk`](https://github.com/PortakiApp/portaki-sdk).
 ## Documentation
 
 - API — [docs.rs/portaki-sdk](https://docs.rs/portaki-sdk)
+- Module / crate layout — [module-layout.md](https://github.com/PortakiApp/portaki-sdk/blob/main/docs/module-layout.md)
+- Typed boundary ids — [typed-ids.md](https://github.com/PortakiApp/portaki-sdk/blob/main/docs/typed-ids.md)
 - Connectors & credentials — [guide](https://github.com/PortakiApp/portaki-sdk/blob/main/docs/connectors-and-credentials.md)
 - Releases — [RELEASE.md](https://github.com/PortakiApp/portaki-sdk/blob/main/docs/RELEASE.md)
 

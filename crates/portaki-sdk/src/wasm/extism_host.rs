@@ -36,7 +36,7 @@ impl HostBackend for ExtismHostBackend {
 
     fn has_capability(&self, id: &str) -> Result<bool> {
         if let Ok(ctx) = context_or_load() {
-            if ctx.has_capability(id) {
+            if ctx.capabilities.iter().any(|grant| grant.id == id) {
                 return Ok(true);
             }
         }

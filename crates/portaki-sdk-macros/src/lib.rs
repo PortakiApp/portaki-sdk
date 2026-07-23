@@ -63,6 +63,7 @@ mod module;
 mod query;
 mod surface;
 mod wasm_handler;
+mod wire_lit;
 
 use proc_macro::TokenStream;
 
@@ -222,10 +223,11 @@ pub fn entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | Position | Key | Required |
 /// |----------|-----|----------|
 /// | 1st | `host` or `guest` (identifier) or `"host"` / `"guest"` (string) | yes — surface context |
-/// | 2nd | `id = "…"` | yes — stable surface id in the manifest |
+/// | 2nd | `id = "…"` or `id = SurfaceId::new("…")` | yes — stable surface id in the manifest |
 /// | 3rd | `display_name_key = "…"` | no — i18n key; omitted from JSON when absent |
 ///
-/// Wrong first token (not `id =`) → **compile error** (`expected id = "…"`).
+/// Wrong first token (not `id =`) → **compile error**. Bare const paths are not
+/// resolved at macro time — use a string lit or `Type::new("…")`.
 ///
 /// # Target item
 ///

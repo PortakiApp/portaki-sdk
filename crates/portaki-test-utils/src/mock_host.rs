@@ -52,7 +52,8 @@ pub struct MockContextBuilder {
 impl MockContextBuilder {
     /// Guest-surface defaults: `home.cards`, `core.storage`, sample guest identity.
     pub fn guest() -> Self {
-        let mut context = Context::with_capabilities(&["core.storage"]);
+        let mut context =
+            Context::with_capabilities(&[portaki_sdk::capability::CapabilityId::Storage]);
         context.surface = Some("home.cards".to_string());
         context.guest = Some(crate::fixtures::GuestIdentityFixture::default().into());
         Self {
@@ -63,7 +64,10 @@ impl MockContextBuilder {
 
     /// Host-dashboard defaults: `main`, `core.storage` + `core.images`.
     pub fn host() -> Self {
-        let mut context = Context::with_capabilities(&["core.storage", "core.images"]);
+        let mut context = Context::with_capabilities(&[
+            portaki_sdk::capability::CapabilityId::Storage,
+            portaki_sdk::capability::CapabilityId::Images,
+        ]);
         context.surface = Some("main".to_string());
         Self {
             context,
@@ -81,7 +85,7 @@ impl MockContextBuilder {
     ///
     /// Preserves surface and guest set by [`Self::guest`] / [`Self::host`] only when
     /// those fields were not cleared by the new context.
-    pub fn with_capabilities(mut self, capability_ids: &[&str]) -> Self {
+    pub fn with_capabilities(mut self, capability_ids: &[portaki_sdk::capability::CapabilityId]) -> Self {
         self.context = Context::with_capabilities(capability_ids);
         self
     }
@@ -165,7 +169,11 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn has_capability(&self, id: &str) -> Result<bool> {
-        Ok(self.context.has_capability(id))
+        Ok(self
+            .context
+            .capabilities
+            .iter()
+            .any(|grant| grant.id == id))
     }
 
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
@@ -196,12 +204,18 @@ impl HostBackend for MockHostFunctions {
             .collect())
     }
 
-    fn i18n_translate(&self, key: &str, _vars_json: &str) -> Result<String> {
-        Ok(self
+    fn i18n_translate(&self, key: &str, vars_json: &str) -> Result<String> {
+        let mut text = self
             .translations
             .get(key)
             .cloned()
-            .unwrap_or_else(|| key.to_string()))
+            .unwrap_or_else(|| key.to_string());
+        if let Ok(vars) = serde_json::from_str::<HashMap<String, String>>(vars_json) {
+            for (name, value) in vars {
+                text = text.replace(&format!("{{{name}}}"), &value);
+            }
+        }
+        Ok(text)
     }
 
     fn log(&self, _level: &str, _message: &str, _fields_json: &str) -> Result<()> {
@@ -272,6 +286,18 @@ mod tests {
             .run(|_ctx| {
                 let text = host::i18n::translate("greeting", &Vars::new()).expect("translate");
                 assert_eq!(text, "Bonjour");
+            });
+    }
+
+    #[test]
+    fn mock_host_interpolates_translation_vars() {
+        MockContext::guest()
+            .with_translation("hello", "Hello {name}")
+            .run(|_ctx| {
+                let mut vars = Vars::new();
+                vars.set("name", "Marie");
+                let text = host::i18n::translate("hello", &vars).expect("translate");
+                assert_eq!(text, "Hello Marie");
             });
     }
 }

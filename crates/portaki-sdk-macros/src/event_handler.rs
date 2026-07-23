@@ -4,9 +4,10 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{ItemFn, LitStr, Token};
+use syn::{ItemFn, Token};
 
 use crate::emit::{sanitize_key, write_emission};
+use crate::wire_lit::WireLit;
 
 struct EventHandlerAttrs {
     event_type: String,
@@ -18,13 +19,13 @@ impl Parse for EventHandlerAttrs {
         if key != "type" && key != "event_type" {
             return Err(syn::Error::new(
                 key.span(),
-                "expected type = \"...\" or event_type = \"...\"",
+                "expected type = \"...\" / event_type = \"...\" or EventType::new(\"...\")",
             ));
         }
         input.parse::<Token![=]>()?;
-        let event_type: LitStr = input.parse()?;
+        let event_type: WireLit = input.parse()?;
         Ok(EventHandlerAttrs {
-            event_type: event_type.value(),
+            event_type: event_type.value,
         })
     }
 }

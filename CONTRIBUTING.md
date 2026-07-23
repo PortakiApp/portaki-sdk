@@ -41,6 +41,10 @@ CI runs the same checks on every PR.
 | `crates/portaki-test-utils` | Prefer these helpers over ad-hoc mocks in new tests |
 | `templates/` | Scaffolding for `portaki init` |
 
+Source layout for the SDK crate and for Wasm modules (guest / host / connectors /
+ids separation): **[docs/module-layout.md](./docs/module-layout.md)**. Typed
+boundary IDs: **[docs/typed-ids.md](./docs/typed-ids.md)**.
+
 ## Coding guidelines
 
 - Prefer explicit types and short functions over clever abstractions.
