@@ -36,7 +36,7 @@
     },
     "hostSurfaces": {
       "type": "array",
-      "description": "Host dashboard navigable surfaces (property workspace tabs, stats cards, …).",
+      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (stats strip).",
       "items": { "$ref": "#/$defs/hostSurface" }
     },
     "guestSurfaces": {
@@ -56,12 +56,12 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "e.g. property-workspace-tab, property-stats-card"
+          "description": "property-workspace-tab | property-module-sheet | property-stats-card"
         },
         "pathSegment": {
           "type": "string",
           "minLength": 1,
-          "description": "URL segment under /dashboard/listings/[id]/"
+          "description": "For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id)."
         },
         "label": { "$ref": "#/$defs/i18nStringMap" },
         "icon": { "type": "string" },
