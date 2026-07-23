@@ -390,7 +390,9 @@ mod tests {
         assert!(ALL.contains(&core::STORAGE));
         assert!(ALL.contains(&external::OPEN_WEATHER_POOL));
         assert!(ALL.contains(&access::SMART_LOCK));
+        assert!(ALL.contains(&external::NUKI_BYOK));
         assert_eq!(core::PROPERTIES.as_str(), "core.properties");
+        assert_eq!(external::NUKI_BYOK.as_str(), "external.nuki.byok");
         assert_eq!(
             external::GOOGLE_PLACES_BYOK.as_str(),
             "external.google-places.byok"
