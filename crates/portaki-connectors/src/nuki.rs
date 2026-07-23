@@ -16,14 +16,12 @@
 
 use portaki_sdk::host::connectors;
 use portaki_sdk::Result as SdkResult;
-use serde::{Deserialize, Serialize};
 
 /// Namespace for Nuki host connector operations.
 pub struct Nuki;
 
 /// Arguments for [`Nuki::remote_unlock`].
 #[portaki_sdk::wire]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnlockArgs {
     /// Nuki smart lock id (path param `{smartlockId}`).
     pub smartlock_id: String,

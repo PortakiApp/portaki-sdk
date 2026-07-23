@@ -449,33 +449,44 @@ pub fn custom_connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks a struct or enum as a Portaki **wire** JSON DTO (gateway / SDUI / events / email).
 ///
 /// Serde defaults to Rust field names (`snake_case`). Portaki's platform wire format is
-/// camelCase. This attribute applies `#[serde(rename_all = "camelCase")]` and, when the
-/// item does not already derive them, adds `Serialize` / `Deserialize`.
+/// camelCase. This attribute applies `#[serde(rename_all = "camelCase")]` and injects the
+/// usual derives when missing:
 ///
-/// Prefer this over repeating `#[serde(rename_all = "camelCase")]` on command/query args,
-/// responses, event payloads, and email-context types. Do **not** use it for KV/config blobs
-/// or entity rows that intentionally stay snake_case on disk.
+/// | Attribute | Derives added |
+/// |---|---|
+/// | `#[wire]` | `Debug`, `Clone`, `Serialize`, `Deserialize` |
+/// | `#[wire(serialize)]` | `Debug`, `Serialize` |
+/// | `#[wire(deserialize)]` | `Debug`, `Deserialize` |
+///
+/// Escape hatches: `no_debug`, `no_clone` (combinable, e.g. `#[wire(serialize, no_debug)]`).
+///
+/// Prefer this over repeating `#[serde(rename_all = "camelCase")]` and common derives on
+/// command/query args, responses, event payloads, and email-context types. Do **not** use it
+/// for KV/config blobs or entity rows that intentionally stay snake_case on disk.
 ///
 /// # Syntax
 ///
 /// ```ignore
 /// #[portaki_sdk::wire]
-/// #[derive(Debug, Clone)]
 /// pub struct SubmitArgs {
 ///     pub item_description: String,
 /// }
 ///
 /// // Serialize-only event payload:
 /// #[portaki_sdk::wire(serialize)]
-/// #[derive(Debug)]
 /// struct SubmittedPayload {
 ///     property_id: uuid::Uuid,
 /// }
+///
+/// // Keep PartialEq / Default yourself; wire covers Debug+Clone+serde:
+/// #[portaki_sdk::wire]
+/// #[derive(PartialEq, Eq, Default)]
+/// pub struct EmailContextArgs { /* … */ }
 /// ```
 ///
-/// Existing `#[derive(Serialize, Deserialize)]` is left as-is; only `rename_all` is injected.
-/// Existing `#[serde(…)]` container attrs are kept — a separate `rename_all = "camelCase"` is
-/// added when missing (serde merges multiple container attributes).
+/// Existing `Serialize` / `Deserialize` on the item are left as-is (wire still adds `Debug` /
+/// `Clone` when appropriate). Existing `#[serde(…)]` container attrs are kept — a separate
+/// `rename_all = "camelCase"` is added when missing (serde merges multiple container attributes).
 #[proc_macro_attribute]
 pub fn wire(attr: TokenStream, item: TokenStream) -> TokenStream {
     wire::expand(attr, item)
