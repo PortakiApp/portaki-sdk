@@ -31,7 +31,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use portaki_sdk::context::Context;
+use portaki_sdk::context::{CapabilityGrant, Context};
 use portaki_sdk::error::Result;
 use portaki_sdk::host::{with_host, HostBackend};
 
@@ -90,6 +90,17 @@ impl MockContextBuilder {
         capability_ids: &[portaki_sdk::capability::CapabilityId],
     ) -> Self {
         self.context = Context::with_capabilities(capability_ids);
+        self
+    }
+
+    /// Appends raw capability ids (e.g. roadmap / newly added wire ids) without
+    /// requiring a matching [`portaki_sdk::capability::CapabilityId`] variant.
+    pub fn with_extra_capability_ids(mut self, ids: &[&str]) -> Self {
+        for id in ids {
+            self.context.capabilities.push(CapabilityGrant {
+                id: (*id).to_string(),
+            });
+        }
         self
     }
 

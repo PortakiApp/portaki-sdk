@@ -430,6 +430,7 @@ pub fn connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | `display_name_key = "…"` | no |
 /// | `base_url = "…"` | no |
 /// | `credential_provider_id = "…"` | no |
+/// | `auth = "bearer" \| "query_appid" \| "query_key" \| "none"` | no |
 ///
 /// Missing `id` → **compile error**. Unknown keys → **compile error**.
 ///
