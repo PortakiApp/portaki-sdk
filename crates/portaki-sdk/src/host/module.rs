@@ -40,8 +40,8 @@ use crate::host::runtime::backend;
 use crate::ids::ModuleId;
 
 /// Orchestrator snapshot of module enablement and config completeness.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ModuleStatus {
     /// Module is enabled on this property.
     pub active: bool,
@@ -66,8 +66,8 @@ impl ModuleStatus {
 }
 
 /// Peer module installed on the current property that provides a capability.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ModulePeer {
     /// Catalog / install module id (e.g. `nuki`).
     pub module_id: ModuleId,

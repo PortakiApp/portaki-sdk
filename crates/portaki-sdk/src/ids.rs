@@ -400,11 +400,7 @@ mod tests {
         }
 
         let peer = ModuleId::from_static("nuki");
-        let cmd = Action::command(
-            &peer,
-            crate::contracts::smart_lock::UNLOCK,
-            crate::sdui::action::EmptyArgs {},
-        );
+        let cmd = peer.command_empty(crate::contracts::smart_lock::UNLOCK);
         match cmd {
             Action::Command {
                 module_id, name, ..

@@ -205,6 +205,35 @@ impl Context {
         let id = capability_id.as_str();
         self.capabilities.iter().any(|grant| grant.id == id)
     }
+
+    /// Reads a string field from [`Self::input`] (host form draft / route params).
+    ///
+    /// Trims whitespace; empty strings become `None`.
+    pub fn input_str(&self, key: &str) -> Option<&str> {
+        self.input
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    /// Boolean draft field from [`Self::input`].
+    ///
+    /// Accepts JSON bools and the strings `"true"` / `"false"` (shell form quirks).
+    /// Missing / unrecognized values return `fallback`.
+    pub fn input_bool(&self, key: &str, fallback: bool) -> bool {
+        match self.input.get(key) {
+            Some(Value::Bool(value)) => *value,
+            Some(Value::String(value)) if value == "true" => true,
+            Some(Value::String(value)) if value == "false" => false,
+            _ => fallback,
+        }
+    }
+
+    /// Unsigned integer draft field from [`Self::input`].
+    pub fn input_u64(&self, key: &str) -> Option<u64> {
+        self.input.get(key).and_then(Value::as_u64)
+    }
 }
 
 impl Default for Context {

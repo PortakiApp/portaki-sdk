@@ -74,7 +74,7 @@ pub use error::{PortakiError, Result};
 pub use ids::{EventType, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
     capability, command, connector, connector_op, custom_connector, entity, entity_indexes,
-    event_handler, portaki_module_decl as portaki_module, query, surface,
+    event_handler, portaki_module_decl as portaki_module, query, surface, wire,
 };
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
@@ -123,7 +123,7 @@ pub mod prelude {
     pub use crate::{
         command, connector, connector_op, custom_connector, define_event_types,
         define_operation_names, define_surface_ids, entity, entity_indexes, event_handler,
-        portaki_module, query, surface,
+        portaki_module, query, surface, wire,
     };
     pub use crate::{log_info, t};
     pub use chrono::{DateTime, Utc};

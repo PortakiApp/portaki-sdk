@@ -42,7 +42,7 @@
 //!
 //! // Prefer catalog / contract consts — not OperationName::new at call sites.
 //! let module = ModuleId::from_static("nuki");
-//! let cmd = Action::command(&module, smart_lock::UNLOCK, EmptyArgs {});
+//! let cmd = module.command_empty(smart_lock::UNLOCK);
 //! let nav = Action::navigate(
 //!     SurfaceId::new("detail"),
 //!     Some(json_value(DetailParams {
@@ -83,8 +83,8 @@ pub fn json_value(value: impl Serialize) -> Value {
 }
 
 /// Overlay presentation style for [`Action::OpenOverlay`].
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
 pub enum OverlayPresentation {
     /// Centered modal dialog.
     Modal,
@@ -99,8 +99,8 @@ pub enum OverlayPresentation {
 ///
 /// Wire keys are camelCase (`title`, `icon`). Closed set of fields used by modules
 /// today; shells may ignore unknown keys on the wire if older payloads linger.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct OverlayArgs {
     /// Overlay chrome title (often an `i18n:` key).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -168,8 +168,9 @@ impl From<SurfaceId> for NavigateTarget {
 }
 
 /// Tagged action envelope serialized into SDUI interactive primitives.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum Action {
     /// Invoke a module command through the gateway.
     Command {
@@ -240,12 +241,32 @@ pub enum Action {
     },
 }
 
+impl ModuleId {
+    /// Builds a command [`Action`] targeting this module.
+    ///
+    /// Prefer over [`Action::command`] at call sites that already hold a
+    /// [`ModuleId`] (typically `crate::ids::module_id()`).
+    pub fn command(&self, name: OperationName, args: impl Serialize) -> Action {
+        Action::command(self, name, args)
+    }
+
+    /// Builds a command [`Action`] with empty `{}` args ([`EmptyArgs`]).
+    ///
+    /// Use for form-backed submits where the shell merges field values at click time.
+    pub fn command_empty(&self, name: OperationName) -> Action {
+        Action::command(self, name, EmptyArgs {})
+    }
+}
+
 impl Action {
     /// Builds a [`Action::Command`] with typed JSON args (`impl Serialize`).
     ///
     /// `module_id` and `name` are typed — use [`ModuleId::from_static`] /
     /// [`crate::define_operation_names!`] / [`crate::contracts`] at call sites.
     /// Pass [`EmptyArgs`] for `{}`, or a module command DTO.
+    ///
+    /// Prefer [`ModuleId::command`] / [`ModuleId::command_empty`] when the target
+    /// is `crate::ids::module_id()`.
     pub fn command(module_id: &ModuleId, name: OperationName, args: impl Serialize) -> Self {
         Action::Command {
             module_id: module_id.as_str().to_string(),

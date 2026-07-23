@@ -52,8 +52,8 @@ pub enum SurfaceLevel {
 }
 
 /// Enter/exit animation kind for shells.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 pub enum AnimationKind {
     /// Fade up.
     FadeUp,
@@ -449,8 +449,9 @@ impl Default for RichTextDoc {
 }
 
 /// TipTap block node (subset used by modules).
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum RichTextBlock {
     /// Paragraph block.
     Paragraph {
@@ -473,8 +474,9 @@ pub enum RichTextBlock {
 }
 
 /// TipTap inline node (subset).
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum RichTextInline {
     /// Plain text run.
     Text {

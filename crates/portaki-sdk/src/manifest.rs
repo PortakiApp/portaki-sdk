@@ -25,8 +25,8 @@ use serde_json::Value;
 use crate::capability::CapabilityId;
 
 /// Top-level module manifest embedded in the OCI artifact as `manifest.json`.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct ModuleManifest {
     /// Manifest schema version (gateway compatibility gate).
     pub manifest_version: String,

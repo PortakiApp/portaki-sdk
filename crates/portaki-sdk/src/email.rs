@@ -440,8 +440,11 @@ impl fmt::Display for ParseEmailTemplateKeyError {
 impl std::error::Error for ParseEmailTemplateKeyError {}
 
 /// Arguments passed to module `emailContext` handlers by the gateway.
+///
+/// Prefer this type over redefining `template_key` / `locale` / `stay_id` in each
+/// module. Modules that need extra wire fields keep a local struct.
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct EmailContextArgs {
     /// Template being composed; modules filter on guest-stay keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -449,14 +452,40 @@ pub struct EmailContextArgs {
     /// Stay identifier when composing a guest-stay email.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stay_id: Option<String>,
+    /// Optional locale override (BCP-47). Falls back to [`crate::Context::locale`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
+}
+
+impl EmailContextArgs {
+    /// `true` when `template_key` is unset or listed in `allowed`.
+    ///
+    /// Most guest-stay modules treat a missing key as “contribute” (gateway
+    /// probe / legacy callers).
+    pub fn allows_template(&self, allowed: &[EmailTemplateKey]) -> bool {
+        match self.template_key {
+            None => true,
+            Some(key) => allowed.contains(&key),
+        }
+    }
+
+    /// Resolved locale: trimmed `locale` override, else `fallback` (typically
+    /// `ctx.locale`).
+    pub fn locale_or<'a>(&'a self, fallback: &'a str) -> &'a str {
+        self.locale
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(fallback)
+    }
 }
 
 /// Documented contribution fields modules may return into guest-stay emails.
 ///
 /// Modules typically serialize a subset as `serde_json::Value` / a dedicated
 /// response struct. Field names match gateway merge keys (camelCase).
+#[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct EmailContextContribution {
     /// Weather one-liner for arrival / arrival-day templates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -494,5 +523,23 @@ mod tests {
             serde_json::to_value(EmailTemplateKey::ArrivalDay).unwrap(),
             "arrival-day"
         );
+    }
+
+    #[test]
+    fn email_context_args_allows_template_and_locale() {
+        use super::EmailContextArgs;
+
+        let empty = EmailContextArgs::default();
+        assert!(empty.allows_template(&[EmailTemplateKey::Arrival]));
+        assert_eq!(empty.locale_or("fr-FR"), "fr-FR");
+
+        let filtered = EmailContextArgs {
+            template_key: Some(EmailTemplateKey::StayLink),
+            stay_id: None,
+            locale: Some("  en-GB  ".into()),
+        };
+        assert!(!filtered.allows_template(&[EmailTemplateKey::Arrival]));
+        assert!(filtered.allows_template(&[EmailTemplateKey::StayLink]));
+        assert_eq!(filtered.locale_or("fr-FR"), "en-GB");
     }
 }

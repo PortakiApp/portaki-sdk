@@ -63,6 +63,7 @@ mod module;
 mod query;
 mod surface;
 mod wasm_handler;
+mod wire;
 mod wire_lit;
 
 use proc_macro::TokenStream;
@@ -443,6 +444,41 @@ pub fn connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn custom_connector(attr: TokenStream, item: TokenStream) -> TokenStream {
     connector::expand_custom(attr, item)
+}
+
+/// Marks a struct or enum as a Portaki **wire** JSON DTO (gateway / SDUI / events / email).
+///
+/// Serde defaults to Rust field names (`snake_case`). Portaki's platform wire format is
+/// camelCase. This attribute applies `#[serde(rename_all = "camelCase")]` and, when the
+/// item does not already derive them, adds `Serialize` / `Deserialize`.
+///
+/// Prefer this over repeating `#[serde(rename_all = "camelCase")]` on command/query args,
+/// responses, event payloads, and email-context types. Do **not** use it for KV/config blobs
+/// or entity rows that intentionally stay snake_case on disk.
+///
+/// # Syntax
+///
+/// ```ignore
+/// #[portaki_sdk::wire]
+/// #[derive(Debug, Clone)]
+/// pub struct SubmitArgs {
+///     pub item_description: String,
+/// }
+///
+/// // Serialize-only event payload:
+/// #[portaki_sdk::wire(serialize)]
+/// #[derive(Debug)]
+/// struct SubmittedPayload {
+///     property_id: uuid::Uuid,
+/// }
+/// ```
+///
+/// Existing `#[derive(Serialize, Deserialize)]` is left as-is; only `rename_all` is injected.
+/// Existing `#[serde(…)]` container attrs are kept — a separate `rename_all = "camelCase"` is
+/// added when missing (serde merges multiple container attributes).
+#[proc_macro_attribute]
+pub fn wire(attr: TokenStream, item: TokenStream) -> TokenStream {
+    wire::expand(attr, item)
 }
 
 /// Declares one HTTP operation on the most recently emitted custom connector, or a validator stub.

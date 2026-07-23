@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 pub struct Nuki;
 
 /// Arguments for [`Nuki::remote_unlock`].
+#[portaki_sdk::wire]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UnlockArgs {
     /// Nuki smart lock id (path param `{smartlockId}`).
     pub smartlock_id: String,
