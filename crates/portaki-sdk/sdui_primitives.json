@@ -1,6 +1,6 @@
 [
   {"name": "Stack", "serde_name": "Stack", "has_children": true, "fields": {"direction": "StackDirection", "gap": "f64"}},
-  {"name": "Grid", "serde_name": "Grid", "has_children": true, "fields": {"columns": "u32", "gap": "f64"}},
+  {"name": "Grid", "serde_name": "Grid", "has_children": true, "fields": {"columns": "u32", "gap": "f64", "minColumnWidth": "f64"}},
   {"name": "Group", "serde_name": "Group", "has_children": true, "fields": {}},
   {"name": "Section", "serde_name": "Section", "has_children": true, "fields": {"title": "String", "subtitle": "String"}},
   {"name": "Card", "serde_name": "Card", "has_children": true, "fields": {"title": "String", "subtitle": "String", "footer": "String", "icon": "String", "action": "Action"}},
@@ -23,6 +23,7 @@
   {"name": "ListItem", "serde_name": "ListItem", "has_children": true, "fields": {"title": "String", "subtitle": "String", "leading": "String", "trailing": "String", "chevron": "bool", "action": "Action"}},
   {"name": "SectionListItem", "serde_name": "SectionListItem", "has_children": false, "fields": {"title": "String"}},
   {"name": "ChecklistItem", "serde_name": "ChecklistItem", "has_children": false, "fields": {"label": "String", "checked": "bool"}},
+  {"name": "IndexedInput", "serde_name": "IndexedInput", "has_children": false, "fields": {"index": "u32", "name": "String", "value": "String", "placeholder": "String", "showCheck": "bool"}},
   {"name": "ColorDotItem", "serde_name": "ColorDotItem", "has_children": false, "fields": {"label": "String", "color": "String"}},
   {"name": "TimedEntry", "serde_name": "TimedEntry", "has_children": false, "fields": {"time": "String", "label": "String", "title": "String", "subtitle": "String"}},
   {"name": "BulletList", "serde_name": "BulletList", "has_children": true, "fields": {}},

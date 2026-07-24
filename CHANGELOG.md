@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Features
+
+* **sdui:** add `IndexedInput` (index + optional checkbox + text field tile)
+* **sdui:** add `Grid.minColumnWidth` for auto-fit host grids
+
 ## [2.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.0.1...v2.1.0) (2026-07-23)
 
 
