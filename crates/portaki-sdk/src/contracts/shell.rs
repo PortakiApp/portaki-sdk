@@ -10,6 +10,9 @@ use crate::ids::EventType;
 /// without a Wasm command round-trip.
 pub const SURFACE_INPUT: EventType = EventType::new("host.surface.input");
 
+/// Host asks the shell to close the current overlay / stay-action modal.
+pub const SURFACE_DISMISS: EventType = EventType::new("host.surface.dismiss");
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -17,5 +20,6 @@ mod tests {
     #[test]
     fn shell_event_wire_names() {
         assert_eq!(SURFACE_INPUT.as_str(), "host.surface.input");
+        assert_eq!(SURFACE_DISMISS.as_str(), "host.surface.dismiss");
     }
 }

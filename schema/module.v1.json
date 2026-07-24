@@ -36,7 +36,7 @@
     },
     "hostSurfaces": {
       "type": "array",
-      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (stats strip), stay-detail (SDUI embed on stay detail with stayId input).",
+      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (stats strip), stay-detail (SDUI embed on stay detail with stayId input), stay-action (stay detail button that opens a modal hosting module SDUI).",
       "items": { "$ref": "#/$defs/hostSurface" }
     },
     "guestSurfaces": {
@@ -56,7 +56,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "property-workspace-tab | property-module-sheet | property-stats-card | stay-detail"
+          "description": "property-workspace-tab | property-module-sheet | property-stats-card | stay-detail | stay-action"
         },
         "pathSegment": {
           "type": "string",
