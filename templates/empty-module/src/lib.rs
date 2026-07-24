@@ -8,7 +8,7 @@ portaki_sdk::portaki_module!(
     id = "{{MODULE_NAME}}",
     display_name_key = "module.displayName",
     description_key = "module.description",
-    author = "Syntax Labs",
+    author = "Portaki",
 );
 
 // Add `guest/` and `host/` surface modules when the module gains UI.

@@ -85,7 +85,7 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     let description_key = attrs
         .description_key
         .unwrap_or_else(|| "module.description".to_string());
-    let author = attrs.author.unwrap_or_else(|| "Syntax Labs".to_string());
+    let author = attrs.author.unwrap_or_else(|| "Portaki".to_string());
     let version = attrs.version.unwrap_or_else(default_crate_version);
 
     let json = format!(

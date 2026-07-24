@@ -80,7 +80,7 @@ use proc_macro::TokenStream;
 ///     id = "weather",
 ///     display_name_key = "module.displayName",
 ///     description_key = "module.description",
-///     author = "Syntax Labs",
+///     author = "Portaki",
 ///     version = "1.0.0", // optional; defaults to compiling crate's CARGO_PKG_VERSION
 /// );
 /// ```
@@ -100,7 +100,7 @@ use proc_macro::TokenStream;
 /// | `id` | no | `"unknown"` |
 /// | `display_name_key` | no | `"module.displayName"` |
 /// | `description_key` | no | `"module.description"` |
-/// | `author` | no | `"Syntax Labs"` |
+/// | `author` | no | `"Portaki"` |
 /// | `version` | no | `CARGO_PKG_VERSION` of the **module crate** (not this proc-macro crate) |
 ///
 /// Unknown keys are a **compile error** (`unknown portaki_module attribute: …`).
