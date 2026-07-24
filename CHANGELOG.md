@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
+* **sdui:** add optional `icon` on `ToggleRow` (leading icon token)
 * **sdui:** add `IndexedInput` (index + optional checkbox + text field tile)
 * **sdui:** add `Grid.minColumnWidth` for auto-fit host grids
 

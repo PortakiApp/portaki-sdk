@@ -56,7 +56,7 @@
   {"name": "FieldHint", "serde_name": "FieldHint", "has_children": false, "fields": {"text": "String"}},
   {"name": "InlineNotice", "serde_name": "InlineNotice", "has_children": false, "fields": {"message": "String", "text": "String"}},
   {"name": "SecretInput", "serde_name": "SecretInput", "has_children": false, "fields": {"name": "String", "placeholder": "String", "value": "String"}},
-  {"name": "ToggleRow", "serde_name": "ToggleRow", "has_children": false, "fields": {"name": "String", "label": "String", "checked": "bool", "action": "Action"}},
+  {"name": "ToggleRow", "serde_name": "ToggleRow", "has_children": false, "fields": {"name": "String", "label": "String", "icon": "String", "checked": "bool", "action": "Action"}},
   {"name": "AddressMapPicker", "serde_name": "AddressMapPicker", "has_children": false, "fields": {"addressName": "String", "latName": "String", "lngName": "String", "address": "String", "lat": "f64", "lng": "f64", "label": "String", "hint": "String"}},
   {"name": "StepList", "serde_name": "StepList", "has_children": true, "fields": {"label": "String", "hint": "String", "emptyTitle": "String", "emptyDescription": "String", "addLabel": "String", "addAction": "Action", "itemKeyPrefix": "String", "removeLabel": "String"}},
   {"name": "FilterBar", "serde_name": "FilterBar", "has_children": true, "fields": {}},
