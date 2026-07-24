@@ -85,7 +85,8 @@ src/
   queries.rs          # #[query] handlers (or queries/)
   model/ or entities  # domain types / entity! structs (pick one name per crate)
   config.rs           # persisted module config load/store helpers
-  email_context.rs    # email contribution (or email/)
+  email_context.rs    # optional contribution to Portaki guest templates
+  email_send.rs       # module-owned mail via host::email::send (or email/)
   events.rs           # #[event_handler] (optional)
   i18n/               # locale bundles (repo convention: crate-root i18n/, not src/)
 ```

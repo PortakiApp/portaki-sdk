@@ -143,6 +143,16 @@ impl HostBackend for ExtismHostBackend {
         Ok(())
     }
 
+    fn email_send(&self, payload_json: &str) -> Result<()> {
+        self.dispatch_value(
+            "email.send",
+            json!({
+                "payloadJson": payload_json,
+            }),
+        )?;
+        Ok(())
+    }
+
     fn time_now_iso(&self) -> Result<String> {
         let result = self.dispatch_value("time.now", json!({}))?;
         result

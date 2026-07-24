@@ -15,6 +15,7 @@
     "repo.delete",
     "module.status",
     "module.listByCapability",
-    "events.emit"
+    "events.emit",
+    "email.send"
   ]
 }

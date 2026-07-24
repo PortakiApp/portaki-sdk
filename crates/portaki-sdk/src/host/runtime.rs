@@ -97,6 +97,11 @@ pub trait HostBackend: Send + Sync {
     /// Publishes a domain event with JSON payload.
     fn emit_event(&self, event_type: &str, payload_json: &str) -> Result<()>;
 
+    /// Requests a transactional email send (`email.send` — module-owned content).
+    fn email_send(&self, _payload_json: &str) -> Result<()> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
     /// Returns current UTC time as ISO-8601 (Wasm host dispatch).
     fn time_now_iso(&self) -> Result<String> {
         Err(PortakiError::HostNotConfigured)

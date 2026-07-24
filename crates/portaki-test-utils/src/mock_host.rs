@@ -249,6 +249,10 @@ impl HostBackend for MockHostFunctions {
         Ok(())
     }
 
+    fn email_send(&self, _payload_json: &str) -> Result<()> {
+        Ok(())
+    }
+
     fn time_now_iso(&self) -> Result<String> {
         Ok(chrono::Utc::now().to_rfc3339())
     }

@@ -14,6 +14,7 @@
 //! | [`capabilities`] | Probe grants (hint); prefer `Context::has_capability` | Assume optional capabilities are present |
 //! | [`module`] | Read install/config readiness from orchestrator | Mutate enablement or config |
 //! | [`events`] | Emit declared domain events | Assume delivery without checking `Result` |
+//! | [`email`] | Request transactional send with module-owned content | Assemble Portaki-core copy or module-named use cases |
 //!
 //! ## Thread-local runtime
 //!
@@ -48,6 +49,7 @@
 
 pub mod capabilities;
 pub mod connectors;
+pub mod email;
 pub mod events;
 pub mod geo;
 pub mod i18n;
