@@ -291,6 +291,65 @@ impl PartialEq<&str> for EventType {
     }
 }
 
+/// Host-owned UI fragment identifier (wire: JSON string).
+///
+/// Modules compose these via [`crate::sdui::primitives::HostFragment`] or
+/// [`crate::sdui::action::Action::OpenHostFragment`]. Well-known ids live under
+/// [`crate::contracts::host_fragments`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FragmentId(pub &'static str);
+
+impl FragmentId {
+    /// Creates a fragment id from a static wire string.
+    pub const fn new(id: &'static str) -> Self {
+        Self(id)
+    }
+
+    /// Stable wire string.
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+impl AsRef<str> for FragmentId {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+impl Deref for FragmentId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl fmt::Display for FragmentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl From<FragmentId> for String {
+    fn from(id: FragmentId) -> Self {
+        id.0.to_string()
+    }
+}
+
+impl PartialEq<str> for FragmentId {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl PartialEq<&str> for FragmentId {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
 /// Shared booklet / host surface id conventions used by first-party modules.
 ///
 /// These are **naming conventions**, not a closed platform enum. Modules may

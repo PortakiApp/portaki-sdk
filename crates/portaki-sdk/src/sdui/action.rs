@@ -12,11 +12,12 @@
 //! | [`Action::Navigate`] | Routes to another module surface by id or shell path |
 //! | [`Action::External`] | Opens `tel:`, `mailto:`, or `https:` via OS handler |
 //! | [`Action::OpenOverlay`] | Second surface render with presentation hint |
+//! | [`Action::OpenHostFragment`] | Opens a host-owned UI fragment (e.g. police form) |
 //! | [`Action::Emit`] | Client-side shell event (no Wasm round-trip) |
 //!
 //! Boundary builders take typed ids ([`ModuleId`], [`OperationName`], [`SurfaceId`],
-//! [`EventType`], [`NavigateTarget`]) — bare `&str` / `String` are rejected at the
-//! type layer. Wire JSON remains plain strings.
+//! [`FragmentId`], [`EventType`], [`NavigateTarget`]) — bare `&str` / `String` are
+//! rejected at the type layer. Wire JSON remains plain strings.
 //!
 //! ## What modules must not assume
 //!
@@ -66,7 +67,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ids::{EventType, ModuleId, OperationName, SurfaceId};
+use crate::ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 
 /// Empty JSON object `{}` for form-backed commands with no static args.
 ///
@@ -231,6 +232,19 @@ pub enum Action {
         #[serde(skip_serializing_if = "Option::is_none")]
         args: Option<OverlayArgs>,
     },
+    /// Open a host-owned UI fragment implemented by guest/dashboard/mobile shells.
+    ///
+    /// Fragment ids are SDK contracts ([`crate::contracts::host_fragments`]) —
+    /// modules must not invent ad-hoc names or branch on module ids in shells.
+    OpenHostFragment {
+        /// Stable host fragment id (e.g. `regulatory.police-form`).
+        fragment_id: String,
+        /// Presentation style (fullscreen page for police form).
+        presentation: OverlayPresentation,
+        /// Overlay chrome args (title / icon) forwarded to the shell.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        args: Option<OverlayArgs>,
+    },
     /// Emit a client-side event handled locally by the shell.
     Emit {
         /// Event name registered with the shell runtime.
@@ -308,6 +322,21 @@ impl Action {
         }
     }
 
+    /// Builds a [`Action::OpenHostFragment`] for a host-owned UI block.
+    ///
+    /// Prefer [`crate::contracts::host_fragments`] consts for `fragment_id`.
+    pub fn open_host_fragment(
+        fragment_id: FragmentId,
+        presentation: OverlayPresentation,
+        args: impl Into<Option<OverlayArgs>>,
+    ) -> Self {
+        Action::OpenHostFragment {
+            fragment_id: fragment_id.as_str().to_string(),
+            presentation,
+            args: args.into(),
+        }
+    }
+
     /// Builds a [`Action::Emit`] client-side event.
     ///
     /// `event` must be an [`EventType`] (module catalog or [`crate::contracts::shell`]).
@@ -366,6 +395,27 @@ mod tests {
                 assert_eq!(args.unwrap().icon.as_deref(), Some("cloud-sun"));
             }
             other => panic!("expected OpenOverlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn open_host_fragment_uses_fragment_id() {
+        let action = Action::open_host_fragment(
+            crate::contracts::host_fragments::POLICE_FORM,
+            OverlayPresentation::Fullscreen,
+            OverlayArgs::new().icon("scale").title("i18n:police.title"),
+        );
+        match action {
+            Action::OpenHostFragment {
+                fragment_id,
+                presentation,
+                args,
+            } => {
+                assert_eq!(fragment_id, "regulatory.police-form");
+                assert_eq!(presentation, OverlayPresentation::Fullscreen);
+                assert_eq!(args.unwrap().icon.as_deref(), Some("scale"));
+            }
+            other => panic!("expected OpenHostFragment, got {other:?}"),
         }
     }
 

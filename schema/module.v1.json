@@ -90,6 +90,16 @@
         "labelKey": {
           "type": "string",
           "description": "i18n key for booklet nav label (e.g. nav.appliances)"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["card", "arrival-formality"],
+          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form)"
+        },
+        "embedsHostFragments": {
+          "type": "array",
+          "description": "Host fragment ids this surface composes (e.g. regulatory.police-form). Shells skip standalone host UI for those fragments when such a surface is enabled.",
+          "items": { "type": "string", "minLength": 1 }
         }
       }
     }

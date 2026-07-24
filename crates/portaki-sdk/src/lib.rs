@@ -71,7 +71,7 @@ pub use context::{
 };
 pub use email::{EmailContextArgs, EmailContextContribution, EmailTemplateKey};
 pub use error::{PortakiError, Result};
-pub use ids::{EventType, ModuleId, OperationName, SurfaceId};
+pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
     capability, command, connector, connector_op, custom_connector, entity, entity_indexes,
     event_handler, portaki_module_decl as portaki_module, query, surface, wire,
@@ -109,7 +109,7 @@ pub mod prelude {
     pub use crate::email::{EmailContextArgs, EmailTemplateKey};
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
-    pub use crate::ids::{self, EventType, ModuleId, OperationName, SurfaceId};
+    pub use crate::ids::{self, EventType, FragmentId, ModuleId, OperationName, SurfaceId};
     pub use crate::sdui::action::{
         json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation,
     };

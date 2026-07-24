@@ -110,5 +110,6 @@
   {"name": "PreviewPane", "serde_name": "PreviewPane", "has_children": true, "fields": {"surfaceRender": "String"}},
   {"name": "ConfirmDialog", "serde_name": "ConfirmDialog", "has_children": false, "fields": {"title": "String", "message": "String", "confirmAction": "Action", "cancelAction": "Action"}},
   {"name": "CapabilityNotice", "serde_name": "CapabilityNotice", "has_children": false, "fields": {"capabilityId": "String", "messageKey": "String"}},
-  {"name": "QuotaIndicator", "serde_name": "QuotaIndicator", "has_children": false, "fields": {"capabilityId": "String", "used": "f64", "limit": "f64"}}
+  {"name": "QuotaIndicator", "serde_name": "QuotaIndicator", "has_children": false, "fields": {"capabilityId": "String", "used": "f64", "limit": "f64"}},
+  {"name": "HostFragment", "serde_name": "HostFragment", "has_children": false, "fields": {"fragmentId": "String", "mode": "String"}}
 ]
