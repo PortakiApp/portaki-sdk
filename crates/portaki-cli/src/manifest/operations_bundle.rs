@@ -319,7 +319,10 @@ mod tests {
     fn when_macro_emission_types_then_maps_uuid_and_datetime() {
         assert_eq!(rust_type_to_sql("pub id : Uuid.ty").0, "uuid");
         assert_eq!(rust_type_to_sql("pub property_id : Uuid.ty").0, "uuid");
-        assert_eq!(rust_type_to_sql("pub created_at : DateTime < Utc > .ty").0, "timestamptz");
+        assert_eq!(
+            rust_type_to_sql("pub created_at : DateTime < Utc > .ty").0,
+            "timestamptz"
+        );
         assert_eq!(rust_type_to_sql("pub sort_order : i32.ty").0, "int");
         assert_eq!(rust_type_to_sql("pub label_fr : String.ty").0, "text");
         assert_eq!(rust_type_to_sql("Uuid").0, "uuid");
