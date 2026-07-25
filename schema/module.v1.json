@@ -43,6 +43,11 @@
       "type": "array",
       "description": "Guest booklet URL routes beyond the implicit home.card (path may include :params).",
       "items": { "$ref": "#/$defs/guestSurface" }
+    },
+    "emails": {
+      "type": "array",
+      "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches for property stays after draft publish; dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
+      "items": { "$ref": "#/$defs/moduleEmail" }
     }
   },
   "$defs": {
@@ -70,6 +75,51 @@
           "properties": {
             "designId": { "type": "string" }
           }
+        }
+      }
+    },
+    "moduleEmail": {
+      "type": "object",
+      "required": ["id", "trigger"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable delivery id (dedup key with module + stay)"
+        },
+        "audience": {
+          "type": "string",
+          "description": "guest | host | propertyEligibleGuests"
+        },
+        "description": { "$ref": "#/$defs/i18nStringMap" },
+        "command": {
+          "type": "string",
+          "description": "Wasm command to dispatch (e.g. sendFormAvailable); module owns gate + email body"
+        },
+        "catchUpOnPropertyPublish": {
+          "type": "boolean",
+          "description": "When true, platform redispatches command for upcoming/active property stays after draft publish"
+        },
+        "dispatchOnStayCreated": {
+          "type": "boolean",
+          "description": "When true, platform dispatches command on StayCreated"
+        },
+        "trigger": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string" },
+            "offset": { "type": "string" },
+            "atLocalTime": { "type": "string" },
+            "command": { "type": "string" },
+            "catchUpOnPropertyPublish": { "type": "boolean" },
+            "dispatchOnStayCreated": { "type": "boolean" }
+          }
+        },
+        "requiresGuestEmail": { "type": "boolean" },
+        "skipWhen": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },
