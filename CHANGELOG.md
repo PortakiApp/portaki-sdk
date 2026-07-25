@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **sdui:** add `IndexedInput` (index + optional checkbox + text field tile)
 * **sdui:** add `Grid.minColumnWidth` for auto-fit host grids
 
+## [2.1.1] — 2026-07-25
+
+### Features
+
+* **email:** `LocalizedEmailText` multi-locale (`translations` map) + `resolve` /
+  `from_i18n_key` helpers with guestLang → tag → en → fr fallback (wire-compatible
+  with `{fr,en}`)
+
 ## [2.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.0.1...v2.1.0) (2026-07-23)
 
 
