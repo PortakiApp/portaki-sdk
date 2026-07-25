@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v1.0.0...v2.0.0) (2026-07-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** SDUI props, CapabilityId, OverlayArgs, EmailTemplateKey, and Action/event builders require typed IDs (SurfaceId/OperationName/ModuleId/EventType). Bare &str dropped in 2.1.0; EmptyArgs/json_value replace json! authoring.
+
+### Features
+
+* **host:** add email.send for module-owned mail ([106cde1](https://github.com/PortakiApp/portaki-sdk/commit/106cde1fd9905baaf5dca9e7913cb782834be4e7))
+* **schema:** document stay-action host surface ([02a10eb](https://github.com/PortakiApp/portaki-sdk/commit/02a10eb1bc606930394f47b8d7c8d20d00f8d356))
+* **sdk:** add Nuki connector and auth attribute ([1f442ee](https://github.com/PortakiApp/portaki-sdk/commit/1f442eef8f3c787e1a4eec04a054f263f0ffb2cb))
+* **sdk:** add wire macro and command helpers ([778fcd2](https://github.com/PortakiApp/portaki-sdk/commit/778fcd202bcc813d7861574de17e59c9b2ccf558))
+* **sdk:** mock extra capability ids for tests ([4362d27](https://github.com/PortakiApp/portaki-sdk/commit/4362d272739c5e5dfed5c5535980bbeea22c5f61))
+* **sdk:** ship typed SDK 2.x boundary APIs ([cbeec7e](https://github.com/PortakiApp/portaki-sdk/commit/cbeec7e5f77ef8b262e883d612b284ab947c4733))
+* **sdui:** add HostFragment and OpenHostFragment ([7cdbf53](https://github.com/PortakiApp/portaki-sdk/commit/7cdbf533e32e56d5d9da3864e6266ae6ec98fee8))
+* **sdui:** add IndexedInput and Grid.minColumnWidth ([5e6f23f](https://github.com/PortakiApp/portaki-sdk/commit/5e6f23f123b8acc78b9f56e42b92896bd97fc226))
+* **sdui:** add optional icon on ToggleRow ([2eed258](https://github.com/PortakiApp/portaki-sdk/commit/2eed2584c40f01aefbe738ce57eb908224b53c35))
+* **wire:** inject Debug and Clone derives ([6178770](https://github.com/PortakiApp/portaki-sdk/commit/617877085d471e773cd2524896d884fb1c722145))
+
+
+### Bug Fixes
+
+* **cli:** map Uuid.ty emissions to uuid SQL ([8497aa9](https://github.com/PortakiApp/portaki-sdk/commit/8497aa92a77d154df5953c391197d17360b1aee9))
+
 ## [Unreleased]
 
 ### Features
