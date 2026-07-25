@@ -149,7 +149,9 @@ fn entity_to_table(module_id: &str, entity: &ManifestEntity) -> TableDef {
 }
 
 fn rust_type_to_sql(rust_type: &str) -> (String, bool) {
-    let normalized: String = rust_type.chars().filter(|c| !c.is_whitespace()).collect();
+    // Emissions look like `pub id : Uuid.ty` / `DateTime < Utc > .ty` (macro token dump).
+    let type_token = extract_rust_type_token(rust_type);
+    let normalized: String = type_token.chars().filter(|c| !c.is_whitespace()).collect();
     if let Some(inner) = normalized
         .strip_prefix("Option<")
         .and_then(|rest| rest.strip_suffix('>'))
@@ -158,7 +160,7 @@ fn rust_type_to_sql(rust_type: &str) -> (String, bool) {
         return (inner_type, true);
     }
 
-    let column_type = if normalized == "Uuid" || normalized.ends_with("::Uuid") {
+    let column_type = if is_uuid_type(&normalized) {
         "uuid"
     } else if normalized == "String" || normalized == "str" || normalized == "&str" {
         "text"
@@ -183,6 +185,26 @@ fn rust_type_to_sql(rust_type: &str) -> (String, bool) {
     };
 
     (column_type.to_string(), false)
+}
+
+/// Strips macro noise (`pub name :`, trailing `.ty`) so type matching is stable.
+fn extract_rust_type_token(rust_type: &str) -> &str {
+    let trimmed = rust_type.trim();
+    let without_ty = trimmed.strip_suffix(".ty").unwrap_or(trimmed).trim();
+    if let Some((_, after_colon)) = without_ty.rsplit_once(':') {
+        let candidate = after_colon.trim();
+        if !candidate.is_empty() {
+            return candidate;
+        }
+    }
+    without_ty
+}
+
+fn is_uuid_type(normalized: &str) -> bool {
+    normalized == "Uuid"
+        || normalized.ends_with("::Uuid")
+        || normalized.ends_with(".Uuid")
+        || normalized == "uuid::Uuid"
 }
 
 fn default_sql_for(sql_name: &str, column_type: &str) -> Option<String> {
@@ -291,6 +313,16 @@ mod tests {
             .unwrap();
         assert_eq!(created["type"], "timestamptz");
         assert_eq!(created["defaultSql"], "now()");
+    }
+
+    #[test]
+    fn when_macro_emission_types_then_maps_uuid_and_datetime() {
+        assert_eq!(rust_type_to_sql("pub id : Uuid.ty").0, "uuid");
+        assert_eq!(rust_type_to_sql("pub property_id : Uuid.ty").0, "uuid");
+        assert_eq!(rust_type_to_sql("pub created_at : DateTime < Utc > .ty").0, "timestamptz");
+        assert_eq!(rust_type_to_sql("pub sort_order : i32.ty").0, "int");
+        assert_eq!(rust_type_to_sql("pub label_fr : String.ty").0, "text");
+        assert_eq!(rust_type_to_sql("Uuid").0, "uuid");
     }
 
     #[test]
