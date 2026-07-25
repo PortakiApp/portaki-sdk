@@ -46,7 +46,7 @@
     },
     "emails": {
       "type": "array",
-      "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches for property stays after draft publish; dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
+      "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches after draft publish; catchUpOnConfigUpdate after host updateConfig (promotes module KV then redispatches); dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
       "items": { "$ref": "#/$defs/moduleEmail" }
     }
   },
@@ -100,6 +100,10 @@
           "type": "boolean",
           "description": "When true, platform redispatches command for upcoming/active property stays after draft publish"
         },
+        "catchUpOnConfigUpdate": {
+          "type": "boolean",
+          "description": "When true, after host updateConfig the platform promotes module KV draft then redispatches for upcoming/active property stays (Save without property Publish)"
+        },
         "dispatchOnStayCreated": {
           "type": "boolean",
           "description": "When true, platform dispatches command on StayCreated"
@@ -113,6 +117,7 @@
             "atLocalTime": { "type": "string" },
             "command": { "type": "string" },
             "catchUpOnPropertyPublish": { "type": "boolean" },
+            "catchUpOnConfigUpdate": { "type": "boolean" },
             "dispatchOnStayCreated": { "type": "boolean" }
           }
         },
