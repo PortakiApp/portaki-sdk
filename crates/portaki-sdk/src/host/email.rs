@@ -181,11 +181,7 @@ pub fn normalize_lang_tag(raw: &str) -> String {
     if trimmed.is_empty() {
         return String::new();
     }
-    trimmed
-        .split(['-', '_'])
-        .next()
-        .unwrap_or("")
-        .to_string()
+    trimmed.split(['-', '_']).next().unwrap_or("").to_string()
 }
 
 /// Fallback chain: guestLang → language tag → en → fr.
@@ -318,7 +314,10 @@ mod tests {
         );
         assert_eq!(text.en, "Hello Ada");
         assert_eq!(text.fr, "Bonjour Ada");
-        assert_eq!(text.translations.get("de").map(String::as_str), Some("Hallo Ada"));
+        assert_eq!(
+            text.translations.get("de").map(String::as_str),
+            Some("Hallo Ada")
+        );
         assert_eq!(text.resolve("de"), "Hallo Ada");
     }
 
@@ -326,7 +325,12 @@ mod tests {
     fn locale_fallback_chain_order() {
         assert_eq!(
             locale_fallback_chain("zh-CN"),
-            vec!["zh-cn".to_string(), "zh".to_string(), "en".to_string(), "fr".to_string()]
+            vec![
+                "zh-cn".to_string(),
+                "zh".to_string(),
+                "en".to_string(),
+                "fr".to_string()
+            ]
         );
         assert_eq!(
             locale_fallback_chain("en"),
