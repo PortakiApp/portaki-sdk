@@ -47,6 +47,7 @@ Prefer the constants in `portaki_sdk::capability::external::*` so ids stay align
 | `open-weather` | `external.open-weather.pool` | `external.open-weather.byok` | `query_appid` (default) |
 | `mapbox` | `external.mapbox.pool` | `external.mapbox.byok` | `bearer` |
 | `google-places` | `external.google-places.pool` | `external.google-places.byok` | `query_key` |
+| `open-agenda` | `external.open-agenda.pool` | `external.open-agenda.byok` | `query_key` |
 | `osm` / `osm-nominatim` | `external.osm.pool` | — | `none` |
 | `nuki` | — | `external.nuki.byok` | `bearer` |
 
