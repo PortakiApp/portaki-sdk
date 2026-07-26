@@ -135,9 +135,11 @@ fn parse_nearby_events(raw: &Value) -> SdkResult<NearbyEventsResponse> {
 fn map_event(item: &Value) -> Option<NearbyEvent> {
     let uid = item
         .get("uid")
-        .and_then(|v| v.as_u64().map(|n| n.to_string()).or_else(|| {
-            v.as_str().map(|s| s.trim().to_string())
-        }))
+        .and_then(|v| {
+            v.as_u64()
+                .map(|n| n.to_string())
+                .or_else(|| v.as_str().map(|s| s.trim().to_string()))
+        })
         .filter(|s| !s.is_empty())?;
     let title = localized_text(item.get("title")).filter(|s| !s.is_empty())?;
     let place = place_label(item.get("location")).unwrap_or_default();
