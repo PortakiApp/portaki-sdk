@@ -110,6 +110,12 @@ pub enum CapabilityId {
     /// Nuki Web API — property-owned access token (BYOK only).
     #[serde(rename = "external.nuki.byok")]
     NukiByok,
+    /// OpenAgenda — platform-managed API pool.
+    #[serde(rename = "external.open-agenda.pool")]
+    OpenAgendaPool,
+    /// OpenAgenda — property-owned API key.
+    #[serde(rename = "external.open-agenda.byok")]
+    OpenAgendaByok,
     /// Inline text suggestion generation.
     #[serde(rename = "ai.text.suggestions")]
     TextSuggestions,
@@ -155,6 +161,8 @@ impl CapabilityId {
             Self::OpenWeatherByok => "external.open-weather.byok",
             Self::OsmPool => "external.osm.pool",
             Self::NukiByok => "external.nuki.byok",
+            Self::OpenAgendaPool => "external.open-agenda.pool",
+            Self::OpenAgendaByok => "external.open-agenda.byok",
             Self::TextSuggestions => "ai.text.suggestions",
             Self::Translation => "ai.translation",
             Self::ImageGeneration => "ai.image.generation",
@@ -189,6 +197,8 @@ impl CapabilityId {
         Self::OpenWeatherByok,
         Self::OsmPool,
         Self::NukiByok,
+        Self::OpenAgendaPool,
+        Self::OpenAgendaByok,
         Self::TextSuggestions,
         Self::Translation,
         Self::ImageGeneration,
@@ -243,6 +253,8 @@ impl FromStr for CapabilityId {
             "external.open-weather.byok" => Ok(Self::OpenWeatherByok),
             "external.osm.pool" => Ok(Self::OsmPool),
             "external.nuki.byok" => Ok(Self::NukiByok),
+            "external.open-agenda.pool" => Ok(Self::OpenAgendaPool),
+            "external.open-agenda.byok" => Ok(Self::OpenAgendaByok),
             "ai.text.suggestions" => Ok(Self::TextSuggestions),
             "ai.translation" => Ok(Self::Translation),
             "ai.image.generation" => Ok(Self::ImageGeneration),
@@ -336,6 +348,10 @@ pub mod external {
     pub const OSM_POOL: CapabilityId = CapabilityId::OsmPool;
     /// Nuki Web API — property-owned access token (BYOK only).
     pub const NUKI_BYOK: CapabilityId = CapabilityId::NukiByok;
+    /// OpenAgenda — platform-managed pool.
+    pub const OPEN_AGENDA_POOL: CapabilityId = CapabilityId::OpenAgendaPool;
+    /// OpenAgenda — property-owned key.
+    pub const OPEN_AGENDA_BYOK: CapabilityId = CapabilityId::OpenAgendaByok;
 }
 
 /// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).

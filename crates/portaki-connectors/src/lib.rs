@@ -24,6 +24,7 @@
 //! | Module | `connector_id` | Operations |
 //! |--------|----------------|------------|
 //! | [`open_weather`] | `open-weather` | `current`, `forecast`, `historical` |
+//! | [`open_agenda`] | `open-agenda` | `nearby_events` |
 //! | [`google_places`] | `google-places` | `nearby_search`, `text_search`, `details`, `photos` |
 //! | [`mapbox`] | `mapbox` | `geocode`, `reverse_geocode`, `directions`, `static_map` |
 //! | [`osm_nominatim`] | `osm-nominatim` | `geocode`, `reverse_geocode` |
@@ -65,12 +66,14 @@
 pub mod google_places;
 pub mod mapbox;
 pub mod nuki;
+pub mod open_agenda;
 pub mod open_weather;
 pub mod osm_nominatim;
 
 pub use google_places::GooglePlaces;
 pub use mapbox::Mapbox;
 pub use nuki::Nuki;
+pub use open_agenda::OpenAgenda;
 pub use open_weather::OpenWeather;
 pub use osm_nominatim::OsmNominatim;
 
