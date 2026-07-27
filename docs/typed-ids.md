@@ -84,3 +84,11 @@ let _ = platform::BOOKING_CONFIRMED;
 Do **not** invent a monorepo-wide enum of every module’s private surfaces.
 Do keep peer protocols (`access.smart_lock`, shell events, `core.*` platform
 events) in the SDK so consumers cannot mistype the contract.
+
+## Shared payload shapes
+
+`contracts` also owns payload shapes the gateway parses from more than one
+module — `stay_import::StayImportRow` for any calendar / channel-manager import
+module. Emit the SDK struct instead of restating the field set in the module
+crate; a shape held together by a comment drifts as soon as a second module
+ships.

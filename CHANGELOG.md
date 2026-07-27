@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **contracts:** add `booking_channel` — canonical `BookingChannel` /
   `ChannelSignal` vocabulary answering *who sold the stay* (vocabulary only, no
   decision table; behavioural attributes stay on the gateway)
+* **contracts:** add `stay_import::StayImportRow` — canonical import row shape
+  for `ModuleGatewayStayImportAdapter`, now carrying `bookingChannel` /
+  `bookingChannelSignal` on every row
 * **sdui:** add optional `icon` on `ToggleRow` (leading icon token)
 * **sdui:** add `IndexedInput` (index + optional checkbox + text field tile)
 * **sdui:** add `Grid.minColumnWidth` for auto-fit host grids
