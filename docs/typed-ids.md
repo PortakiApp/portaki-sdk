@@ -31,6 +31,8 @@ boundary. Wire format stays a JSON string (`AsRef<str>` / serde transparent).
 | [`ModuleId`](../crates/portaki-sdk/src/ids.rs) | `Action::command`, peer discovery, `Context::module_id` | No |
 | [`EventType`](../crates/portaki-sdk/src/ids.rs) | `events::emit`, `Action::Emit`, `#[event_handler]` | Partial — platform/shell in contracts |
 | [`NavigateTarget`](../crates/portaki-sdk/src/sdui/action.rs) | `Action::navigate` — `Surface(SurfaceId)` or `Path(String)` | — |
+| [`BookingChannel`](../crates/portaki-sdk/src/contracts/booking_channel.rs) | Who sold an imported stay — host platform selectors, `StayImportRow` | Yes |
+| [`ChannelSignal`](../crates/portaki-sdk/src/contracts/booking_channel.rs) | How a `BookingChannel` was established | Yes |
 
 ## Module-local catalogs
 

@@ -7,6 +7,7 @@
 //! via [`crate::define_surface_ids!`] / [`crate::define_operation_names!`] /
 //! [`crate::define_event_types!`].
 
+pub mod booking_channel;
 pub mod host_fragments;
 pub mod platform;
 pub mod shell;

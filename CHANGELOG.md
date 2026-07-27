@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
+* **contracts:** add `booking_channel` — canonical `BookingChannel` /
+  `ChannelSignal` vocabulary answering *who sold the stay* (vocabulary only, no
+  decision table; behavioural attributes stay on the gateway)
 * **sdui:** add optional `icon` on `ToggleRow` (leading icon token)
 * **sdui:** add `IndexedInput` (index + optional checkbox + text field tile)
 * **sdui:** add `Grid.minColumnWidth` for auto-fit host grids
