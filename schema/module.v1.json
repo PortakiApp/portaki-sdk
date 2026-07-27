@@ -29,6 +29,17 @@
     },
     "icon": { "type": "string" },
     "type": { "type": "string" },
+    "maturity": {
+      "type": "string",
+      "enum": ["stable", "beta"],
+      "default": "stable",
+      "description": "Marketplace maturity. stable modules sort before beta; beta modules show a Beta badge in the host marketplace."
+    },
+    "sortOrder": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Marketplace sort key within a maturity band (lower first). Defaults to 1000 when omitted."
+    },
     "license": { "type": "string" },
     "requiresHostSdk": {
       "type": "string",
