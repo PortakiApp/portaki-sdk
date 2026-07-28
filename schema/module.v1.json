@@ -159,8 +159,8 @@
         },
         "role": {
           "type": "string",
-          "enum": ["card", "arrival-formality", "post-stay"],
-          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form) | post-stay (rendered on the dedicated end-of-stay screen once the stay is over)"
+          "enum": ["card", "arrival-formality", "post-stay", "upcoming"],
+          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form) | post-stay (rendered on the dedicated end-of-stay screen once the stay is over) | upcoming (compact prep card rendered on the pre-arrival timeline before check-in)"
         },
         "embedsHostFragments": {
           "type": "array",
