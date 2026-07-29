@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.1.1...v2.2.0) (2026-07-29)
+
+
+### Features
+
+* **connectors:** add OpenAgenda nearby events client ([ab53d1f](https://github.com/PortakiApp/portaki-sdk/commit/ab53d1f9c2a1f66170905c86a012f1fd47fcd123))
+* **contracts:** add booking channel vocabulary ([6e84543](https://github.com/PortakiApp/portaki-sdk/commit/6e845434dc761e912bb0ba747f05eaa245495da2))
+* **contracts:** add shared StayImportRow shape ([c695a53](https://github.com/PortakiApp/portaki-sdk/commit/c695a539749830d7785e9328f6d7ac1bfe86c4f8))
+* **schema:** add maturity and sortOrder fields ([411e626](https://github.com/PortakiApp/portaki-sdk/commit/411e62640a08cb2c6b2567ffed41b2bfbaa7eb87))
+* **sdui:** add optional blurHash to Image ([5c4ce59](https://github.com/PortakiApp/portaki-sdk/commit/5c4ce598137e840390413ab710c95cec36717b0b))
+
 ## [Unreleased]
 
 ### Features
