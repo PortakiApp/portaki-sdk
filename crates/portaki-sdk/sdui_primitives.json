@@ -67,7 +67,7 @@
   {"name": "DatePicker", "serde_name": "DatePicker", "has_children": false, "fields": {"name": "String", "value": "String"}},
   {"name": "TimePicker", "serde_name": "TimePicker", "has_children": false, "fields": {"name": "String", "value": "String"}},
   {"name": "FormStepper", "serde_name": "FormStepper", "has_children": true, "fields": {"steps": "u32", "currentStep": "u32"}},
-  {"name": "Image", "serde_name": "Image", "has_children": false, "fields": {"url": "String", "alt": "String", "aspectRatio": "String"}},
+  {"name": "Image", "serde_name": "Image", "has_children": false, "fields": {"url": "String", "alt": "String", "aspectRatio": "String", "blurHash": "String"}},
   {"name": "Icon", "serde_name": "Icon", "has_children": false, "fields": {"name": "String", "size": "f64"}},
   {"name": "Map", "serde_name": "Map", "has_children": false, "fields": {"viewport": "MapViewport", "markers": "Vec<MapMarker>", "markersSource": "Value", "isStatic": "bool", "interactionMode": "MapInteractionMode", "clustering": "Value", "onMarkerTap": "Action"}},
   {"name": "QRCode", "serde_name": "QRCode", "has_children": false, "fields": {"value": "String", "size": "f64"}},
