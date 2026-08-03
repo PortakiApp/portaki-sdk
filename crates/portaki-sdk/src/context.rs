@@ -121,6 +121,11 @@ pub struct StayContext {
     pub checkin_at: Option<DateTime<Utc>>,
     /// Check-out instant (UTC), when the gateway loaded a stay.
     pub checkout_at: Option<DateTime<Utc>>,
+    /// Platform the stay was booked on (lowercased channel: `airbnb`, `booking`,
+    /// `abritel_vrbo`, `direct`, `other_platform`, `unknown`). `None` on older
+    /// payloads / when the gateway did not resolve a channel — treat as unknown.
+    #[serde(default)]
+    pub booking_channel: Option<String>,
 }
 
 /// Shell accessibility and theme preferences from the client runtime.

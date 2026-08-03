@@ -51,6 +51,10 @@ pub struct WasmContextEnvelope {
     /// Stay check-out instant (UTC ISO-8601) for guest reveal policies.
     #[serde(rename = "checkoutAt", default)]
     pub checkout_at: Option<String>,
+    /// Platform the stay was booked on (lowercased channel name). Optional for
+    /// backward compatibility with older orchestrators that do not send it.
+    #[serde(rename = "bookingChannel", default)]
+    pub booking_channel: Option<String>,
     /// Property IANA timezone (`Europe/Paris`) — preferred over [`Self::timezone`].
     #[serde(rename = "propertyTimezone", default)]
     pub property_timezone: Option<String>,
@@ -110,6 +114,12 @@ impl WasmRequestEnvelope {
             stay_id,
             checkin_at: parse_instant_opt(ctx.checkin_at.as_deref()),
             checkout_at: parse_instant_opt(ctx.checkout_at.as_deref()),
+            booking_channel: ctx
+                .booking_channel
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_ascii_lowercase()),
         });
         Ok(Context {
             property_id,
