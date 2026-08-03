@@ -37,4 +37,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-trybuild = "1"
+trybuild = "1.0.120"
