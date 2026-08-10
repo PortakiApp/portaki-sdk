@@ -59,6 +59,9 @@ pub enum CapabilityId {
     /// Transactional email send quota.
     #[serde(rename = "core.email.transactional")]
     EmailTransactional,
+    /// Host in-app inbox + push notification channel (module-raised).
+    #[serde(rename = "core.host.notifications")]
+    HostNotifications,
     /// Custom outbound email domain.
     #[serde(rename = "core.email.custom_domain")]
     EmailCustomDomain,
@@ -144,6 +147,7 @@ impl CapabilityId {
             Self::IcalImport => "core.ical.import",
             Self::IcalExport => "core.ical.export",
             Self::EmailTransactional => "core.email.transactional",
+            Self::HostNotifications => "core.host.notifications",
             Self::EmailCustomDomain => "core.email.custom_domain",
             Self::BrandingRemovePortaki => "core.branding.remove_portaki",
             Self::BrandingCustomLogo => "core.branding.custom_logo",
@@ -180,6 +184,7 @@ impl CapabilityId {
         Self::IcalImport,
         Self::IcalExport,
         Self::EmailTransactional,
+        Self::HostNotifications,
         Self::EmailCustomDomain,
         Self::BrandingRemovePortaki,
         Self::BrandingCustomLogo,
@@ -236,6 +241,7 @@ impl FromStr for CapabilityId {
             "core.ical.import" => Ok(Self::IcalImport),
             "core.ical.export" => Ok(Self::IcalExport),
             "core.email.transactional" => Ok(Self::EmailTransactional),
+            "core.host.notifications" => Ok(Self::HostNotifications),
             "core.email.custom_domain" => Ok(Self::EmailCustomDomain),
             "core.branding.remove_portaki" => Ok(Self::BrandingRemovePortaki),
             "core.branding.custom_logo" => Ok(Self::BrandingCustomLogo),
@@ -308,6 +314,8 @@ pub mod core {
     pub const ICAL_EXPORT: CapabilityId = CapabilityId::IcalExport;
     /// Transactional email send quota.
     pub const EMAIL_TRANSACTIONAL: CapabilityId = CapabilityId::EmailTransactional;
+    /// Host in-app inbox + push notification channel (module-raised).
+    pub const HOST_NOTIFICATIONS: CapabilityId = CapabilityId::HostNotifications;
     /// Custom outbound email domain.
     pub const EMAIL_CUSTOM_DOMAIN: CapabilityId = CapabilityId::EmailCustomDomain;
     /// Remove Portaki branding from guest surfaces.

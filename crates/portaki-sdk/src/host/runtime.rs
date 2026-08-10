@@ -102,6 +102,11 @@ pub trait HostBackend: Send + Sync {
         Err(PortakiError::HostNotConfigured)
     }
 
+    /// Raises a host inbox notification + push (`host.notify` — module-owned content).
+    fn notify_host(&self, _payload_json: &str) -> Result<()> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
     /// Returns current UTC time as ISO-8601 (Wasm host dispatch).
     fn time_now_iso(&self) -> Result<String> {
         Err(PortakiError::HostNotConfigured)

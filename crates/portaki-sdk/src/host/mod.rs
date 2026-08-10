@@ -15,6 +15,7 @@
 //! | [`module`] | Read install/config readiness from orchestrator | Mutate enablement or config |
 //! | [`events`] | Emit declared domain events | Assume delivery without checking `Result` |
 //! | [`email`] | Request transactional send with module-owned content | Assemble Portaki-core copy or module-named use cases |
+//! | [`notify`] | Raise a host inbox notification + push (module-owned copy) | Bypass the host push-preference category |
 //!
 //! ## Thread-local runtime
 //!
@@ -56,6 +57,7 @@ pub mod i18n;
 pub mod kv;
 pub mod log;
 pub mod module;
+pub mod notify;
 pub mod repo;
 pub mod runtime;
 pub mod time;
