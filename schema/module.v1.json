@@ -41,9 +41,16 @@
       "description": "Marketplace sort key within a maturity band (lower first). Defaults to 1000 when omitted."
     },
     "license": { "type": "string" },
-    "requiresHostSdk": {
+    "requiresModuleSdk": {
       "type": "string",
-      "description": "Minimum host SDK semver required by this module."
+      "description": "Minimum version of the Portaki module SDK this module compiles against — the Rust crate portaki-sdk, published on crates.io. Renamed from requiresHostSdk, which did not say which SDK it meant: an npm @portaki/sdk also describes itself as the module SDK and carries an unrelated version line (3.2.1 against the crate 2.1.1).",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, i18n.translate, log.",
+      "items": { "$ref": "#/$defs/permission" }
     },
     "hostSurfaces": {
       "type": "array",
@@ -62,6 +69,11 @@
     }
   },
   "$defs": {
+    "permission": {
+      "type": "string",
+      "pattern": "^(kv|repo|email|events|platform|connectors:[a-z][a-z0-9-]*)$",
+      "description": "kv — kv.get/set/delete/list, the module's own key-value namespace. repo — repo.find/create/delete over the module's own isolated schema; implies module-owned tables, reserved to official modules during beta. email — email.send, which reaches real guests. events — events.emit, which publishes to the platform outbox. platform — capabilities.has, module.status, module.listByCapability. connectors:<id> — connector.call restricted to that connector (e.g. connectors:nuki); the credential resolver refuses any connector not listed here."
+    },
     "i18nStringMap": {
       "type": "object",
       "additionalProperties": { "type": "string" }
