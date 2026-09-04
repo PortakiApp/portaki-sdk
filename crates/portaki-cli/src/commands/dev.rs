@@ -1,23 +1,367 @@
-//! `portaki dev` — local mock gateway (not implemented yet).
+//! `portaki dev` — build, push to the hosted sandbox, and show what happened.
+//!
+//! Deliberately **not** a local gateway. A parallel engine always drifts from the real host, so
+//! the module runs against the actual runtime in the sandbox; the difference with running
+//! locally is latency, not nature — and no line of code leaves the infrastructure.
 
-use anyhow::{bail, Result};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
+
+use anyhow::{bail, Context, Result};
 use clap::Parser;
+use notify::{RecursiveMode, Watcher};
+use sha2::{Digest as _, Sha256};
+
+/// How long to wait for the editor to finish writing before rebuilding.
+const DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki dev`.
 pub struct DevArgs {
-    /// HTTP port that would be used once the mock gateway lands.
-    #[arg(long, default_value_t = 3838)]
-    pub port: u16,
+    /// Rebuild and redeploy on every save.
+    #[arg(long)]
+    pub watch: bool,
+
+    /// Base URL of the dev platform. Defaults to PORTAKI_DEV_URL, then production.
+    #[arg(long)]
+    pub url: Option<String>,
+
+    /// Operation to dispatch after each deploy. Omitted, the module is only deployed.
+    #[arg(long)]
+    pub dispatch: Option<String>,
+
+    /// JSON parameters for `--dispatch`.
+    #[arg(long, default_value = "{}")]
+    pub params: String,
+
+    /// `query` reads, `command` writes — the SDK's own distinction.
+    #[arg(long, default_value = "query")]
+    pub kind: String,
 }
 
 /// Runs `portaki dev`.
-///
-/// Fails clearly until a real local gateway exists — does not pretend to listen.
 pub async fn run(args: DevArgs) -> Result<()> {
-    bail!(
-        "portaki dev is not implemented yet (requested port {}). \
-         Use portaki-test-utils::MockContext in unit tests instead.",
-        args.port
+    let module_root = std::env::current_dir().context("current_dir")?;
+    let token = token()?;
+    let module_id = read_module_id(&module_root)?;
+    let base_url = base_url(&args);
+
+    let mut last_digest = String::new();
+    cycle(
+        &args,
+        &base_url,
+        &module_root,
+        &module_id,
+        &token,
+        &mut last_digest,
+    )
+    .await?;
+
+    if !args.watch {
+        return Ok(());
+    }
+
+    let src = module_root.join("src");
+    println!(
+        "\nwatching {} — ⌘S to rebuild, ctrl-c to stop",
+        src.display()
     );
+
+    let (tx, rx) = mpsc::channel();
+    let mut watcher = notify::recommended_watcher(move |event| {
+        let _ = tx.send(event);
+    })
+    .context("start file watcher")?;
+    watcher
+        .watch(&src, RecursiveMode::Recursive)
+        .with_context(|| format!("watch {}", src.display()))?;
+
+    loop {
+        // Bloque jusqu'à la première sauvegarde…
+        if rx.recv().is_err() {
+            return Ok(());
+        }
+        // …puis absorbe la rafale qu'un éditeur produit en écrivant un fichier.
+        while rx.recv_timeout(DEBOUNCE).is_ok() {}
+
+        if let Err(failure) = cycle(
+            &args,
+            &base_url,
+            &module_root,
+            &module_id,
+            &token,
+            &mut last_digest,
+        )
+        .await
+        {
+            // Une erreur de compilation ne doit pas arrêter la boucle : c'est le cas courant.
+            eprintln!("\n{failure:#}");
+        }
+    }
+}
+
+/// One pass: build, upload if it changed, optionally dispatch.
+async fn cycle(
+    args: &DevArgs,
+    base_url: &str,
+    module_root: &Path,
+    module_id: &str,
+    token: &str,
+    last_digest: &mut String,
+) -> Result<()> {
+    build(module_root)?;
+
+    let wasm_path = wasm_path(module_root, module_id);
+    let wasm = std::fs::read(&wasm_path)
+        .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
+    let digest = sha256(&wasm);
+
+    if digest == *last_digest {
+        println!("unchanged ({}), nothing to upload", short(&digest));
+        return Ok(());
+    }
+
+    let manifest = std::fs::read_to_string(module_root.join("portaki.module.json"))
+        .context("read portaki.module.json")?;
+
+    let deployed = deploy(base_url, module_id, token, wasm, manifest).await?;
+    println!(
+        "deployed {} {} — {} bytes",
+        module_id,
+        short(&deployed.digest),
+        deployed.size_bytes
+    );
+    *last_digest = digest;
+
+    if let Some(operation) = &args.dispatch {
+        let trace = dispatch(args, base_url, module_id, token, operation).await?;
+        print_trace(&trace);
+    }
+    Ok(())
+}
+
+fn build(module_root: &Path) -> Result<()> {
+    // Release, pas debug : un build debug pèse dix fois plus et se fait refuser par le plafond
+    // d'ingestion de 5 Mo. Mieux vaut compiler plus longtemps que découvrir le refus au push.
+    let status = std::process::Command::new("cargo")
+        .current_dir(module_root)
+        .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
+        .status()
+        .context("cargo build wasm32")?;
+    if !status.success() {
+        bail!("cargo build failed");
+    }
+    Ok(())
+}
+
+fn wasm_path(module_root: &Path, module_id: &str) -> PathBuf {
+    module_root
+        .join("target/wasm32-unknown-unknown/release")
+        .join(format!("{module_id}.wasm"))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct DeployResponse {
+    digest: String,
+    size_bytes: u64,
+}
+
+async fn deploy(
+    base_url: &str,
+    module_id: &str,
+    token: &str,
+    wasm: Vec<u8>,
+    manifest: String,
+) -> Result<DeployResponse> {
+    let form = reqwest::multipart::Form::new()
+        .part(
+            "wasm",
+            reqwest::multipart::Part::bytes(wasm).file_name("backend.wasm"),
+        )
+        .text("manifest", manifest);
+
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{}/dev/v1/modules/{module_id}/dev-deploy",
+            base_url
+        ))
+        .bearer_auth(token)
+        .multipart(form)
+        .send()
+        .await
+        .context("upload to the dev platform")?;
+
+    read_json(response).await
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct DispatchResponse {
+    #[serde(default)]
+    result_json: String,
+    #[serde(default)]
+    duration_ms: u64,
+    #[serde(default)]
+    host_calls: Vec<HostCall>,
+    #[serde(default)]
+    captured_effects: Vec<CapturedEffect>,
+    #[serde(default)]
+    published_events: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct HostCall {
+    op: String,
+    duration_micros: u64,
+    #[serde(default)]
+    error_code: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CapturedEffect {
+    op: String,
+    detail_json: String,
+}
+
+async fn dispatch(
+    args: &DevArgs,
+    base_url: &str,
+    module_id: &str,
+    token: &str,
+    operation: &str,
+) -> Result<DispatchResponse> {
+    let body = serde_json::json!({
+        "operation": operation,
+        "kind": args.kind,
+        "paramsJson": args.params,
+    });
+    let response = reqwest::Client::new()
+        .post(format!("{}/dev/v1/modules/{module_id}/dispatch", base_url))
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .await
+        .context("dispatch on the dev platform")?;
+
+    read_json(response).await
+}
+
+/// Prints what the run did — and what the sandbox refused to do.
+fn print_trace(trace: &DispatchResponse) {
+    println!("  {} ms", trace.duration_ms);
+    for call in &trace.host_calls {
+        let outcome = if call.error_code.is_empty() {
+            String::new()
+        } else {
+            format!("  ← {}", call.error_code)
+        };
+        println!("  {:>7} µs  {}{}", call.duration_micros, call.op, outcome);
+    }
+    for effect in &trace.captured_effects {
+        println!("  captured  {}  {}", effect.op, effect.detail_json);
+    }
+    for event in &trace.published_events {
+        println!("  would publish  {event}");
+    }
+    if !trace.result_json.is_empty() {
+        println!("  → {}", trace.result_json);
+    }
+}
+
+async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        bail!("the dev platform answered {status}: {body}");
+    }
+    serde_json::from_str(&body).with_context(|| format!("unexpected answer: {body}"))
+}
+
+/// The access token for the dev platform.
+///
+/// There is no `portaki login` yet: the device grant and the per-client audiences it needs are
+/// the two chantiers left in the auth work. Until they land the token has to come from the
+/// environment, and saying so beats a confusing 401.
+fn token() -> Result<String> {
+    match std::env::var("PORTAKI_DEV_TOKEN") {
+        Ok(token) if !token.trim().is_empty() => Ok(token),
+        _ => bail!(
+            "set PORTAKI_DEV_TOKEN to a token carrying the `devapi` audience.\n\
+             `portaki login` does not exist yet — it needs the device grant (RFC 8628) and \
+             per-client audience issuance, the two remaining pieces of the auth work."
+        ),
+    }
+}
+
+/// `--url`, then `PORTAKI_DEV_URL`, then production.
+fn base_url(args: &DevArgs) -> String {
+    let raw = args
+        .url
+        .clone()
+        .or_else(|| std::env::var("PORTAKI_DEV_URL").ok())
+        .unwrap_or_else(|| "https://api.portaki.app".to_string());
+    raw.trim_end_matches('/').to_string()
+}
+
+fn read_module_id(module_root: &Path) -> Result<String> {
+    let manifest = module_root.join("portaki.module.json");
+    let raw = std::fs::read_to_string(&manifest)
+        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&raw).context("parse portaki.module.json")?;
+    parsed
+        .get("id")
+        .and_then(|id| id.as_str())
+        .map(str::to_owned)
+        .context("portaki.module.json carries no id")
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
+}
+
+/// Digests are unreadable in full; the first bytes are enough to tell two builds apart.
+fn short(digest: &str) -> String {
+    digest.chars().take("sha256:".len() + 12).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Valeur obtenue par `printf '\0asm' | shasum -a 256`, pas recopiée de la sortie du test.
+    #[test]
+    fn a_digest_is_computed_on_the_bytes() {
+        assert_eq!(
+            sha256(b"\0asm"),
+            "sha256:cd5d4935a48c0672cb06407bb443bc0087aff947c6b864bac886982c73b3027f"
+        );
+    }
+
+    #[test]
+    fn a_short_digest_stays_recognisable() {
+        assert_eq!(short("sha256:abcdef0123456789"), "sha256:abcdef012345");
+    }
+
+    #[test]
+    fn the_module_id_comes_from_the_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("portaki.module.json"),
+            r#"{"id":"nuki","version":"1.4.0"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(read_module_id(dir.path()).unwrap(), "nuki");
+    }
+
+    #[test]
+    fn without_a_token_the_command_says_what_is_missing() {
+        std::env::remove_var("PORTAKI_DEV_TOKEN");
+
+        let failure = token().unwrap_err().to_string();
+
+        assert!(failure.contains("PORTAKI_DEV_TOKEN"));
+        assert!(failure.contains("device grant"));
+    }
 }
