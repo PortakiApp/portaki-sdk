@@ -26,6 +26,51 @@ pub fn access_token() -> Result<String> {
     }
 }
 
+/// Renouvelle le jeton d'accès et range la paire tournée.
+///
+/// Le jeton d'accès vit quinze minutes, une session `--watch` bien plus. Sans ceci, elle
+/// s'arrêterait au milieu sur un 401, et la seule issue serait de relancer `portaki login`.
+///
+/// La plateforme se souvient désormais du client et des scopes attachés au jeton de
+/// rafraîchissement, donc le jeton renouvelé ouvre les mêmes portes que le premier — sans cette
+/// mémoire, il repartait avec la seule audience `portaki-api`.
+pub async fn refresh() -> Result<String> {
+    let refresh_token = match read(REFRESH_ENTRY)? {
+        Some(token) => token,
+        None => bail!("no refresh token stored — run `portaki login`"),
+    };
+
+    let response = reqwest::Client::new()
+        .post(format!("{}/api/v1/auth/refresh", api_base_url(None)))
+        .json(&serde_json::json!({ "refreshToken": refresh_token }))
+        .send()
+        .await
+        .context("renew the access token")?;
+    let body = response.text().await.unwrap_or_default();
+    let renewed: RenewedTokens = crate::api::unwrap(&body)?;
+
+    // La rotation invalide l'ancien jeton de rafraîchissement : ne pas ranger le nouveau
+    // reviendrait à se déconnecter au renouvellement suivant.
+    store(&renewed.access_token, &renewed.refresh_token)?;
+    Ok(renewed.access_token)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenewedTokens {
+    access_token: String,
+    refresh_token: String,
+}
+
+/// `--url`, puis `PORTAKI_API_URL`, puis la production.
+pub fn api_base_url(explicit: Option<&str>) -> String {
+    let raw = explicit
+        .map(str::to_owned)
+        .or_else(|| std::env::var("PORTAKI_API_URL").ok())
+        .unwrap_or_else(|| "https://api.portaki.app".to_string());
+    raw.trim_end_matches('/').to_string()
+}
+
 pub fn store(access_token: &str, refresh_token: &str) -> Result<()> {
     write(ACCESS_ENTRY, access_token)?;
     write(REFRESH_ENTRY, refresh_token)
