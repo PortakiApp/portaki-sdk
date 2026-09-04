@@ -24,6 +24,7 @@
 //!
 //! Install: `cargo install portaki-cli`. Requires `rustup target add wasm32-unknown-unknown`.
 
+mod auth;
 mod commands;
 mod manifest;
 mod oci;
@@ -43,6 +44,10 @@ struct Cli {
 enum Command {
     /// Scaffold a new module from a template.
     Init(commands::init::InitArgs),
+    /// Sign in with the device grant and store the token in the system keychain.
+    Login(commands::login::LoginArgs),
+    /// Clear the stored credentials.
+    Logout,
     /// Build, push to the hosted sandbox, and show what the run did.
     Dev(commands::dev::DevArgs),
     /// Build wasm32 artifact, manifest, and i18n bundle.
@@ -70,6 +75,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Init(args) => commands::init::run(args),
+        Command::Login(args) => commands::login::run(args).await,
+        Command::Logout => commands::login::logout(),
         Command::Dev(args) => commands::dev::run(args).await,
         Command::Build(args) => commands::build::run(args).await,
         Command::Lint(args) => commands::lint::run(args),

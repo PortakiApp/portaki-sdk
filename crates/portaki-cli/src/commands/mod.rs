@@ -7,5 +7,6 @@ pub mod docs;
 pub mod init;
 pub mod inspect;
 pub mod lint;
+pub mod login;
 pub mod publish;
 pub mod test;

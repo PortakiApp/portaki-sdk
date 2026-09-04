@@ -39,6 +39,7 @@ reqwest = { workspace = true }
 oci-distribution = { workspace = true }
 base64 = "0.22"
 notify = { workspace = true }
+keyring = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
