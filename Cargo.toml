@@ -48,6 +48,8 @@ tar = "0.4.46"
 flate2 = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 notify = "8"
+# Trousseau du système : Keychain, Secret Service, Credential Manager.
+keyring = { version = "3", features = ["apple-native", "linux-native", "windows-native"] }
 sha2 = "0.10"
 oci-distribution = "0.11"
 

@@ -43,7 +43,7 @@ pub struct DevArgs {
 /// Runs `portaki dev`.
 pub async fn run(args: DevArgs) -> Result<()> {
     let module_root = std::env::current_dir().context("current_dir")?;
-    let token = token()?;
+    let token = crate::auth::access_token()?;
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
 
@@ -277,22 +277,6 @@ async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) 
     serde_json::from_str(&body).with_context(|| format!("unexpected answer: {body}"))
 }
 
-/// The access token for the dev platform.
-///
-/// There is no `portaki login` yet: the device grant and the per-client audiences it needs are
-/// the two chantiers left in the auth work. Until they land the token has to come from the
-/// environment, and saying so beats a confusing 401.
-fn token() -> Result<String> {
-    match std::env::var("PORTAKI_DEV_TOKEN") {
-        Ok(token) if !token.trim().is_empty() => Ok(token),
-        _ => bail!(
-            "set PORTAKI_DEV_TOKEN to a token carrying the `devapi` audience.\n\
-             `portaki login` does not exist yet — it needs the device grant (RFC 8628) and \
-             per-client audience issuance, the two remaining pieces of the auth work."
-        ),
-    }
-}
-
 /// `--url`, then `PORTAKI_DEV_URL`, then production.
 fn base_url(args: &DevArgs) -> String {
     let raw = args
@@ -353,15 +337,5 @@ mod tests {
         .unwrap();
 
         assert_eq!(read_module_id(dir.path()).unwrap(), "nuki");
-    }
-
-    #[test]
-    fn without_a_token_the_command_says_what_is_missing() {
-        std::env::remove_var("PORTAKI_DEV_TOKEN");
-
-        let failure = token().unwrap_err().to_string();
-
-        assert!(failure.contains("PORTAKI_DEV_TOKEN"));
-        assert!(failure.contains("device grant"));
     }
 }
