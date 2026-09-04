@@ -43,7 +43,7 @@ struct Cli {
 enum Command {
     /// Scaffold a new module from a template.
     Init(commands::init::InitArgs),
-    /// Local mock gateway (not implemented — use portaki-test-utils).
+    /// Build, push to the hosted sandbox, and show what the run did.
     Dev(commands::dev::DevArgs),
     /// Build wasm32 artifact, manifest, and i18n bundle.
     Build(commands::build::BuildArgs),
