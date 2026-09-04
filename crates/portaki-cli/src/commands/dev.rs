@@ -43,7 +43,7 @@ pub struct DevArgs {
 /// Runs `portaki dev`.
 pub async fn run(args: DevArgs) -> Result<()> {
     let module_root = std::env::current_dir().context("current_dir")?;
-    let token = crate::auth::access_token()?;
+    let mut token = crate::auth::access_token()?;
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
 
@@ -53,7 +53,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
         &base_url,
         &module_root,
         &module_id,
-        &token,
+        &mut token,
         &mut last_digest,
     )
     .await?;
@@ -90,7 +90,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
             &base_url,
             &module_root,
             &module_id,
-            &token,
+            &mut token,
             &mut last_digest,
         )
         .await
@@ -107,7 +107,7 @@ async fn cycle(
     base_url: &str,
     module_root: &Path,
     module_id: &str,
-    token: &str,
+    token: &mut String,
     last_digest: &mut String,
 ) -> Result<()> {
     build(module_root)?;
@@ -125,7 +125,16 @@ async fn cycle(
     let manifest = std::fs::read_to_string(module_root.join("portaki.module.json"))
         .context("read portaki.module.json")?;
 
-    let deployed = deploy(base_url, module_id, token, wasm, manifest).await?;
+    // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
+    // l'emprunt du jeton pendant qu'on cherche à le remplacer.
+    let first = deploy(base_url, module_id, token, &wasm, &manifest).await;
+    let deployed = match first {
+        Err(failure) if failure.is::<Unauthorized>() => {
+            *token = reauthenticate().await?;
+            deploy(base_url, module_id, token, &wasm, &manifest).await?
+        }
+        other => other?,
+    };
     println!(
         "deployed {} {} — {} bytes",
         module_id,
@@ -135,10 +144,29 @@ async fn cycle(
     *last_digest = digest;
 
     if let Some(operation) = &args.dispatch {
-        let trace = dispatch(args, base_url, module_id, token, operation).await?;
+        let first = dispatch(args, base_url, module_id, token, operation).await;
+        let trace = match first {
+            Err(failure) if failure.is::<Unauthorized>() => {
+                *token = reauthenticate().await?;
+                dispatch(args, base_url, module_id, token, operation).await?
+            }
+            other => other?,
+        };
         print_trace(&trace);
     }
     Ok(())
+}
+
+/// Un jeton d'accès vit quinze minutes ; une session `--watch` bien plus longtemps.
+///
+/// Le renouvellement est tenté une fois, pas en boucle : si le jeton de rafraîchissement est
+/// lui aussi hors d'usage, réessayer ne ferait que masquer la seule chose à dire — il faut se
+/// reconnecter.
+async fn reauthenticate() -> Result<String> {
+    println!("access token expired — renewing");
+    crate::auth::refresh()
+        .await
+        .context("renew the session — run `portaki login` if this keeps failing")
 }
 
 fn build(module_root: &Path) -> Result<()> {
@@ -171,15 +199,15 @@ async fn deploy(
     base_url: &str,
     module_id: &str,
     token: &str,
-    wasm: Vec<u8>,
-    manifest: String,
+    wasm: &[u8],
+    manifest: &str,
 ) -> Result<DeployResponse> {
     let form = reqwest::multipart::Form::new()
         .part(
             "wasm",
-            reqwest::multipart::Part::bytes(wasm).file_name("backend.wasm"),
+            reqwest::multipart::Part::bytes(wasm.to_vec()).file_name("backend.wasm"),
         )
-        .text("manifest", manifest);
+        .text("manifest", manifest.to_owned());
 
     let response = reqwest::Client::new()
         .post(format!(
@@ -268,8 +296,24 @@ fn print_trace(trace: &DispatchResponse) {
     }
 }
 
+/// Le seul échec dont on sait quoi faire : renouveler et rejouer. Il porte un type pour que
+/// l'appelant le distingue d'un 500, qu'il serait absurde de rejouer avec un autre jeton.
+#[derive(Debug)]
+struct Unauthorized;
+
+impl std::fmt::Display for Unauthorized {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the dev platform refused the token")
+    }
+}
+
+impl std::error::Error for Unauthorized {}
+
 async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
     let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(anyhow::Error::new(Unauthorized));
+    }
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
         bail!("the dev platform answered {status}: {body}");

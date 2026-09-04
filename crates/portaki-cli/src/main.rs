@@ -24,6 +24,7 @@
 //!
 //! Install: `cargo install portaki-cli`. Requires `rustup target add wasm32-unknown-unknown`.
 
+mod api;
 mod auth;
 mod commands;
 mod manifest;

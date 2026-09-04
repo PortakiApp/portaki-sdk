@@ -43,25 +43,18 @@ struct Granted {
     scopes: Vec<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct OAuthError {
-    error: String,
-}
-
 /// Runs `portaki login`.
 pub async fn run(args: LoginArgs) -> Result<()> {
     let base = base_url(args.url.as_deref());
     let client = reqwest::Client::new();
 
-    let started: DeviceCode = client
+    let response = client
         .post(format!("{base}/api/v1/auth/device/code"))
         .json(&serde_json::json!({ "clientId": CLIENT_ID, "scopes": SCOPES }))
         .send()
         .await
-        .context("ask the platform for a device code")?
-        .json()
-        .await
-        .context("unexpected answer to the device code request")?;
+        .context("ask the platform for a device code")?;
+    let started: DeviceCode = crate::api::unwrap(&response.text().await.unwrap_or_default())?;
 
     println!("\n  open  {}", started.verification_uri);
     println!("  code  {}\n", started.user_code);
@@ -84,8 +77,11 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             .await
             .context("poll the platform")?;
 
-        if response.status().is_success() {
-            let granted: Granted = response.json().await.context("unexpected token answer")?;
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+
+        if status.is_success() {
+            let granted: Granted = crate::api::unwrap(&body)?;
             auth::store(&granted.access_token, &granted.refresh_token)?;
             println!("\nsigned in — token stored in the system keychain");
             if !granted.scopes.is_empty() {
@@ -94,10 +90,9 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             return Ok(());
         }
 
-        let body = response.text().await.unwrap_or_default();
-        let error = serde_json::from_str::<OAuthError>(&body)
-            .map(|parsed| parsed.error)
-            .unwrap_or_else(|_| body.clone());
+        // Les codes de la spec arrivent dans le `error_code` de l'enveloppe maison. Lus à plat,
+        // ils ressemblaient à une réponse inconnue et la CLI abandonnait dès le premier sondage.
+        let error = crate::api::error_code(&body).unwrap_or_else(|| body.clone());
 
         match error.as_str() {
             // Ni l'un ni l'autre n'est un échec : « pas encore » et « moins vite ».
@@ -118,11 +113,7 @@ pub fn logout() -> Result<()> {
 }
 
 fn base_url(explicit: Option<&str>) -> String {
-    let raw = explicit
-        .map(str::to_owned)
-        .or_else(|| std::env::var("PORTAKI_API_URL").ok())
-        .unwrap_or_else(|| "https://api.portaki.app".to_string());
-    raw.trim_end_matches('/').to_string()
+    auth::api_base_url(explicit)
 }
 
 #[cfg(test)]
