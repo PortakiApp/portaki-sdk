@@ -29,6 +29,7 @@ mod auth;
 mod commands;
 mod manifest;
 mod oci;
+mod oidc;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

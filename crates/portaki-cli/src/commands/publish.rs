@@ -5,6 +5,10 @@
 //!
 //! Authenticates with `GITHUB_TOKEN` / `GHCR_TOKEN` or Docker `~/.docker/config.json`.
 //!
+//! L'annonce au registre, elle, n'a plus besoin d'un secret stocké : dans un job GitHub Actions
+//! avec `id-token: write`, la CLI demande le jeton OIDC du job et l'échange contre un credential
+//! de publication à usage unique. Hors CI, le jeton de `portaki login` fait le travail.
+//!
 //! Set `PORTAKI_PUBLISH_VERSION` (e.g. from CI git tag `*-vX.Y.Z`) to fail fast if `publish-manifest.json`
 //! version does not match.
 //!
@@ -18,7 +22,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::commands::build::{self, BuildArgs};
-use crate::{auth, oci};
+use crate::{auth, oci, oidc};
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki publish`.
@@ -120,14 +124,19 @@ async fn announce(
         "channel": args.channel,
     });
 
-    let mut token = auth::access_token().context(
-        "portaki login required to announce a publication — or pass --no-announce to push to GHCR only",
-    )?;
-    let mut outcome = post_publication(&base, &body, &token).await?;
-    if outcome == Outcome::Unauthorized {
-        token = auth::refresh().await?;
-        outcome = post_publication(&base, &body, &token).await?;
-    }
+    let outcome = match credential(&base, &coords.id, &args.channel).await? {
+        // Une CI : le credential est à usage unique, un 401 veut dire consommé ou expiré. Le
+        // rejouer avec le même n'aurait aucune chance, il faut un nouvel échange.
+        Credential::Ci(token) => post_publication(&base, &body, &token).await?,
+        Credential::Person(token) => {
+            let first = post_publication(&base, &body, &token).await?;
+            if first == Outcome::Unauthorized {
+                post_publication(&base, &body, &auth::refresh().await?).await?
+            } else {
+                first
+            }
+        }
+    };
 
     match outcome {
         Outcome::Published => {
@@ -144,7 +153,8 @@ async fn announce(
             Ok(())
         }
         Outcome::Unauthorized => anyhow::bail!(
-            "the registry refused the token even after renewal — run portaki login. \
+            "the registry refused the token — run portaki login, or replay the job if the \
+             publication credential had already been used. \
              The artifact is on GHCR: replay with portaki publish --skip-build"
         ),
         Outcome::Refused {
@@ -156,6 +166,42 @@ async fn announce(
              The artifact is on GHCR: fix and replay with portaki publish --skip-build"
         ),
     }
+}
+
+/// Ce qui autorise la publication — et les deux façons de l'obtenir.
+enum Credential {
+    /// Obtenu contre le jeton OIDC du job. Aucun secret n'est stocké nulle part.
+    Ci(String),
+    /// Le jeton d'une personne, depuis le trousseau ou l'environnement.
+    Person(String),
+}
+
+/// Choisit le chemin d'autorisation.
+///
+/// Un jeton posé explicitement gagne : un mécanisme qui s'active tout seul ne doit pas rendre
+/// muette une variable qu'on a écrite exprès. Sinon, chez GitHub Actions, l'OIDC — et si le
+/// workflow ne l'a pas demandé, on le dit plutôt que de réclamer un `portaki login` introuvable
+/// sur un runner.
+async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Credential> {
+    if let Some(token) = auth::explicit_token() {
+        return Ok(Credential::Person(token));
+    }
+    if oidc::available() {
+        let audience = oidc::audience(base);
+        let oidc_token = oidc::request_token(&audience).await?;
+        return Ok(Credential::Ci(
+            oidc::exchange(base, module_id, channel, &oidc_token).await?,
+        ));
+    }
+    if oidc::inside_github_actions() {
+        anyhow::bail!(
+            "aucun jeton OIDC disponible : ajoute `permissions: id-token: write` au job. \
+             Le jeton est ce qui remplace un secret de publication — il n'y en a pas d'autre à poser"
+        );
+    }
+    auth::access_token()
+        .map(Credential::Person)
+        .context("portaki login required to announce a publication — or pass --no-announce to push to GHCR only")
 }
 
 #[derive(Debug, PartialEq, Eq)]
