@@ -75,6 +75,32 @@ Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>`.
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
 a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
 
+### Publishing from CI
+
+No publication secret to store. In a GitHub Actions job with `id-token: write`, the CLI asks
+GitHub for the job's OIDC token and exchanges it at the registry for a single-use publication
+credential:
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+  id-token: write     # sans quoi il n'y a pas de jeton à échanger
+
+jobs:
+  publish:
+    environment: release   # exigé par la liaison pour le canal stable
+    steps:
+      - run: portaki publish --registry ghcr.io/portakiapp
+```
+
+Link the module to its repository from the dashboard first: the registry authorises on the
+repository *id* recorded there, and checks the workflow file, the triggering event and the
+runner. The token says where it comes from; the link says what it may publish.
+
+`PORTAKI_DEV_TOKEN` still wins when it is set — an explicit choice beats a mechanism that turns
+itself on.
+
 Official modules: [`portaki-modules`](https://github.com/PortakiApp/portaki-modules).
 
 ## Related crates

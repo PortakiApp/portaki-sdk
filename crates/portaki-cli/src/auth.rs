@@ -10,14 +10,24 @@ const SERVICE: &str = "app.portaki.cli";
 const ACCESS_ENTRY: &str = "access-token";
 const REFRESH_ENTRY: &str = "refresh-token";
 
+/// Le jeton posé explicitement dans l'environnement, s'il y en a un.
+///
+/// Il gagne sur tout le reste, y compris sur l'OIDC d'une CI : un choix explicite doit primer
+/// sur un mécanisme qui s'active tout seul, sans quoi poser cette variable n'aurait plus d'effet
+/// visible et le débogage deviendrait un jeu de devinettes.
+pub fn explicit_token() -> Option<String> {
+    std::env::var("PORTAKI_DEV_TOKEN")
+        .ok()
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty())
+}
+
 /// Reads the access token: environment first, then the keychain.
 ///
 /// The environment wins so CI can inject a token without a keychain — a build agent has none.
 pub fn access_token() -> Result<String> {
-    if let Ok(token) = std::env::var("PORTAKI_DEV_TOKEN") {
-        if !token.trim().is_empty() {
-            return Ok(token);
-        }
+    if let Some(token) = explicit_token() {
+        return Ok(token);
     }
     match read(ACCESS_ENTRY) {
         Ok(Some(token)) => Ok(token),
