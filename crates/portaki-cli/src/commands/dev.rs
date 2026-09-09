@@ -152,7 +152,7 @@ async fn cycle(
             deploy(base_url, module_id, token, &wasm, &manifest).await?
         }
         other => other.map_err(|failure| {
-            uploading.fail("the sandbox refused the deploy");
+            uploading.abandon();
             failure
         })?,
     };
@@ -171,7 +171,7 @@ async fn cycle(
                 dispatch(args, base_url, module_id, token, operation).await?
             }
             other => other.map_err(|failure| {
-                running.fail(format!("{operation} failed"));
+                running.abandon();
                 failure
             })?,
         };

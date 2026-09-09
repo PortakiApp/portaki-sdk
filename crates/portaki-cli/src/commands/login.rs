@@ -66,7 +66,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         .send()
         .await
         .map_err(|failure| {
-            asking.fail("could not reach the platform");
+            asking.abandon();
             failure
         })
         .context("ask the platform for a device code")?;
@@ -83,7 +83,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     loop {
         let now = std::time::Instant::now();
         if now >= deadline {
-            waiting.fail("the code expired");
+            waiting.abandon();
             bail!("the code expired before it was approved — run `portaki login` again");
         }
         waiting.say(format!(
@@ -124,15 +124,15 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             "authorization_pending" => {}
             "slow_down" => interval += Duration::from_secs(5),
             "access_denied" => {
-                waiting.fail("denied");
+                waiting.abandon();
                 bail!("the request was denied");
             }
             "expired_token" => {
-                waiting.fail("the code expired");
+                waiting.abandon();
                 bail!("the code expired — run `portaki login` again");
             }
             other => {
-                waiting.fail("unexpected answer");
+                waiting.abandon();
                 bail!("the platform answered {other}");
             }
         }
