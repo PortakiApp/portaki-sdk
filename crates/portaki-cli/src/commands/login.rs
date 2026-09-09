@@ -9,7 +9,7 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 
-use crate::auth;
+use crate::{auth, ui};
 
 const CLIENT_ID: &str = "portaki-cli";
 
@@ -22,6 +22,10 @@ pub struct LoginArgs {
     /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
     #[arg(long)]
     pub url: Option<String>,
+
+    /// Print the URL instead of opening it — for a remote shell or a headless box.
+    #[arg(long)]
+    pub no_browser: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -30,6 +34,11 @@ struct DeviceCode {
     device_code: String,
     user_code: String,
     verification_uri: String,
+    /// L'URL avec le code déjà dedans (RFC 8628 §3.3.1). Le serveur n'est pas tenu de la rendre,
+    /// et la fabriquer soi-même serait deviner la forme d'un paramètre : quand elle est là, il
+    /// n'y a plus rien à recopier ; quand elle manque, on ouvre l'URL nue et le code s'affiche.
+    #[serde(default)]
+    verification_uri_complete: Option<String>,
     expires_in: u64,
     interval: u64,
 }
@@ -45,29 +54,42 @@ struct Granted {
 
 /// Runs `portaki login`.
 pub async fn run(args: LoginArgs) -> Result<()> {
+    ui::header("portaki login");
+
     let base = base_url(args.url.as_deref());
     let client = reqwest::Client::new();
 
+    let asking = ui::step("asking the platform for a code");
     let response = client
         .post(format!("{base}/api/v1/auth/device/code"))
         .json(&serde_json::json!({ "clientId": CLIENT_ID, "scopes": SCOPES }))
         .send()
         .await
+        .map_err(|failure| {
+            asking.fail("could not reach the platform");
+            failure
+        })
         .context("ask the platform for a device code")?;
     let started: DeviceCode = crate::api::unwrap(&response.text().await.unwrap_or_default())?;
+    asking.done("got a code");
 
-    println!("\n  open  {}", started.verification_uri);
-    println!("  code  {}\n", started.user_code);
-    println!("waiting for approval…");
+    present(&started, args.no_browser);
 
     // Le serveur dicte l'intervalle : la spec veut qu'il puisse ralentir un client trop pressé.
     let mut interval = Duration::from_secs(started.interval.max(1));
     let deadline = std::time::Instant::now() + Duration::from_secs(started.expires_in);
+    let waiting = ui::step("waiting for approval");
 
     loop {
-        if std::time::Instant::now() >= deadline {
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            waiting.fail("the code expired");
             bail!("the code expired before it was approved — run `portaki login` again");
         }
+        waiting.say(format!(
+            "waiting for approval — {} left",
+            ui::countdown(deadline - now)
+        ));
         tokio::time::sleep(interval).await;
 
         let response = client
@@ -83,10 +105,13 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         if status.is_success() {
             let granted: Granted = crate::api::unwrap(&body)?;
             auth::store(&granted.access_token, &granted.refresh_token)?;
-            println!("\nsigned in — token stored in the system keychain");
+            waiting.done("approved");
+            ui::success("signed in — token stored in the system keychain");
             if !granted.scopes.is_empty() {
-                println!("scopes: {}", granted.scopes.join(" "));
+                ui::field("scopes", granted.scopes.join(" "));
             }
+            ui::next(&["portaki dev --watch"]);
+            ui::blank();
             return Ok(());
         }
 
@@ -98,17 +123,58 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             // Ni l'un ni l'autre n'est un échec : « pas encore » et « moins vite ».
             "authorization_pending" => {}
             "slow_down" => interval += Duration::from_secs(5),
-            "access_denied" => bail!("the request was denied"),
-            "expired_token" => bail!("the code expired — run `portaki login` again"),
-            other => bail!("the platform answered {other}"),
+            "access_denied" => {
+                waiting.fail("denied");
+                bail!("the request was denied");
+            }
+            "expired_token" => {
+                waiting.fail("the code expired");
+                bail!("the code expired — run `portaki login` again");
+            }
+            other => {
+                waiting.fail("unexpected answer");
+                bail!("the platform answered {other}");
+            }
         }
     }
 }
 
+/// Montre le code, puis emmène l'utilisateur là où il l'approuve.
+///
+/// Le navigateur s'ouvre sur l'URL pré-remplie quand le serveur en donne une : il ne reste alors
+/// qu'à confirmer. Le code reste affiché quoi qu'il arrive — c'est le seul recours si l'ouverture
+/// échoue, si la CLI tourne dans un SSH, ou si le navigateur ouvert n'est pas celui où la session
+/// est déjà ouverte.
+fn present(started: &DeviceCode, no_browser: bool) {
+    let target = started
+        .verification_uri_complete
+        .as_deref()
+        .unwrap_or(&started.verification_uri);
+
+    ui::blank();
+    ui::code_block(&started.user_code);
+    ui::blank();
+
+    if no_browser || !ui::open_browser(target) {
+        ui::field("open", target);
+        ui::field("code", &started.user_code);
+    } else {
+        ui::success(if started.verification_uri_complete.is_some() {
+            "opened your browser — check the code above, then approve"
+        } else {
+            "opened your browser — paste the code above to approve"
+        });
+        ui::detail(target);
+    }
+    ui::blank();
+}
+
 /// Runs `portaki logout`.
 pub fn logout() -> Result<()> {
+    ui::header("portaki logout");
     auth::forget()?;
-    println!("signed out — credentials cleared from the system keychain");
+    ui::success("signed out — credentials cleared from the system keychain");
+    ui::blank();
     Ok(())
 }
 

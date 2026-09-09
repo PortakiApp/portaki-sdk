@@ -11,6 +11,7 @@ use crate::manifest::{
     write_migration_bundle, write_operations_bundle,
 };
 use crate::oci::pack;
+use crate::ui;
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki build`.
@@ -21,17 +22,29 @@ pub struct BuildArgs {
     /// Skip `cargo build` (manifest-only refresh).
     #[arg(long)]
     pub manifest_only: bool,
+
+    /// `publish` enchaîne sur `build` : un second en-tête ferait croire à deux commandes.
+    #[arg(skip)]
+    pub nested: bool,
 }
 
 /// Runs `portaki build`.
 pub async fn run(args: BuildArgs) -> Result<()> {
+    if !args.nested {
+        ui::header("portaki build");
+    }
+    let started = std::time::Instant::now();
+
     let module_root = std::env::current_dir().context("current_dir")?;
     let out_dir = module_root.join("target/portaki");
     std::fs::create_dir_all(&out_dir)?;
 
     let catalog_path = module_root.join("portaki.module.json");
 
-    if !args.manifest_only {
+    if args.manifest_only {
+        ui::skipped("cargo build skipped (--manifest-only)");
+    } else {
+        let profile = if args.release { "release" } else { "debug" };
         let mut cmd = Command::new("cargo");
         cmd.arg("build")
             .arg("--target")
@@ -39,10 +52,11 @@ pub async fn run(args: BuildArgs) -> Result<()> {
         if args.release {
             cmd.arg("--release");
         }
-        let status = cmd.status().context("cargo build wasm32")?;
-        if !status.success() {
-            anyhow::bail!("cargo build failed");
-        }
+        ui::command(
+            &format!("compiling wasm32-unknown-unknown ({profile})"),
+            &mut cmd,
+        )
+        .context("cargo build wasm32")?;
     }
 
     if let Some(emissions_dir) = find_emissions_dir(&module_root) {
@@ -56,7 +70,14 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             .unwrap_or_else(|| "fr-FR".to_string());
 
         let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
-        write_manifest(&manifest, &out_dir.join("manifest.json"))?;
+        let manifest_path = out_dir.join("manifest.json");
+        write_manifest(&manifest, &manifest_path)?;
+        ui::wrote("manifest", relative(&manifest_path, &module_root));
+        ui::detail(format!(
+            "{} entities · {} locales · default {default_locale}",
+            manifest.entities.len(),
+            supported.len()
+        ));
 
         let schema_version = manifest
             .entities
@@ -67,11 +88,11 @@ pub async fn run(args: BuildArgs) -> Result<()> {
         if let Some(bundle_path) =
             write_migration_bundle(&module_root, &out_dir, &manifest.id, schema_version)?
         {
-            println!(
-                "Wrote migrations bundle at {} (applied on module install to schema module_{})",
-                bundle_path.display(),
+            ui::wrote("migrations", relative(&bundle_path, &module_root));
+            ui::detail(format!(
+                "applied on module install to schema module_{}",
                 manifest.id.replace('-', "_")
-            );
+            ));
         }
 
         let module_version =
@@ -83,13 +104,14 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             schema_version,
             &manifest.entities,
         )? {
-            println!(
-                "Wrote operations bundle v2 at {} (schema.tables for typed-repo upsert)",
-                bundle_path.display()
-            );
+            ui::wrote("operations", relative(&bundle_path, &module_root));
+            ui::detail("v2 — schema.tables for typed-repo upsert");
         }
 
-        bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))?;
+        if let Some(bundle_path) = bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))? {
+            ui::wrote("i18n", relative(&bundle_path, &module_root));
+            ui::detail(supported.join(" "));
+        }
     } else if !catalog_path.exists() {
         anyhow::bail!(
             "no portaki.module.json and no SDK emissions — add portaki_module!(...) or a catalog manifest"
@@ -97,12 +119,24 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     }
 
     let publish_path = pack::assemble_publish_manifest(&module_root, &out_dir)?;
+    ui::wrote("publish", relative(&publish_path, &module_root));
+    ui::detail("OCI layer source — edit portaki.module.json then rebuild");
 
-    println!(
-        "Built publish manifest at {} (OCI layer source; edit portaki.module.json then rebuild)",
-        publish_path.display()
-    );
+    ui::blank();
+    ui::detail(format!("built in {}", ui::elapsed(started.elapsed())));
+    if !args.nested {
+        ui::next(&["portaki lint", "portaki dev --watch"]);
+        ui::blank();
+    }
     Ok(())
+}
+
+/// Le chemin tel qu'on le retaperait : depuis la racine du module, pas depuis la racine du disque.
+fn relative(path: &std::path::Path, root: &std::path::Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 fn catalog_module_version(catalog_path: &std::path::Path) -> Option<String> {
@@ -131,9 +165,9 @@ fn read_supported_locales(i18n_dir: &PathBuf) -> Option<Vec<String>> {
     }
 }
 
-fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<()> {
+fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<Option<PathBuf>> {
     if !i18n_dir.exists() {
-        return Ok(());
+        return Ok(None);
     }
     let file = std::fs::File::create(dest)?;
     let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
@@ -146,5 +180,5 @@ fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<()> {
         }
     }
     archive.finish()?;
-    Ok(())
+    Ok(Some(dest.clone()))
 }

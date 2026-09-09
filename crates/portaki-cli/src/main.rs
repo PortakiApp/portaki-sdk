@@ -30,14 +30,39 @@ mod commands;
 mod manifest;
 mod oci;
 mod oidc;
+mod ui;
 
 use anyhow::Result;
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
+/// L'aide de `clap` peinte comme le reste de la sortie : un seul vocabulaire visuel, que la
+/// ligne vienne de `--help` ou d'une commande.
+const HELP_STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .usage(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .literal(AnsiColor::White.on_default().effects(Effects::BOLD))
+    .placeholder(AnsiColor::Cyan.on_default())
+    .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
+    .invalid(AnsiColor::Yellow.on_default());
+
 #[derive(Debug, Parser)]
-#[command(name = "portaki", version, about = "Portaki module SDK CLI")]
+#[command(
+    name = "portaki",
+    version,
+    about = "Portaki module SDK CLI",
+    styles = HELP_STYLES
+)]
 struct Cli {
+    /// Plain text only — no colour, no spinners.
+    #[arg(long, global = true)]
+    no_color: bool,
+
+    /// Stream the raw output of the tools the CLI drives.
+    #[arg(long, short, global = true)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -69,13 +94,24 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     let cli = Cli::parse();
-    match cli.command {
+    ui::init(cli.no_color, cli.verbose);
+
+    // L'échec est rendu ici, une fois, au lieu du `Debug` que `main() -> Result` imprime : la
+    // chaîne des causes se lit, et la sortie d'erreur ressemble au reste de la CLI.
+    if let Err(failure) = dispatch(cli.command).await {
+        ui::report(&failure);
+        std::process::exit(1);
+    }
+}
+
+async fn dispatch(command: Command) -> Result<()> {
+    match command {
         Command::Init(args) => commands::init::run(args),
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout => commands::login::logout(),

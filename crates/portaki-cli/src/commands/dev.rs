@@ -13,6 +13,8 @@ use clap::Parser;
 use notify::{RecursiveMode, Watcher};
 use sha2::{Digest as _, Sha256};
 
+use crate::ui;
+
 /// How long to wait for the editor to finish writing before rebuilding.
 const DEBOUNCE: Duration = Duration::from_millis(300);
 
@@ -43,6 +45,8 @@ pub struct DevArgs {
 
 /// Runs `portaki dev`.
 pub async fn run(args: DevArgs) -> Result<()> {
+    ui::header("portaki dev");
+
     let module_root = std::env::current_dir().context("current_dir")?;
     let mut token = crate::auth::access_token()?;
     let module_id = read_module_id(&module_root)?;
@@ -60,14 +64,16 @@ pub async fn run(args: DevArgs) -> Result<()> {
     .await?;
 
     if !args.watch {
+        ui::blank();
         return Ok(());
     }
 
     let src = module_root.join("src");
-    println!(
-        "\nwatching {} — ⌘S to rebuild, ctrl-c to stop",
+    ui::blank();
+    ui::detail(format!(
+        "watching {} — save to rebuild, ctrl-c to stop",
         src.display()
-    );
+    ));
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |event| {
@@ -86,6 +92,9 @@ pub async fn run(args: DevArgs) -> Result<()> {
         // …puis absorbe la rafale qu'un éditeur produit en écrivant un fichier.
         while rx.recv_timeout(DEBOUNCE).is_ok() {}
 
+        ui::blank();
+        ui::rule(&chrono::Local::now().format("%H:%M:%S").to_string());
+
         if let Err(failure) = cycle(
             &args,
             &base_url,
@@ -97,7 +106,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
         .await
         {
             // Une erreur de compilation ne doit pas arrêter la boucle : c'est le cas courant.
-            eprintln!("\n{failure:#}");
+            ui::report(&failure);
         }
     }
 }
@@ -121,7 +130,10 @@ async fn cycle(
     let digest = sha256(&wasm);
 
     if digest == *last_digest {
-        println!("unchanged ({}), nothing to upload", short(&digest));
+        ui::skipped(format!(
+            "unchanged ({}) — nothing to upload",
+            short(&digest)
+        ));
         return Ok(());
     }
 
@@ -130,31 +142,43 @@ async fn cycle(
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
+    let uploading = ui::step(format!("deploying {module_id} to the sandbox"));
     let first = deploy(base_url, module_id, token, &wasm, &manifest).await;
     let deployed = match first {
         Err(failure) if failure.is::<Unauthorized>() => {
+            uploading.say("renewing the access token");
             *token = reauthenticate().await?;
+            uploading.say(format!("deploying {module_id} to the sandbox"));
             deploy(base_url, module_id, token, &wasm, &manifest).await?
         }
-        other => other?,
+        other => other.map_err(|failure| {
+            uploading.fail("the sandbox refused the deploy");
+            failure
+        })?,
     };
-    println!(
-        "deployed {} {} — {} bytes",
-        module_id,
-        short(&deployed.digest),
-        deployed.size_bytes
-    );
+    uploading.done(format!("deployed {module_id}"));
+    ui::field("digest", short(&deployed.digest));
+    ui::field("size", ui::bytes(deployed.size_bytes));
     *last_digest = digest;
 
     if let Some(operation) = &args.dispatch {
+        let running = ui::step(format!("dispatching {} {operation}", args.kind));
         let first = dispatch(args, base_url, module_id, token, operation).await;
         let trace = match first {
             Err(failure) if failure.is::<Unauthorized>() => {
+                running.say("renewing the access token");
                 *token = reauthenticate().await?;
                 dispatch(args, base_url, module_id, token, operation).await?
             }
-            other => other?,
+            other => other.map_err(|failure| {
+                running.fail(format!("{operation} failed"));
+                failure
+            })?,
         };
+        running.done(format!(
+            "{} {operation} — {} ms",
+            args.kind, trace.duration_ms
+        ));
         print_trace(&trace);
     }
     Ok(())
@@ -166,7 +190,6 @@ async fn cycle(
 /// lui aussi hors d'usage, réessayer ne ferait que masquer la seule chose à dire — il faut se
 /// reconnecter.
 async fn reauthenticate() -> Result<String> {
-    println!("access token expired — renewing");
     crate::auth::refresh()
         .await
         .context("renew the session — run `portaki login` if this keeps failing")
@@ -175,18 +198,18 @@ async fn reauthenticate() -> Result<String> {
 fn build(module_root: &Path) -> Result<()> {
     // Release, pas debug : un build debug pèse dix fois plus et se fait refuser par le plafond
     // d'ingestion de 5 Mo. Mieux vaut compiler plus longtemps que découvrir le refus au push.
-    let status = std::process::Command::new("cargo")
-        .current_dir(module_root)
-        .args(["build", "--release", "--target", "wasm32-unknown-unknown"])
-        .status()
-        .context("cargo build wasm32")?;
-    if !status.success() {
-        bail!("cargo build failed");
-    }
-    Ok(())
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.current_dir(module_root)
+        .args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
+    ui::command("compiling wasm32-unknown-unknown (release)", &mut cmd)
+        .context("cargo build wasm32")
 }
 
+/// devapi rend du camelCase, comme toutes les API Portaki. Sans ce rename, `size_bytes` ne
+/// trouvait rien et le déploiement échouait à la lecture de sa propre réponse — alors qu'il
+/// avait réussi côté serveur.
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct DeployResponse {
     digest: String,
     size_bytes: u64,
@@ -220,7 +243,11 @@ async fn deploy(
     read_json(response).await
 }
 
+/// Même remarque, en pire : les `serde(default)` ci-dessous avalaient la non-correspondance en
+/// silence. `--dispatch` affichait un résultat vide, une durée nulle et aucun host call sur une
+/// invocation qui avait parfaitement tourné.
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct DispatchResponse {
     #[serde(default)]
     result_json: String,
@@ -235,6 +262,7 @@ struct DispatchResponse {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HostCall {
     op: String,
     duration_micros: u64,
@@ -243,6 +271,7 @@ struct HostCall {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CapturedEffect {
     op: String,
     detail_json: String,
@@ -273,23 +302,25 @@ async fn dispatch(
 
 /// Prints what the run did — and what the sandbox refused to do.
 fn print_trace(trace: &DispatchResponse) {
-    println!("  {} ms", trace.duration_ms);
     for call in &trace.host_calls {
         let outcome = if call.error_code.is_empty() {
             String::new()
         } else {
             format!("  ← {}", call.error_code)
         };
-        println!("  {:>7} µs  {}{}", call.duration_micros, call.op, outcome);
+        ui::detail(format!(
+            "{:>7} µs  {}{}",
+            call.duration_micros, call.op, outcome
+        ));
     }
     for effect in &trace.captured_effects {
-        println!("  captured  {}  {}", effect.op, effect.detail_json);
+        ui::detail(format!("captured  {}  {}", effect.op, effect.detail_json));
     }
     for event in &trace.published_events {
-        println!("  would publish  {event}");
+        ui::detail(format!("would publish  {event}"));
     }
     if !trace.result_json.is_empty() {
-        println!("  → {}", trace.result_json);
+        ui::result(&trace.result_json);
     }
 }
 
@@ -405,6 +436,41 @@ mod tests {
 
     /// `PORTAKI_API_URL` est la variable que lisent `login` et `publish`. `dev` l'ignorait, et
     /// partait en production avec un jeton émis ailleurs.
+    /// La charge exacte que devapi renvoie, recopiée d'un déploiement réel.
+    ///
+    /// <p>C'est le test qui manquait : la structure attendait `size_bytes`, la réponse portait
+    /// `sizeBytes`, et le déploiement échouait à lire sa propre réussite.
+    #[test]
+    fn a_deploy_response_is_read_as_devapi_writes_it() {
+        let body = r#"{"moduleId":"access-guide","version":"0.3.2",
+            "digest":"sha256:3e9fc0c17866a50a005799fc53c854e696a101a9a6be0884b701cf157b4a9d1a",
+            "permissions":["email","kv","platform"],"sizeBytes":1024374,
+            "deployedAt":"2026-09-09T10:21:22.119744997Z"}"#;
+
+        let parsed: DeployResponse = serde_json::from_str(body).expect("réponse de deploy lisible");
+
+        assert_eq!(parsed.size_bytes, 1_024_374);
+        assert!(parsed.digest.starts_with("sha256:"));
+    }
+
+    /// Les `serde(default)` d'une réponse de dispatch avalent une non-correspondance en silence :
+    /// sans assertion sur les valeurs, un test de désérialisation passerait sur du vide.
+    #[test]
+    fn a_dispatch_response_carries_its_values_not_defaults() {
+        let body = r#"{"runId":"4d7a","hasResult":true,"resultJson":"{\"ok\":true}",
+            "durationMs":42,"publishedEvents":[],
+            "capturedEffects":[{"op":"email.send","detailJson":"{}","at":"2026-09-09T10:00:00Z"}],
+            "hostCalls":[{"op":"kv.get","durationMicros":128,"errorCode":""}]}"#;
+
+        let parsed: DispatchResponse =
+            serde_json::from_str(body).expect("réponse de dispatch lisible");
+
+        assert_eq!(parsed.duration_ms, 42);
+        assert_eq!(parsed.host_calls.len(), 1);
+        assert_eq!(parsed.host_calls[0].duration_micros, 128);
+        assert_eq!(parsed.captured_effects[0].detail_json, "{}");
+    }
+
     #[test]
     fn falls_back_to_the_shared_api_variable() {
         assert_eq!(
