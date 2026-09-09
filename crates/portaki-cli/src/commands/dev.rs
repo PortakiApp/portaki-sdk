@@ -4,7 +4,7 @@
 //! the module runs against the actual runtime in the sandbox; the difference with running
 //! locally is latency, not nature — and no line of code leaves the infrastructure.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -112,7 +112,9 @@ async fn cycle(
 ) -> Result<()> {
     build(module_root)?;
 
-    let wasm_path = wasm_path(module_root, module_id);
+    // Le même résolveur que `publish`, et pas un chemin deviné : cargo nomme l'artefact
+    // d'après la cible, donc `access-guide` produit `access_guide.wasm`.
+    let wasm_path = crate::oci::pack::find_wasm_artifact(module_root, module_id)?;
     let wasm = std::fs::read(&wasm_path)
         .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
     let digest = sha256(&wasm);
@@ -181,12 +183,6 @@ fn build(module_root: &Path) -> Result<()> {
         bail!("cargo build failed");
     }
     Ok(())
-}
-
-fn wasm_path(module_root: &Path, module_id: &str) -> PathBuf {
-    module_root
-        .join("target/wasm32-unknown-unknown/release")
-        .join(format!("{module_id}.wasm"))
 }
 
 #[derive(Debug, serde::Deserialize)]
