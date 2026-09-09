@@ -14,7 +14,18 @@ use crate::{auth, ui};
 const CLIENT_ID: &str = "portaki-cli";
 
 /// What the CLI may ask for. Narrowed server-side to what this client is allowed.
-const SCOPES: [&str; 2] = ["modules:read", "modules:write"];
+///
+/// One entry per thing the CLI actually does, so the approval screen can show them one by one:
+/// asking for a single coarse scope would put "grant developer access" in front of the person
+/// deciding, which is not something anyone can weigh. Nothing here touches host data — no
+/// `host:` scope is grantable to this client, and the server would strip one anyway.
+const SCOPES: [&str; 5] = [
+    "dev:read",
+    "dev:deploy",
+    "dev:dispatch",
+    "dev:stay:read",
+    "registry:publish",
+];
 
 /// This binary's version, and the SDK it was built against.
 ///
@@ -253,10 +264,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_cli_never_asks_for_the_host_scope() {
+    fn the_cli_never_asks_for_a_host_scope() {
         // Un jeton de CLI ne fait pas d'opérations hôte ; le serveur le raboterait de toute
-        // façon, mais le demander serait déjà une intention de trop.
-        assert!(!SCOPES.contains(&"host"));
+        // façon, mais le demander serait déjà une intention de trop. Écrit sur le préfixe et
+        // non sur un scope nommé : `host:billing` ajouté demain doit échouer ici aussi.
+        assert!(!SCOPES.iter().any(|s| s.starts_with("host:")));
+    }
+
+    /// Les séjours du bac à sable et ceux d'un vrai voyageur ne portent pas le même scope.
+    #[test]
+    fn sandbox_stays_are_asked_for_under_the_dev_domain() {
+        assert!(SCOPES.contains(&"dev:stay:read"));
+        assert!(!SCOPES.contains(&"stay:read"));
     }
 
     /// A hostname reaches an approval screen, so it must never arrive as a raw command output —
