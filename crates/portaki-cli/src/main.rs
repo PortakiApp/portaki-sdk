@@ -129,7 +129,94 @@ fn parse() -> Cli {
         // construite une fois, au démarrage, et l'écran de version en est le seul lecteur.
         .long_version(Box::leak(ui::long_version().into_boxed_str()) as &'static str);
 
-    Cli::from_arg_matches(&command.get_matches()).unwrap_or_else(|failure| failure.exit())
+    let matches = match command.clone().try_get_matches() {
+        Ok(matches) => matches,
+        Err(refusal) => refuse(refusal, &command),
+    };
+    Cli::from_arg_matches(&matches).unwrap_or_else(|failure| failure.exit())
+}
+
+/// Rend le refus de `clap` comme le reste de la CLI, et dit où chercher.
+///
+/// « a value is required for '--dispatch <DISPATCH>' » est exact et n'aide pas : il manque ce
+/// qu'on aurait pu écrire. Quand le refus porte sur la commande elle-même, la liste des
+/// commandes suit — c'est la seule réponse à « laquelle ? ».
+fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
+    use clap::error::ErrorKind;
+
+    // `--help` et `--version` ne sont pas des échecs : `clap` les rend lui-même et sort en 0.
+    if !refusal.use_stderr() {
+        refusal.exit();
+    }
+
+    let rendered = refusal.to_string();
+    ui::blank();
+    ui::failure(headline(&rendered));
+
+    // `clap` sait souvent proposer le nom qu'on visait ; le perdre serait retirer la seule
+    // chose vraiment utile de son message.
+    for tip in rendered
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("tip: "))
+    {
+        ui::detail(tip);
+    }
+
+    // La liste des commandes ne répond qu'à « laquelle ? ». Sur un flag inconnu, on est déjà
+    // dans une commande : la dérouler entière serait du bruit devant la vraie question.
+    if matches!(
+        refusal.kind(),
+        ErrorKind::InvalidSubcommand | ErrorKind::MissingSubcommand
+    ) {
+        // `get_about` rend un `StyledStr` : il faut le matérialiser avant d'en prêter des
+        // tranches à la liste.
+        let commands: Vec<(String, String)> = command
+            .get_subcommands()
+            .filter(|sub| !sub.is_hide_set())
+            .map(|sub| {
+                (
+                    sub.get_name().to_string(),
+                    sub.get_about().map(ToString::to_string).unwrap_or_default(),
+                )
+            })
+            .collect();
+        let rows: Vec<(&str, &str)> = commands
+            .iter()
+            .map(|(name, about)| (name.as_str(), about.as_str()))
+            .collect();
+        ui::list("commands", &rows);
+    }
+
+    let help = match invoked_command(command) {
+        Some(name) => format!("portaki {name} --help"),
+        None => "portaki --help".to_string(),
+    };
+    ui::next(&[(&help, "every flag this command takes")]);
+    ui::blank();
+    std::process::exit(2);
+}
+
+/// La première ligne du refus, sans le « error: » que `clap` préfixe — la croix le dit déjà.
+fn headline(rendered: &str) -> String {
+    rendered
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .map(|line| line.trim_start_matches("error: ").to_string())
+        .unwrap_or_else(|| "invalid arguments".to_string())
+}
+
+/// La sous-commande que la ligne de commande nommait, s'il y en avait une de connue.
+///
+/// Lue des arguments bruts : le refus est arrivé avant qu'aucune analyse n'aboutisse, il n'y a
+/// donc rien d'autre à interroger. On veut seulement pointer la bonne page d'aide.
+fn invoked_command(command: &clap::Command) -> Option<String> {
+    let known: Vec<&str> = command
+        .get_subcommands()
+        .map(|sub| sub.get_name())
+        .collect();
+    std::env::args()
+        .skip(1)
+        .find(|argument| known.contains(&argument.as_str()))
 }
 
 async fn dispatch(command: Command) -> Result<()> {
@@ -145,5 +232,25 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Docs(args) => commands::docs::run(args),
         Command::Catalog(args) => commands::catalog::run(args),
         Command::Inspect(args) => commands::inspect::run(args).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// La croix dit déjà que c'est un échec ; « error: » une seconde fois serait du bégaiement.
+    #[test]
+    fn the_headline_drops_the_prefix_clap_adds() {
+        assert_eq!(
+            headline("error: unrecognized subcommand 'buidl'\n\n  tip: ..."),
+            "unrecognized subcommand 'buidl'"
+        );
+    }
+
+    /// Un refus dont on ne saurait rien dire reste un refus : la sortie ne doit pas être vide.
+    #[test]
+    fn an_unreadable_refusal_still_says_something() {
+        assert_eq!(headline("   \n\n"), "invalid arguments");
     }
 }
