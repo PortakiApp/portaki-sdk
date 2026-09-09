@@ -8,6 +8,8 @@ on:
 permissions:
   contents: read
   packages: write
+  # Le jeton OIDC : il sert à publier, et à dire à Portaki comment le run s'est terminé.
+  id-token: write
 
 jobs:
   publish:
@@ -29,3 +31,31 @@ jobs:
       - run: portaki publish --registry ghcr.io/portakiapp/portaki-modules
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dit à Portaki comment ce run s'est terminé.
+      #
+      # `if: always()` et non `if: failure()` : conditionné à l'échec, ce pas ne pourrait jamais
+      # ÉTEINDRE une alerte, et un module réparé garderait la sienne indéfiniment.
+      #
+      # Rien n'est stocké de votre côté : Portaki n'a aucun droit de lecture sur vos runs, c'est
+      # ce jeton — émis par GitHub pour la durée du job — qui prouve d'où vient le rapport.
+      #
+      # `|| true` : un rapport qui échoue ne doit pas faire échouer une publication réussie.
+      - name: Report the run outcome to Portaki
+        if: always()
+        env:
+          PORTAKI_API_URL: ${{ vars.PORTAKI_API_URL || 'https://api.portaki.app' }}
+          MODULE_ID: ${{ github.event.repository.name }}
+          OUTCOME: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -u
+          oidc=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.portaki.app/registry" \
+            | jq -r '.value')
+          curl -sS -X POST "$PORTAKI_API_URL/registry/v1/runs" \
+            -H "Authorization: Bearer $oidc" \
+            -H 'Content-Type: application/json' \
+            -d "{\"moduleId\":\"$MODULE_ID\",\"outcome\":\"$OUTCOME\",\"runUrl\":\"$RUN_URL\"}" \
+            || true
