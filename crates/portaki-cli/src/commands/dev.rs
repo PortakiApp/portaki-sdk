@@ -467,11 +467,9 @@ mod tests {
         assert_eq!(read_module_id(dir.path()).unwrap(), "nuki");
     }
 
-    /// `PORTAKI_API_URL` est la variable que lisent `login` et `publish`. `dev` l'ignorait, et
-    /// partait en production avec un jeton émis ailleurs.
     /// La charge exacte que devapi renvoie, recopiée d'un déploiement réel.
     ///
-    /// <p>C'est le test qui manquait : la structure attendait `size_bytes`, la réponse portait
+    /// C'est le test qui manquait : la structure attendait `size_bytes`, la réponse portait
     /// `sizeBytes`, et le déploiement échouait à lire sa propre réussite.
     #[test]
     fn a_deploy_response_is_read_as_devapi_writes_it() {
@@ -504,6 +502,8 @@ mod tests {
         assert_eq!(parsed.captured_effects[0].detail_json, "{}");
     }
 
+    /// `PORTAKI_API_URL` est la variable que lisent `login` et `publish`. `dev` l'ignorait, et
+    /// partait en production avec un jeton émis ailleurs.
     #[test]
     fn falls_back_to_the_shared_api_variable() {
         assert_eq!(
