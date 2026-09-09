@@ -79,7 +79,7 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
 ///
 /// Rend `None` quand cargo ne répond pas ou que le SDK n'est pas dans le graphe — un module qui
 /// n'en dépend pas ne se voit pas inventer une version.
-fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>> {
+pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>> {
     let output = std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1"])
         .current_dir(module_root)
@@ -351,6 +351,23 @@ mod tests {
         let raw = r#"{"id":"weather","version":"0.3.24"}"#;
 
         assert_eq!(stamp_sdk_version(raw, None).unwrap(), raw);
+    }
+
+    /// Le bac à sable reçoit le manifeste tamponné, comme la publication.
+    ///
+    /// Sans ce tampon, `requiresModuleSdk` manquait dans tout module déployé par `portaki dev`,
+    /// et l'inspecteur SDUI refusait de typer — pour tous les modules, toujours. Le message
+    /// conseillait alors « reconstruisez avec portaki build », qui écrit ailleurs et n'y
+    /// changeait rien.
+    #[test]
+    fn the_sandbox_manifest_carries_the_linked_sdk_version() {
+        let raw = r#"{"id":"access-guide","version":"0.3.2"}"#;
+
+        let stamped = stamp_sdk_version(raw, Some("2.1.1".to_string())).unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_str(&stamped).unwrap();
+        assert_eq!(parsed["requiresModuleSdk"], "2.1.1");
+        assert_eq!(parsed["id"], "access-guide");
     }
 
     #[test]
