@@ -33,8 +33,11 @@ pub struct DevArgs {
     #[arg(long)]
     pub url: Option<String>,
 
-    /// Operation to dispatch after each deploy. Omitted, the module is only deployed.
-    #[arg(long)]
+    /// Operation to dispatch after each deploy. Bare, it lists what this module exposes.
+    ///
+    /// `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
+    /// laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
+    #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub dispatch: Option<String>,
 
     /// JSON parameters for `--dispatch`.
@@ -54,6 +57,13 @@ pub async fn run(args: DevArgs) -> Result<()> {
     );
 
     let module_root = std::env::current_dir().context("current_dir")?;
+
+    // `--dispatch` nu ne demande pas un déploiement : il demande les noms. On les montre et on
+    // s'arrête — compiler et pousser pour finir sur « laquelle ? » serait une minute perdue.
+    if args.dispatch.as_deref() == Some("") {
+        return list_operations(&module_root);
+    }
+
     let mut token = crate::auth::access_token()?;
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
@@ -139,6 +149,83 @@ pub async fn run(args: DevArgs) -> Result<()> {
             ui::report(&failure);
         }
     }
+}
+
+/// Ce que ce module expose, et comment l'appeler.
+///
+/// Lu du manifeste, pas du bac à sable : la question se pose avant le premier déploiement, et
+/// souvent sans réseau.
+fn list_operations(module_root: &Path) -> Result<()> {
+    let (manifest, source) = crate::manifest::load_manifest(module_root, None)?;
+
+    match source {
+        crate::manifest::ManifestSource::Built(path) => ui::detail(format!(
+            "from {}",
+            path.strip_prefix(module_root).unwrap_or(&path).display()
+        )),
+        crate::manifest::ManifestSource::Emissions => {
+            ui::detail("from the SDK emissions — no build output yet")
+        }
+    }
+
+    if manifest.queries.is_empty() && manifest.commands.is_empty() {
+        ui::warn(format!("{} exposes no operation", manifest.id));
+        ui::detail("add a #[portaki_sdk::query] or #[portaki_sdk::command] function, then build");
+        ui::blank();
+        return Ok(());
+    }
+
+    show(
+        "queries · read-only",
+        manifest
+            .queries
+            .iter()
+            .map(|query| (query.name.as_str(), query.r#fn.as_str())),
+    );
+    show(
+        "commands · mutating",
+        manifest
+            .commands
+            .iter()
+            .map(|command| (command.name.as_str(), command.r#fn.as_str())),
+    );
+
+    // L'exemple porte un vrai nom du module : une syntaxe illustrée sur `<operation>` se recopie
+    // mal, et le `--kind` qui va avec se devine encore moins.
+    let sample = manifest
+        .queries
+        .first()
+        .map(|query| query.name.as_str())
+        .or_else(|| {
+            manifest
+                .commands
+                .first()
+                .map(|command| command.name.as_str())
+        })
+        .unwrap_or("listThings");
+
+    ui::next(&[(
+        &format!("portaki dev --dispatch {sample}"),
+        "build, deploy, then run it",
+    )]);
+    ui::blank();
+    // `--kind query` est le défaut : le rappeler n'apprendrait rien. C'est `command` qu'il faut
+    // penser à poser, et c'est justement celui qu'on oublie.
+    ui::detail("--kind command for a mutating one · --params '{…}' passes arguments");
+    ui::blank();
+    Ok(())
+}
+
+/// Un groupe d'opérations : le nom qu'on appelle, puis la fonction qui le sert.
+///
+/// Le symbole Rust est la seconde colonne parce que c'est lui qu'on cherche ensuite dans les
+/// sources ; répéter « read-only » à chaque ligne n'aurait rien appris que le titre ne dise.
+fn show<'a>(title: &str, operations: impl Iterator<Item = (&'a str, &'a str)>) {
+    let rows: Vec<(&str, &str)> = operations.collect();
+    if rows.is_empty() {
+        return;
+    }
+    ui::list(title, &rows);
 }
 
 /// One pass: build, upload if it changed, optionally dispatch.

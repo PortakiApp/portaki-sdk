@@ -257,6 +257,11 @@ pub fn skipped(message: impl Display) {
     ));
 }
 
+/// Un échec sans chaîne de causes — celui que `clap` rend, par exemple.
+pub fn failure(message: impl Display) {
+    eline(format!("{MARGIN}{} {message}", style(CROSS).red().bold()));
+}
+
 /// Une chose à savoir, qui n'empêche rien.
 pub fn warn(message: impl Display) {
     line(format!("{MARGIN}{} {message}", style(BANG).yellow().bold()));

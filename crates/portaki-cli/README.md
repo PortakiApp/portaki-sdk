@@ -86,6 +86,12 @@ the copyright — they travel with the binary, which often circulates without it
 `portaki --version` adds where the source lives and the Apache-2.0 "AS IS" disclaimer, while
 `-V` stays a single parseable line for scripts.
 
+`portaki dev --dispatch`, with no operation name, lists what the module exposes — queries and
+commands, each with the Rust function behind it — read from the manifest, without building or
+deploying. And when an argument is refused, the refusal is rendered like everything else: the
+CLI's own commands follow when the question was *which command*, `clap`'s suggestion is kept,
+and the pointer goes to the help page of the command you were actually in.
+
 `portaki login` opens the browser on the verification URL — pre-filled with the code when the
 platform returns one, so there is nothing left to paste. The code is printed either way; use
 `--no-browser` over SSH or on a headless box.
