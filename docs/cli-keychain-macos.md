@@ -1,76 +1,67 @@
-# Le trousseau redemande son mot de passe à chaque build
+# Où la CLI range ses identifiants
 
-## Le symptôme
+## Par défaut : un fichier
 
-```
-portaki-14043a3d45f57b96 veut utiliser vos informations confidentielles
-gardées dans « app.portaki.cli » de votre trousseau.
-```
+`~/.config/portaki/credentials.json`, en `0600`, dossier en `0700`.
 
-À chaque `portaki dev`, après chaque rebuild. « Toujours autoriser » ne change rien : le
-dialogue revient au build suivant.
+- **Hors du dépôt** — un fichier de secrets dans un arbre de travail finit par être commité, ou
+  balayé par un `git add -A`.
+- **Écrit par renommage atomique** — une interruption ne laisse pas un fichier tronqué, ce qui
+  obligerait à se reconnecter pour une raison sans rapport.
+- **Jamais affiché**, et `portaki logout` l'efface entièrement.
 
-## Pourquoi
+Le chemin se change par `PORTAKI_CREDENTIALS_FILE`.
 
-Le trousseau macOS n'autorise pas « un fichier à cet emplacement », il autorise une **identité
-de code**. Un binaire non signé — ou signé à la volée — n'a pas d'identité stable : son
-empreinte change à chaque compilation, et le système voit un programme inconnu qui demande le
-secret d'un autre. « Toujours autoriser » enregistre l'autorisation pour *cette* empreinte, que
-le build suivant invalide.
+## Ce que ce fichier ne fait pas
 
-Ce n'est donc pas un défaut de la CLI, et le corriger dans son code reviendrait à sortir le
-secret du trousseau — ce que ce projet refuse : voir l'en-tête de `crates/portaki-cli/src/auth.rs`.
+**Il n'est pas chiffré.** Deux idées reviennent, et aucune ne tient :
 
-## Le correctif, une fois
+- *le hacher* — impossible : un jeton doit être rejoué tel quel, et un condensat ne se rejoue
+  pas. Ce qu'on hacherait ne servirait plus à s'authentifier ;
+- *le chiffrer* — il faudrait une clé, qu'il faudrait ranger quelque part sur la même machine.
+  Le seul endroit correct est le trousseau, celui-là même qu'on vient de quitter. Brouiller le
+  contenu sans clé protégée ne protège de rien, ça donne seulement l'air de protéger.
 
-Créer une identité de signature locale. Elle ne sert qu'à votre machine, ne coûte rien et
-n'a rien à voir avec un compte développeur Apple.
+Sur une machine mono-utilisateur, la protection qui compte est celle des droits du fichier, et
+elle est en place. Le jeton d'accès vit quinze minutes ; celui de renouvellement, sept jours et
+se révoque par `portaki logout`.
 
-1. Ouvrir **Trousseaux d'accès**.
-2. Menu **Trousseaux d'accès ▸ Assistant de certification ▸ Créer un certificat…**
-3. Renseigner :
-   - **Nom** : `Portaki Dev`
-   - **Type d'identité** : `Racine auto-signée`
-   - **Type de certificat** : `Signature de code`
-4. Créer, puis fermer.
+## Pourquoi ce n'est plus le trousseau
 
-## Ensuite, à chaque installation
+Le trousseau était le bon choix sur le papier : chiffré au repos, verrouillé avec la session. Son
+coût réel sur macOS l'a emporté.
+
+Le trousseau n'autorise pas *un fichier à un emplacement*, il autorise une **identité de code**.
+Un binaire recompilé n'a pas la même : chaque `cargo install` produit un programme inconnu, et
+« Toujours autoriser » ne vaut que pour l'empreinte du jour. Une boucle de développement qui
+recompile redemande donc le mot de passe de session à chaque passage.
+
+Un garde-fou qu'on affronte cent fois par jour finit par être contourné — celui-ci l'était déjà,
+par la variable d'environnement.
+
+## Revenir au trousseau
 
 ```sh
-./scripts/install-cli.sh
+export PORTAKI_CREDENTIALS=keychain
 ```
 
-Le script installe puis signe avec `Portaki Dev`. Le premier lancement redemandera le mot de
-passe une dernière fois : cliquer **Toujours autoriser**. Les suivants ne demanderont plus, y
-compris après un rebuild — l'exigence désignée porte sur l'identité et l'identifiant, tous deux
-inchangés.
+Rien n'a été retiré. Si vous le faites sur macOS et que le dialogue vous lasse, la vraie réponse
+est une identité de signature stable :
 
-Une autre identité : `PORTAKI_SIGN_IDENTITY="Mon identité" ./scripts/install-cli.sh`.
+1. **Trousseaux d'accès ▸ Assistant de certification ▸ Créer un certificat…**
+   Nom `Portaki Dev`, type d'identité `Racine auto-signée`, type de certificat `Signature de code`.
+2. Installer avec `./scripts/install-cli.sh`, qui signe le binaire après l'avoir installé.
 
-## Vérifier
+Vérifier que la signature tient sur l'identité et non sur une empreinte :
 
 ```sh
 codesign -d -r- "$(command -v portaki)"
 ```
 
-L'exigence affichée doit nommer `app.portaki.cli` et le certificat, jamais une empreinte de
-fichier. Si le dialogue revient malgré tout après un rebuild, c'est cette sortie qu'il faut
-lire : une exigence qui mentionne un `cdhash` signifie que la signature est restée ad hoc.
+Une exigence qui mentionne un `cdhash` signifie que la signature est restée ad hoc, et le
+dialogue reviendra.
 
-## Le dépannage rapide, sans rien signer
+## En CI
 
-`PORTAKI_DEV_TOKEN` court-circuite le trousseau — `auth.rs` le lit avant lui, et il gagne sur
-tout, y compris sur l'OIDC d'une CI :
-
-```sh
-export PORTAKI_DEV_TOKEN="…"
-```
-
-Ça dépanne une session, pas une journée : le jeton d'accès vit quinze minutes, et son
-renouvellement, lui, retourne au trousseau.
-
-## Ailleurs que sur macOS
-
-Le problème n'existe pas sous cette forme. Linux passe par Secret Service, Windows par
-Credential Manager, et ni l'un ni l'autre n'attache son autorisation à l'empreinte du binaire.
-`scripts/install-cli.sh` installe et s'arrête là.
+`PORTAKI_DEV_TOKEN` court-circuite tout : ni fichier, ni trousseau. Un agent de build n'a ni
+l'un ni l'autre, et cette variable gagne sur le reste — y compris sur l'OIDC.

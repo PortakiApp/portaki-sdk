@@ -1,8 +1,31 @@
 //! Where the CLI keeps its credentials.
 //!
-//! In the system keychain — Keychain on macOS, Secret Service on Linux, Credential Manager on
-//! Windows — and not in a plain file under `~/.portaki/`. Three lines more, and a stray `cat`
-//! during a screencast no longer broadcasts a week of access.
+//! Dans un fichier, `~/.config/portaki/credentials.json`, en `0600` — et non plus dans le
+//! trousseau du système.
+//!
+//! Le trousseau était le bon choix sur le papier : chiffré au repos, verrouillé avec la session.
+//! Il l'est resté jusqu'à ce qu'on constate son coût réel sur macOS — il attache son
+//! autorisation à l'identité de code du binaire, et un binaire recompilé est un inconnu. Une
+//! boucle de développement qui recompile redemande donc le mot de passe de session à chaque
+//! passage. Un garde-fou qu'on affronte cent fois par jour finit par être contourné ; celui-ci
+//! l'était déjà, par la variable d'environnement.
+//!
+//! Ce que le fichier garde :
+//!
+//! - `0600` sur le fichier, `0700` sur son dossier — sur une machine mono-utilisateur, c'est la
+//!   protection qui compte réellement ;
+//! - hors du dépôt, sous `$XDG_CONFIG_HOME`, donc jamais commité ni pris dans un `git add -A` ;
+//! - écrit par renommage atomique : une interruption ne laisse pas un fichier tronqué ;
+//! - jamais affiché, et `portaki logout` l'efface.
+//!
+//! Ce qu'il ne garde pas : le chiffrement au repos. **Hacher est impossible** — un jeton doit
+//! être rejoué tel quel, et un condensat ne se rejoue pas. Chiffrer demanderait une clé, qu'il
+//! faudrait ranger… dans le trousseau qu'on vient de quitter. Le dire vaut mieux que de brouiller
+//! le contenu pour s'en donner l'air.
+//!
+//! `PORTAKI_CREDENTIALS=keychain` restaure l'ancien comportement, pour qui le préfère.
+
+use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
@@ -91,11 +114,114 @@ pub fn forget() -> Result<()> {
     delete(REFRESH_ENTRY)
 }
 
+/// Le trousseau reste accessible pour qui le préfère.
+fn uses_keychain() -> bool {
+    std::env::var("PORTAKI_CREDENTIALS")
+        .map(|choice| choice.trim().eq_ignore_ascii_case("keychain"))
+        .unwrap_or(false)
+}
+
+/// `$XDG_CONFIG_HOME/portaki/credentials.json`, ou `~/.config/…` à défaut.
+///
+/// Hors du dépôt, toujours : un fichier de secrets dans un arbre de travail finit par être
+/// commité, ou balayé par un `git add -A`.
+fn credentials_path() -> Result<PathBuf> {
+    if let Ok(explicit) = std::env::var("PORTAKI_CREDENTIALS_FILE") {
+        if !explicit.trim().is_empty() {
+            return Ok(PathBuf::from(explicit));
+        }
+    }
+    let base = match std::env::var("XDG_CONFIG_HOME") {
+        Ok(xdg) if !xdg.trim().is_empty() => PathBuf::from(xdg),
+        _ => {
+            let home = std::env::var("HOME").context("locate the home directory")?;
+            PathBuf::from(home).join(".config")
+        }
+    };
+    Ok(base.join("portaki").join("credentials.json"))
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredCredentials {
+    #[serde(default)]
+    access_token: String,
+    #[serde(default)]
+    refresh_token: String,
+}
+
+fn load() -> Result<StoredCredentials> {
+    load_from(&credentials_path()?)
+}
+
+/// Le chemin en paramètre, pour que l'éprouver ne dépende pas de l'environnement du processus —
+/// partagé par tous les tests, donc source de vraies intermittences.
+fn load_from(path: &std::path::Path) -> Result<StoredCredentials> {
+    match std::fs::read_to_string(path) {
+        Ok(raw) => serde_json::from_str(&raw).with_context(|| {
+            format!(
+                "parse {} — delete it and run `portaki login`",
+                path.display()
+            )
+        }),
+        Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => {
+            Ok(StoredCredentials::default())
+        }
+        Err(failure) => Err(failure).with_context(|| format!("read {}", path.display())),
+    }
+}
+
+/// Écrit par renommage : une interruption ne laisse pas un fichier de secrets tronqué, ce qui
+/// obligerait à se reconnecter pour une raison qui n'a rien à voir.
+fn save(credentials: &StoredCredentials) -> Result<()> {
+    save_to(&credentials_path()?, credentials)
+}
+
+fn save_to(path: &std::path::Path, credentials: &StoredCredentials) -> Result<()> {
+    let parent = path.parent().context("credentials directory")?;
+    std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    restrict(parent, 0o700)?;
+
+    let temporary = path.with_extension("json.tmp");
+    let body = serde_json::to_string_pretty(credentials).context("serialise credentials")?;
+    std::fs::write(&temporary, body).with_context(|| format!("write {}", temporary.display()))?;
+    // Les droits AVANT le renommage : entre l'écriture et le chmod, le fichier existerait en
+    // clair et lisible par tous.
+    restrict(&temporary, 0o600)?;
+    std::fs::rename(&temporary, path).with_context(|| format!("write {}", path.display()))
+}
+
+#[cfg(unix)]
+fn restrict(path: &std::path::Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .with_context(|| format!("restrict {}", path.display()))
+}
+
+/// Ailleurs, les ACL par défaut d'un profil utilisateur font le travail.
+#[cfg(not(unix))]
+fn restrict(_path: &std::path::Path, _mode: u32) -> Result<()> {
+    Ok(())
+}
+
 fn entry(name: &str) -> Result<keyring::Entry> {
     keyring::Entry::new(SERVICE, name).context("open the system keychain")
 }
 
 fn read(name: &str) -> Result<Option<String>> {
+    if !uses_keychain() {
+        let stored = load()?;
+        let value = if name == ACCESS_ENTRY {
+            stored.access_token
+        } else {
+            stored.refresh_token
+        };
+        return Ok(if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        });
+    }
     match entry(name)?.get_password() {
         Ok(value) => Ok(Some(value)),
         Err(keyring::Error::NoEntry) => Ok(None),
@@ -104,12 +230,31 @@ fn read(name: &str) -> Result<Option<String>> {
 }
 
 fn write(name: &str, value: &str) -> Result<()> {
+    if !uses_keychain() {
+        let mut stored = load()?;
+        if name == ACCESS_ENTRY {
+            stored.access_token = value.to_string();
+        } else {
+            stored.refresh_token = value.to_string();
+        }
+        return save(&stored);
+    }
     entry(name)?
         .set_password(value)
         .context("write to the system keychain")
 }
 
 fn delete(name: &str) -> Result<()> {
+    if !uses_keychain() {
+        // Le fichier entier part au premier appel : il ne porte que ces deux jetons, et en
+        // laisser un seul rendrait un `logout` à moitié fait.
+        let path = credentials_path()?;
+        return match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(failure) => Err(failure).with_context(|| format!("remove {}", path.display())),
+        };
+    }
     match entry(name)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(failure) => Err(failure).context("clear the system keychain"),
@@ -119,6 +264,75 @@ fn delete(name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Le stockage, éprouvé sans toucher l'environnement du processus.
+    ///
+    /// Les chemins sont passés en paramètre : deux tests qui se règlent par variable
+    /// d'environnement courent en parallèle dans le même processus et s'écrasent l'un l'autre,
+    /// ce qui produit des échecs qui n'ont rien à voir avec le code.
+    #[test]
+    fn credentials_round_trip_through_the_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("portaki").join("credentials.json");
+
+        // Rien de stocké : ce n'est pas une panne, c'est « pas connecté ».
+        let empty = load_from(&path).unwrap();
+        assert!(empty.access_token.is_empty());
+
+        save_to(
+            &path,
+            &StoredCredentials {
+                access_token: "acces".into(),
+                refresh_token: "renouvellement".into(),
+            },
+        )
+        .unwrap();
+
+        let stored = load_from(&path).unwrap();
+        assert_eq!(stored.access_token, "acces");
+        assert_eq!(stored.refresh_token, "renouvellement");
+
+        // Le fichier n'est lisible que par son propriétaire — sur une machine
+        // mono-utilisateur, c'est la seule protection réelle, donc celle qu'il faut vérifier.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "le fichier de secrets doit être en 0600");
+            let parent = std::fs::metadata(path.parent().unwrap()).unwrap();
+            assert_eq!(parent.permissions().mode() & 0o777, 0o700);
+        }
+    }
+
+    /// Un fichier illisible se dit, il ne se devine pas : le message doit nommer la sortie,
+    /// sinon on cherche une panne de réseau.
+    #[test]
+    fn a_corrupt_file_says_what_to_do() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("credentials.json");
+        std::fs::write(&path, "{ pas du json").unwrap();
+
+        // `unwrap_err` exigerait `Debug` sur `StoredCredentials`, donc un jeton imprimable dans
+        // un message de panique ou une trace. On lit l'erreur sans le demander.
+        let failure = match load_from(&path) {
+            Ok(_) => panic!("un fichier illisible ne doit pas passer pour vide"),
+            Err(failure) => failure.to_string(),
+        };
+        assert!(failure.contains("portaki login"), "{failure}");
+    }
+
+    /// Le chemin par défaut vit hors du dépôt : un fichier de secrets dans un arbre de travail
+    /// finit par être commité, ou balayé par un `git add -A`.
+    #[test]
+    fn the_default_path_is_outside_any_repository() {
+        let resolved = credentials_path().unwrap();
+
+        assert!(
+            resolved.ends_with("portaki/credentials.json"),
+            "{resolved:?}"
+        );
+        assert!(resolved.is_absolute(), "{resolved:?}");
+    }
 
     /// Un seul test pour les deux cas : ils partagent une variable d'environnement, et les
     /// séparer les ferait courir en parallèle dans le même processus — donc s'écraser l'un
