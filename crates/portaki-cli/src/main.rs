@@ -34,7 +34,7 @@ mod ui;
 
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 /// L'aide de `clap` peinte comme le reste de la sortie : un seul vocabulaire visuel, que la
@@ -52,7 +52,8 @@ const HELP_STYLES: Styles = Styles::styled()
     name = "portaki",
     version,
     about = "Portaki module SDK CLI",
-    styles = HELP_STYLES
+    styles = HELP_STYLES,
+    arg_required_else_help = true
 )]
 struct Cli {
     /// Plain text only — no colour, no spinners.
@@ -99,7 +100,7 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let cli = Cli::parse();
+    let cli = parse();
     ui::init(cli.no_color, cli.verbose);
 
     // L'échec est rendu ici, une fois, au lieu du `Debug` que `main() -> Result` imprime : la
@@ -108,6 +109,27 @@ async fn main() {
         ui::report(&failure);
         std::process::exit(1);
     }
+}
+
+/// Analyse les arguments, en habillant l'aide et `--version` de ce que `clap` ne sait pas seul.
+///
+/// `clap` rend ces deux écrans pendant l'analyse, donc avant qu'on ait lu le moindre argument :
+/// `--no-color` est cherché à la main d'abord, sans quoi un logo en couleurs partirait dans un
+/// fichier de sortie qu'on avait justement demandé nu.
+fn parse() -> Cli {
+    let wants_color = !std::env::args().any(|argument| argument == "--no-color");
+    ui::set_colors(wants_color);
+
+    let command = Cli::command()
+        .before_help(ui::banner())
+        .before_long_help(ui::banner())
+        .after_help(ui::legal())
+        .after_long_help(ui::legal())
+        // `clap` veut une chaîne qui vit aussi longtemps que le programme ; celle-ci est
+        // construite une fois, au démarrage, et l'écran de version en est le seul lecteur.
+        .long_version(Box::leak(ui::long_version().into_boxed_str()) as &'static str);
+
+    Cli::from_arg_matches(&command.get_matches()).unwrap_or_else(|failure| failure.exit())
 }
 
 async fn dispatch(command: Command) -> Result<()> {

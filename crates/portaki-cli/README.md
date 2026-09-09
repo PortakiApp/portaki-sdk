@@ -81,6 +81,11 @@ Colour and animation turn themselves off when the output is not a terminal, and 
 honoured. `portaki catalog` and `portaki inspect` write nothing but their JSON to stdout, so
 they stay pipeable into `jq`.
 
+`portaki` with no arguments, and `portaki --help`, open on the logo and close on the licence and
+the copyright — they travel with the binary, which often circulates without its repository.
+`portaki --version` adds where the source lives and the Apache-2.0 "AS IS" disclaimer, while
+`-V` stays a single parseable line for scripts.
+
 `portaki login` opens the browser on the verification URL — pre-filled with the code when the
 platform returns one, so there is nothing left to paste. The code is printed either way; use
 `--no-browser` over SSH or on a headless box.

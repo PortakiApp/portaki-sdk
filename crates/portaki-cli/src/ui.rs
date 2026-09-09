@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use console::{style, Emoji, Term};
+use console::{style, Emoji, Style, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 
 /// La marge de gauche commune à toutes les lignes : la sortie respire, et un bloc de texte se
@@ -38,10 +38,7 @@ static FRESH: AtomicBool = AtomicBool::new(false);
 
 /// Fixe le mode de rendu pour tout le processus, avant la première ligne écrite.
 pub fn init(no_color: bool, verbose: bool) {
-    if no_color {
-        console::set_colors_enabled(false);
-        console::set_colors_enabled_stderr(false);
-    }
+    set_colors(!no_color);
     VERBOSE.store(verbose, Ordering::Relaxed);
 }
 
@@ -53,6 +50,106 @@ pub fn verbose() -> bool {
 /// Quelqu'un regarde-t-il vraiment ? Sinon : pas d'animation, pas de réécriture de ligne.
 fn attended() -> bool {
     console::user_attended() && !verbose()
+}
+
+/// Le logo, en cinq lignes de blocs.
+///
+/// Écrit ici plutôt que généré : une police de blocs se lit à l'œil, pas à l'exécution, et un
+/// générateur ferait dépendre l'identité de la marque d'une dépendance de plus.
+const LOGO: [&str; 5] = [
+    "██████   ██████  ██████  ████████  █████  ██   ██ ██",
+    "██   ██ ██    ██ ██   ██    ██    ██   ██ ██  ██  ██",
+    "██████  ██    ██ ██████     ██    ███████ █████   ██",
+    "██      ██    ██ ██   ██    ██    ██   ██ ██  ██  ██",
+    "██       ██████  ██   ██    ██    ██   ██ ██   ██ ██",
+];
+
+/// Le dégradé du logo, du cyan clair au bleu — une couleur par ligne.
+///
+/// En 256 couleurs : la palette de base n'a pas assez de bleus pour un dégradé, et un terminal
+/// qui ne les gère pas verra le texte nu, jamais des codes en clair.
+const LOGO_RAMP: [u8; 5] = [51, 45, 39, 33, 27];
+
+/// Le logo peint, prêt à être posé en tête d'un écran d'aide.
+///
+/// Rendu en `String` plutôt qu'imprimé : `clap` le veut comme en-tête de son aide, et le même
+/// texte sert à `--version`.
+pub fn banner() -> String {
+    let mut out = String::from("\n");
+    for (row, shade) in LOGO.iter().zip(LOGO_RAMP) {
+        out.push_str(&format!(
+            "{MARGIN}{}\n",
+            Style::new().color256(shade).apply_to(row)
+        ));
+    }
+    out.push_str(&format!(
+        "{MARGIN}{}\n",
+        style(format!(
+            "the module toolchain  ·  v{}",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .dim()
+    ));
+    out
+}
+
+/// Ce qui protège le projet et ceux qui s'en servent, en pied d'aide.
+///
+/// La licence et le détenteur du copyright ne sont pas de la décoration : ils voyagent avec le
+/// binaire, qui circule souvent sans son dépôt. Les lire coûte deux lignes.
+pub fn legal() -> String {
+    format!(
+        "{MARGIN}{}\n{MARGIN}{}",
+        style(format!(
+            "{} · Copyright 2026 Syntax Labs",
+            env!("CARGO_PKG_LICENSE")
+        ))
+        .dim(),
+        style(format!(
+            "{} · {}",
+            env!("CARGO_PKG_HOMEPAGE"),
+            env!("CARGO_PKG_REPOSITORY")
+        ))
+        .dim()
+    )
+}
+
+/// Ce que `--version` raconte, par opposition au `-V` que lit un script.
+///
+/// Un `-V` doit rester une ligne analysable ; c'est la forme longue qui porte la licence, la
+/// clause de non-garantie et où retrouver la source.
+pub fn long_version() -> String {
+    let rows = [
+        ("license", env!("CARGO_PKG_LICENSE")),
+        ("copyright", "Copyright 2026 Syntax Labs"),
+        ("homepage", env!("CARGO_PKG_HOMEPAGE")),
+        ("source", env!("CARGO_PKG_REPOSITORY")),
+    ];
+    let mut out = format!("{}\n{}\n", env!("CARGO_PKG_VERSION"), banner());
+    for (label, value) in rows {
+        out.push_str(&format!(
+            "{MARGIN}  {} {value}\n",
+            style(format!("{label:<11}")).dim()
+        ));
+    }
+    out.push_str(&format!(
+        "\n{MARGIN}{}\n{MARGIN}{}",
+        style("This product includes software developed at Syntax Labs.").dim(),
+        style("Distributed on an \"AS IS\" basis, without warranties or conditions of any kind.")
+            .dim()
+    ));
+    out
+}
+
+/// Éteint la couleur avant que quoi que ce soit ne soit peint.
+///
+/// Séparé d'[`init`] parce que l'aide et `--version` sont rendues par `clap` pendant l'analyse,
+/// donc avant qu'on sache autre chose des arguments.
+pub fn set_colors(enabled: bool) {
+    if !enabled {
+        console::set_colors_enabled(false);
+        console::set_colors_enabled_stderr(false);
+    }
 }
 
 /// Une ligne vide.
@@ -435,6 +532,37 @@ mod tests {
 
     /// Une colonne réglée sur le groupe : des noms courts se serrent au plancher, des noms
     /// moyens l'écartent juste ce qu'il faut.
+    /// La licence, le détenteur du copyright et la clause de non-garantie voyagent avec le
+    /// binaire, qui circule souvent sans son dépôt. Un champ de `Cargo.toml` renommé les ferait
+    /// disparaître sans rien casser — d'où l'assertion.
+    #[test]
+    fn the_version_screen_carries_what_protects_the_project() {
+        let screen = long_version();
+
+        assert!(screen.contains("Apache-2.0"));
+        assert!(screen.contains("Syntax Labs"));
+        assert!(screen.contains("AS IS"));
+        assert!(screen.contains(env!("CARGO_PKG_REPOSITORY")));
+    }
+
+    #[test]
+    fn the_help_footer_names_the_licence_and_the_source() {
+        let footer = legal();
+
+        assert!(footer.contains("Apache-2.0"));
+        assert!(footer.contains("Copyright 2026 Syntax Labs"));
+        assert!(footer.contains(env!("CARGO_PKG_HOMEPAGE")));
+    }
+
+    /// Le logo est rectangulaire : une ligne plus courte que les autres se voit tout de suite.
+    #[test]
+    fn every_logo_row_is_the_same_width() {
+        let width = LOGO[0].chars().count();
+
+        assert!(LOGO.iter().all(|row| row.chars().count() == width));
+        assert_eq!(LOGO.len(), LOGO_RAMP.len());
+    }
+
     #[test]
     fn a_column_settles_on_the_widest_name() {
         assert_eq!(column_width(&[("a", "x"), ("bb", "y")]), Some(COLUMN_FLOOR));

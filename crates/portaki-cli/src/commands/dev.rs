@@ -76,11 +76,14 @@ pub async fn run(args: DevArgs) -> Result<()> {
 
     let src = module_root.join("src");
     let manifest = module_root.join(MANIFEST);
+    // Les chemins sont dits depuis la racine du module, pas depuis celle du disque : un chemin
+    // absolu de soixante-dix caractères repousse son explication à la ligne suivante, et la
+    // liste cesse de se lire en colonnes.
     ui::list(
         "watching",
         &[
             (
-                &src.display().to_string(),
+                "src/",
                 "every save rebuilds, redeploys and dispatches again",
             ),
             (
@@ -89,7 +92,9 @@ pub async fn run(args: DevArgs) -> Result<()> {
             ),
         ],
     );
+    ui::blank();
     ui::detail("a build that fails does not stop the loop — fix and save again");
+    ui::detail(format!("from {}", module_root.display()));
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |event| {
