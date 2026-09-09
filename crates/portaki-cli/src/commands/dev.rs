@@ -264,6 +264,15 @@ async fn cycle(
         &raw_manifest,
         crate::oci::pack::resolved_sdk_version(module_root)?,
     )?;
+    // Et les surfaces telles que le build les a emises : sans elles, le bac a sable prend le
+    // `pathSegment` pour un identifiant de surface et demande un symbole qui n'existe pas.
+    let manifest = match std::fs::read_to_string(
+        module_root.join(crate::manifest::loader::BUILT_MANIFEST),
+    ) {
+        Ok(built) => crate::oci::pack::stamp_surfaces(&manifest, &built)?,
+        // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
+        Err(_) => manifest,
+    };
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.

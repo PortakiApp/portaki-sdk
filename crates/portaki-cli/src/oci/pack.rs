@@ -107,6 +107,34 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
 /// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
 /// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
 /// rend exact par construction plutôt que par discipline.
+/// Recopie les surfaces emises par le build dans le manifeste envoye au bac a sable.
+///
+/// Deux manifestes coexistent et ne disent pas la meme chose. `portaki.module.json` decrit la
+/// navigation du dashboard : ses `hostSurfaces` portent un `pathSegment`, qui est un morceau
+/// d'URL. Le manifeste emis par le build decrit ce que le binaire exporte reellement :
+/// `surfaces.host[].id` vaut `main`, et le symbole associe est `render_host_main`.
+///
+/// Le bac a sable ne recevait que le premier. Il en deduisait un identifiant de surface egal au
+/// `pathSegment` — `access-guide` —, le runtime cherchait `render_host_access_guide`, et aucun
+/// module ne l'exporte : les vingt modules qui declarent une surface hote echouaient sur
+/// `wasm_handler_not_found`. La production, elle, marche parce que le dashboard envoie `main`.
+///
+/// Corriger les vingt manifestes ecrits a la main serait une seconde source de verite pour une
+/// chose que le build sait deja. On transporte donc ce qu'il a emis.
+pub fn stamp_surfaces(raw: &str, built_manifest: &str) -> Result<String> {
+    let built: serde_json::Value =
+        serde_json::from_str(built_manifest).context("parse built manifest")?;
+    let Some(surfaces) = built.get("surfaces") else {
+        return Ok(raw.to_string());
+    };
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(raw).context("parse module manifest")?;
+    if let Some(object) = manifest.as_object_mut() {
+        object.insert("surfaces".to_string(), surfaces.clone());
+    }
+    serde_json::to_string_pretty(&manifest).context("serialise module manifest")
+}
+
 pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> {
     let Some(resolved) = resolved else {
         return Ok(raw.to_string());
@@ -574,5 +602,47 @@ mod tests {
         assert!(layers
             .iter()
             .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA));
+    }
+}
+
+#[cfg(test)]
+mod stamp_surfaces_tests {
+    use super::stamp_surfaces;
+
+    const BUILT: &str = r#"{"id":"access-guide","surfaces":{"host":[{"id":"main","render_fn":"render_host_main"}],"guest":[]}}"#;
+
+    /// Le manifeste ecrit a la main ne dit pas quel symbole appeler ; le build, si.
+    #[test]
+    fn carries_the_built_surfaces_into_the_uploaded_manifest() {
+        let raw = r#"{"id":"access-guide","hostSurfaces":[{"pathSegment":"access-guide"}]}"#;
+
+        let stamped = stamp_surfaces(raw, BUILT).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(value["surfaces"]["host"][0]["id"], "main");
+        // Ce que le manifeste disait deja n'est pas efface : le pathSegment reste une donnee
+        // de navigation, utile au dashboard.
+        assert_eq!(value["hostSurfaces"][0]["pathSegment"], "access-guide");
+    }
+
+    /// Un build sans emission ne doit pas empecher un deploiement.
+    #[test]
+    fn leaves_the_manifest_alone_when_the_build_declares_no_surface() {
+        let raw = r#"{"id":"access-guide"}"#;
+
+        let stamped = stamp_surfaces(raw, r#"{"id":"access-guide"}"#).expect("stamp");
+
+        assert_eq!(stamped, raw);
+    }
+
+    /// Les surfaces emises font foi : elles decrivent les octets qui vont tourner.
+    #[test]
+    fn built_surfaces_win_over_anything_already_declared() {
+        let raw = r#"{"surfaces":{"host":[{"id":"stale"}]}}"#;
+
+        let stamped = stamp_surfaces(raw, BUILT).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(value["surfaces"]["host"][0]["id"], "main");
     }
 }
