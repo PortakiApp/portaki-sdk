@@ -18,6 +18,9 @@ use crate::ui;
 /// How long to wait for the editor to finish writing before rebuilding.
 const DEBOUNCE: Duration = Duration::from_millis(300);
 
+/// Le manifeste du module — lu à chaque cycle, et désormais surveillé comme les sources.
+const MANIFEST: &str = "portaki.module.json";
+
 #[derive(Debug, Parser)]
 /// Arguments for `portaki dev`.
 pub struct DevArgs {
@@ -69,9 +72,10 @@ pub async fn run(args: DevArgs) -> Result<()> {
     }
 
     let src = module_root.join("src");
+    let manifest = module_root.join(MANIFEST);
     ui::blank();
     ui::detail(format!(
-        "watching {} — save to rebuild, ctrl-c to stop",
+        "watching {} and {MANIFEST} — save to rebuild, ctrl-c to stop",
         src.display()
     ));
 
@@ -83,6 +87,15 @@ pub async fn run(args: DevArgs) -> Result<()> {
     watcher
         .watch(&src, RecursiveMode::Recursive)
         .with_context(|| format!("watch {}", src.display()))?;
+    // Le manifeste aussi : chaque cycle le relit et l'envoie, mais rien ne déclenchait de cycle
+    // quand il changeait. Ajouter une surface ou une permission restait donc sans effet visible
+    // jusqu'à la prochaine sauvegarde d'un fichier Rust — de quoi croire qu'il n'est pas lu.
+    //
+    // `NonRecursive` sur le fichier lui-même : surveiller la racine du module ferait entrer
+    // `target/`, que chaque build réécrit — la boucle se relancerait elle-même sans fin.
+    watcher
+        .watch(&manifest, RecursiveMode::NonRecursive)
+        .with_context(|| format!("watch {}", manifest.display()))?;
 
     loop {
         // Bloque jusqu'à la première sauvegarde…
@@ -137,8 +150,8 @@ async fn cycle(
         return Ok(());
     }
 
-    let manifest = std::fs::read_to_string(module_root.join("portaki.module.json"))
-        .context("read portaki.module.json")?;
+    let manifest =
+        std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
@@ -381,7 +394,7 @@ fn resolve_base_url(
 }
 
 fn read_module_id(module_root: &Path) -> Result<String> {
-    let manifest = module_root.join("portaki.module.json");
+    let manifest = module_root.join(MANIFEST);
     let raw = std::fs::read_to_string(&manifest)
         .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
     let parsed: serde_json::Value =
