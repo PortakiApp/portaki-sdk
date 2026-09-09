@@ -153,7 +153,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
 
 /// Ce que ce module expose, et comment l'appeler.
 ///
-/// Lu du manifeste, pas du bac à sable : la question se pose avant le premier déploiement, et
+/// Lu du manifeste, pas de la sandbox : la question se pose avant le premier déploiement, et
 /// souvent sans réseau.
 fn list_operations(module_root: &Path) -> Result<()> {
     let (manifest, source) = crate::manifest::load_manifest(module_root, None)?;
@@ -258,21 +258,20 @@ async fn cycle(
         std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
     // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
     // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
-    // graphe résolu par cargo. Sans lui, le bac à sable recevait un manifeste muet et
+    // graphe résolu par cargo. Sans lui, la sandbox recevait un manifeste muet et
     // l'inspecteur refusait de typer — pour tous les modules, toujours.
     let manifest = crate::oci::pack::stamp_sdk_version(
         &raw_manifest,
         crate::oci::pack::resolved_sdk_version(module_root)?,
     )?;
-    // Et les surfaces telles que le build les a emises : sans elles, le bac a sable prend le
+    // Et les surfaces telles que le build les a emises : sans elles, la sandbox prend le
     // `pathSegment` pour un identifiant de surface et demande un symbole qui n'existe pas.
-    let manifest = match std::fs::read_to_string(
-        module_root.join(crate::manifest::loader::BUILT_MANIFEST),
-    ) {
-        Ok(built) => crate::oci::pack::stamp_surfaces(&manifest, &built)?,
-        // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
-        Err(_) => manifest,
-    };
+    let manifest =
+        match std::fs::read_to_string(module_root.join(crate::manifest::loader::BUILT_MANIFEST)) {
+            Ok(built) => crate::oci::pack::stamp_surfaces(&manifest, &built)?,
+            // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
+            Err(_) => manifest,
+        };
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
@@ -457,7 +456,7 @@ fn print_trace(trace: &DispatchResponse) {
         ui::detail(format!("would publish  {event}"));
     }
     // « captured » et « would publish » se ressemblent assez pour qu'on les prenne pour des
-    // choses faites. Elles ne le sont pas : le bac à sable les note et les retient.
+    // choses faites. Elles ne le sont pas : la sandbox les note et les retient.
     if !trace.captured_effects.is_empty() || !trace.published_events.is_empty() {
         ui::detail("captured and would-publish lines were held, not performed");
     }
@@ -621,7 +620,7 @@ mod tests {
         );
     }
 
-    /// Le bac à sable peut vivre à part : sa variable dédiée reste prioritaire.
+    /// La sandbox peut vivre à part : sa variable dédiée reste prioritaire.
     #[test]
     fn prefers_the_dedicated_variable() {
         assert_eq!(

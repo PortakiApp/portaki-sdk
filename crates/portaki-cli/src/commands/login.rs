@@ -271,7 +271,7 @@ mod tests {
         assert!(!SCOPES.iter().any(|s| s.starts_with("host:")));
     }
 
-    /// Les séjours du bac à sable et ceux d'un vrai voyageur ne portent pas le même scope.
+    /// Les séjours de la sandbox et ceux d'un vrai voyageur ne portent pas le même scope.
     #[test]
     fn sandbox_stays_are_asked_for_under_the_dev_domain() {
         assert!(SCOPES.contains(&"dev:stay:read"));

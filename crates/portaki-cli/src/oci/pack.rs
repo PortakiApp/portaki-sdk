@@ -107,14 +107,14 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
 /// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
 /// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
 /// rend exact par construction plutôt que par discipline.
-/// Recopie les surfaces emises par le build dans le manifeste envoye au bac a sable.
+/// Recopie les surfaces emises par le build dans le manifeste envoye a la sandbox.
 ///
 /// Deux manifestes coexistent et ne disent pas la meme chose. `portaki.module.json` decrit la
 /// navigation du dashboard : ses `hostSurfaces` portent un `pathSegment`, qui est un morceau
 /// d'URL. Le manifeste emis par le build decrit ce que le binaire exporte reellement :
 /// `surfaces.host[].id` vaut `main`, et le symbole associe est `render_host_main`.
 ///
-/// Le bac a sable ne recevait que le premier. Il en deduisait un identifiant de surface egal au
+/// La sandbox ne recevait que le premier. Il en deduisait un identifiant de surface egal au
 /// `pathSegment` — `access-guide` —, le runtime cherchait `render_host_access_guide`, et aucun
 /// module ne l'exporte : les vingt modules qui declarent une surface hote echouaient sur
 /// `wasm_handler_not_found`. La production, elle, marche parce que le dashboard envoie `main`.
@@ -381,7 +381,7 @@ mod tests {
         assert_eq!(stamp_sdk_version(raw, None).unwrap(), raw);
     }
 
-    /// Le bac à sable reçoit le manifeste tamponné, comme la publication.
+    /// La sandbox reçoit le manifeste tamponné, comme la publication.
     ///
     /// Sans ce tampon, `requiresModuleSdk` manquait dans tout module déployé par `portaki dev`,
     /// et l'inspecteur SDUI refusait de typer — pour tous les modules, toujours. Le message
