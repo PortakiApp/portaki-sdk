@@ -17,7 +17,10 @@ pub struct TestArgs {
 
 /// Runs `portaki test`.
 pub fn run(args: TestArgs) -> Result<()> {
-    ui::header("portaki test");
+    ui::header(
+        "portaki test",
+        "Forward to cargo test — the module's own tests, on the host target.",
+    );
 
     let mut cmd = Command::new("cargo");
     cmd.arg("test");

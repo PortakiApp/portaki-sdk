@@ -55,7 +55,10 @@ pub struct PublishArgs {
 
 /// Runs `portaki publish`.
 pub async fn run(args: PublishArgs) -> Result<()> {
-    ui::header("portaki publish");
+    ui::header(
+        "portaki publish",
+        "Push the OCI artifact, then announce it so a catalogue can carry it.",
+    );
 
     let module_root = std::env::current_dir().context("current_dir")?;
     let artifact_dir = args
@@ -95,9 +98,10 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     packing.done("packed the OCI artifact");
 
     if args.dry_run {
-        ui::success("dry run — nothing was pushed");
+        ui::success("dry run — nothing was pushed, nothing was announced");
         ui::field("artifact", artifact_dir.display());
         ui::field("registry", &args.registry);
+        ui::detail("drop --dry-run to push these layers and announce the version");
         ui::blank();
         return Ok(());
     }
@@ -161,7 +165,12 @@ async fn announce(
         Outcome::Published => {
             announcing.done(format!("announced to the registry on {}", args.channel));
             ui::field("module", format!("{} {}", coords.id, coords.version));
+            ui::field("channel", &args.channel);
             ui::field("digest", &pushed.digest);
+            ui::detail(
+                "publications are immutable — shipping a change means a new version, never a \
+                 re-push of this one",
+            );
             ui::blank();
             Ok(())
         }
@@ -172,6 +181,7 @@ async fn announce(
                 "already in the registry ({} {})",
                 coords.id, coords.version
             ));
+            ui::detail("nothing to do — a replayed job lands here, and that is fine");
             ui::blank();
             Ok(())
         }

@@ -48,7 +48,10 @@ pub struct DevArgs {
 
 /// Runs `portaki dev`.
 pub async fn run(args: DevArgs) -> Result<()> {
-    ui::header("portaki dev");
+    ui::header(
+        "portaki dev",
+        "Runs against the real host in the hosted sandbox — not a local mock.",
+    );
 
     let module_root = std::env::current_dir().context("current_dir")?;
     let mut token = crate::auth::access_token()?;
@@ -73,11 +76,20 @@ pub async fn run(args: DevArgs) -> Result<()> {
 
     let src = module_root.join("src");
     let manifest = module_root.join(MANIFEST);
-    ui::blank();
-    ui::detail(format!(
-        "watching {} and {MANIFEST} — save to rebuild, ctrl-c to stop",
-        src.display()
-    ));
+    ui::list(
+        "watching",
+        &[
+            (
+                &src.display().to_string(),
+                "every save rebuilds, redeploys and dispatches again",
+            ),
+            (
+                MANIFEST,
+                "surfaces and permissions take effect without touching a .rs file",
+            ),
+        ],
+    );
+    ui::detail("a build that fails does not stop the loop — fix and save again");
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |event| {
@@ -315,6 +327,9 @@ async fn dispatch(
 
 /// Prints what the run did — and what the sandbox refused to do.
 fn print_trace(trace: &DispatchResponse) {
+    if !trace.host_calls.is_empty() || !trace.captured_effects.is_empty() {
+        ui::detail("what the run asked the host for:");
+    }
     for call in &trace.host_calls {
         let outcome = if call.error_code.is_empty() {
             String::new()
@@ -331,6 +346,11 @@ fn print_trace(trace: &DispatchResponse) {
     }
     for event in &trace.published_events {
         ui::detail(format!("would publish  {event}"));
+    }
+    // « captured » et « would publish » se ressemblent assez pour qu'on les prenne pour des
+    // choses faites. Elles ne le sont pas : le bac à sable les note et les retient.
+    if !trace.captured_effects.is_empty() || !trace.published_events.is_empty() {
+        ui::detail("captured and would-publish lines were held, not performed");
     }
     if !trace.result_json.is_empty() {
         ui::result(&trace.result_json);

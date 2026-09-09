@@ -31,7 +31,10 @@ pub struct BuildArgs {
 /// Runs `portaki build`.
 pub async fn run(args: BuildArgs) -> Result<()> {
     if !args.nested {
-        ui::header("portaki build");
+        ui::header(
+            "portaki build",
+            "Compile to wasm32, then turn the SDK's emissions into what the host reads.",
+        );
     }
     let started = std::time::Instant::now();
 
@@ -125,7 +128,16 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     ui::blank();
     ui::detail(format!("built in {}", ui::elapsed(started.elapsed())));
     if !args.nested {
-        ui::next(&["portaki lint", "portaki dev --watch"]);
+        ui::next(&[
+            (
+                "portaki lint",
+                "check capability ids, connector bindings and i18n keys",
+            ),
+            (
+                "portaki dev --watch",
+                "deploy to the sandbox and see what a run does",
+            ),
+        ]);
         ui::blank();
     }
     Ok(())
