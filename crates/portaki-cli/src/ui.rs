@@ -165,10 +165,12 @@ pub fn code_block(code: &str) {
 
 /// L'échec, en dernier mot du processus : le message, puis la chaîne des causes.
 ///
+/// Sans ligne vide devant : ce qui précède en a déjà posé une — l'en-tête de la commande, le
+/// résultat de l'étape qui vient d'échouer, ou le bloc de sortie capturée de l'outil piloté.
+///
 /// `anyhow` empile le contexte du plus proche de l'appelant au plus profond. Déplié plutôt
 /// qu'affiché en `{:#}`, on lit d'abord ce qui a échoué, puis pourquoi.
 pub fn report(failure: &anyhow::Error) {
-    blank();
     eprintln!("{MARGIN}{} {failure}", style(CROSS).red().bold());
     for cause in failure.chain().skip(1) {
         eprintln!(
@@ -222,7 +224,7 @@ impl Step {
     pub fn done(&self, message: impl Display) {
         let elapsed = self.close();
         println!(
-            "{MARGIN}{} {message} {}",
+            "{MARGIN}{} {message}  {}",
             style(TICK).green().bold(),
             style(elapsed).dim()
         );
@@ -234,10 +236,12 @@ impl Step {
         skipped(message);
     }
 
-    /// Clôt l'étape sur un échec. L'erreur elle-même est rendue par [`report`].
-    pub fn fail(&self, message: impl Display) {
+    /// Abandonne l'étape sans rien dire.
+    ///
+    /// Le pourquoi est déjà dans l'erreur qui remonte, et [`report`] l'écrira en fin de course.
+    /// Une ligne d'échec ici la répéterait à un mot près — deux croix pour un seul problème.
+    pub fn abandon(&self) {
         self.close();
-        eprintln!("{MARGIN}{} {message}", style(CROSS).red().bold());
     }
 
     fn close(&self) -> String {
@@ -257,7 +261,7 @@ pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
     if verbose() {
         let status = cmd.status().with_context(|| format!("run {label}"))?;
         if !status.success() {
-            step.fail(label);
+            step.abandon();
             bail!("{label} failed");
         }
         step.done(label);
@@ -266,7 +270,7 @@ pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
 
     let output = cmd.output().with_context(|| format!("run {label}"))?;
     if !output.status.success() {
-        step.fail(label);
+        step.abandon();
         emit_captured(&output.stderr);
         emit_captured(&output.stdout);
         bail!("{label} failed");
@@ -282,7 +286,6 @@ fn emit_captured(bytes: &[u8]) {
     if text.is_empty() {
         return;
     }
-    blank();
     for line in text.lines() {
         eprintln!("{MARGIN}  {line}");
     }

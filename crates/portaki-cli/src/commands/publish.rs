@@ -106,7 +106,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     let pushed = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
         .await
         .map_err(|failure| {
-            pushing.fail(format!("could not push to {}", args.registry));
+            pushing.abandon();
             failure
         })
         .context("push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io")?;
@@ -176,7 +176,7 @@ async fn announce(
             Ok(())
         }
         Outcome::Unauthorized => {
-            announcing.fail("the registry refused the token");
+            announcing.abandon();
             anyhow::bail!(
                 "the registry refused the token — run portaki login, or replay the job if the \
              publication credential had already been used. \
@@ -188,7 +188,7 @@ async fn announce(
             code,
             message,
         } => {
-            announcing.fail(format!("the registry refused the publication ({code})"));
+            announcing.abandon();
             anyhow::bail!(
                 "the registry refused the publication ({status} {code}): {message}. \
                  The artifact is on GHCR: fix and replay with portaki publish --skip-build"

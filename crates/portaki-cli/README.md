@@ -60,6 +60,25 @@ rustup target add wasm32-unknown-unknown
 | `portaki inspect` | Inspect a published OCI artifact |
 | `portaki docs` / `dev` | Docs helper / local mock gateway (evolves with the SDK) |
 
+## Output
+
+Every command writes the same way: one step per line, a spinner while it runs, the elapsed time
+once it is done. The tools the CLI drives (`cargo build`, `cargo test`) stay quiet unless they
+fail — then their whole output surfaces, because that is what you were looking for.
+
+| Flag | Effect |
+|------|--------|
+| `--no-color` | Plain text, no colour and no spinners |
+| `-v`, `--verbose` | Stream the raw output of the tools the CLI drives |
+
+Colour and animation turn themselves off when the output is not a terminal, and `NO_COLOR` is
+honoured. `portaki catalog` and `portaki inspect` write nothing but their JSON to stdout, so
+they stay pipeable into `jq`.
+
+`portaki login` opens the browser on the verification URL — pre-filled with the code when the
+platform returns one, so there is nothing left to paste. The code is printed either way; use
+`--no-browser` over SSH or on a headless box.
+
 ## Typical workflow
 
 ```bash

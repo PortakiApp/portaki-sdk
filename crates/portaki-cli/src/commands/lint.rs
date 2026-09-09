@@ -44,13 +44,13 @@ pub fn run(args: LintArgs) -> Result<()> {
         reading.done("read the SDK emissions (no build output yet)");
         manifest
     } else {
-        reading.fail("nothing to lint");
+        reading.abandon();
         anyhow::bail!("no manifest or emissions found — run portaki build first");
     };
 
     let checking = ui::step("checking capability ids, connector bindings, and i18n keys");
     validate_manifest(&manifest, &module_root.join("i18n")).map_err(|failure| {
-        checking.fail("the manifest did not pass");
+        checking.abandon();
         failure
     })?;
     checking.done(format!("{} passes", manifest.id));
