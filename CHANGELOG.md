@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.1.1...v2.2.0) (2026-09-09)
+
+
+### Features
+
+* **cli:** `portaki login` annonce la machine qui demande ([b0d5cc0](https://github.com/PortakiApp/portaki-sdk/commit/b0d5cc09afc844e321ab759944af918ef8d30554))
+* **cli:** annoncer la publication au registre ([a7715d8](https://github.com/PortakiApp/portaki-sdk/commit/a7715d80783b223aacef99bdd9f28621c2c6cb0b))
+* **cli:** annoncer une version deja sur GHCR ([90cd7b8](https://github.com/PortakiApp/portaki-sdk/commit/90cd7b8d2598fee4f8750fd6be6511b9bff071d5))
+* **cli:** demander un scope par geste, pas un fourre-tout ([6374b58](https://github.com/PortakiApp/portaki-sdk/commit/6374b58463e67cc78b022e4f3fcf4e2be709261f))
+* **cli:** dire ce que fait chaque commande ([25dc59c](https://github.com/PortakiApp/portaki-sdk/commit/25dc59c1e01184166d8142f942f1d6d783d1adf6))
+* **cli:** portaki dev builds, deploys and shows the run ([ec4cdce](https://github.com/PortakiApp/portaki-sdk/commit/ec4cdce2de0a71e1870ee9d44e2ebdd93c140eaa))
+* **cli:** portaki login stores the token in the system keychain ([28c83aa](https://github.com/PortakiApp/portaki-sdk/commit/28c83aaeefa4f145bbdf599828ecf3d204062344))
+* **cli:** publier depuis une CI sans secret ([23615f2](https://github.com/PortakiApp/portaki-sdk/commit/23615f26f133244853bf39c50e84093ab46cf406))
+* **cli:** ranger les identifiants dans un fichier ([212d08a](https://github.com/PortakiApp/portaki-sdk/commit/212d08ad461c18ba133de73df25d1f2989bcb06b))
+* **cli:** repondre « laquelle ? » au lieu de refuser ([78d3afa](https://github.com/PortakiApp/portaki-sdk/commit/78d3afa7557ca6028f98a347a5949b3039e3655e))
+* **cli:** tamponner la version SDK liee au build ([08ec4bd](https://github.com/PortakiApp/portaki-sdk/commit/08ec4bd95ca8454ef6df99594a742b717fba2747))
+* **cli:** un logo, et ce qui protege le projet ([51b3f43](https://github.com/PortakiApp/portaki-sdk/commit/51b3f43ac749698c23e7f16d7f4aa82d814a6ca5))
+* **connectors:** add OpenAgenda nearby events client ([ab53d1f](https://github.com/PortakiApp/portaki-sdk/commit/ab53d1f9c2a1f66170905c86a012f1fd47fcd123))
+* **context:** expose stay booking_channel to modules ([3ac7d48](https://github.com/PortakiApp/portaki-sdk/commit/3ac7d4816740a87da607eaec0dbcd38f42c3fc78))
+* **contracts:** add booking channel vocabulary ([6e84543](https://github.com/PortakiApp/portaki-sdk/commit/6e845434dc761e912bb0ba747f05eaa245495da2))
+* **contracts:** add shared StayImportRow shape ([c695a53](https://github.com/PortakiApp/portaki-sdk/commit/c695a539749830d7785e9328f6d7ac1bfe86c4f8))
+* **host:** add host::notify + core.host.notifications capability ([a3b8715](https://github.com/PortakiApp/portaki-sdk/commit/a3b87157cc14acde7553892b2049589f9045743e))
+* **schema:** add maturity and sortOrder fields ([411e626](https://github.com/PortakiApp/portaki-sdk/commit/411e62640a08cb2c6b2567ffed41b2bfbaa7eb87))
+* **schema:** declare module permissions, rename SDK field ([f588b92](https://github.com/PortakiApp/portaki-sdk/commit/f588b92010e005dc2edf527ae8cc4c102cfee82b))
+* **sdui:** add optional blurHash to Image ([5c4ce59](https://github.com/PortakiApp/portaki-sdk/commit/5c4ce598137e840390413ab710c95cec36717b0b))
+
+
+### Bug Fixes
+
+* **cli:** --watch surveille aussi le manifeste ([0d5aaaf](https://github.com/PortakiApp/portaki-sdk/commit/0d5aaaf3023e146bc6a314db09c2ac3e9db24743))
+* **cli:** lire les reponses de devapi en camelCase ([54eba86](https://github.com/PortakiApp/portaki-sdk/commit/54eba86def30353ac87fd2d293ae9906eca9623a))
+* **cli:** portaki dev ignorait PORTAKI_API_URL ([85fe671](https://github.com/PortakiApp/portaki-sdk/commit/85fe671a2575f402aa098f2afa2670c6eadbeb48))
+* **cli:** portaki dev sur un module au nom composé ([c23f144](https://github.com/PortakiApp/portaki-sdk/commit/c23f144bdfae182dfeae728b417821bbfb91948b))
+* **cli:** portaki dev tamponne la version du SDK ([505ab78](https://github.com/PortakiApp/portaki-sdk/commit/505ab7885329df7a7c3731b18b3574910cebbf66))
+* **cli:** portaki nu ouvre l'aide, pas une croix ([b8f84cb](https://github.com/PortakiApp/portaki-sdk/commit/b8f84cb046e893d2a82922714cb8bc86b232048b))
+* **cli:** read the platform envelope, renew on 401 ([f00bbcc](https://github.com/PortakiApp/portaki-sdk/commit/f00bbcc334c196cf58cc78a3dbb7cdc54ae8dd20))
+* **cli:** une seule croix par echec ([f730c79](https://github.com/PortakiApp/portaki-sdk/commit/f730c79f48106837fa46b1f04c51303a9331b1ef))
+* **deps:** update rust crate extism-pdk to 1.4.1 ([440ca31](https://github.com/PortakiApp/portaki-sdk/commit/440ca31322af04242dc0fe13e2bf290b7cb9004e))
+* **deps:** update rust crate inventory to 0.3.24 ([706e9ec](https://github.com/PortakiApp/portaki-sdk/commit/706e9eccd83c705b4d2088d23bef17609e2f8c84))
+* **deps:** update rust crate proc-macro2 to 1.0.107 ([8961164](https://github.com/PortakiApp/portaki-sdk/commit/896116410758a7c8e56f8bc7eeb3f65f7e3cb196))
+* **deps:** update rust crate quote to 1.0.47 ([e07b7f8](https://github.com/PortakiApp/portaki-sdk/commit/e07b7f8637bc29f74433b01a443d27e98035b7f5))
+* **deps:** update rust crate syn to 2.0.119 ([d0c2e85](https://github.com/PortakiApp/portaki-sdk/commit/d0c2e850747936619a48e46f885f50d230c25d0e))
+
 ## [Unreleased]
 
 ### Features
