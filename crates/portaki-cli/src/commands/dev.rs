@@ -23,7 +23,8 @@ pub struct DevArgs {
     #[arg(long)]
     pub watch: bool,
 
-    /// Base URL of the dev platform. Defaults to PORTAKI_DEV_URL, then production.
+    /// Base URL of the dev platform. Defaults to PORTAKI_DEV_URL, then PORTAKI_API_URL,
+    /// then production.
     #[arg(long)]
     pub url: Option<String>,
 
@@ -317,14 +318,35 @@ async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) 
     serde_json::from_str(&body).with_context(|| format!("unexpected answer: {body}"))
 }
 
-/// `--url`, then `PORTAKI_DEV_URL`, then production.
+/// `--url`, then `PORTAKI_DEV_URL`, then `PORTAKI_API_URL`, then production.
 fn base_url(args: &DevArgs) -> String {
-    let raw = args
-        .url
-        .clone()
-        .or_else(|| std::env::var("PORTAKI_DEV_URL").ok())
-        .unwrap_or_else(|| "https://api.portaki.app".to_string());
-    raw.trim_end_matches('/').to_string()
+    resolve_base_url(
+        args.url.as_deref(),
+        std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
+        std::env::var("PORTAKI_API_URL").ok().as_deref(),
+    )
+}
+
+/// The precedence itself, free of the environment so it can be tested without touching it.
+///
+/// `PORTAKI_API_URL` is the variable `login` and `publish` read. Pointing at a staging platform
+/// is a per-shell decision that applies to all three, and honouring it in only two sent `dev` to
+/// production with a token minted elsewhere — a DNS failure at best, the wrong platform at
+/// worst. `PORTAKI_DEV_URL` still wins, for the rarer case of a sandbox that lives apart.
+///
+/// An exported-but-empty variable means "unset", not "use the empty string as a URL".
+fn resolve_base_url(
+    explicit: Option<&str>,
+    dev_var: Option<&str>,
+    api_var: Option<&str>,
+) -> String {
+    let candidate = [explicit, dev_var, api_var]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .unwrap_or("https://api.portaki.app");
+    candidate.trim_end_matches('/').to_string()
 }
 
 fn read_module_id(module_root: &Path) -> Result<String> {
@@ -353,6 +375,8 @@ fn short(digest: &str) -> String {
 mod tests {
     use super::*;
 
+    const PROD: &str = "https://api.portaki.app";
+
     /// Valeur obtenue par `printf '\0asm' | shasum -a 256`, pas recopiée de la sortie du test.
     #[test]
     fn a_digest_is_computed_on_the_bytes() {
@@ -377,5 +401,53 @@ mod tests {
         .unwrap();
 
         assert_eq!(read_module_id(dir.path()).unwrap(), "nuki");
+    }
+
+    /// `PORTAKI_API_URL` est la variable que lisent `login` et `publish`. `dev` l'ignorait, et
+    /// partait en production avec un jeton émis ailleurs.
+    #[test]
+    fn falls_back_to_the_shared_api_variable() {
+        assert_eq!(
+            resolve_base_url(None, None, Some("https://api-staging.portaki.app")),
+            "https://api-staging.portaki.app"
+        );
+    }
+
+    /// Le bac à sable peut vivre à part : sa variable dédiée reste prioritaire.
+    #[test]
+    fn prefers_the_dedicated_variable() {
+        assert_eq!(
+            resolve_base_url(
+                None,
+                Some("https://sandbox.example"),
+                Some("https://api.example")
+            ),
+            "https://sandbox.example"
+        );
+    }
+
+    /// `--url` l'emporte sur tout, et la barre finale ne double jamais celle du chemin.
+    #[test]
+    fn prefers_the_flag_and_trims_the_trailing_slash() {
+        assert_eq!(
+            resolve_base_url(
+                Some("https://explicit.example/"),
+                Some("https://ignored.example"),
+                None
+            ),
+            "https://explicit.example"
+        );
+    }
+
+    /// Une variable exportée vide vaut « non définie », pas « URL vide ».
+    #[test]
+    fn ignores_empty_and_blank_variables() {
+        assert_eq!(resolve_base_url(None, Some(""), Some("   ")), PROD);
+        assert_eq!(resolve_base_url(Some(""), None, None), PROD);
+    }
+
+    #[test]
+    fn falls_back_to_production_when_nothing_is_set() {
+        assert_eq!(resolve_base_url(None, None, None), PROD);
     }
 }
