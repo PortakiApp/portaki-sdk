@@ -22,7 +22,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::commands::build::{self, BuildArgs};
-use crate::{auth, oci, oidc};
+use crate::{auth, oci, oidc, ui};
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki publish`.
@@ -55,6 +55,8 @@ pub struct PublishArgs {
 
 /// Runs `portaki publish`.
 pub async fn run(args: PublishArgs) -> Result<()> {
+    ui::header("portaki publish");
+
     let module_root = std::env::current_dir().context("current_dir")?;
     let artifact_dir = args
         .artifact_dir
@@ -66,39 +68,55 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     // aucun risque d'écraser un artefact par un build local qui aurait dérivé.
     if args.announce_only {
         let coords = oci::pack::read_source_coordinates(&module_root)?;
+        let looking = ui::step("looking up the pushed artifact");
         let pushed = oci::resolve_pushed_artifact(&module_root, &args.registry).await?;
-        println!("Found {} ({})", pushed.image_ref, pushed.digest);
+        looking.done("found the artifact on the registry");
+        ui::field("image", &pushed.image_ref);
+        ui::field("digest", &pushed.digest);
         return announce(&args, &coords, &pushed).await;
     }
 
-    if !args.skip_build {
+    if args.skip_build {
+        ui::skipped("build skipped (--skip-build)");
+    } else {
         build::run(BuildArgs {
             release: true,
             manifest_only: false,
+            nested: true,
         })
         .await
         .context("portaki build --release before publish")?;
+        ui::blank();
     }
 
+    let packing = ui::step("packing the OCI artifact");
     oci::package_artifact_with_root(&module_root, &artifact_dir).context("package OCI artifact")?;
     assert_publish_version_matches_env(&module_root, &artifact_dir)?;
+    packing.done("packed the OCI artifact");
 
     if args.dry_run {
-        println!(
-            "Dry-run: artifact ready at {} (registry: {})",
-            artifact_dir.display(),
-            args.registry
-        );
+        ui::success("dry run — nothing was pushed");
+        ui::field("artifact", artifact_dir.display());
+        ui::field("registry", &args.registry);
+        ui::blank();
         return Ok(());
     }
 
+    let pushing = ui::step(format!("pushing to {}", args.registry));
     let pushed = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
         .await
+        .map_err(|failure| {
+            pushing.fail(format!("could not push to {}", args.registry));
+            failure
+        })
         .context("push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io")?;
-    println!("Pushed to {} ({})", args.registry, pushed.manifest_url);
+    pushing.done(format!("pushed to {}", args.registry));
+    ui::field("manifest", &pushed.manifest_url);
 
     if args.no_announce {
-        println!("Skipped the registry announcement — this version is in no catalogue.");
+        ui::warn("skipped the registry announcement — this version is in no catalogue");
+        ui::detail("drop --no-announce, or replay with portaki publish --announce-only");
+        ui::blank();
         return Ok(());
     }
 
@@ -116,6 +134,7 @@ async fn announce(
     pushed: &oci::PushedArtifact,
 ) -> Result<()> {
     let base = auth::api_base_url(args.url.as_deref());
+    let announcing = ui::step(format!("announcing {} to the registry", args.channel));
     let body = serde_json::json!({
         "moduleId": coords.id,
         "version": coords.version,
@@ -140,31 +159,41 @@ async fn announce(
 
     match outcome {
         Outcome::Published => {
-            println!(
-                "Announced to the registry ({} @ {})",
-                args.channel, pushed.digest
-            );
+            announcing.done(format!("announced to the registry on {}", args.channel));
+            ui::field("module", format!("{} {}", coords.id, coords.version));
+            ui::field("digest", &pushed.digest);
+            ui::blank();
             Ok(())
         }
         Outcome::AlreadyPublished => {
             // Rejouer une publication n'est pas une erreur d'opérateur : c'est le cas normal
             // d'une CI relancée. Le catalogue porte déjà cette version, il n'y a rien à faire.
-            println!("Already in the registry ({} {})", coords.id, coords.version);
+            announcing.skip(format!(
+                "already in the registry ({} {})",
+                coords.id, coords.version
+            ));
+            ui::blank();
             Ok(())
         }
-        Outcome::Unauthorized => anyhow::bail!(
-            "the registry refused the token — run portaki login, or replay the job if the \
+        Outcome::Unauthorized => {
+            announcing.fail("the registry refused the token");
+            anyhow::bail!(
+                "the registry refused the token — run portaki login, or replay the job if the \
              publication credential had already been used. \
              The artifact is on GHCR: replay with portaki publish --skip-build"
-        ),
+            )
+        }
         Outcome::Refused {
             status,
             code,
             message,
-        } => anyhow::bail!(
-            "the registry refused the publication ({status} {code}): {message}. \
-             The artifact is on GHCR: fix and replay with portaki publish --skip-build"
-        ),
+        } => {
+            announcing.fail(format!("the registry refused the publication ({code})"));
+            anyhow::bail!(
+                "the registry refused the publication ({status} {code}): {message}. \
+                 The artifact is on GHCR: fix and replay with portaki publish --skip-build"
+            )
+        }
     }
 }
 

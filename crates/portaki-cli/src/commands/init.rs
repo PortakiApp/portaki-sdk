@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
 
+use crate::ui;
+
 #[derive(Debug, Clone, ValueEnum)]
 /// Template kind for `portaki init`.
 pub enum InitTemplate {
@@ -30,6 +32,8 @@ pub struct InitArgs {
 
 /// Runs `portaki init`.
 pub fn run(args: InitArgs) -> Result<()> {
+    ui::header("portaki init");
+
     let dest = args
         .path
         .clone()
@@ -51,10 +55,28 @@ pub fn run(args: InitArgs) -> Result<()> {
         );
     }
 
+    let scaffolding = ui::step(format!(
+        "scaffolding {} from the {} template",
+        args.name,
+        label(&args.template)
+    ));
     copy_template(&template_dir, &dest, &args.name)?;
-    println!("Created module at {}", dest.display());
-    println!("Next: cd {} && portaki build", dest.display());
+    scaffolding.done(format!("created {}", dest.display()));
+
+    ui::next(&[
+        &format!("cd {}", dest.display()),
+        "portaki build",
+        "portaki dev --watch",
+    ]);
+    ui::blank();
     Ok(())
+}
+
+fn label(template: &InitTemplate) -> &'static str {
+    match template {
+        InitTemplate::Default => "default",
+        InitTemplate::Empty => "empty",
+    }
 }
 
 fn template_root() -> PathBuf {
