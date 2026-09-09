@@ -79,6 +79,11 @@ rustup target add wasm32-unknown-unknown
 cargo install --git https://github.com/PortakiApp/portaki-sdk --branch main --locked portaki-cli
 ```
 
+Working **on** the CLI rather than with it? Install from the checkout with
+`./scripts/install-cli.sh`: it also signs the binary, which is what stops macOS asking for your
+keychain password after every rebuild — see
+[docs/cli-keychain-macos.md](docs/cli-keychain-macos.md).
+
 ## Quick start
 
 ```bash
