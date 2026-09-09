@@ -52,23 +52,28 @@ fn attended() -> bool {
     console::user_attended() && !verbose()
 }
 
-/// Le logo, en cinq lignes de blocs.
+/// Le logo, en bas de casse comme la marque.
 ///
 /// Écrit ici plutôt que généré : une police de blocs se lit à l'œil, pas à l'exécution, et un
 /// générateur ferait dépendre l'identité de la marque d'une dépendance de plus.
-const LOGO: [&str; 5] = [
-    "██████   ██████  ██████  ████████  █████  ██   ██ ██",
-    "██   ██ ██    ██ ██   ██    ██    ██   ██ ██  ██  ██",
-    "██████  ██    ██ ██████     ██    ███████ █████   ██",
-    "██      ██    ██ ██   ██    ██    ██   ██ ██  ██  ██",
-    "██       ██████  ██   ██    ██    ██   ██ ██   ██ ██",
+const LOGO: [&str; 7] = [
+    "                              ██                          ██",
+    "                              ██              ██",
+    "██████      ████    ██  ████  ██████  ██████    ██    ████  ██",
+    "██    ██  ██    ██  ████        ██        ████  ██  ████    ██",
+    "██    ██  ██    ██  ██          ██    ████████  ██████      ██",
+    "██████      ████    ██          ████    ██████  ██    ████  ██",
+    "██",
 ];
 
-/// Le dégradé du logo, du cyan clair au bleu — une couleur par ligne.
+/// La ligne sur laquelle le point de la marque se pose — la ligne de base.
+const DOT_ROW: usize = 5;
+
+/// L'orange du point, seule couleur du logo.
 ///
-/// En 256 couleurs : la palette de base n'a pas assez de bleus pour un dégradé, et un terminal
-/// qui ne les gère pas verra le texte nu, jamais des codes en clair.
-const LOGO_RAMP: [u8; 5] = [51, 45, 39, 33, 27];
+/// Le mot, lui, garde la couleur d'avant-plan du terminal : un blanc écrit en dur disparaîtrait
+/// sur un thème clair, alors que la marque veut seulement « la couleur du texte ».
+const DOT_SHADE: u8 = 214;
 
 /// Le logo peint, prêt à être posé en tête d'un écran d'aide.
 ///
@@ -76,11 +81,16 @@ const LOGO_RAMP: [u8; 5] = [51, 45, 39, 33, 27];
 /// texte sert à `--version`.
 pub fn banner() -> String {
     let mut out = String::from("\n");
-    for (row, shade) in LOGO.iter().zip(LOGO_RAMP) {
-        out.push_str(&format!(
-            "{MARGIN}{}\n",
-            Style::new().color256(shade).apply_to(row)
-        ));
+    for (row, line) in LOGO.iter().enumerate() {
+        let word = style(line).bold();
+        if row == DOT_ROW {
+            out.push_str(&format!(
+                "{MARGIN}{word}  {}\n",
+                Style::new().color256(DOT_SHADE).apply_to("██")
+            ));
+        } else {
+            out.push_str(&format!("{MARGIN}{word}\n"));
+        }
     }
     out.push_str(&format!(
         "{MARGIN}{}\n",
@@ -559,13 +569,12 @@ mod tests {
         assert!(footer.contains(env!("CARGO_PKG_HOMEPAGE")));
     }
 
-    /// Le logo est rectangulaire : une ligne plus courte que les autres se voit tout de suite.
+    /// Le point de la marque est la seule couleur du logo, et il se pose sur la ligne de base.
     #[test]
-    fn every_logo_row_is_the_same_width() {
-        let width = LOGO[0].chars().count();
-
-        assert!(LOGO.iter().all(|row| row.chars().count() == width));
-        assert_eq!(LOGO.len(), LOGO_RAMP.len());
+    fn the_wordmark_carries_its_dot() {
+        assert!(DOT_ROW < LOGO.len());
+        assert!(banner().contains("the module toolchain"));
+        assert_eq!(LOGO.len(), 7);
     }
 
     #[test]
