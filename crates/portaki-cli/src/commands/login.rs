@@ -16,6 +16,14 @@ const CLIENT_ID: &str = "portaki-cli";
 /// What the CLI may ask for. Narrowed server-side to what this client is allowed.
 const SCOPES: [&str; 2] = ["modules:read", "modules:write"];
 
+/// This binary's version, and the SDK it was built against.
+///
+/// Sent with the device code request so the approval screen can show which build is asking.
+/// The two travel separately because they can differ: a machine may run an old `portaki`
+/// against a freshly published SDK, and the person approving should see both numbers.
+const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const SDK_VERSION: &str = portaki_sdk::VERSION;
+
 #[derive(Debug, Parser)]
 /// Arguments for `portaki login`.
 pub struct LoginArgs {
@@ -63,9 +71,18 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     let client = reqwest::Client::new();
 
     let asking = ui::step("asking the platform for a code");
+    // What this machine says about itself. None of it proves anything — a hostile client would
+    // lie — but the approval screen has nothing else to show, and a developer recognises their
+    // own machine name at a glance. Absent fields simply render as unknown.
     let response = client
         .post(format!("{base}/api/v1/auth/device/code"))
-        .json(&serde_json::json!({ "clientId": CLIENT_ID, "scopes": SCOPES }))
+        .json(&serde_json::json!({
+            "clientId": CLIENT_ID,
+            "scopes": SCOPES,
+            "deviceLabel": device_label(),
+            "clientVersion": CLIENT_VERSION,
+            "sdkVersion": SDK_VERSION,
+        }))
         .send()
         .await
         .map_err(|failure| {
@@ -201,6 +218,36 @@ fn base_url(explicit: Option<&str>) -> String {
     auth::api_base_url(explicit)
 }
 
+/// This machine's name, the way its owner would recognise it.
+///
+/// No dependency for it: `COMPUTERNAME` on Windows, the `hostname` binary everywhere else, then
+/// the environment as a last resort — zsh exports `HOST`, bash exports `HOSTNAME`, and neither
+/// is guaranteed. Returning `None` is a normal outcome, not a failure: the approval screen shows
+/// one fewer line and login proceeds.
+fn device_label() -> Option<String> {
+    if let Ok(name) = std::env::var("COMPUTERNAME") {
+        if let Some(name) = non_empty(name) {
+            return Some(name);
+        }
+    }
+    if let Ok(output) = std::process::Command::new("hostname").output() {
+        if output.status.success() {
+            if let Some(name) = non_empty(String::from_utf8_lossy(&output.stdout).into_owned()) {
+                return Some(name);
+            }
+        }
+    }
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("HOST"))
+        .ok()
+        .and_then(non_empty)
+}
+
+fn non_empty(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +257,36 @@ mod tests {
         // Un jeton de CLI ne fait pas d'opérations hôte ; le serveur le raboterait de toute
         // façon, mais le demander serait déjà une intention de trop.
         assert!(!SCOPES.contains(&"host"));
+    }
+
+    /// A hostname reaches an approval screen, so it must never arrive as a raw command output —
+    /// `hostname` ends its line with a newline, and a trailing one would render as a blank row.
+    #[test]
+    fn a_device_label_is_trimmed_or_absent() {
+        assert_eq!(
+            non_empty("  my-laptop.local\n".to_owned()).as_deref(),
+            Some("my-laptop.local")
+        );
+        assert_eq!(non_empty("   ".to_owned()), None);
+        assert_eq!(non_empty(String::new()), None);
+    }
+
+    /// Nothing about login depends on knowing the machine name; it only makes the screen poorer.
+    #[test]
+    fn a_missing_device_label_is_not_an_error() {
+        let label = device_label();
+
+        assert!(label
+            .as_deref()
+            .map(str::trim)
+            .map(|l| !l.is_empty())
+            .unwrap_or(true));
+    }
+
+    #[test]
+    fn the_versions_announced_are_the_ones_compiled_in() {
+        assert!(!CLIENT_VERSION.is_empty());
+        assert_eq!(SDK_VERSION, portaki_sdk::VERSION);
     }
 
     #[test]

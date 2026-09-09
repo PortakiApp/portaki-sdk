@@ -58,6 +58,13 @@ pub mod sdui;
 
 pub mod wasm;
 
+/// The version of this SDK, as compiled into the crate.
+///
+/// Tooling reports it alongside its own version so a developer can see, from the
+/// outside, which SDK a build was produced against — the CLI and the SDK are
+/// released together but a module crate may pin an older one.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Re-export for `inventory::submit!` in wasm handler registration (macro-generated).
 ///
 /// Module authors do not call this directly — `query!` / `command!` / `surface!`
