@@ -266,9 +266,21 @@ pub fn layers_to_image_layers(layers: &[PushLayer]) -> Result<Vec<ImageLayer>> {
     Ok(image_layers)
 }
 
-fn find_wasm_artifact(module_root: &Path, module_id: &str) -> Result<PathBuf> {
+/// Locates the wasm cargo just built for `module_id`.
+///
+/// Cargo names a library artifact after the *target*, not the package: `access-guide`
+/// produces `access_guide.wasm`. Only hyphenated module ids differ, which is why this went
+/// unnoticed — every single-word module resolves on the first candidate.
+///
+/// Shared with `commands::dev`, deliberately: the two paths diverged, `publish` grew a
+/// directory scan that saved it and `dev` did not, so the same module built and deployed
+/// from CI while failing on the author's machine.
+pub(crate) fn find_wasm_artifact(module_root: &Path, module_id: &str) -> Result<PathBuf> {
     let release_dir = module_root.join("target/wasm32-unknown-unknown/release");
-    let candidates = [release_dir.join(format!("{module_id}.wasm"))];
+    let candidates = [
+        release_dir.join(format!("{module_id}.wasm")),
+        release_dir.join(format!("{}.wasm", module_id.replace('-', "_"))),
+    ];
     for candidate in &candidates {
         if candidate.exists() {
             return Ok(candidate.clone());
@@ -457,6 +469,41 @@ mod tests {
         assert_eq!(layers.len(), 2);
         assert_eq!(layers[0].path, artifact.join(PUBLISH_MANIFEST));
         assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
+    }
+
+    /// Cargo nomme l'artefact d'après la cible : `access-guide` produit `access_guide.wasm`.
+    /// `portaki dev` lisait le nom du paquet tel quel et échouait sur tout module au nom
+    /// composé, alors que `publish` s'en sortait par son balayage de répertoire.
+    #[test]
+    fn find_wasm_artifact_accepts_the_underscored_target_name() {
+        let root = tempdir().unwrap();
+        let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+        fs::write(wasm_dir.join("access_guide.wasm"), b"\0asm").unwrap();
+
+        let found = find_wasm_artifact(root.path(), "access-guide").unwrap();
+        assert_eq!(found, wasm_dir.join("access_guide.wasm"));
+    }
+
+    /// Le nom exact l'emporte sur la normalisation : un répertoire qui porte les deux ne doit
+    /// pas dépendre de l'ordre de lecture.
+    #[test]
+    fn find_wasm_artifact_prefers_the_exact_name() {
+        let root = tempdir().unwrap();
+        let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+        fs::write(wasm_dir.join("access_guide.wasm"), b"\0asm").unwrap();
+        fs::write(wasm_dir.join("access-guide.wasm"), b"\0asm").unwrap();
+
+        let found = find_wasm_artifact(root.path(), "access-guide").unwrap();
+        assert_eq!(found, wasm_dir.join("access-guide.wasm"));
+    }
+
+    #[test]
+    fn find_wasm_artifact_reports_the_directory_when_nothing_was_built() {
+        let root = tempdir().unwrap();
+        let error = find_wasm_artifact(root.path(), "access-guide").unwrap_err();
+        assert!(error.to_string().contains("no wasm artifact"));
     }
 
     #[test]
