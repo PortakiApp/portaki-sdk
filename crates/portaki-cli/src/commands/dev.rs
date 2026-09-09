@@ -162,8 +162,16 @@ async fn cycle(
         return Ok(());
     }
 
-    let manifest =
+    let raw_manifest =
         std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
+    // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
+    // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
+    // graphe résolu par cargo. Sans lui, le bac à sable recevait un manifeste muet et
+    // l'inspecteur refusait de typer — pour tous les modules, toujours.
+    let manifest = crate::oci::pack::stamp_sdk_version(
+        &raw_manifest,
+        crate::oci::pack::resolved_sdk_version(module_root)?,
+    )?;
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
