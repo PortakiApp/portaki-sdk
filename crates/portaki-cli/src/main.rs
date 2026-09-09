@@ -145,7 +145,7 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     use clap::error::ErrorKind;
 
     // `--help` et `--version` ne sont pas des échecs : `clap` les rend lui-même et sort en 0.
-    if !refusal.use_stderr() {
+    if is_a_screen(refusal.kind()) {
         refusal.exit();
     }
 
@@ -194,6 +194,22 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     ui::next(&[(&help, "every flag this command takes")]);
     ui::blank();
     std::process::exit(2);
+}
+
+/// `clap` rend-il un écran plutôt qu'un refus ?
+///
+/// Classé sur le type, et non sur le flux de sortie : `portaki` nu lève
+/// `DisplayHelpOnMissingArgumentOrSubcommand`, que `clap` écrit sur stderr. Pris pour un refus,
+/// son aide passait dans [`headline`], qui en retenait la première ligne — le logo — et
+/// l'affichait derrière une croix.
+fn is_a_screen(kind: clap::error::ErrorKind) -> bool {
+    use clap::error::ErrorKind;
+    matches!(
+        kind,
+        ErrorKind::DisplayHelp
+            | ErrorKind::DisplayVersion
+            | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+    )
 }
 
 /// La première ligne du refus, sans le « error: » que `clap` préfixe — la croix le dit déjà.
@@ -246,6 +262,20 @@ mod tests {
             headline("error: unrecognized subcommand 'buidl'\n\n  tip: ..."),
             "unrecognized subcommand 'buidl'"
         );
+    }
+
+    /// `portaki` nu doit ouvrir l'aide, pas une croix suivie du logo.
+    #[test]
+    fn a_help_screen_is_never_taken_for_a_refusal() {
+        use clap::error::ErrorKind;
+
+        assert!(is_a_screen(
+            ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+        ));
+        assert!(is_a_screen(ErrorKind::DisplayHelp));
+        assert!(is_a_screen(ErrorKind::DisplayVersion));
+        assert!(!is_a_screen(ErrorKind::InvalidSubcommand));
+        assert!(!is_a_screen(ErrorKind::UnknownArgument));
     }
 
     /// Un refus dont on ne saurait rien dire reste un refus : la sortie ne doit pas être vide.
