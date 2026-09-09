@@ -1,0 +1,45 @@
+# Une CVE paraît sans qu'on pousse de commit.
+#
+# La CI ne se déclenchait que sur `push` et `pull_request` : un avis RustSec publié un mardi
+# sur une dépendance qu'on n'a pas touchée depuis six mois n'aurait rien déclenché du tout.
+# D'où le `schedule`, qui est le cœur de ce fichier ; le déclenchement sur PR ne fait que
+# rapprocher le signal du moment où on peut encore l'éviter.
+#
+# Ce dépôt publie sur crates.io : ce qui est vulnérable ici est réinstallé par la CI des
+# modules et par chaque auteur tiers.
+name: security-audit
+
+on:
+  schedule:
+    # 06:20 UTC — décalé de l'heure pile, où la file d'Actions est la plus chargée.
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/*/Cargo.toml"
+      - ".github/workflows/security-audit.yml"
+
+concurrency:
+  group: security-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # L'action ouvre une issue quand elle trouve quelque chose sur le cadencement périodique —
+  # sans ça, la trouvaille reste dans un journal que personne ne relit.
+  issues: write
+  checks: write
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
