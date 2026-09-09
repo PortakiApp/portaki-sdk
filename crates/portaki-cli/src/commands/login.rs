@@ -54,7 +54,10 @@ struct Granted {
 
 /// Runs `portaki login`.
 pub async fn run(args: LoginArgs) -> Result<()> {
-    ui::header("portaki login");
+    ui::header(
+        "portaki login",
+        "Device grant — the code below ties this terminal to your Portaki account.",
+    );
 
     let base = base_url(args.url.as_deref());
     let client = reqwest::Client::new();
@@ -110,7 +113,20 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             if !granted.scopes.is_empty() {
                 ui::field("scopes", granted.scopes.join(" "));
             }
-            ui::next(&["portaki dev --watch"]);
+            ui::detail(
+                "the access token lasts minutes and renews itself — the session lives in the \
+                 keychain until portaki logout",
+            );
+            ui::next(&[
+                (
+                    "portaki dev --watch",
+                    "build, deploy to the sandbox, redeploy on every save",
+                ),
+                (
+                    "portaki publish",
+                    "push a release and announce it to the registry",
+                ),
+            ]);
             ui::blank();
             return Ok(());
         }
@@ -171,7 +187,10 @@ fn present(started: &DeviceCode, no_browser: bool) {
 
 /// Runs `portaki logout`.
 pub fn logout() -> Result<()> {
-    ui::header("portaki logout");
+    ui::header(
+        "portaki logout",
+        "Drop the session from the system keychain.",
+    );
     auth::forget()?;
     ui::success("signed out — credentials cleared from the system keychain");
     ui::blank();

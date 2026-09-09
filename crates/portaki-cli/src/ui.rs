@@ -30,6 +30,12 @@ static ARROW: Emoji<'_, '_> = Emoji("→", "->");
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
+/// Rien n'a encore été écrit depuis l'en-tête.
+///
+/// Une section pose une ligne vide devant elle pour se détacher de ce qui précède. Juste après
+/// l'en-tête, qui en pose déjà une, ça en faisait deux — un trou qui se lit comme un oubli.
+static FRESH: AtomicBool = AtomicBool::new(false);
+
 /// Fixe le mode de rendu pour tout le processus, avant la première ligne écrite.
 pub fn init(no_color: bool, verbose: bool) {
     if no_color {
@@ -54,64 +60,142 @@ pub fn blank() {
     println!();
 }
 
-/// Le titre de la commande, une fois, en tête de sortie.
-pub fn header(command: &str) {
+/// Une ligne de sortie, et la trace qu'il s'en est écrit une.
+///
+/// Toute écriture passe par ici ou par [`eline`] : une seule qui y échappe, et le drapeau ment.
+fn line(text: String) {
+    FRESH.store(false, Ordering::Relaxed);
+    println!("{text}");
+}
+
+/// La même chose sur la sortie d'erreur.
+fn eline(text: String) {
+    FRESH.store(false, Ordering::Relaxed);
+    eprintln!("{text}");
+}
+
+/// Le titre de la commande, et en une ligne ce qu'elle fait.
+///
+/// La ligne de propos n'est pas de la décoration : `build`, `dev` et `publish` ne font pas ce
+/// que leur nom laisse supposer — `dev` ne monte pas de passerelle locale, `publish` ne se
+/// limite pas à pousser. Le dire en tête coûte une ligne et évite de le découvrir autrement.
+pub fn header(command: &str, purpose: &str) {
     blank();
     println!(
         "{MARGIN}{}  {}",
         style(command).bold(),
         style(format!("v{}", env!("CARGO_PKG_VERSION"))).dim()
     );
+    println!("{MARGIN}{}", style(purpose).dim());
     blank();
+    FRESH.store(true, Ordering::Relaxed);
+}
+
+/// La largeur au-delà de laquelle une colonne de noms repousse trop loin les explications.
+const COLUMN_CAP: usize = 32;
+
+/// En deçà, la colonne se serre au point que les deux moitiés se touchent.
+const COLUMN_FLOOR: usize = 16;
+
+/// Un intertitre discret, qui ouvre une liste : « next », « what you got ».
+pub fn section(title: &str) {
+    // Juste après l'en-tête, la ligne vide est déjà là.
+    if !FRESH.swap(false, Ordering::Relaxed) {
+        blank();
+    }
+    line(format!("{MARGIN}{}", style(title).dim()));
+}
+
+/// Une liste sous son intertitre : chaque nom, puis à quoi il sert.
+///
+/// Sans la seconde colonne, une liste de chemins ou de commandes suppose qu'on sache déjà les
+/// lire — c'est-à-dire qu'on n'en ait pas besoin.
+///
+/// La colonne se règle sur le groupe, pas sur une constante : une liste de chemins courts se
+/// serre, une liste de commandes longues respire. Passé [`COLUMN_CAP`], l'explication passe à la
+/// ligne plutôt que de partir chercher le bord droit du terminal.
+pub fn list(title: &str, rows: &[(&str, &str)]) {
+    section(title);
+
+    match column_width(rows) {
+        Some(width) => {
+            for (name, purpose) in rows {
+                let padding = " ".repeat(width - name.chars().count());
+                line(format!(
+                    "{MARGIN}  {}{padding}  {}",
+                    style(name).cyan(),
+                    style(purpose).dim()
+                ));
+            }
+        }
+        None => {
+            for (name, purpose) in rows {
+                line(format!("{MARGIN}  {}", style(name).cyan()));
+                line(format!("{MARGIN}    {}", style(purpose).dim()));
+            }
+        }
+    }
+}
+
+/// La largeur de la colonne de gauche, ou `None` s'il faut passer à deux lignes.
+///
+/// Isolée de l'écriture pour être décidable sans terminal : c'est la seule partie de la mise en
+/// page dont on puisse dire qu'elle a tort ou raison.
+fn column_width(rows: &[(&str, &str)]) -> Option<usize> {
+    let widest = rows.iter().map(|(name, _)| name.chars().count()).max()?;
+    (widest <= COLUMN_CAP).then(|| widest.max(COLUMN_FLOOR))
 }
 
 /// Une chose faite.
 pub fn success(message: impl Display) {
-    println!("{MARGIN}{} {message}", style(TICK).green().bold());
+    line(format!("{MARGIN}{} {message}", style(TICK).green().bold()));
 }
 
 /// Une chose qui n'avait pas lieu d'être faite.
 pub fn skipped(message: impl Display) {
-    println!("{MARGIN}{} {}", style(DOT).dim(), style(message).dim());
+    line(format!(
+        "{MARGIN}{} {}",
+        style(DOT).dim(),
+        style(message).dim()
+    ));
 }
 
 /// Une chose à savoir, qui n'empêche rien.
 pub fn warn(message: impl Display) {
-    println!("{MARGIN}{} {message}", style(BANG).yellow().bold());
+    line(format!("{MARGIN}{} {message}", style(BANG).yellow().bold()));
 }
 
 /// Un résultat renvoyé par ailleurs — la réponse d'une opération, un corps de trace.
 pub fn result(message: impl Display) {
-    println!("{MARGIN}{} {message}", style(ARROW).cyan());
+    line(format!("{MARGIN}{} {message}", style(ARROW).cyan()));
 }
 
 /// Une précision sous la ligne qui précède.
 pub fn detail(message: impl Display) {
-    println!("{MARGIN}  {}", style(message).dim());
+    line(format!("{MARGIN}  {}", style(message).dim()));
 }
 
 /// Un fichier produit : ce que c'est, puis où il est.
 pub fn wrote(kind: &str, where_: impl Display) {
-    println!(
+    line(format!(
         "{MARGIN}{} {} {}",
         style(TICK).green().bold(),
         style(format!("{kind:<10}")),
         style(where_).dim()
-    );
+    ));
 }
 
 /// Un couple étiquette / valeur, aligné avec ses voisins.
 pub fn field(label: &str, value: impl Display) {
-    println!("{MARGIN}  {} {value}", style(format!("{label:<11}")).dim());
+    line(format!(
+        "{MARGIN}  {} {value}",
+        style(format!("{label:<11}")).dim()
+    ));
 }
 
-/// La suite : ce que l'utilisateur tapera après.
-pub fn next(steps: &[&str]) {
-    blank();
-    println!("{MARGIN}{}", style("next").dim());
-    for step in steps {
-        println!("{MARGIN}  {}", style(step).cyan());
-    }
+/// La suite : ce que l'utilisateur tapera après, et ce que ça lui donnera.
+pub fn next(steps: &[(&str, &str)]) {
+    list("next", steps);
 }
 
 /// Un trait de séparation, pour marquer une reprise dans une session qui dure.
@@ -120,11 +204,11 @@ pub fn rule(label: &str) {
     let filler = width.saturating_sub(label.chars().count() + MARGIN.len() + 4);
     let dash = if Term::stdout().is_term() { '─' } else { '-' };
     let rule = dash.to_string().repeat(filler);
-    println!(
+    line(format!(
         "{MARGIN}{} {}",
         style(format!("{dash}{dash} {label}")).dim(),
         style(rule).dim()
-    );
+    ));
 }
 
 /// Une taille d'octets telle qu'on la lit.
@@ -153,14 +237,20 @@ pub fn code_block(code: &str) {
     };
     let rule = h.to_string().repeat(width);
 
-    println!("{MARGIN}{}", style(format!("{tl}{rule}{tr}")).dim());
-    println!(
+    line(format!(
+        "{MARGIN}{}",
+        style(format!("{tl}{rule}{tr}")).dim()
+    ));
+    line(format!(
         "{MARGIN}{}  {}  {}",
         style(v).dim(),
         style(code).bold().cyan(),
         style(v).dim()
-    );
-    println!("{MARGIN}{}", style(format!("{bl}{rule}{br}")).dim());
+    ));
+    line(format!(
+        "{MARGIN}{}",
+        style(format!("{bl}{rule}{br}")).dim()
+    ));
 }
 
 /// L'échec, en dernier mot du processus : le message, puis la chaîne des causes.
@@ -171,13 +261,13 @@ pub fn code_block(code: &str) {
 /// `anyhow` empile le contexte du plus proche de l'appelant au plus profond. Déplié plutôt
 /// qu'affiché en `{:#}`, on lit d'abord ce qui a échoué, puis pourquoi.
 pub fn report(failure: &anyhow::Error) {
-    eprintln!("{MARGIN}{} {failure}", style(CROSS).red().bold());
+    eline(format!("{MARGIN}{} {failure}", style(CROSS).red().bold()));
     for cause in failure.chain().skip(1) {
-        eprintln!(
+        eline(format!(
             "{MARGIN}  {} {}",
             style("caused by").dim(),
             style(cause).dim()
-        );
+        ));
     }
     blank();
 }
@@ -223,11 +313,11 @@ impl Step {
     /// Clôt l'étape sur un succès, suivi du temps qu'elle a pris.
     pub fn done(&self, message: impl Display) {
         let elapsed = self.close();
-        println!(
+        line(format!(
             "{MARGIN}{} {message}  {}",
             style(TICK).green().bold(),
             style(elapsed).dim()
-        );
+        ));
     }
 
     /// Clôt l'étape sans succès ni échec : il n'y avait rien à faire.
@@ -286,8 +376,8 @@ fn emit_captured(bytes: &[u8]) {
     if text.is_empty() {
         return;
     }
-    for line in text.lines() {
-        eprintln!("{MARGIN}  {line}");
+    for raw in text.lines() {
+        eline(format!("{MARGIN}  {raw}"));
     }
     blank();
 }
@@ -341,6 +431,32 @@ mod tests {
     #[test]
     fn a_long_build_reads_in_minutes() {
         assert_eq!(elapsed(Duration::from_secs(124)), "2m 04s");
+    }
+
+    /// Une colonne réglée sur le groupe : des noms courts se serrent au plancher, des noms
+    /// moyens l'écartent juste ce qu'il faut.
+    #[test]
+    fn a_column_settles_on_the_widest_name() {
+        assert_eq!(column_width(&[("a", "x"), ("bb", "y")]), Some(COLUMN_FLOOR));
+        assert_eq!(
+            column_width(&[("portaki dev --watch", "x")]),
+            Some("portaki dev --watch".len())
+        );
+    }
+
+    /// Passé le plafond, la seconde colonne partirait chercher le bord droit : on passe à la
+    /// ligne plutôt que de compter sur la largeur du terminal.
+    #[test]
+    fn an_overlong_name_gives_up_the_column() {
+        assert_eq!(
+            column_width(&[("cargo doc --workspace --no-deps --open", "x")]),
+            None
+        );
+    }
+
+    #[test]
+    fn an_empty_list_has_no_column() {
+        assert_eq!(column_width(&[]), None);
     }
 
     #[test]

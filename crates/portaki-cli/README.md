@@ -62,9 +62,15 @@ rustup target add wasm32-unknown-unknown
 
 ## Output
 
-Every command writes the same way: one step per line, a spinner while it runs, the elapsed time
-once it is done. The tools the CLI drives (`cargo build`, `cargo test`) stay quiet unless they
-fail — then their whole output surfaces, because that is what you were looking for.
+Every command writes the same way: a line under the title saying what it actually does, one step
+per line, a spinner while it runs, the elapsed time once it is done, and a `next` block naming
+what to run afterwards and what each one gives you. The tools the CLI drives (`cargo build`,
+`cargo test`) stay quiet unless they fail — then their whole output surfaces, because that is
+what you were looking for.
+
+The explanatory lines earn their place: `dev` does not start a local gateway, `publish` does not
+just push, and `init` leaves a tree whose halves (`ids.rs` and `i18n/`) only make sense together.
+Saying so costs a line each.
 
 | Flag | Effect |
 |------|--------|

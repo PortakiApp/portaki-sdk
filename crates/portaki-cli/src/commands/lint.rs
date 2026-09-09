@@ -21,7 +21,10 @@ pub struct LintArgs {
 
 /// Runs `portaki lint`.
 pub fn run(args: LintArgs) -> Result<()> {
-    ui::header("portaki lint");
+    ui::header(
+        "portaki lint",
+        "Check that everything the manifest names actually resolves.",
+    );
 
     let module_root = std::env::current_dir().context("current_dir")?;
     let manifest_path = args
@@ -54,6 +57,7 @@ pub fn run(args: LintArgs) -> Result<()> {
         failure
     })?;
     checking.done(format!("{} passes", manifest.id));
+    ui::detail("capability ids, connector bindings and i18n keys all resolve");
     ui::blank();
     Ok(())
 }

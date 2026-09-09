@@ -32,7 +32,10 @@ pub struct InitArgs {
 
 /// Runs `portaki init`.
 pub fn run(args: InitArgs) -> Result<()> {
-    ui::header("portaki init");
+    ui::header(
+        "portaki init",
+        "Scaffold a module crate — buildable, runnable in the sandbox, publishable.",
+    );
 
     let dest = args
         .path
@@ -63,13 +66,45 @@ pub fn run(args: InitArgs) -> Result<()> {
     copy_template(&template_dir, &dest, &args.name)?;
     scaffolding.done(format!("created {}", dest.display()));
 
+    describe(&args.template);
     ui::next(&[
-        &format!("cd {}", dest.display()),
-        "portaki build",
-        "portaki dev --watch",
+        (
+            &format!("cd {}", dest.display()),
+            "everything below runs from the module root",
+        ),
+        (
+            "portaki build",
+            "compile to wasm32 and assemble the manifest",
+        ),
+        (
+            "portaki dev --watch",
+            "run it in the hosted sandbox on every save",
+        ),
     ]);
     ui::blank();
     Ok(())
+}
+
+/// Ce qui vient d'être écrit, et à quoi chaque morceau sert.
+///
+/// Un squelette qu'on découvre fichier par fichier se lit mal : `ids.rs` et `i18n/` n'ont de
+/// sens que l'un par rapport à l'autre, et rien dans leur nom ne le dit.
+fn describe(template: &InitTemplate) {
+    let mut rows = vec![
+        ("src/lib.rs", "the module — entity, capability, manifest"),
+        ("src/ids.rs", "typed surface and operation ids"),
+    ];
+    if matches!(template, InitTemplate::Default) {
+        rows.push(("src/host/", "surfaces the host dashboard renders"));
+        rows.push(("src/guest/", "surfaces the guest booklet renders"));
+    }
+    rows.push((
+        "i18n/*.json",
+        "one file per locale — the keys ids.rs points at",
+    ));
+    rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
+
+    ui::list("what you got", &rows);
 }
 
 fn label(template: &InitTemplate) -> &'static str {

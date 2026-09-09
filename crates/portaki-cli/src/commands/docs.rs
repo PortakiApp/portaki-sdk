@@ -11,11 +11,19 @@ pub struct DocsArgs {}
 
 /// Prints documentation commands — does not start a docs server.
 pub fn run(_args: DocsArgs) -> Result<()> {
-    ui::header("portaki docs");
-    ui::detail("no docs server — these two commands are the documentation");
+    ui::header(
+        "portaki docs",
+        "There is no docs server — these two commands are the documentation.",
+    );
     ui::next(&[
-        "cargo doc --workspace --no-deps --open",
-        "portaki catalog --format json",
+        (
+            "cargo doc --workspace --no-deps --open",
+            "the SDK's API, rendered from the source you compile against",
+        ),
+        (
+            "portaki catalog --format json",
+            "every SDUI primitive the host knows how to render",
+        ),
     ]);
     ui::blank();
     Ok(())
