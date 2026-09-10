@@ -146,6 +146,15 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
 
     // `--help` et `--version` ne sont pas des échecs : `clap` les rend lui-même et sort en 0.
     if is_a_screen(refusal.kind()) {
+        // `clap` rogne l'espace en tête de `before_help` : la ligne qui décolle le logo de
+        // l'invite se pose donc ici, sur le flux que `clap` s'apprête à écrire.
+        if wants_room() {
+            if refusal.use_stderr() {
+                eprintln!();
+            } else {
+                println!();
+            }
+        }
         refusal.exit();
     }
 
@@ -212,6 +221,20 @@ fn is_a_screen(kind: clap::error::ErrorKind) -> bool {
     )
 }
 
+/// Cet écran mérite-t-il qu'on l'aère ?
+///
+/// Tous sauf `-V` : sa sortie tient en une ligne que des scripts lisent, et une ligne vide
+/// devant ferait rendre un vide à `portaki -V | head -1`. `--version` est la forme longue,
+/// destinée à un lecteur.
+fn wants_room() -> bool {
+    room_for(std::env::args().skip(1))
+}
+
+/// La décision seule, séparée de l'environnement pour être vérifiable.
+fn room_for(mut arguments: impl Iterator<Item = String>) -> bool {
+    !arguments.any(|argument| argument == "-V")
+}
+
 /// La première ligne du refus, sans le « error: » que `clap` préfixe — la croix le dit déjà.
 fn headline(rendered: &str) -> String {
     rendered
@@ -262,6 +285,22 @@ mod tests {
             headline("error: unrecognized subcommand 'buidl'\n\n  tip: ..."),
             "unrecognized subcommand 'buidl'"
         );
+    }
+
+    fn args(raw: &[&str]) -> impl Iterator<Item = String> + use<> {
+        raw.iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    /// `-V` tient en une ligne que des scripts lisent : une ligne vide devant la rendrait vide.
+    #[test]
+    fn the_short_version_stays_a_single_parseable_line() {
+        assert!(!room_for(args(&["-V"])));
+        assert!(room_for(args(&["--version"])));
+        assert!(room_for(args(&["--help"])));
+        assert!(room_for(args(&[])));
     }
 
     /// `portaki` nu doit ouvrir l'aide, pas une croix suivie du logo.
