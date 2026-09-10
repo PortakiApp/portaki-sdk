@@ -68,17 +68,18 @@ pub async fn run(args: DevArgs) -> Result<()> {
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
 
-    // Prise avant le premier build, pas après : refuser une seconde session une fois qu'elle a
-    // compilé et déployé aurait déjà écrasé dans le bac à sable ce que la première y tenait.
-    let watching = match args.watch {
-        true => Some(crate::dev_session::start(&base_url, &module_id, &token).await?),
-        false => None,
-    };
+    // Prise pour tout déploiement, `--watch` ou non. Un `portaki dev` seul écrase le bac à
+    // sable exactement comme une session qui boucle — une fois au lieu de sans fin, ce qui ne
+    // le rend pas moins surprenant pour celui dont le module vient de disparaître.
+    //
+    // Avant le premier build, pas après : refuser une fois compilé et déployé aurait déjà
+    // écrasé ce que l'autre session tenait.
+    let session = crate::dev_session::start(&base_url, &module_id, &token).await?;
 
     // Ctrl-c ne déroule rien : sans ceci, le bail resterait pris jusqu'à son échéance et le
     // verrou local jusqu'au prochain lancement. Ni l'un ni l'autre n'est grave — les deux se
     // reprennent seuls — mais rendre la place tout de suite évite une attente pour rien.
-    if let Some(session) = &watching {
+    {
         // Une poignée, pas la session : une tâche qui la retiendrait empêcherait son `Drop` de
         // s'exécuter au retour normal, et le verrou local survivrait à chaque échec.
         let release = session.release();
@@ -92,7 +93,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
     }
 
     let mut last_digest = String::new();
-    cycle(
+    let first = cycle(
         &args,
         &base_url,
         &module_root,
@@ -100,7 +101,16 @@ pub async fn run(args: DevArgs) -> Result<()> {
         &mut token,
         &mut last_digest,
     )
-    .await?;
+    .await;
+
+    // Rendue dès qu'on n'en a plus besoin : un déploiement ponctuel a fini, et un échec ne
+    // gardera rien. Le `Drop` de la session ne peut pas s'en charger — rendre un bail distant
+    // demande d'attendre une réponse, ce qu'un `Drop` ne sait pas faire — donc sans ceci un
+    // build raté interdirait le suivant pendant une minute et demie.
+    if first.is_err() || !args.watch {
+        session.release().now().await;
+    }
+    first?;
 
     if !args.watch {
         ui::blank();

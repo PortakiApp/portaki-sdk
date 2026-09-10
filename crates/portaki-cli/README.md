@@ -107,7 +107,7 @@ command, not before, so it delays nothing and does not push the line you came to
 sight. It stays quiet under `--plain`, when the output is not a terminal, and when
 `PORTAKI_NO_UPDATE_CHECK` is set.
 
-Only one `portaki dev --watch` runs at a time. A second one refuses before it compiles anything
+Only one `portaki dev` runs at a time — with or without `--watch`. A second one refuses before it compiles anything
 and says who holds the session:
 
 ```
@@ -115,7 +115,11 @@ and says who holds the session:
   or run this one without --watch
 ```
 
-Two watch sessions push different modules into the same sandbox in turn, each undoing what the
+A one-shot `portaki dev` overwrites the sandbox exactly as a looping session does — once
+instead of endlessly, which makes it no less surprising for whoever's module just vanished. It
+takes the place too, and hands it back as soon as it is done.
+
+Two sessions push different modules into the same sandbox in turn, each undoing what the
 other just did — and one is rarely started on purpose: it is forgotten in a tab, and another is
 started elsewhere. The lock lives next to the credentials, so it covers you on this machine,
 not a repository.
