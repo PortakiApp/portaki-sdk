@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use console::{style, Emoji, Style, Term};
+use console::{style, Emoji, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 
 /// La marge de gauche commune à toutes les lignes : la sortie respire, et un bloc de texte se
@@ -69,24 +69,28 @@ const LOGO: [&str; 7] = [
 /// La ligne sur laquelle le point de la marque se pose — la ligne de base.
 const DOT_ROW: usize = 5;
 
-/// L'orange du point, seule couleur du logo.
+/// Le point porte le vert de `portaki dev`, et c'est exactement celui des coches de succès.
+///
+/// Une seule teinte de vert dans toute la CLI : le point de la marque et la coche qui dit
+/// « fait » sont la même couleur, pas deux verts qui se ressemblent sans se répondre. En vert
+/// ANSI de base plutôt qu'en 256 couleurs, le logo tient aussi sur un terminal à seize couleurs.
 ///
 /// Le mot, lui, garde la couleur d'avant-plan du terminal : un blanc écrit en dur disparaîtrait
 /// sur un thème clair, alors que la marque veut seulement « la couleur du texte ».
-const DOT_SHADE: u8 = 214;
+const WORDMARK_DOT: &str = "██";
 
 /// Le logo peint, prêt à être posé en tête d'un écran d'aide.
 ///
 /// Rendu en `String` plutôt qu'imprimé : `clap` le veut comme en-tête de son aide, et le même
 /// texte sert à `--version`.
 pub fn banner() -> String {
-    let mut out = String::from("\n");
+    let mut out = String::new();
     for (row, line) in LOGO.iter().enumerate() {
         let word = style(line).bold();
         if row == DOT_ROW {
             out.push_str(&format!(
                 "{MARGIN}{word}  {}\n",
-                Style::new().color256(DOT_SHADE).apply_to("██")
+                style(WORDMARK_DOT).green().bold()
             ));
         } else {
             out.push_str(&format!("{MARGIN}{word}\n"));
@@ -135,7 +139,7 @@ pub fn long_version() -> String {
         ("homepage", env!("CARGO_PKG_HOMEPAGE")),
         ("source", env!("CARGO_PKG_REPOSITORY")),
     ];
-    let mut out = format!("{}\n{}\n", env!("CARGO_PKG_VERSION"), banner());
+    let mut out = format!("{}\n\n{}\n", env!("CARGO_PKG_VERSION"), banner());
     for (label, value) in rows {
         out.push_str(&format!(
             "{MARGIN}  {} {value}\n",
