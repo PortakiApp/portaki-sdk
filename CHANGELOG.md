@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.5.0...v2.6.0) (2026-09-10)
+
+
+### Features
+
+* **cli:** tenir la session --watch au nom du compte ([e343f80](https://github.com/PortakiApp/portaki-sdk/commit/e343f808cd8489d25f492a11d63dba8653efbb5e))
+* **cli:** une seule session --watch a la fois ([70ba552](https://github.com/PortakiApp/portaki-sdk/commit/70ba552ad07a580f4304ed30ae14357e7beffee8))
+
+
+### Bug Fixes
+
+* **cli:** logout ferme la session sur la plateforme aussi ([1cb5e22](https://github.com/PortakiApp/portaki-sdk/commit/1cb5e22693c2401b8d60d3b9e59177de9d1c2990))
+* **cli:** refuser de republier avant de pousser, pas apres ([4e75d27](https://github.com/PortakiApp/portaki-sdk/commit/4e75d2744ac5691e3feae9e2c6840cf6d95a7c58))
+* **cli:** un dev ponctuel prend la place, lui aussi ([1cf1f7b](https://github.com/PortakiApp/portaki-sdk/commit/1cf1f7b27950f3220323f25fe654e969c7312744))
+* **cli:** un refus qui dit ce qui manque, et ou le lire ([7845d8c](https://github.com/PortakiApp/portaki-sdk/commit/7845d8cd65e19d2be90a1f2319e9b60be6c2affd))
+
 ## [2.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.4.0...v2.5.0) (2026-09-10)
 
 
