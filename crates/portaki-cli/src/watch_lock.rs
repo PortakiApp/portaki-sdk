@@ -37,6 +37,16 @@ pub struct WatchLock {
     path: PathBuf,
 }
 
+impl WatchLock {
+    /// Où il vit, pour qui doit le rendre depuis ailleurs.
+    ///
+    /// Ctrl-c ne déroule rien : sans un rendu explicite, le fichier survivrait jusqu'à ce que
+    /// le lancement suivant le constate périmé. Sans gravité, mais inutilement obscur.
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
 impl Drop for WatchLock {
     fn drop(&mut self) {
         // Un verrou qu'on n'arrive pas à effacer sera repris comme périmé au prochain
