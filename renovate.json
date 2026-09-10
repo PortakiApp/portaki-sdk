@@ -1,72 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":dependencyDashboard",
-    ":semanticCommits",
-    "group:recommended",
-    "group:monorepos"
+    "github>PortakiApp/renovate-config",
+    "github>PortakiApp/renovate-config:rust"
   ],
-  "labels": ["dependencies"],
-  "timezone": "Europe/Paris",
-  "schedule": ["before 10am on monday"],
-  "prHourlyLimit": 2,
-  "prConcurrentLimit": 5,
-  "rangeStrategy": "bump",
-  "rebaseWhen": "behind-base-branch",
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["before 5am on sunday"]
-  },
-  "osvVulnerabilityAlerts": true,
-  "vulnerabilityAlerts": {
-    "labels": ["dependencies", "security"],
-    "schedule": ["at any time"]
-  },
   "packageRules": [
     {
-      "description": "GitHub Actions — groupe hebdo",
-      "matchManagers": ["github-actions"],
-      "groupName": "GitHub Actions",
-      "schedule": ["before 10am on monday"]
-    },
-    {
-      "groupName": "Tokio",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["tokio"]
-    },
-    {
-      "groupName": "Serde",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["serde", "serde_json"]
-    },
-    {
-      "groupName": "Tracing",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["tracing", "tracing-subscriber"]
-    },
-    {
-      "groupName": "Clap",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["clap"]
-    },
-    {
-      "groupName": "Reqwest",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["reqwest"]
-    },
-    {
-      "groupName": "OCI distribution",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["oci-distribution"]
-    },
-    {
-      "groupName": "Extism PDK",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["extism-pdk"]
-    },
-    {
-      "groupName": "Portaki workspace crates",
+      "description": "Les crates du workspace se versionnent entre elles a chaque release : les laisser au robot lui ferait proposer une montee que release-please vient d'ecrire.",
       "matchManagers": ["cargo"],
       "matchPackageNames": [
         "portaki-sdk",
@@ -77,9 +17,11 @@
       "enabled": false
     },
     {
-      "description": "Majors Rust — review manuelle",
+      "description": "extism-pdk est la frontiere avec le runtime hote : sa version doit rester alignee sur l'Extism que la plateforme execute. Une montee ici sans montee la-bas casse chaque module a l'execution, pas a la compilation.",
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["major"],
+      "matchPackageNames": ["extism-pdk"],
+      "groupName": "Extism PDK",
+      "automerge": false,
       "labels": ["dependencies", "breaking"]
     }
   ]

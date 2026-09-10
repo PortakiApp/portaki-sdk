@@ -26,6 +26,21 @@ La règle « Majors Rust — review manuelle » vit dans `renovate.json`. Depend
 il ne l'a pas contournée, il ne l'a jamais vue. C'est la raison de fond pour n'en garder qu'un —
 une politique qu'un second robot ignore n'est pas une politique.
 
+### Automerge
+
+Patch, `pin` et `digest` fusionnent seuls quand `quality` est vert. Les majeures ne fusionnent
+jamais seules — et les **mineures en `0.x` non plus** : semver ne s'applique pas avant `1.0`, une
+mineure y casse comme une majeure ailleurs, et la moitié de l'écosystème Rust est en `0.x`.
+
+Une montée attend **trois jours** après publication. Sans ce délai, il existe un chemin direct
+entre le compte crates.io d'un mainteneur et ce qui se publie. Les correctifs de sécurité
+n'attendent pas.
+
+`extism-pdk` est exclu de l'automerge quel que soit le type : c'est la frontière avec le runtime
+hôte, et une montée non alignée casse les modules à l'exécution, pas à la compilation.
+
+La configuration vit dans `PortakiApp/renovate-config`.
+
 La règle reste **une étiquette `breaking` sur une PR**, pas un blocage : c'est bien une revue
 manuelle, puisqu'un humain merge. Ce qui manquait n'était pas le verrou, c'était l'unicité.
 
