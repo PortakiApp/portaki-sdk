@@ -106,6 +106,12 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         return Ok(());
     }
 
+    // Demandé avant de pousser, pas découvert après. Une publication est immuable (ADR-0005) :
+    // le second envoi se faisait refuser à l'annonce, mais il avait déjà écrasé le tag OCI —
+    // qui ne désignait alors plus l'artefact que le catalogue référence.
+    let coords = oci::pack::read_module_coordinates(&module_root, &artifact_dir)?;
+    refuse_if_already_published(&auth::api_base_url(args.url.as_deref()), &coords).await?;
+
     let pushing = ui::step(format!("pushing to {}", args.registry));
     let pushed = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
         .await
@@ -124,8 +130,71 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         return Ok(());
     }
 
-    let coords = oci::pack::read_module_coordinates(&module_root, &artifact_dir)?;
     announce(&args, &coords, &pushed).await
+}
+
+/// Une version publiée ne se republie pas.
+///
+/// Le registre le disait déjà, mais à l'annonce — c'est-à-dire après la poussée OCI. Le tag
+/// avait donc été réécrit, et ne désignait plus l'artefact dont le catalogue porte le digest :
+/// deux sources de vérité en désaccord, sans que rien ne le signale.
+///
+/// Le catalogue est public : la question ne coûte ni jeton ni droit.
+///
+/// Injoignable, on continue. Refuser de publier parce qu'une lecture de contrôle échoue
+/// bloquerait une livraison pour une raison qui n'en est pas une, et l'annonce refusera de
+/// toute façon si la version existe.
+async fn refuse_if_already_published(
+    base: &str,
+    coords: &oci::pack::ModuleCoordinates,
+) -> Result<()> {
+    let Some(published) = published_digest(base, &coords.id, &coords.version).await else {
+        return Ok(());
+    };
+    anyhow::bail!(
+        "{} {} is already in the registry ({published}) — publications are immutable, so \
+         pushing again would leave the OCI tag pointing at something the catalogue does not \
+         reference. Bump the version, or replay the announcement with \
+         portaki publish --announce-only",
+        coords.id,
+        coords.version
+    )
+}
+
+/// Une version au catalogue, telle que le registre la rend.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishedVersion {
+    digest: String,
+    version: String,
+}
+
+/// Le digest publié pour cette version, s'il y en a un.
+async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<String> {
+    let response = reqwest::Client::new()
+        .get(format!(
+            "{}/registry/v1/modules/{module_id}/versions",
+            base.trim_end_matches('/')
+        ))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    digest_of(
+        &response.json::<Vec<PublishedVersion>>().await.ok()?,
+        version,
+    )
+}
+
+/// La sélection seule, séparée du réseau pour être vérifiable.
+fn digest_of(published: &[PublishedVersion], version: &str) -> Option<String> {
+    published
+        .iter()
+        .find(|candidate| candidate.version == version)
+        .map(|candidate| candidate.digest.clone())
 }
 
 /// Annonce la publication au registre, en renouvelant le jeton une fois sur un 401.
@@ -335,6 +404,24 @@ mod tests {
     use std::fs;
 
     use tempfile::tempdir;
+
+    /// Le catalogue rend toutes les versions : c'est la nôtre qu'il faut y trouver, pas la
+    /// première venue — sans quoi une republication serait refusée au nom d'une autre version.
+    #[test]
+    fn the_catalogue_is_searched_for_our_own_version() {
+        let published: Vec<PublishedVersion> = serde_json::from_value(serde_json::json!([
+            { "digest": "sha256:aaa", "version": "0.3.1" },
+            { "digest": "sha256:bbb", "version": "0.3.2" }
+        ]))
+        .unwrap();
+
+        assert_eq!(
+            digest_of(&published, "0.3.2").as_deref(),
+            Some("sha256:bbb")
+        );
+        assert!(digest_of(&published, "0.4.0").is_none());
+        assert!(digest_of(&[], "0.3.2").is_none());
+    }
 
     #[test]
     fn a_replayed_publication_is_not_an_error() {

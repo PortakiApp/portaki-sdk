@@ -201,6 +201,12 @@ PORTAKI_PUBLISH_VERSION=0.3.5 portaki publish --registry ghcr.io/portakiapp
 
 Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>`.
 
+`publish` refuses a version the registry already holds, **before** pushing anything. Publications
+are immutable, so a second push could only leave the OCI tag pointing at something the catalogue
+does not reference — two sources of truth disagreeing, with nothing to say so. That covers a
+re-run; two jobs starting together both look before either announces, so serialise them with a
+`concurrency:` group per module in the workflow.
+
 `publish` announces the version to the registry after the push (needs `portaki login`).
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
 a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
