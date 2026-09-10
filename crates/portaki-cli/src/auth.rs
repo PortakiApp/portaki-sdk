@@ -96,12 +96,25 @@ struct RenewedTokens {
 }
 
 /// `--url`, puis `PORTAKI_API_URL`, puis la production.
+///
+/// Une valeur vide ou blanche vaut « non définie », pas « URL vide ». `env::var` rend `Ok("")`
+/// pour une variable exportée vide, et l'URL de base devenait alors la chaîne vide : chaque
+/// appel partait vers `/registry/v1/...`, que reqwest refuse de construire. Une action de CI
+/// qui passe une entrée facultative non renseignée exporte exactement ça.
 pub fn api_base_url(explicit: Option<&str>) -> String {
-    let raw = explicit
-        .map(str::to_owned)
-        .or_else(|| std::env::var("PORTAKI_API_URL").ok())
-        .unwrap_or_else(|| "https://api.portaki.app".to_string());
-    raw.trim_end_matches('/').to_string()
+    resolve_base_url(explicit, std::env::var("PORTAKI_API_URL").ok().as_deref())
+}
+
+/// La règle seule, sans l'environnement, pour être vérifiable.
+fn resolve_base_url(explicit: Option<&str>, from_env: Option<&str>) -> String {
+    [explicit, from_env]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .unwrap_or("https://api.portaki.app")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 pub fn store(access_token: &str, refresh_token: &str) -> Result<()> {
@@ -264,6 +277,43 @@ fn delete(name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const PROD: &str = "https://api.portaki.app";
+
+    /// Une action de CI qui passe une entrée facultative non renseignée exporte une variable
+    /// vide. Lue comme une URL, chaque appel partait vers `/registry/v1/...` — que reqwest
+    /// refuse de construire, avec un « builder error » qui ne désigne rien.
+    #[test]
+    fn an_exported_but_empty_variable_means_unset() {
+        assert_eq!(resolve_base_url(None, Some("")), PROD);
+        assert_eq!(resolve_base_url(None, Some("   ")), PROD);
+        assert_eq!(resolve_base_url(Some(""), None), PROD);
+    }
+
+    #[test]
+    fn the_flag_wins_over_the_environment() {
+        assert_eq!(
+            resolve_base_url(
+                Some("https://explicit.example"),
+                Some("https://env.example")
+            ),
+            "https://explicit.example"
+        );
+    }
+
+    /// Une barre finale ne doit jamais doubler celle du chemin qu'on y accole.
+    #[test]
+    fn a_trailing_slash_never_doubles() {
+        assert_eq!(
+            resolve_base_url(None, Some("https://api.example/")),
+            "https://api.example"
+        );
+    }
+
+    #[test]
+    fn nothing_set_means_production() {
+        assert_eq!(resolve_base_url(None, None), PROD);
+    }
 
     /// Le stockage, éprouvé sans toucher l'environnement du processus.
     ///
