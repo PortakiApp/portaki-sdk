@@ -122,6 +122,14 @@ pub fn store(access_token: &str, refresh_token: &str) -> Result<()> {
     write(REFRESH_ENTRY, refresh_token)
 }
 
+/// Le jeton de rafraîchissement rangé, s'il y en a un.
+///
+/// Rendu pour que `logout` puisse le présenter au serveur : l'effacer d'ici ne le révoque pas,
+/// et une session qu'on croit fermée resterait ouverte jusqu'à son expiration.
+pub fn refresh_token() -> Option<String> {
+    read(REFRESH_ENTRY).ok().flatten()
+}
+
 pub fn forget() -> Result<()> {
     delete(ACCESS_ENTRY)?;
     delete(REFRESH_ENTRY)
