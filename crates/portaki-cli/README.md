@@ -103,6 +103,33 @@ and the pointer goes to the help page of the command you were actually in.
 platform returns one, so there is nothing left to paste. The code is printed either way; use
 `--no-browser` over SSH or on a headless box.
 
+## From a CI workflow
+
+`portaki ci` answers, from the CLI, what a workflow used to ask in `bash`, `jq` and `curl`.
+Every subcommand prints for a human and writes `GITHUB_OUTPUT` when it exists, so the same
+invocation serves both.
+
+| Command | Answers |
+|---------|---------|
+| `portaki ci modules [--changed-since <ref>] [--only a,b]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
+| `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
+| `portaki ci check [--offline]` | Warns about an outdated SDK or a manifest the shell has moved past |
+
+`ci modules` reads the layout from the manifests, not from a flag: a `portaki.module.json` at the
+root means one module, one under `modules/*/` means several. A change to the shared workspace
+(`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain`) rebuilds everything; a change to a
+workflow file rebuilds nothing.
+
+`ci sdk-version` reads `Cargo.lock`, not `Cargo.toml`: a module may declare the SDK by semver, by
+git branch or by path, and only the lock says what will actually compile. The key it prints is
+the version alone, because the CLI installs from crates.io — `cargo install portaki-cli@<key>` —
+so the cache turns over when the SDK does, not on every commit to its branch.
+
+```bash
+portaki --plain ci modules --changed-since "$BASE"   # ["access-guide","weather"]
+portaki --plain ci sdk-version                       # 2.2.0
+```
+
 ## Typical workflow
 
 ```bash

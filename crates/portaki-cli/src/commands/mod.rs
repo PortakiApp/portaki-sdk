@@ -2,6 +2,7 @@
 
 pub mod build;
 pub mod catalog;
+pub mod ci;
 pub mod dev;
 pub mod docs;
 pub mod init;

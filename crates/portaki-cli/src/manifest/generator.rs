@@ -3,6 +3,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// La version de manifeste que cette version du CLI produit.
+///
+/// Nommée plutôt que répétée en littéral : `ci check` compare le manifeste d'un module à cette
+/// référence, et deux littéraux qui doivent rester égaux finissent toujours par diverger.
+pub const MANIFEST_VERSION: &str = "1";
+
+/// La version de schéma SDUI que cette version du CLI produit, pour les deux coquilles.
+pub const SDUI_SCHEMA_VERSION: &str = "1";
+
 use anyhow::{Context, Result};
 use portaki_sdk::capability::CapabilityId;
 use portaki_sdk::manifest::{
@@ -221,7 +230,7 @@ pub fn generate_manifest(
     }
 
     Ok(ModuleManifest {
-        manifest_version: "1".to_string(),
+        manifest_version: MANIFEST_VERSION.to_string(),
         id,
         version,
         display_name,
@@ -232,8 +241,8 @@ pub fn generate_manifest(
             support_email: Some("support@syntax-labs.fr".to_string()),
         },
         ui_schema: UiSchemaVersions {
-            host: "1".to_string(),
-            guest: "1".to_string(),
+            host: SDUI_SCHEMA_VERSION.to_string(),
+            guest: SDUI_SCHEMA_VERSION.to_string(),
         },
         capabilities: ManifestCapabilities {
             required: required_caps,
