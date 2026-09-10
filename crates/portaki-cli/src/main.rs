@@ -64,6 +64,10 @@ struct Cli {
     #[arg(long, short, global = true)]
     verbose: bool,
 
+    /// Bare output for scripts and CI: no logo, no headings, no advice. Implies --no-color.
+    #[arg(long, global = true)]
+    plain: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -101,7 +105,7 @@ async fn main() {
         .init();
 
     let cli = parse();
-    ui::init(cli.no_color, cli.verbose);
+    ui::init(cli.no_color, cli.verbose, cli.plain);
 
     // L'échec est rendu ici, une fois, au lieu du `Debug` que `main() -> Result` imprime : la
     // chaîne des causes se lit, et la sortie d'erreur ressemble au reste de la CLI.
@@ -117,17 +121,26 @@ async fn main() {
 /// `--no-color` est cherché à la main d'abord, sans quoi un logo en couleurs partirait dans un
 /// fichier de sortie qu'on avait justement demandé nu.
 fn parse() -> Cli {
-    let wants_color = !std::env::args().any(|argument| argument == "--no-color");
-    ui::set_colors(wants_color);
+    let raw: Vec<String> = std::env::args().collect();
+    let bare = raw.iter().any(|argument| argument == "--plain");
+    ui::set_plain(bare);
+    ui::set_colors(!bare && !raw.iter().any(|argument| argument == "--no-color"));
 
-    let command = Cli::command()
-        .before_help(ui::banner())
-        .before_long_help(ui::banner())
-        .after_help(ui::legal())
-        .after_long_help(ui::legal())
+    // Le logo et le pied de licence sont ce que `--plain` retire en premier : une aide lue par
+    // un script n'a que faire d'une signature de six lignes.
+    let mut command = Cli::command().long_version(
         // `clap` veut une chaîne qui vit aussi longtemps que le programme ; celle-ci est
         // construite une fois, au démarrage, et l'écran de version en est le seul lecteur.
-        .long_version(Box::leak(ui::long_version().into_boxed_str()) as &'static str);
+        Box::leak(ui::long_version().into_boxed_str()) as &'static str,
+    );
+    if !bare {
+        command = command
+            .before_help(ui::banner())
+            .before_long_help(ui::banner())
+            .after_help(ui::legal())
+            .after_long_help(ui::legal());
+    }
+    let command = command;
 
     let matches = match command.clone().try_get_matches() {
         Ok(matches) => matches,
@@ -148,7 +161,7 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     if is_a_screen(refusal.kind()) {
         // `clap` rogne l'espace en tête de `before_help` : la ligne qui décolle le logo de
         // l'invite se pose donc ici, sur le flux que `clap` s'apprête à écrire.
-        if wants_room() {
+        if wants_room() && !ui::plain() {
             if refusal.use_stderr() {
                 eprintln!();
             } else {

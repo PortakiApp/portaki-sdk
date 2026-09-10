@@ -15,16 +15,21 @@ pub fn run(_args: DocsArgs) -> Result<()> {
         "portaki docs",
         "There is no docs server — these two commands are the documentation.",
     );
-    ui::next(&[
-        (
-            "cargo doc --workspace --no-deps --open",
-            "the SDK's API, rendered from the source you compile against",
-        ),
-        (
-            "portaki catalog --format json",
-            "every SDUI primitive the host knows how to render",
-        ),
-    ]);
+    // `list` plutôt que `next` : pour `docs`, ces deux commandes ne sont pas un conseil sur la
+    // suite, elles sont tout ce que la commande a à dire.
+    ui::list(
+        "commands",
+        &[
+            (
+                "cargo doc --workspace --no-deps --open",
+                "the SDK's API, rendered from the source you compile against",
+            ),
+            (
+                "portaki catalog --format json",
+                "every SDUI primitive the host knows how to render",
+            ),
+        ],
+    );
     ui::blank();
     Ok(())
 }

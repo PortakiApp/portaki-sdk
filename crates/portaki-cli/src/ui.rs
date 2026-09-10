@@ -30,6 +30,13 @@ static ARROW: Emoji<'_, '_> = Emoji("→", "->");
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
+/// La sortie est dépouillée : ni logo, ni en-tête, ni glyphes, ni marge, ni conseils.
+///
+/// Ce qui reste est ce qu'un autre programme viendrait lire — les étapes, les champs, les
+/// résultats. Le reste s'adresse à un humain qui découvre la commande, et n'a rien à faire dans
+/// un journal de CI ni dans un `grep`.
+static PLAIN: AtomicBool = AtomicBool::new(false);
+
 /// Rien n'a encore été écrit depuis l'en-tête.
 ///
 /// Une section pose une ligne vide devant elle pour se détacher de ce qui précède. Juste après
@@ -37,9 +44,44 @@ static VERBOSE: AtomicBool = AtomicBool::new(false);
 static FRESH: AtomicBool = AtomicBool::new(false);
 
 /// Fixe le mode de rendu pour tout le processus, avant la première ligne écrite.
-pub fn init(no_color: bool, verbose: bool) {
-    set_colors(!no_color);
+pub fn init(no_color: bool, verbose: bool, plain: bool) {
+    set_plain(plain);
+    set_colors(!no_color && !plain);
     VERBOSE.store(verbose, Ordering::Relaxed);
+}
+
+/// Passe en sortie dépouillée, avant que quoi que ce soit ne soit écrit.
+///
+/// Séparé d'[`init`] comme [`set_colors`] : l'aide et `--version` sont rendues par `clap`
+/// pendant l'analyse, donc avant qu'on sache autre chose des arguments.
+pub fn set_plain(plain: bool) {
+    PLAIN.store(plain, Ordering::Relaxed);
+}
+
+/// La sortie est-elle dépouillée ?
+pub fn plain() -> bool {
+    PLAIN.load(Ordering::Relaxed)
+}
+
+/// Le retrait des lignes de second plan — précisions et champs.
+fn indent() -> &'static str {
+    if plain() {
+        ""
+    } else {
+        "    "
+    }
+}
+
+/// Une ligne à glyphe : le glyphe disparaît avec la marge quand la sortie est dépouillée.
+///
+/// Le glyphe dit « fait », « ignoré », « attention » à un œil qui balaie. Un programme, lui,
+/// lit le texte — et devrait sinon apprendre à découper des symboles avant chaque message.
+fn glyphed(painted: String, message: impl Display) -> String {
+    if plain() {
+        format!("{message}")
+    } else {
+        format!("{MARGIN}{painted} {message}")
+    }
 }
 
 /// L'utilisateur veut voir la sortie brute des outils pilotés.
@@ -166,9 +208,11 @@ pub fn set_colors(enabled: bool) {
     }
 }
 
-/// Une ligne vide.
+/// Une ligne vide — aucune quand la sortie est dépouillée : elles n'aèrent que pour un œil.
 pub fn blank() {
-    println!();
+    if !plain() {
+        println!();
+    }
 }
 
 /// Une ligne de sortie, et la trace qu'il s'en est écrit une.
@@ -191,6 +235,9 @@ fn eline(text: String) {
 /// que leur nom laisse supposer — `dev` ne monte pas de passerelle locale, `publish` ne se
 /// limite pas à pousser. Le dire en tête coûte une ligne et évite de le découvrir autrement.
 pub fn header(command: &str, purpose: &str) {
+    if plain() {
+        return;
+    }
     blank();
     println!(
         "{MARGIN}{}  {}",
@@ -210,6 +257,12 @@ const COLUMN_FLOOR: usize = 16;
 
 /// Un intertitre discret, qui ouvre une liste : « next », « what you got ».
 pub fn section(title: &str) {
+    if plain() {
+        // Le titre reste : pour `queries · read-only` contre `commands · mutating`, c'est lui
+        // qui porte l'information, pas la décoration.
+        line(title.to_string());
+        return;
+    }
     // Juste après l'en-tête, la ligne vide est déjà là.
     if !FRESH.swap(false, Ordering::Relaxed) {
         blank();
@@ -233,7 +286,8 @@ pub fn list(title: &str, rows: &[(&str, &str)]) {
             for (name, purpose) in rows {
                 let padding = " ".repeat(width - name.chars().count());
                 line(format!(
-                    "{MARGIN}  {}{padding}  {}",
+                    "{}{}{padding}  {}",
+                    indent(),
                     style(name).cyan(),
                     style(purpose).dim()
                 ));
@@ -241,8 +295,8 @@ pub fn list(title: &str, rows: &[(&str, &str)]) {
         }
         None => {
             for (name, purpose) in rows {
-                line(format!("{MARGIN}  {}", style(name).cyan()));
-                line(format!("{MARGIN}    {}", style(purpose).dim()));
+                line(format!("{}{}", indent(), style(name).cyan()));
+                line(format!("{}  {}", indent(), style(purpose).dim()));
             }
         }
     }
@@ -259,40 +313,59 @@ fn column_width(rows: &[(&str, &str)]) -> Option<usize> {
 
 /// Une chose faite.
 pub fn success(message: impl Display) {
-    line(format!("{MARGIN}{} {message}", style(TICK).green().bold()));
+    line(glyphed(style(TICK).green().bold().to_string(), message));
 }
 
 /// Une chose qui n'avait pas lieu d'être faite.
 pub fn skipped(message: impl Display) {
-    line(format!(
-        "{MARGIN}{} {}",
-        style(DOT).dim(),
-        style(message).dim()
-    ));
+    line(glyphed(style(DOT).dim().to_string(), style(message).dim()));
 }
 
 /// Un échec sans chaîne de causes — celui que `clap` rend, par exemple.
 pub fn failure(message: impl Display) {
+    if plain() {
+        // Le préfixe remplace la croix : sans lui, un échec dépouillé ne se distingue plus
+        // d'une ligne de résultat dans un journal.
+        eline(format!("error: {message}"));
+        return;
+    }
     eline(format!("{MARGIN}{} {message}", style(CROSS).red().bold()));
 }
 
 /// Une chose à savoir, qui n'empêche rien.
 pub fn warn(message: impl Display) {
-    line(format!("{MARGIN}{} {message}", style(BANG).yellow().bold()));
+    line(glyphed(style(BANG).yellow().bold().to_string(), message));
 }
 
 /// Un résultat renvoyé par ailleurs — la réponse d'une opération, un corps de trace.
 pub fn result(message: impl Display) {
-    line(format!("{MARGIN}{} {message}", style(ARROW).cyan()));
+    line(glyphed(style(ARROW).cyan().to_string(), message));
+}
+
+/// Un conseil sur la suite — taisé quand la sortie est dépouillée.
+///
+/// Ignoré, quand la sortie est dépouillée.
+///
+/// La différence avec [`detail`] est celle du destinataire : une précision informe sur ce qui
+/// vient de se passer, un conseil s'adresse à quelqu'un qui apprend la commande.
+pub fn advice(message: impl Display) {
+    if plain() {
+        return;
+    }
+    detail(message);
 }
 
 /// Une précision sous la ligne qui précède.
 pub fn detail(message: impl Display) {
-    line(format!("{MARGIN}  {}", style(message).dim()));
+    line(format!("{}{}", indent(), style(message).dim()));
 }
 
 /// Un fichier produit : ce que c'est, puis où il est.
 pub fn wrote(kind: &str, where_: impl Display) {
+    if plain() {
+        line(format!("{kind:<10}  {where_}"));
+        return;
+    }
     line(format!(
         "{MARGIN}{} {} {}",
         style(TICK).green().bold(),
@@ -304,13 +377,19 @@ pub fn wrote(kind: &str, where_: impl Display) {
 /// Un couple étiquette / valeur, aligné avec ses voisins.
 pub fn field(label: &str, value: impl Display) {
     line(format!(
-        "{MARGIN}  {} {value}",
+        "{}{} {value}",
+        indent(),
         style(format!("{label:<11}")).dim()
     ));
 }
 
 /// La suite : ce que l'utilisateur tapera après, et ce que ça lui donnera.
 pub fn next(steps: &[(&str, &str)]) {
+    // Ce bloc s'adresse à quelqu'un qui découvre la commande. Un script n'a que faire de la
+    // suite : il l'a déjà écrite.
+    if plain() {
+        return;
+    }
     list("next", steps);
 }
 
@@ -377,6 +456,13 @@ pub fn code_block(code: &str) {
 /// `anyhow` empile le contexte du plus proche de l'appelant au plus profond. Déplié plutôt
 /// qu'affiché en `{:#}`, on lit d'abord ce qui a échoué, puis pourquoi.
 pub fn report(failure: &anyhow::Error) {
+    if plain() {
+        eline(format!("error: {failure}"));
+        for cause in failure.chain().skip(1) {
+            eline(format!("caused by: {cause}"));
+        }
+        return;
+    }
     eline(format!("{MARGIN}{} {failure}", style(CROSS).red().bold()));
     for cause in failure.chain().skip(1) {
         eline(format!(
@@ -493,7 +579,7 @@ fn emit_captured(bytes: &[u8]) {
         return;
     }
     for raw in text.lines() {
-        eline(format!("{MARGIN}  {raw}"));
+        eline(format!("{}{raw}", indent()));
     }
     blank();
 }
@@ -532,6 +618,22 @@ pub fn open_browser(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// En sortie dépouillée, rien de ce qui s'adresse à l'œil ne subsiste : ni marge, ni
+    /// glyphe. C'est la promesse du mode, et elle se vérifie sur les fonctions qui décident.
+    ///
+    /// Le drapeau est global au processus : remis à sa valeur d'origine avant de sortir, sans
+    /// quoi ce test dicterait le rendu de tous les suivants.
+    #[test]
+    fn plain_output_drops_what_only_an_eye_reads() {
+        set_plain(true);
+        assert_eq!(indent(), "");
+        assert_eq!(glyphed("*".to_string(), "done"), "done");
+
+        set_plain(false);
+        assert_eq!(indent(), "    ");
+        assert_eq!(glyphed("*".to_string(), "done"), format!("{MARGIN}* done"));
+    }
 
     #[test]
     fn a_short_duration_reads_in_milliseconds() {

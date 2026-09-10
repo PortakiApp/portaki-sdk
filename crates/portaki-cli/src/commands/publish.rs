@@ -101,7 +101,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         ui::success("dry run — nothing was pushed, nothing was announced");
         ui::field("artifact", artifact_dir.display());
         ui::field("registry", &args.registry);
-        ui::detail("drop --dry-run to push these layers and announce the version");
+        ui::advice("drop --dry-run to push these layers and announce the version");
         ui::blank();
         return Ok(());
     }
@@ -119,7 +119,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
 
     if args.no_announce {
         ui::warn("skipped the registry announcement — this version is in no catalogue");
-        ui::detail("drop --no-announce, or replay with portaki publish --announce-only");
+        ui::advice("drop --no-announce, or replay with portaki publish --announce-only");
         ui::blank();
         return Ok(());
     }
@@ -167,7 +167,7 @@ async fn announce(
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
             ui::field("digest", &pushed.digest);
-            ui::detail(
+            ui::advice(
                 "publications are immutable — shipping a change means a new version, never a \
                  re-push of this one",
             );
@@ -181,7 +181,7 @@ async fn announce(
                 "already in the registry ({} {})",
                 coords.id, coords.version
             ));
-            ui::detail("nothing to do — a replayed job lands here, and that is fine");
+            ui::advice("nothing to do — a replayed job lands here, and that is fine");
             ui::blank();
             Ok(())
         }

@@ -123,7 +123,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
 
     let publish_path = pack::assemble_publish_manifest(&module_root, &out_dir)?;
     ui::wrote("publish", relative(&publish_path, &module_root));
-    ui::detail("OCI layer source — edit portaki.module.json then rebuild");
+    ui::advice("OCI layer source — edit portaki.module.json then rebuild");
 
     ui::blank();
     ui::detail(format!("built in {}", ui::elapsed(started.elapsed())));

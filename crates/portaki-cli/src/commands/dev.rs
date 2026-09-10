@@ -103,7 +103,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
         ],
     );
     ui::blank();
-    ui::detail("a build that fails does not stop the loop — fix and save again");
+    ui::advice("a build that fails does not stop the loop — fix and save again");
     ui::detail(format!("from {}", module_root.display()));
 
     let (tx, rx) = mpsc::channel();
@@ -211,7 +211,7 @@ fn list_operations(module_root: &Path) -> Result<()> {
     ui::blank();
     // `--kind query` est le défaut : le rappeler n'apprendrait rien. C'est `command` qu'il faut
     // penser à poser, et c'est justement celui qu'on oublie.
-    ui::detail("--kind command for a mutating one · --params '{…}' passes arguments");
+    ui::advice("--kind command for a mutating one · --params '{…}' passes arguments");
     ui::blank();
     Ok(())
 }
