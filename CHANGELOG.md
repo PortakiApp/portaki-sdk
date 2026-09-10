@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.3.0...v2.4.0) (2026-09-10)
+
+
+### Features
+
+* **cli:** --plain, une sortie faite pour etre lue par un programme ([dc1aa9b](https://github.com/PortakiApp/portaki-sdk/commit/dc1aa9bb3b8f6f7334d6e04ca109130d7c1761b7))
+* **cli:** le point en vert, et de l'air au-dessus du logo ([2146ad0](https://github.com/PortakiApp/portaki-sdk/commit/2146ad0ec0b5845424b26903d054f31837ae88b2))
+* **cli:** portaki ci info, l'identite du module ([4019c44](https://github.com/PortakiApp/portaki-sdk/commit/4019c445640d8939fccf6449ab434370a0b91c24))
+* **cli:** portaki ci, ce qu'un workflow faisait en bash ([b70990f](https://github.com/PortakiApp/portaki-sdk/commit/b70990f31992026a9387a9e0f924389e7c7ad35a))
+* **sdk:** declarer ce que la plateforme retire ([cd1116e](https://github.com/PortakiApp/portaki-sdk/commit/cd1116e3f9c08a254a90328383e22da9b29c3478))
+
+
+### Bug Fixes
+
+* **cli:** lint refuse une crate et un manifeste qui divergent ([2de8657](https://github.com/PortakiApp/portaki-sdk/commit/2de8657feb7844a09f4210b5047296c3f20972d6))
+* **template:** un module scaffolde qui compile hors du depot ([b5c3704](https://github.com/PortakiApp/portaki-sdk/commit/b5c3704c335bb269d04d6fca719c3ef1f723f503))
+
 ## [2.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.2.0...v2.3.0) (2026-09-09)
 
 
