@@ -9,5 +9,5 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-portaki-sdk = { path = "../../../crates/portaki-sdk" }
-portaki-sdk-macros = { path = "../../../crates/portaki-sdk-macros" }
+portaki-sdk = "{{SDK_VERSION}}"
+portaki-sdk-macros = "{{SDK_VERSION}}"

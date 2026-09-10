@@ -139,7 +139,12 @@ fn copy_template(source: &PathBuf, dest: &PathBuf, module_name: &str) -> Result<
         }
         let target = dest.join(&target_name);
         let text = fs::read_to_string(&source_path)?;
-        let rendered = text.replace("{{MODULE_NAME}}", module_name);
+        // La version du CLI est celle du SDK avec lequel il a été publié : un module scaffoldé
+        // compile donc contre le SDK que cette commande connaît, et non contre des chemins
+        // relatifs qui ne résolvent que dans un checkout du dépôt.
+        let rendered = text
+            .replace("{{MODULE_NAME}}", module_name)
+            .replace("{{SDK_VERSION}}", env!("CARGO_PKG_VERSION"));
         fs::write(&target, rendered).with_context(|| format!("write {}", target.display()))?;
     }
     Ok(())
