@@ -47,6 +47,14 @@ pub struct LoginArgs {
     pub no_browser: bool,
 }
 
+#[derive(Debug, Parser)]
+/// Arguments for `portaki logout`.
+pub struct LogoutArgs {
+    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
+    #[arg(long)]
+    pub url: Option<String>,
+}
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceCode {
@@ -214,14 +222,57 @@ fn present(started: &DeviceCode, no_browser: bool) {
 }
 
 /// Runs `portaki logout`.
-pub fn logout() -> Result<()> {
+pub async fn logout(args: LogoutArgs) -> Result<()> {
     ui::header(
         "portaki logout",
-        "Drop the session from the system keychain.",
+        "End the session here, and on the platform.",
     );
+
+    let stored = auth::refresh_token();
+
+    // Effacé d'abord, quoi qu'il arrive ensuite : une déconnexion qui laisse les identifiants
+    // en place parce que le réseau a hoqueté serait la pire des deux moitiés — on croit être
+    // sorti, et on ne l'est nulle part.
     auth::forget()?;
-    ui::success("signed out — credentials cleared from the system keychain");
+    ui::success("signed out here — credentials cleared");
+
+    let Some(refresh_token) = stored else {
+        ui::detail("no session was stored");
+        ui::blank();
+        return Ok(());
+    };
+
+    match revoke(&base_url(args.url.as_deref()), &refresh_token).await {
+        Ok(()) => ui::success("the platform revoked this session"),
+        Err(failure) => {
+            // Le dire, parce que c'est la moitié qui protège : un jeton non révoqué reste
+            // utilisable par qui détient une copie du fichier.
+            ui::warn("could not reach the platform — this session is still valid there");
+            ui::detail(format!("{failure:#}"));
+            ui::advice("run portaki logout again once you are online");
+        }
+    }
     ui::blank();
+    Ok(())
+}
+
+/// Dit à la plateforme d'oublier ce jeton.
+///
+/// Sans quoi `portaki logout` n'efface qu'un fichier : le jeton de rafraîchissement reste
+/// valide jusqu'à son expiration, et qui détient une copie du fichier reste connecté.
+async fn revoke(base: &str, refresh_token: &str) -> Result<()> {
+    let response = reqwest::Client::new()
+        .post(format!("{base}/api/v1/auth/logout"))
+        .json(&serde_json::json!({ "refreshToken": refresh_token }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .context("tell the platform to end this session")?;
+
+    let status = response.status();
+    if !status.is_success() {
+        anyhow::bail!("the platform answered {status}");
+    }
     Ok(())
 }
 

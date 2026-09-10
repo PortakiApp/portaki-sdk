@@ -146,6 +146,12 @@ deploying. And when an argument is refused, the refusal is rendered like everyth
 CLI's own commands follow when the question was *which command*, `clap`'s suggestion is kept,
 and the pointer goes to the help page of the command you were actually in.
 
+`portaki logout` ends the session **on the platform**, not only here: it hands the stored
+refresh token back for revocation. Clearing the file alone left that token valid until it
+expired, so anyone holding a copy stayed signed in. The local credentials go first and
+unconditionally — a logout that leaves them behind because the network hiccuped is the worse
+half of both, since you believe you are out and you are out nowhere.
+
 `portaki login` opens the browser on the verification URL — pre-filled with the code when the
 platform returns one, so there is nothing left to paste. The code is printed either way; use
 `--no-browser` over SSH or on a headless box.

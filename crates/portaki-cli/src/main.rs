@@ -81,8 +81,8 @@ enum Command {
     Init(commands::init::InitArgs),
     /// Sign in with the device grant and store the token in the system keychain.
     Login(commands::login::LoginArgs),
-    /// Clear the stored credentials.
-    Logout,
+    /// End the session here and on the platform.
+    Logout(commands::login::LogoutArgs),
     /// Build, push to the hosted sandbox, and show what the run did.
     Dev(commands::dev::DevArgs),
     /// Build wasm32 artifact, manifest, and i18n bundle.
@@ -331,7 +331,7 @@ async fn dispatch(command: Command) -> Result<()> {
     match command {
         Command::Init(args) => commands::init::run(args),
         Command::Login(args) => commands::login::run(args).await,
-        Command::Logout => commands::login::logout(),
+        Command::Logout(args) => commands::login::logout(args).await,
         Command::Dev(args) => commands::dev::run(args).await,
         Command::Build(args) => commands::build::run(args).await,
         Command::Ci(args) => commands::ci::run(args).await,
