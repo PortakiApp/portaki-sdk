@@ -114,6 +114,7 @@ invocation serves both.
 | `portaki ci modules [--changed-since <ref>] [--only a,b]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
 | `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
 | `portaki ci check [--offline]` | Warns about an outdated SDK or a manifest the shell has moved past |
+| `portaki ci info` | This module's id and version — one per line under `--plain` |
 
 `ci modules` reads the layout from the manifests, not from a flag: a `portaki.module.json` at the
 root means one module, one under `modules/*/` means several. A change to the shared workspace

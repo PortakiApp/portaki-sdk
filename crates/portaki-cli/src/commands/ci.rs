@@ -47,6 +47,8 @@ pub enum CiCommand {
     SdkVersion(SdkVersionArgs),
     /// Warn about what will age badly: an old SDK, a manifest behind the host.
     Check(CheckArgs),
+    /// Print this module's id and version — what a workflow needs to name a release.
+    Info(InfoArgs),
 }
 
 /// Runs `portaki ci`.
@@ -55,7 +57,60 @@ pub async fn run(args: CiArgs) -> Result<()> {
         CiCommand::Modules(args) => modules(args),
         CiCommand::SdkVersion(args) => sdk_version(args),
         CiCommand::Check(args) => check(args).await,
+        CiCommand::Info(args) => info(args),
     }
+}
+
+#[derive(Debug, Parser)]
+/// Arguments for `portaki ci info`.
+pub struct InfoArgs {
+    /// Module root (defaults to the current directory).
+    #[arg(long)]
+    pub root: Option<PathBuf>,
+}
+
+/// L'identité du module, pour un workflow qui doit la nommer.
+///
+/// Sans elle, une action composite en était réduite à extraire la version du manifeste avec
+/// `python3` ou `jq` — une dépendance de plus sur le runner, pour un champ que le CLI lit déjà.
+fn info(args: InfoArgs) -> Result<()> {
+    let root = args
+        .root
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(std::env::current_dir)
+        .context("resolve the module root")?;
+    let manifest = root.join(MODULE_MANIFEST);
+    let raw = std::fs::read_to_string(&manifest)
+        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", manifest.display()))?;
+
+    let field = |key: &str| {
+        parsed
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let (id, version) = (field("id"), field("version"));
+    if id.is_empty() || version.is_empty() {
+        anyhow::bail!("{MODULE_MANIFEST} carries no id or no version");
+    }
+
+    emit_outputs(&[("id", &id), ("version", &version)])?;
+
+    if ui::plain() {
+        // Deux lignes, dans un ordre fixe : `read id version < <(portaki --plain ci info)`.
+        println!("{id}");
+        println!("{version}");
+        return Ok(());
+    }
+    ui::header("portaki ci info", "What this module calls itself.");
+    ui::field("id", &id);
+    ui::field("version", &version);
+    ui::blank();
+    Ok(())
 }
 
 #[derive(Debug, Parser)]
