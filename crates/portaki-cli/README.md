@@ -74,8 +74,15 @@ Saying so costs a line each.
 
 | Flag | Effect |
 |------|--------|
-| `--no-color` | Plain text, no colour and no spinners |
+| `--plain` | Bare output for scripts and CI — no logo, no headings, no glyphs, no advice. Implies `--no-color` |
+| `--no-color` | Same layout, without colour or spinners |
 | `-v`, `--verbose` | Stream the raw output of the tools the CLI drives |
+
+`--no-color` and `--plain` answer different questions. The first keeps the layout and only drops
+what a terminal paints. The second drops the layer written for a person who is discovering the
+command — the logo, the heading, the `next` block, the glyphs, the margins — and keeps what
+another program would come to read: the steps, the fields, the results, the errors. Failures
+there are prefixed `error:` rather than marked with a cross, so a log stays greppable.
 
 Colour and animation turn themselves off when the output is not a terminal, and `NO_COLOR` is
 honoured. `portaki catalog` and `portaki inspect` write nothing but their JSON to stdout, so

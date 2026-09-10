@@ -141,7 +141,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             if !granted.scopes.is_empty() {
                 ui::field("scopes", granted.scopes.join(" "));
             }
-            ui::detail(
+            ui::advice(
                 "the access token lasts minutes and renews itself — the session lives in the \
                  keychain until portaki logout",
             );
