@@ -31,6 +31,7 @@ mod manifest;
 mod oci;
 mod oidc;
 mod ui;
+mod update;
 
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
@@ -115,6 +116,10 @@ async fn main() {
         ui::report(&failure);
         std::process::exit(1);
     }
+
+    // Après la commande, jamais avant : l'avis ne retarde rien de ce qu'on attendait, et
+    // n'éloigne pas du regard la ligne qu'on est venu lire.
+    update::notify().await;
 }
 
 /// Analyse les arguments, en habillant l'aide et `--version` de ce que `clap` ne sait pas seul.
