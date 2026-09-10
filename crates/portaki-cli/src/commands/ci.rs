@@ -51,6 +51,9 @@ pub enum CiCommand {
     Check(CheckArgs),
     /// Print this module's id and version — what a workflow needs to name a release.
     Info(InfoArgs),
+    /// Tell Portaki how this run ended, so a broken module raises an alert — and a fixed one
+    /// clears it.
+    Report(ReportArgs),
 }
 
 /// Runs `portaki ci`.
@@ -60,7 +63,106 @@ pub async fn run(args: CiArgs) -> Result<()> {
         CiCommand::SdkVersion(args) => sdk_version(args),
         CiCommand::Check(args) => check(args).await,
         CiCommand::Info(args) => info(args),
+        CiCommand::Report(args) => report(args).await,
     }
+}
+
+#[derive(Debug, Parser)]
+/// Arguments for `portaki ci report`.
+pub struct ReportArgs {
+    /// How the run ended — `success`, `failure`, `cancelled`.
+    #[arg(long)]
+    pub outcome: String,
+    /// Where to look at it. Defaults to the current GitHub Actions run.
+    #[arg(long)]
+    pub run_url: Option<String>,
+    /// Module root (defaults to the current directory).
+    #[arg(long)]
+    pub root: Option<PathBuf>,
+    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
+    #[arg(long)]
+    pub url: Option<String>,
+}
+
+/// Dit à Portaki comment ce run s'est terminé.
+///
+/// Rien n'est stocké côté module : Portaki n'a aucun droit de lecture sur vos runs. C'est le
+/// jeton OIDC — émis par GitHub pour la durée du job — qui prouve d'où vient le rapport.
+///
+/// À appeler sur *tous* les dénouements, pas seulement les échecs : conditionné à l'échec, ce
+/// rapport ne pourrait jamais éteindre une alerte, et un module réparé garderait la sienne
+/// indéfiniment.
+///
+/// Un rapport qui échoue n'échoue pas le run. Il vient après la publication, qui a déjà eu
+/// lieu ; faire rougir un job pour un compte rendu inverserait l'importance des deux.
+async fn report(args: ReportArgs) -> Result<()> {
+    let root = args
+        .root
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(std::env::current_dir)
+        .context("resolve the module root")?;
+    let module_id = read_module_id(&root)?;
+    let base = crate::auth::api_base_url(args.url.as_deref());
+    let run_url = args.run_url.clone().or_else(github_run_url);
+
+    match deliver(&base, &module_id, &args.outcome, run_url.as_deref()).await {
+        Ok(()) => ui::success(format!("reported {} for {module_id}", args.outcome)),
+        Err(failure) => {
+            ui::skipped(format!("could not report the run: {failure}"));
+            ui::advice("the publication itself is unaffected — only the alert was not updated");
+        }
+    }
+    if !ui::plain() {
+        ui::blank();
+    }
+    Ok(())
+}
+
+async fn deliver(base: &str, module_id: &str, outcome: &str, run_url: Option<&str>) -> Result<()> {
+    if !crate::oidc::available() {
+        anyhow::bail!("no OIDC token available — add `permissions: id-token: write` to the job");
+    }
+    let token = crate::oidc::request_token(&crate::oidc::audience(base)).await?;
+    let response = reqwest::Client::new()
+        .post(format!("{}/registry/v1/runs", base.trim_end_matches('/')))
+        .bearer_auth(token)
+        .json(&serde_json::json!({
+            "moduleId": module_id,
+            "outcome": outcome,
+            "runUrl": run_url.unwrap_or_default(),
+        }))
+        .send()
+        .await?;
+    let status = response.status();
+    if !status.is_success() {
+        anyhow::bail!("the registry answered {status}");
+    }
+    Ok(())
+}
+
+/// L'adresse de ce run, reconstruite depuis ce que GitHub Actions pose dans l'environnement.
+fn github_run_url() -> Option<String> {
+    let server = std::env::var("GITHUB_SERVER_URL").ok()?;
+    let repository = std::env::var("GITHUB_REPOSITORY").ok()?;
+    let run = std::env::var("GITHUB_RUN_ID").ok()?;
+    Some(format!("{server}/{repository}/actions/runs/{run}"))
+}
+
+/// L'identifiant du module, lu là où il est déclaré.
+///
+/// Le template le tirait du nom du dépôt — faux dès qu'un dépôt en porte plusieurs, et fragile
+/// même seul : rien n'oblige un dépôt à porter le nom de son module.
+fn read_module_id(root: &Path) -> Result<String> {
+    let manifest = root.join(MODULE_MANIFEST);
+    let raw = std::fs::read_to_string(&manifest)
+        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
+    let parsed: serde_json::Value = serde_json::from_str(&raw)?;
+    parsed
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .with_context(|| format!("{MODULE_MANIFEST} carries no id"))
 }
 
 #[derive(Debug, Parser)]
@@ -904,6 +1006,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
                 "manque {expected}"
             );
         }
+    }
+
+    /// Le template tirait l'id du nom du dépôt : faux dès qu'un dépôt en porte plusieurs, et
+    /// fragile même seul. Il est déclaré, donc il se lit.
+    #[test]
+    fn the_module_id_comes_from_the_manifest_not_the_directory() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join(MODULE_MANIFEST),
+            r#"{"id":"access-guide","version":"0.3.2"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(read_module_id(root.path()).unwrap(), "access-guide");
+    }
+
+    #[test]
+    fn a_manifest_without_an_id_says_so() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(MODULE_MANIFEST), r#"{"version":"1.0.0"}"#).unwrap();
+
+        assert!(read_module_id(root.path()).is_err());
     }
 
     /// Un dossier sous `modules/` sans manifeste n'est pas un module — `target/`, par exemple.

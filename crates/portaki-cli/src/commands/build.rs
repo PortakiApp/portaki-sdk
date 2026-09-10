@@ -125,6 +125,11 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     ui::wrote("publish", relative(&publish_path, &module_root));
     ui::advice("OCI layer source — edit portaki.module.json then rebuild");
 
+    if !args.manifest_only {
+        let coords = pack::read_module_coordinates(&module_root, &out_dir)?;
+        reject_wasm_bindgen(&pack::find_wasm_artifact(&module_root, &coords.id)?)?;
+    }
+
     ui::blank();
     ui::detail(format!("built in {}", ui::elapsed(started.elapsed())));
     if !args.nested {
@@ -142,6 +147,34 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     }
     Ok(())
 }
+
+/// Refuse un wasm qui attend `wasm-bindgen`.
+///
+/// L'hôte Extism ne fournit pas ces imports : le module se chargerait puis échouerait à
+/// l'exécution, loin d'ici, avec un message qui ne désigne pas la cause. Une dépendance tirée
+/// sans y penser suffit à les faire apparaître — c'est arrivé, et le contrôle vivait depuis
+/// dans le script bash d'un dépôt. Il appartient au build.
+fn reject_wasm_bindgen(wasm: &std::path::Path) -> Result<()> {
+    let bytes = std::fs::read(wasm).with_context(|| format!("read {}", wasm.display()))?;
+    // Cherché dans les octets et non dans une table d'imports décodée : le nom apparaît en
+    // clair dans la section des imports, et lire le format complet pour une chaîne coûterait un
+    // analyseur wasm de plus.
+    if bytes
+        .windows(WBINDGEN.len())
+        .any(|window| window == WBINDGEN)
+    {
+        anyhow::bail!(
+            "{} imports wasm-bindgen — the Extism host provides none of it, so the module \
+             would load and then fail at run time. A dependency pulled it in: build with \
+             --target wasm32-unknown-unknown only, and check what was added recently",
+            wasm.display()
+        );
+    }
+    Ok(())
+}
+
+/// La marque que laisse `wasm-bindgen` dans la section des imports.
+const WBINDGEN: &[u8] = b"__wbindgen";
 
 /// Le chemin tel qu'on le retaperait : depuis la racine du module, pas depuis la racine du disque.
 fn relative(path: &std::path::Path, root: &std::path::Path) -> String {
@@ -193,4 +226,34 @@ fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<Option<PathBuf>> {
     }
     archive.finish()?;
     Ok(Some(dest.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Le contrôle qui vivait dans un script bash : un wasm qui attend `wasm-bindgen` se charge
+    /// puis échoue à l'exécution, loin du build, avec un message qui ne désigne pas la cause.
+    #[test]
+    fn a_wasm_importing_wasm_bindgen_is_refused() {
+        let directory = tempfile::tempdir().unwrap();
+        let wasm = directory.path().join("module.wasm");
+        let mut bytes = b"\0asm\x01\0\0\0".to_vec();
+        bytes.extend_from_slice(b"__wbindgen_placeholder__");
+        std::fs::write(&wasm, bytes).unwrap();
+
+        let refusal = reject_wasm_bindgen(&wasm).unwrap_err().to_string();
+
+        assert!(refusal.contains("wasm-bindgen"));
+        assert!(refusal.contains("run time"));
+    }
+
+    #[test]
+    fn a_plain_wasm_passes() {
+        let directory = tempfile::tempdir().unwrap();
+        let wasm = directory.path().join("module.wasm");
+        std::fs::write(&wasm, b"\0asm\x01\0\0\0kv.get").unwrap();
+
+        assert!(reject_wasm_bindgen(&wasm).is_ok());
+    }
 }

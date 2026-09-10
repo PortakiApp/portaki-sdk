@@ -1,5 +1,11 @@
 name: release
 
+# Publie ce module quand un tag `v*` est poussé.
+#
+# Tout le travail est dans `portaki-release-action` : compiler en wasm32, valider le manifeste,
+# pousser l'artefact OCI, annoncer la version au registre, et avertir de ce qui vieillit. Ce
+# fichier ne dit que *quand*.
+
 on:
   push:
     tags:
@@ -8,54 +14,23 @@ on:
 permissions:
   contents: read
   packages: write
-  # Le jeton OIDC : il sert à publier, et à dire à Portaki comment le run s'est terminé.
+  # Sans ce droit, GitHub n'émet aucun jeton OIDC et il n'y a rien à échanger contre un
+  # credential de publication. C'est ce jeton qui remplace un secret longue durée : il n'y a
+  # rien à ranger dans les secrets du dépôt.
   id-token: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    # La liaison enregistrée au registre exige un environment sur le canal stable : c'est lui
+    # qui porte les relecteurs obligatoires. Sans lui l'échange est refusé —
+    # `environment_required`. Liez d'abord ce module à ce dépôt depuis le dashboard.
+    environment: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Install portaki CLI
-        run: cargo install --path ../../../crates/portaki-cli --locked
-      - run: portaki build --release
-      - run: portaki lint
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - run: portaki publish --registry ghcr.io/portakiapp/portaki-modules
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Dit à Portaki comment ce run s'est terminé.
-      #
-      # `if: always()` et non `if: failure()` : conditionné à l'échec, ce pas ne pourrait jamais
-      # ÉTEINDRE une alerte, et un module réparé garderait la sienne indéfiniment.
-      #
-      # Rien n'est stocké de votre côté : Portaki n'a aucun droit de lecture sur vos runs, c'est
-      # ce jeton — émis par GitHub pour la durée du job — qui prouve d'où vient le rapport.
-      #
-      # `|| true` : un rapport qui échoue ne doit pas faire échouer une publication réussie.
-      - name: Report the run outcome to Portaki
-        if: always()
-        env:
-          PORTAKI_API_URL: ${{ vars.PORTAKI_API_URL || 'https://api.portaki.app' }}
-          MODULE_ID: ${{ github.event.repository.name }}
-          OUTCOME: ${{ job.status }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -u
-          oidc=$(curl -sS \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.portaki.app/registry" \
-            | jq -r '.value')
-          curl -sS -X POST "$PORTAKI_API_URL/registry/v1/runs" \
-            -H "Authorization: Bearer $oidc" \
-            -H 'Content-Type: application/json' \
-            -d "{\"moduleId\":\"$MODULE_ID\",\"outcome\":\"$OUTCOME\",\"runUrl\":\"$RUN_URL\"}" \
-            || true
+      - uses: PortakiApp/portaki-release-action@v1
