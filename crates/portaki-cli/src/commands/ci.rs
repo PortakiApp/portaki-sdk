@@ -17,6 +17,7 @@ use portaki_sdk::manifest::ModuleManifest;
 
 use crate::manifest::generator::{MANIFEST_VERSION, SDUI_SCHEMA_VERSION};
 use crate::ui;
+use crate::update::outdated;
 
 /// Le manifeste qui fait d'un dossier un module.
 const MODULE_MANIFEST: &str = "portaki.module.json";
@@ -814,24 +815,6 @@ async fn latest_sdk() -> Result<String> {
         .context("crates.io did not say which version is newest")
 }
 
-/// `declared` est-il en retard sur `latest` ?
-///
-/// Comparé composant par composant, en nombres : `2.10.0` est postérieur à `2.9.0`, ce qu'un
-/// ordre lexicographique inverserait.
-fn outdated(declared: &str, latest: &str) -> bool {
-    parts(latest) > parts(declared)
-}
-
-fn parts(version: &str) -> Vec<u64> {
-    version
-        .split('-')
-        .next()
-        .unwrap_or(version)
-        .split('.')
-        .map(|part| part.parse().unwrap_or(0))
-        .collect()
-}
-
 /// Rend les valeurs disponibles à l'étape suivante du workflow.
 fn emit_outputs(pairs: &[(&str, &str)]) -> Result<()> {
     let Ok(path) = std::env::var("GITHUB_OUTPUT") else {
@@ -903,14 +886,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
     }
 
     /// Comparées en nombres : lexicographiquement, `2.9.0` passerait pour postérieur à `2.10.0`.
-    #[test]
-    fn versions_compare_as_numbers_not_as_text() {
-        assert!(outdated("2.9.0", "2.10.0"));
-        assert!(!outdated("2.10.0", "2.9.0"));
-        assert!(!outdated("2.3.0", "2.3.0"));
-        assert!(outdated("2.2.0", "2.3.0"));
-    }
-
     /// Le socle commun fait tout reconstruire — mais un fichier de CI n'en fait pas partie,
     /// sinon la moindre retouche de workflow déclencherait vingt et une publications.
     #[test]

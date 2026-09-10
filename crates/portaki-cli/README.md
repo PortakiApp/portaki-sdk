@@ -93,6 +93,20 @@ the copyright — they travel with the binary, which often circulates without it
 `portaki --version` adds where the source lives and the Apache-2.0 "AS IS" disclaimer, while
 `-V` stays a single parseable line for scripts.
 
+After a command has done its work, `portaki` says so when a newer version is published:
+
+```
+  ▲ portaki 2.4.0 → 2.5.0 is available
+    cargo install portaki-cli --locked --force
+    PORTAKI_NO_UPDATE_CHECK=1 silences this
+```
+
+The answer is cached for a day, and the one command that refreshes it gives up after a second
+and a half — the notice must never be the reason a build feels slow. It is printed after the
+command, not before, so it delays nothing and does not push the line you came to read out of
+sight. It stays quiet under `--plain`, when the output is not a terminal, and when
+`PORTAKI_NO_UPDATE_CHECK` is set.
+
 `portaki dev --dispatch`, with no operation name, lists what the module exposes — queries and
 commands, each with the Rust function behind it — read from the manifest, without building or
 deploying. And when an argument is refused, the refusal is rendered like everything else: the
