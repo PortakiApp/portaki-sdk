@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
+use portaki_sdk::manifest::ModuleManifest;
+
 use crate::manifest::generator::{MANIFEST_VERSION, SDUI_SCHEMA_VERSION};
 use crate::ui;
 
@@ -566,6 +568,13 @@ async fn check(args: CheckArgs) -> Result<()> {
                 // Un registre injoignable n'est pas un défaut du module : le dire, et continuer.
                 Err(failure) => ui::skipped(format!("could not reach crates.io: {failure}")),
             }
+
+            match withdrawn(&resolved.version).await {
+                Ok(catalogue) => found += warn_about_withdrawn(&manifest, &catalogue),
+                // Le registre est la source, mais son indisponibilité n'est pas un défaut du
+                // module : un build ne doit pas échouer parce qu'une plateforme répond mal.
+                Err(failure) => ui::skipped(format!("could not read the deprecations: {failure}")),
+            }
         }
     }
 
@@ -592,6 +601,96 @@ fn annotate(file: Option<&str>, message: impl std::fmt::Display) {
         return;
     }
     ui::warn(message);
+}
+
+/// Ce que le manifeste déclare et que la plateforme retire.
+///
+/// Les identifiants sont comparés à ceux du contrat, jamais interprétés : le CLI ne sait pas ce
+/// qu'est `core.storage`, il sait seulement que le module le nomme et que le registre l'annonce
+/// partant. C'est ce qui permet à une dépréciation de circuler sans nouvelle version du CLI.
+fn warn_about_withdrawn(manifest: &ModuleManifest, catalogue: &[Withdrawn]) -> usize {
+    let declared = declared_ids(manifest);
+
+    let mut found = 0;
+    for entry in catalogue {
+        if !declared.iter().any(|name| name == &entry.id) {
+            continue;
+        }
+        found += 1;
+        let replacement = match &entry.replacement {
+            Some(replacement) => format!(" — use {replacement}"),
+            None => String::new(),
+        };
+        annotate(
+            Some(MODULE_MANIFEST),
+            format!(
+                "{} `{}` is deprecated since {}{replacement}: {}",
+                entry.subject, entry.id, entry.since, entry.note
+            ),
+        );
+    }
+    found
+}
+
+/// Tout ce que le manifeste nomme et que la plateforme pourrait retirer sous ses pieds.
+///
+/// Séparé du rendu pour être vérifiable : c'est la liste qui décide si un module est concerné,
+/// et l'oublier d'une seule catégorie rendrait l'avertissement muet là où il compte.
+fn declared_ids(manifest: &ModuleManifest) -> Vec<String> {
+    manifest
+        .capabilities
+        .required
+        .iter()
+        .chain(manifest.capabilities.provided.iter())
+        .map(|capability| capability.as_str().to_string())
+        .chain(
+            manifest
+                .capabilities
+                .optional
+                .iter()
+                .map(|capability| capability.id.as_str().to_string()),
+        )
+        .chain(manifest.connectors.builtin.iter().cloned())
+        .collect()
+}
+
+/// Une entrée du contrat des dépréciations, telle que le registre la rend.
+#[derive(Debug, serde::Deserialize)]
+struct Withdrawn {
+    id: String,
+    subject: String,
+    since: String,
+    #[serde(default)]
+    replacement: Option<String>,
+    #[serde(default)]
+    note: String,
+}
+
+/// Le contrat des dépréciations de cette version du SDK.
+///
+/// Sur sa route dédiée plutôt qu'en lisant tous les contrats de la version : `ci check` tourne à
+/// chaque build, et télécharger le schéma de manifeste et les primitives SDUI pour lire une
+/// liste souvent vide serait payer cher une question bon marché.
+///
+/// Une version que le registre ne connaît pas — un SDK compilé depuis une branche, jamais
+/// publié — rend un 404. Ce n'est pas un défaut du module : il n'y a rien à dire, et on se tait.
+async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
+    let base = crate::auth::api_base_url(None);
+    let response = reqwest::Client::new()
+        .get(format!(
+            "{base}/registry/v1/sdk-releases/{sdk_version}/deprecations"
+        ))
+        .send()
+        .await?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(Vec::new());
+    }
+    let body: serde_json::Value = response.json().await?;
+    let entries = body
+        .get("deprecations")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    Ok(serde_json::from_value(entries).unwrap_or_default())
 }
 
 /// La dernière version publiée du SDK.
@@ -738,6 +837,73 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
             std::fs::write(directory.join(MODULE_MANIFEST), r#"{"id":"x"}"#).unwrap();
         }
         assert_eq!(discover(many.path()).unwrap(), vec!["nuki", "weather"]);
+    }
+
+    /// Le contrat vient du registre : sa forme est un contrat, pas un détail.
+    #[test]
+    fn the_registry_document_reads_as_the_cli_expects() {
+        let document = serde_json::json!([
+            {
+                "id": "core.storage",
+                "subject": "capability",
+                "since": "2.4.0",
+                "replacement": "core.kv",
+                "note": "typed repositories replace raw storage"
+            },
+            { "id": "kv.list", "subject": "hostOp", "since": "2.4.0", "note": "never scaled" }
+        ]);
+
+        let parsed: Vec<Withdrawn> = serde_json::from_value(document).unwrap();
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].replacement.as_deref(), Some("core.kv"));
+        // Sans remplaçant, la clé est absente du document — elle ne doit pas faire échouer la
+        // lecture, sans quoi un avertissement disparaîtrait au lieu de s'afficher.
+        assert!(parsed[1].replacement.is_none());
+        assert_eq!(parsed[1].since, "2.4.0");
+    }
+
+    /// Une catégorie oubliée ici rendrait l'avertissement muet là où il compte.
+    #[test]
+    fn every_kind_of_declaration_is_looked_at() {
+        let raw = serde_json::json!({
+            "manifestVersion": "1",
+            "id": "weather",
+            "version": "1.0.0",
+            "displayName": "k",
+            "description": "k",
+            "author": { "name": "x" },
+            "uiSchema": { "host": "1", "guest": "1" },
+            "capabilities": {
+                "required": ["core.storage"],
+                "optional": [
+                    { "id": "core.guests.notifications", "purpose_key": "k", "fallback_key": "k" }
+                ],
+                "provided": ["access.smart_lock"]
+            },
+            "connectors": { "builtin": ["open-weather"], "custom": [] },
+            "entities": [],
+            "surfaces": {},
+            "queries": [],
+            "commands": [],
+            "events": {},
+            "i18n": { "default": "fr-FR", "supported": ["fr-FR"] }
+        });
+        let manifest: ModuleManifest = serde_json::from_value(raw).expect("manifeste lisible");
+
+        let declared = declared_ids(&manifest);
+
+        for expected in [
+            "core.storage",
+            "core.guests.notifications",
+            "access.smart_lock",
+            "open-weather",
+        ] {
+            assert!(
+                declared.iter().any(|id| id == expected),
+                "manque {expected}"
+            );
+        }
     }
 
     /// Un dossier sous `modules/` sans manifeste n'est pas un module — `target/`, par exemple.

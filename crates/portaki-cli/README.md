@@ -113,7 +113,7 @@ invocation serves both.
 |---------|---------|
 | `portaki ci modules [--changed-since <ref>] [--only a,b]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
 | `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
-| `portaki ci check [--offline]` | Warns about an outdated SDK or a manifest the shell has moved past |
+| `portaki ci check [--offline]` | Warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
 
 `ci modules` reads the layout from the manifests, not from a flag: a `portaki.module.json` at the
@@ -125,6 +125,12 @@ workflow file rebuilds nothing.
 git branch or by path, and only the lock says what will actually compile. The key it prints is
 the version alone, because the CLI installs from crates.io — `cargo install portaki-cli@<key>` —
 so the cache turns over when the SDK does, not on every commit to its branch.
+
+Deprecations come from the registry, which serves them per SDK version alongside the other
+contracts. A module is warned only about what it actually declares — capabilities required,
+optional or provided, and built-in connectors. A registry that cannot be reached, or an SDK
+version it has never seen, is reported and never fails the run: neither is a defect of the
+module.
 
 ```bash
 portaki --plain ci modules --changed-since "$BASE"   # ["access-guide","weather"]
