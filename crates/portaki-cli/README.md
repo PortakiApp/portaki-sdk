@@ -123,6 +123,19 @@ not a repository.
 A session ended with ctrl-c never releases it — nothing runs then. The next launch takes it over
 as soon as the recorded process is gone, so an interruption never wedges the command.
 
+The same exclusion holds **account-wide**, from the registry: two laptops on one account share
+one sandbox, and only the registry sees both. It is a lease, not a lock — nothing can ask a
+remote process whether it is still alive, so the session pushes the deadline back while it runs
+and the account frees itself when it stops.
+
+What a network failure does, since it will happen:
+
+| | |
+|---|---|
+| Unreachable when the session starts | Warns and carries on. Refusing to work because a lock service is down costs more than the nuisance it prevents — and the local lock still covers this machine |
+| A renewal fails | Retries in silence. The lease outlives several missed renewals; only a long outage is reported |
+| The lease was taken over | Stops. Carrying on would be exactly the mutual clobbering this exists to prevent |
+
 `portaki dev --dispatch`, with no operation name, lists what the module exposes — queries and
 commands, each with the Rust function behind it — read from the manifest, without building or
 deploying. And when an argument is refused, the refusal is rendered like everything else: the

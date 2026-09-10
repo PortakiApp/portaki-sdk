@@ -68,16 +68,28 @@ pub async fn run(args: DevArgs) -> Result<()> {
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
 
-    // Pris avant le premier build, pas après : refuser une seconde session une fois qu'elle a
+    // Prise avant le premier build, pas après : refuser une seconde session une fois qu'elle a
     // compilé et déployé aurait déjà écrasé dans le bac à sable ce que la première y tenait.
-    //
-    // Tenu jusqu'à la fin du processus. Une interruption par ctrl-c ne le rend pas — rien ne
-    // s'exécute alors — mais le prochain lancement le reprendra en constatant que le PID
-    // inscrit n'existe plus.
-    let _watching = match args.watch {
-        true => Some(crate::watch_lock::acquire(&module_id)?),
+    let watching = match args.watch {
+        true => Some(crate::dev_session::start(&base_url, &module_id, &token).await?),
         false => None,
     };
+
+    // Ctrl-c ne déroule rien : sans ceci, le bail resterait pris jusqu'à son échéance et le
+    // verrou local jusqu'au prochain lancement. Ni l'un ni l'autre n'est grave — les deux se
+    // reprennent seuls — mais rendre la place tout de suite évite une attente pour rien.
+    if let Some(session) = &watching {
+        // Une poignée, pas la session : une tâche qui la retiendrait empêcherait son `Drop` de
+        // s'exécuter au retour normal, et le verrou local survivrait à chaque échec.
+        let release = session.release();
+        tokio::spawn(async move {
+            if tokio::signal::ctrl_c().await.is_ok() {
+                release.now().await;
+                ui::blank();
+                std::process::exit(130);
+            }
+        });
+    }
 
     let mut last_digest = String::new();
     cycle(
