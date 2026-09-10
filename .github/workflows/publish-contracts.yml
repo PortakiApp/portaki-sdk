@@ -47,7 +47,7 @@ jobs:
       # Le garde-fou du script (tag vs Cargo.toml) attrapait le cas et faisait échouer le job.
       # Il reste, mais il ne devrait pas être ce qui empêche la faute : un déclenchement manuel
       # ne doit pas être une arme chargée dont seule une vérification en aval retient le coup.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
 
