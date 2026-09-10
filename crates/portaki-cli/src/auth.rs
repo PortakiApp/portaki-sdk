@@ -144,6 +144,14 @@ fn credentials_path() -> Result<PathBuf> {
             return Ok(PathBuf::from(explicit));
         }
     }
+    Ok(config_dir()?.join("credentials.json"))
+}
+
+/// Le dossier où la CLI range ce qui appartient à cette personne sur cette machine.
+///
+/// Hors du dépôt, toujours : ce qui vit ici traverse les projets, et n'a rien à faire dans un
+/// arbre de travail.
+pub fn config_dir() -> Result<PathBuf> {
     let base = match std::env::var("XDG_CONFIG_HOME") {
         Ok(xdg) if !xdg.trim().is_empty() => PathBuf::from(xdg),
         _ => {
@@ -151,7 +159,7 @@ fn credentials_path() -> Result<PathBuf> {
             PathBuf::from(home).join(".config")
         }
     };
-    Ok(base.join("portaki").join("credentials.json"))
+    Ok(base.join("portaki"))
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]

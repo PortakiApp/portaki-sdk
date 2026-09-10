@@ -32,6 +32,7 @@ mod oci;
 mod oidc;
 mod ui;
 mod update;
+mod watch_lock;
 
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};

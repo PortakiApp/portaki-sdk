@@ -68,6 +68,17 @@ pub async fn run(args: DevArgs) -> Result<()> {
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
 
+    // Pris avant le premier build, pas après : refuser une seconde session une fois qu'elle a
+    // compilé et déployé aurait déjà écrasé dans le bac à sable ce que la première y tenait.
+    //
+    // Tenu jusqu'à la fin du processus. Une interruption par ctrl-c ne le rend pas — rien ne
+    // s'exécute alors — mais le prochain lancement le reprendra en constatant que le PID
+    // inscrit n'existe plus.
+    let _watching = match args.watch {
+        true => Some(crate::watch_lock::acquire(&module_id)?),
+        false => None,
+    };
+
     let mut last_digest = String::new();
     cycle(
         &args,
