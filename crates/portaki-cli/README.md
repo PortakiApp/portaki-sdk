@@ -127,16 +127,20 @@ not a repository.
 A session ended with ctrl-c never releases it — nothing runs then. The next launch takes it over
 as soon as the recorded process is gone, so an interruption never wedges the command.
 
-The same exclusion holds **account-wide**, from the registry: two laptops on one account share
-one sandbox, and only the registry sees both. It is a lease, not a lock — nothing can ask a
+The same exclusion holds **account-wide**, from the dev platform: two laptops on one account
+share one sandbox, and only the server sees both. It is a lease, not a lock — nothing can ask a
 remote process whether it is still alive, so the session pushes the deadline back while it runs
 and the account frees itself when it stops.
+
+The lease is held by the service that owns the sandbox, so it is the deploy itself that gets
+refused, not merely the request to hold the place. A client that skips the lease — or that could
+not reach the server to take it — still cannot overwrite a session that holds it.
 
 What a network failure does, since it will happen:
 
 | | |
 |---|---|
-| Unreachable when the session starts | Warns and carries on. Refusing to work because a lock service is down costs more than the nuisance it prevents — and the local lock still covers this machine |
+| Unreachable when the session starts | Warns and carries on. Refusing to work because a lock service is down costs more than the nuisance it prevents — the local lock still covers this machine, and the server refuses the deploy anyway if someone else holds the account |
 | A renewal fails | Retries in silence. The lease outlives several missed renewals; only a long outage is reported |
 | The lease was taken over | Stops. Carrying on would be exactly the mutual clobbering this exists to prevent |
 

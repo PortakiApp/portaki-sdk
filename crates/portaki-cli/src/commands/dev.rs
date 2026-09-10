@@ -100,6 +100,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
         &module_id,
         &mut token,
         &mut last_digest,
+        session.session_id(),
     )
     .await;
 
@@ -175,6 +176,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
             &module_id,
             &mut token,
             &mut last_digest,
+            session.session_id(),
         )
         .await
         {
@@ -269,6 +271,7 @@ async fn cycle(
     module_id: &str,
     token: &mut String,
     last_digest: &mut String,
+    session: Option<&str>,
 ) -> Result<()> {
     build(module_root)?;
 
@@ -309,13 +312,13 @@ async fn cycle(
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
     let uploading = ui::step(format!("deploying {module_id} to the sandbox"));
-    let first = deploy(base_url, module_id, token, &wasm, &manifest).await;
+    let first = deploy(base_url, module_id, token, &wasm, &manifest, session).await;
     let deployed = match first {
         Err(failure) if failure.is::<Unauthorized>() => {
             uploading.say("renewing the access token");
             *token = reauthenticate().await?;
             uploading.say(format!("deploying {module_id} to the sandbox"));
-            deploy(base_url, module_id, token, &wasm, &manifest).await?
+            deploy(base_url, module_id, token, &wasm, &manifest, session).await?
         }
         other => other.map_err(|failure| {
             uploading.abandon();
@@ -381,19 +384,28 @@ struct DeployResponse {
     size_bytes: u64,
 }
 
+/// `session` est celle du bail, quand nous l'avons obtenu.
+///
+/// Elle dit au serveur que ce push est celui du détenteur. Sans elle — bail non obtenu — il
+/// n'admet le push que si personne d'autre ne tient la place, ce qui est exactement la garantie
+/// que le verrou local ne peut pas donner.
 async fn deploy(
     base_url: &str,
     module_id: &str,
     token: &str,
     wasm: &[u8],
     manifest: &str,
+    session: Option<&str>,
 ) -> Result<DeployResponse> {
-    let form = reqwest::multipart::Form::new()
+    let mut form = reqwest::multipart::Form::new()
         .part(
             "wasm",
             reqwest::multipart::Part::bytes(wasm.to_vec()).file_name("backend.wasm"),
         )
         .text("manifest", manifest.to_owned());
+    if let Some(session) = session {
+        form = form.text("sessionId", session.to_owned());
+    }
 
     let response = reqwest::Client::new()
         .post(format!(

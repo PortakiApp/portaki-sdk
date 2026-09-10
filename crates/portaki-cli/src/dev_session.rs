@@ -1,16 +1,23 @@
-//! Une seule session `--watch` par compte, tenue auprès du registre.
+//! Une seule session `portaki dev` par compte, tenue auprès de devapi.
 //!
-//! # Pourquoi côté registre
+//! # Pourquoi côté plateforme
 //!
 //! Le verrou de [`crate::watch_lock`] ne voit que sa machine. Deux portables, un seul compte,
-//! un seul bac à sable : les deux sessions poussent tour à tour des modules différents et
-//! chacune défait ce que l'autre vient de faire. Seul le registre voit les deux.
+//! une seule sandbox : les deux sessions poussent tour à tour des modules différents et
+//! chacune défait ce que l'autre vient de faire. Seul le serveur voit les deux.
+//!
+//! # Pourquoi devapi et non le registre
+//!
+//! Le bail a d'abord vécu chez le registre, où il ne pouvait qu'être demandé poliment : le
+//! `dev-deploy` qu'il protège a lieu chez devapi, qui ne le voyait pas. Un client qui l'ignorait
+//! — ou qui avait perdu le registre à la prise — écrasait quand même la sandbox de l'autre.
+//! Depuis devapi, le refus est opposé à l'écriture elle-même.
 //!
 //! # Un bail, pas un verrou
 //!
 //! Rien ici ne peut interroger un processus distant. Un portable qu'on ferme, un réseau qu'on
 //! coupe, un `kill -9` : le détenteur disparaît sans rien rendre, et le compte resterait pris
-//! jusqu'à intervention humaine. Le registre donne donc un bail à échéance, que cette session
+//! jusqu'à intervention humaine. Le serveur donne donc un bail à échéance, que cette session
 //! repousse tant qu'elle vit — et qui libère le compte tout seul quand elle cesse.
 //!
 //! # Ce que fait un réseau qui tombe
@@ -33,7 +40,7 @@ use anyhow::{Context, Result};
 
 use crate::ui;
 
-/// Ce que le registre rend quand il accorde le bail.
+/// Ce que le serveur rend quand il accorde le bail.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Lease {
@@ -76,7 +83,7 @@ impl Release {
             return;
         };
         let _ = reqwest::Client::new()
-            .delete(format!("{}/registry/v1/dev-watch", holder.base_url))
+            .delete(format!("{}/dev/v1/dev-watch", holder.base_url))
             .query(&[("sessionId", &holder.session_id)])
             .bearer_auth(&holder.token)
             .timeout(Duration::from_secs(3))
@@ -91,10 +98,10 @@ struct LeaseHolder {
     token: String,
 }
 
-/// Prend la place — localement d'abord, puis auprès du registre.
+/// Prend la place — localement d'abord, puis auprès de devapi.
 ///
 /// Le verrou local en premier parce qu'il est immédiat et sans réseau : inutile d'aller
-/// interroger le registre pour se faire refuser par sa propre machine.
+/// interroger le serveur pour se faire refuser par sa propre machine.
 pub async fn start(base_url: &str, module_id: &str, token: &str) -> Result<DevSession> {
     let local = crate::watch_lock::acquire(module_id)?;
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -120,10 +127,11 @@ pub async fn start(base_url: &str, module_id: &str, token: &str) -> Result<DevSe
             held.machine
         ),
         Err(unreachable) => {
-            // Le registre ne répond pas. On le dit et on continue : le verrou local couvre
-            // encore cette machine, et refuser de travailler pour cette raison coûterait plus
-            // que la gêne qu'on évite.
-            ui::warn("could not reach the registry — this session is not held account-wide");
+            // devapi ne répond pas. On le dit et on continue : le verrou local couvre encore
+            // cette machine, et refuser de travailler pour cette raison coûterait plus que la
+            // gêne qu'on évite. Le serveur refusera de toute façon le déploiement si quelqu'un
+            // d'autre tient la place — c'est lui qui garde la sandbox, pas nous.
+            ui::warn("could not reach the dev platform — this session is not held account-wide");
             // La chaîne entière : le contexte seul dit ce qu'on tentait, pas ce qui a échoué.
             ui::detail(format!("{unreachable:#}"));
             ui::advice("another machine on this account could start one too");
@@ -133,6 +141,15 @@ pub async fn start(base_url: &str, module_id: &str, token: &str) -> Result<DevSe
 }
 
 impl DevSession {
+    /// La session telle que le bail la connaît, si nous l'avons obtenu.
+    ///
+    /// `None` quand la prise a échoué : nous poussons alors sans rien pouvoir prouver, et c'est
+    /// le serveur qui tranche — il n'admet un push anonyme que si personne d'autre ne tient la
+    /// place. Envoyer un identifiant inventé serait pire, il ressemblerait à un détenteur.
+    pub fn session_id(&self) -> Option<&str> {
+        self.lease.as_ref().map(|holder| holder.session_id.as_str())
+    }
+
     /// De quoi rendre la place depuis une autre tâche.
     pub fn release(&self) -> Release {
         Release {
@@ -149,7 +166,7 @@ enum Kept {
 
 async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
     let response = reqwest::Client::new()
-        .put(format!("{}/registry/v1/dev-watch", holder.base_url))
+        .put(format!("{}/dev/v1/dev-watch", holder.base_url))
         .bearer_auth(&holder.token)
         .json(&serde_json::json!({
             "sessionId": holder.session_id,
@@ -159,7 +176,7 @@ async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
         .timeout(Duration::from_secs(10))
         .send()
         .await
-        .context("ask the registry for the watch session")?;
+        .context("ask the dev platform for the watch session")?;
 
     if response.status() == reqwest::StatusCode::CONFLICT {
         return Ok(Kept::Theirs(
@@ -171,7 +188,7 @@ async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
     }
     let status = response.status();
     if !status.is_success() {
-        anyhow::bail!("the registry answered {status}");
+        anyhow::bail!("the dev platform answered {status}");
     }
     Ok(Kept::Ours(response.json().await.context("read the lease")?))
 }
@@ -204,7 +221,7 @@ fn spawn_renewal(holder: Arc<LeaseHolder>, module_id: String, first: Lease) {
                     // ou déjà repris ailleurs.
                     if missed == 3 {
                         ui::blank();
-                        ui::warn("the registry has not answered for a while");
+                        ui::warn("the dev platform has not answered for a while");
                         ui::detail("this session may no longer be held account-wide");
                     }
                 }
@@ -251,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn the_registry_answer_reads_as_the_cli_expects() {
+    fn the_server_answer_reads_as_the_cli_expects() {
         let lease: Lease =
             serde_json::from_value(serde_json::json!({ "renewAfterSeconds": 30 })).unwrap();
         assert_eq!(lease.renew_after_seconds, 30);
