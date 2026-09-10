@@ -15,11 +15,18 @@ import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
-/** Les trois contrats, avec le nom sous lequel le registre les range. */
+/**
+ * Les contrats, avec le nom sous lequel le registre les range.
+ *
+ * Les trois premiers sont exigés par le registre ; `deprecations.json` est connu de lui mais
+ * facultatif, parce que le rendre obligatoire ferait échouer la relecture des versions déjà
+ * stockées, qui n'en portent pas.
+ */
 const CONTRACTS = {
   "module.v1.json": "schema/module.v1.json",
   "host-ops.json": "contracts/host-ops.json",
   "sdui_primitives.json": "crates/portaki-sdk/sdui_primitives.json",
+  "deprecations.json": "contracts/deprecations.json",
 };
 
 /** Version de l'espace de travail — la source dont dérivent toutes les crates publiées. */

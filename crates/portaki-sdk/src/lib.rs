@@ -49,6 +49,7 @@
 pub mod capability;
 pub mod context;
 pub mod contracts;
+pub mod deprecation;
 pub mod email;
 pub mod error;
 pub mod host;
