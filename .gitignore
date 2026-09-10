@@ -1,6 +1,8 @@
 /target
 **/*.rs.bk
-Cargo.lock
+
+# Cargo.lock est versionné : le workspace publie un binaire (portaki-cli), et la CI
+# d'audit lit ce fichier pour savoir quelles versions sont réellement résolues.
 
 # AI agent / Cursor tooling (local only — never commit)
 .cursor/
