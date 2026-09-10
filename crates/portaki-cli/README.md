@@ -107,6 +107,22 @@ command, not before, so it delays nothing and does not push the line you came to
 sight. It stays quiet under `--plain`, when the output is not a terminal, and when
 `PORTAKI_NO_UPDATE_CHECK` is set.
 
+Only one `portaki dev --watch` runs at a time. A second one refuses before it compiles anything
+and says who holds the session:
+
+```
+✖ portaki dev --watch is already running on weather (pid 41999) — stop it first,
+  or run this one without --watch
+```
+
+Two watch sessions push different modules into the same sandbox in turn, each undoing what the
+other just did — and one is rarely started on purpose: it is forgotten in a tab, and another is
+started elsewhere. The lock lives next to the credentials, so it covers you on this machine,
+not a repository.
+
+A session ended with ctrl-c never releases it — nothing runs then. The next launch takes it over
+as soon as the recorded process is gone, so an interruption never wedges the command.
+
 `portaki dev --dispatch`, with no operation name, lists what the module exposes — queries and
 commands, each with the Rust function behind it — read from the manifest, without building or
 deploying. And when an argument is refused, the refusal is rendered like everything else: the
