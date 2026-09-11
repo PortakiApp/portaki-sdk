@@ -66,6 +66,40 @@
       "type": "array",
       "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches after draft publish; catchUpOnConfigUpdate after host updateConfig (promotes module KV then redispatches); dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
       "items": { "$ref": "#/$defs/moduleEmail" }
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["guest", "host"],
+      "default": "guest",
+      "description": "Who the module works for. host modules (e.g. calendar import) are never shown to guests and cannot be placed on the booklet board. Any other value is read as guest."
+    },
+    "hostScheduledSync": {
+      "type": "object",
+      "description": "Host-side sync the platform runs on a schedule (and on demand), without business logic in the API. With platformFetch, the platform calls sourcesQuery to list what to fetch, downloads it, then hands the payloads to applyQuery; both are then required. Without it, the platform runs the module host action hostAction, then stayImportQuery if set to import the resulting stays.",
+      "properties": {
+        "hostAction": {
+          "type": "string",
+          "default": "sync",
+          "description": "Host action the platform runs when platformFetch is false. A host action with this name is treated as the scheduled sync."
+        },
+        "stayImportQuery": {
+          "type": "string",
+          "description": "Query read after hostAction to import stays, when platformFetch is false."
+        },
+        "platformFetch": {
+          "type": "boolean",
+          "default": false,
+          "description": "The platform fetches the sources, not the module."
+        },
+        "sourcesQuery": {
+          "type": "string",
+          "description": "Query listing the sources to fetch, when platformFetch is true."
+        },
+        "applyQuery": {
+          "type": "string",
+          "description": "Query receiving the fetched payloads, when platformFetch is true."
+        }
+      }
     }
   },
   "$defs": {
