@@ -17,6 +17,8 @@ on:
 
 concurrency:
   group: publish-crates.io
+  # Never cancel: crates.io versions are immutable, and an interrupted workspace publish leaves
+  # some crates at the new version and the rest behind, with no way to republish them.
   cancel-in-progress: false
 
 permissions:
