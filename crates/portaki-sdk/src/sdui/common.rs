@@ -3,6 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Semantic color role.
+///
+/// A role, never a color: each shell resolves it against its own theme — the host dashboard,
+/// the guest booklet in the property's brand, light or dark. A module that wants "the brand
+/// color" asks for `Primary`; one that wants a quieter companion to it asks for `Secondary`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Tone {
@@ -11,6 +15,8 @@ pub enum Tone {
     Neutral,
     /// Primary brand tone.
     Primary,
+    /// Secondary brand tone — a quieter companion to `Primary`.
+    Secondary,
     /// Accent highlight.
     Accent,
     /// Informational.
@@ -483,4 +489,22 @@ pub enum RichTextInline {
         /// Text content.
         text: String,
     },
+}
+
+#[cfg(test)]
+mod tone_tests {
+    use super::Tone;
+
+    /// The wire names both shells match on.
+    #[test]
+    fn tones_serialise_in_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&Tone::Secondary).unwrap(),
+            "\"secondary\""
+        );
+        assert_eq!(
+            serde_json::from_str::<Tone>("\"secondary\"").unwrap(),
+            Tone::Secondary
+        );
+    }
 }
