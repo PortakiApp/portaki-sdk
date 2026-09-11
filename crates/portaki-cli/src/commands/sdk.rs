@@ -313,6 +313,35 @@ fn nodes(value: &serde_json::Value) -> usize {
     }
 }
 
+/// Un contrôle de conformité en échec.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailingCheck {
+    pub id: String,
+    pub detail: String,
+}
+
+/// Ce que la sandbox disait du module avant la montée.
+struct Baseline {
+    renders: BTreeMap<String, Rendered>,
+    /// Les contrôles déjà en échec — la montée n'y est pour rien.
+    failing: std::collections::BTreeSet<String>,
+}
+
+/// Les échecs de conformité d'après la montée : ceux qu'elle a causés, et ceux d'avant.
+///
+/// Même règle que pour les rendus ([`RenderOutcome::StillFailing`]) : un contrôle qui échouait
+/// déjà n'est pas une régression. Sans elle, un module qui déclare un e-mail sans commande
+/// ne pouvait tout simplement plus monter de SDK — la commande restaurait Cargo.toml en
+/// accusant la montée d'une faute qu'elle n'avait pas commise.
+pub fn split_failures(
+    before: &std::collections::BTreeSet<String>,
+    after: Vec<FailingCheck>,
+) -> (Vec<FailingCheck>, Vec<FailingCheck>) {
+    after
+        .into_iter()
+        .partition(|check| !before.contains(&check.id))
+}
+
 // ─── L'enchaînement ──────────────────────────────────────────────────────────
 
 struct Backup {
@@ -428,7 +457,7 @@ impl Sandbox {
     }
 
     /// Les contrôles de conformité en échec — ceux qui verrouilleraient une publication stable.
-    async fn failing_checks(&self) -> Result<Vec<String>> {
+    async fn failing_checks(&self) -> Result<Vec<FailingCheck>> {
         #[derive(Deserialize)]
         struct Report {
             checks: Vec<Check>,
@@ -456,7 +485,10 @@ impl Sandbox {
             .checks
             .into_iter()
             .filter(|check| check.status == "FAIL")
-            .map(|check| format!("{} — {}", check.id, check.detail))
+            .map(|check| FailingCheck {
+                id: check.id,
+                detail: check.detail,
+            })
             .collect())
     }
 }
@@ -574,7 +606,18 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             ui::section(&format!("before — portaki-sdk {current}"));
             dev::build(&module_root)?;
             crate::commands::build::refresh_outputs(&module_root)?;
-            Some(sandbox.deploy_and_render(&module_root).await?)
+            let renders = sandbox.deploy_and_render(&module_root).await?;
+            let failing = sandbox.failing_checks().await?;
+            for check in &failing {
+                ui::detail(format!(
+                    "conformance {}: failing before the upgrade — {}",
+                    check.id, check.detail
+                ));
+            }
+            Some(Baseline {
+                renders,
+                failing: failing.into_iter().map(|check| check.id).collect(),
+            })
         }
         None => None,
     };
@@ -641,7 +684,7 @@ async fn upgrade_and_verify(
     metadata: &Metadata,
     target: &str,
     sandbox: Option<&mut Sandbox>,
-    baseline: Option<&BTreeMap<String, Rendered>>,
+    baseline: Option<&Baseline>,
 ) -> Result<String> {
     let original = std::fs::read_to_string(&declaration.file)
         .with_context(|| format!("read {}", declaration.file.display()))?;
@@ -709,7 +752,7 @@ async fn upgrade_and_verify(
 
     let mut broken = Vec::new();
     let mut changed_renders = Vec::new();
-    for (id, before) in baseline {
+    for (id, before) in &baseline.renders {
         let Some(now) = after.get(id) else {
             broken.push(format!("{id} is no longer declared"));
             continue;
@@ -731,9 +774,16 @@ async fn upgrade_and_verify(
             RenderOutcome::Fixed => ui::detail(format!("{id}: renders now, it did not before")),
         }
     }
-    let failing = sandbox.failing_checks().await?;
-    for check in &failing {
-        broken.push(format!("conformance: {check}"));
+    let (introduced, preexisting) =
+        split_failures(&baseline.failing, sandbox.failing_checks().await?);
+    for check in &preexisting {
+        ui::detail(format!(
+            "conformance {}: still failing, as before the upgrade",
+            check.id
+        ));
+    }
+    for check in introduced {
+        broken.push(format!("conformance: {} — {}", check.id, check.detail));
     }
     if args.strict {
         broken.extend(
@@ -841,6 +891,26 @@ mod tests {
         assert!(note.contains("resolved 3.1.0"));
         assert!(note.contains("=3.0.1"));
         assert_eq!(resolution_note("3.1.0", "3.1.0"), None);
+    }
+
+    fn check(id: &str) -> FailingCheck {
+        FailingCheck {
+            id: id.into(),
+            detail: String::new(),
+        }
+    }
+
+    /// ical-sync declares e-mails without a command: failing before, failing after — not the
+    /// upgrade's doing, so it must not roll the upgrade back.
+    #[test]
+    fn a_check_that_already_failed_is_not_a_regression() {
+        let before = ["emails".to_string()].into_iter().collect();
+
+        let (introduced, preexisting) =
+            split_failures(&before, vec![check("emails"), check("surfaces")]);
+
+        assert_eq!(introduced, vec![check("surfaces")]);
+        assert_eq!(preexisting, vec![check("emails")]);
     }
 
     fn release(version: &str, channel: &str, supported: bool) -> SdkRelease {
