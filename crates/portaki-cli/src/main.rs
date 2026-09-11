@@ -93,6 +93,8 @@ enum Command {
     Lint(commands::lint::LintArgs),
     /// Run `cargo test` in the module crate.
     Test(commands::test::TestArgs),
+    /// Move the module to another SDK version, and prove nothing broke.
+    Sdk(commands::sdk::SdkArgs),
     /// Push OCI artifact to Scaleway Container Registry.
     Publish(commands::publish::PublishArgs),
     /// Print how to open local SDK documentation (no docs server).
@@ -337,6 +339,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Ci(args) => commands::ci::run(args).await,
         Command::Lint(args) => commands::lint::run(args),
         Command::Test(args) => commands::test::run(args),
+        Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Publish(args) => commands::publish::run(args).await,
         Command::Docs(args) => commands::docs::run(args),
         Command::Catalog(args) => commands::catalog::run(args),
