@@ -10,4 +10,5 @@ pub mod inspect;
 pub mod lint;
 pub mod login;
 pub mod publish;
+pub mod sdk;
 pub mod test;

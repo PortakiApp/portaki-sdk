@@ -285,25 +285,7 @@ async fn cycle(
     let wasm = std::fs::read(&wasm_path)
         .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
 
-    let raw_manifest =
-        std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
-    // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
-    // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
-    // graphe résolu par cargo. Sans lui, la sandbox recevait un manifeste muet et
-    // l'inspecteur refusait de typer — pour tous les modules, toujours.
-    let manifest = crate::oci::pack::stamp_sdk_version(
-        &raw_manifest,
-        crate::oci::pack::resolved_sdk_version(module_root)?,
-    )?;
-    // Et ce que le build a emis — surfaces, queries, commands. Sans les surfaces, la sandbox
-    // prend le `pathSegment` pour un identifiant et demande un symbole qui n'existe pas ; sans
-    // les operations, elle ne peut proposer qu'une saisie libre du nom a dispatcher.
-    let manifest =
-        match std::fs::read_to_string(module_root.join(crate::manifest::loader::BUILT_MANIFEST)) {
-            Ok(built) => crate::oci::pack::stamp_built_declarations(&manifest, &built)?,
-            // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
-            Err(_) => manifest,
-        };
+    let manifest = sandbox_manifest(module_root)?;
 
     // L'empreinte porte sur le Wasm ET le manifeste. Sur le seul Wasm, un `--watch` qui relisait
     // `portaki.module.json` modifié répondait « unchanged » et ne l'envoyait jamais : le fichier
@@ -366,13 +348,13 @@ async fn cycle(
 /// Le renouvellement est tenté une fois, pas en boucle : si le jeton de rafraîchissement est
 /// lui aussi hors d'usage, réessayer ne ferait que masquer la seule chose à dire — il faut se
 /// reconnecter.
-async fn reauthenticate() -> Result<String> {
+pub(crate) async fn reauthenticate() -> Result<String> {
     crate::auth::refresh()
         .await
         .context("renew the session — run `portaki login` if this keeps failing")
 }
 
-fn build(module_root: &Path) -> Result<()> {
+pub(crate) fn build(module_root: &Path) -> Result<()> {
     // Release, pas debug : un build debug pèse dix fois plus et se fait refuser par le plafond
     // d'ingestion de 5 Mo. Mieux vaut compiler plus longtemps que découvrir le refus au push.
     let mut cmd = std::process::Command::new("cargo");
@@ -387,9 +369,9 @@ fn build(module_root: &Path) -> Result<()> {
 /// avait réussi côté serveur.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DeployResponse {
-    digest: String,
-    size_bytes: u64,
+pub(crate) struct DeployResponse {
+    pub(crate) digest: String,
+    pub(crate) size_bytes: u64,
 }
 
 /// `session` est celle du bail, quand nous l'avons obtenu.
@@ -397,7 +379,7 @@ struct DeployResponse {
 /// Elle dit au serveur que ce push est celui du détenteur. Sans elle — bail non obtenu — il
 /// n'admet le push que si personne d'autre ne tient la place, ce qui est exactement la garantie
 /// que le verrou local ne peut pas donner.
-async fn deploy(
+pub(crate) async fn deploy(
     base_url: &str,
     module_id: &str,
     token: &str,
@@ -531,7 +513,9 @@ impl std::fmt::Display for Unauthorized {
 
 impl std::error::Error for Unauthorized {}
 
-async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
+pub(crate) async fn read_json<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+) -> Result<T> {
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED {
         return Err(anyhow::Error::new(Unauthorized));
@@ -560,7 +544,7 @@ fn base_url(args: &DevArgs) -> String {
 /// worst. `PORTAKI_DEV_URL` still wins, for the rarer case of a sandbox that lives apart.
 ///
 /// An exported-but-empty variable means "unset", not "use the empty string as a URL".
-fn resolve_base_url(
+pub(crate) fn resolve_base_url(
     explicit: Option<&str>,
     dev_var: Option<&str>,
     api_var: Option<&str>,
@@ -574,7 +558,7 @@ fn resolve_base_url(
     candidate.trim_end_matches('/').to_string()
 }
 
-fn read_module_id(module_root: &Path) -> Result<String> {
+pub(crate) fn read_module_id(module_root: &Path) -> Result<String> {
     let manifest = module_root.join(MANIFEST);
     let raw = std::fs::read_to_string(&manifest)
         .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
@@ -587,6 +571,34 @@ fn read_module_id(module_root: &Path) -> Result<String> {
         .context("portaki.module.json carries no id")
 }
 
+/// Le manifeste que la sandbox reçoit : celui écrit à la main, tamponné de la version du SDK
+/// résolue par cargo et de ce que le build a émis.
+///
+/// Partagé avec `portaki sdk upgrade`, qui déploie deux fois — avant et après la montée de
+/// version — et doit envoyer exactement ce que `dev` enverrait.
+pub(crate) fn sandbox_manifest(module_root: &Path) -> Result<String> {
+    let raw_manifest =
+        std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
+    // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
+    // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
+    // graphe résolu par cargo. Sans lui, la sandbox recevait un manifeste muet et
+    // l'inspecteur refusait de typer — pour tous les modules, toujours.
+    let manifest = crate::oci::pack::stamp_sdk_version(
+        &raw_manifest,
+        crate::oci::pack::resolved_sdk_version(module_root)?,
+    )?;
+    // Et ce que le build a emis — surfaces, queries, commands. Sans les surfaces, la sandbox
+    // prend le `pathSegment` pour un identifiant et demande un symbole qui n'existe pas ; sans
+    // les operations, elle ne peut proposer qu'une saisie libre du nom a dispatcher.
+    let manifest =
+        match std::fs::read_to_string(module_root.join(crate::manifest::loader::BUILT_MANIFEST)) {
+            Ok(built) => crate::oci::pack::stamp_built_declarations(&manifest, &built)?,
+            // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
+            Err(_) => manifest,
+        };
+    Ok(manifest)
+}
+
 /// Ce qui décide qu'un cycle a quelque chose à envoyer : le binaire et le manifeste ensemble.
 fn upload_fingerprint(wasm: &[u8], manifest: &str) -> String {
     sha256(&[wasm, b"\0", manifest.as_bytes()].concat())
@@ -597,7 +609,7 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 /// Digests are unreadable in full; the first bytes are enough to tell two builds apart.
-fn short(digest: &str) -> String {
+pub(crate) fn short(digest: &str) -> String {
     digest.chars().take("sha256:".len() + 12).collect()
 }
 
