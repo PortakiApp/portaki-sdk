@@ -34,6 +34,7 @@
 //! | `surface` | `surface` | `surface-{context}_{id}.json` |
 //! | `query` | `query` | `query-{name}.json` |
 //! | `command` | `command` | `command-{name}.json` |
+//! | `params` | `params` | `params-{TypeName}.json` |
 //! | `event_handler` | `event_handler` | `event_handler-{event_type}.json` |
 //! | `capability` | `capability` | `capability-{id}.json` |
 //! | `connector` | `connector_builtin` | `connector_builtin-{builtin}.json` |
@@ -60,6 +61,7 @@ mod emit;
 mod entity;
 mod event_handler;
 mod module;
+mod params;
 mod query;
 mod surface;
 mod wasm_handler;
@@ -300,6 +302,36 @@ pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     command::expand(attr, item)
+}
+
+/// Describes the arguments of a query or command, so tooling can offer a form for them.
+///
+/// # Syntax
+///
+/// ```text
+/// #[portaki_sdk::params]
+/// #[derive(Deserialize)]
+/// pub struct UpdateConfigArgs {
+///     /// Feeds to import.
+///     #[serde(default)]
+///     pub calendars: Vec<CalendarInput>,
+/// }
+///
+/// #[portaki_sdk::command(name = "updateConfig")]
+/// pub fn update_config(ctx: Context, args: UpdateConfigArgs) -> Result<()> { /* ... */ }
+/// ```
+///
+/// On a struct: each field with its wire name, type, whether it is required and its first doc
+/// paragraph — read the way serde reads it (`rename_all`, `rename`, `default`, `skip`,
+/// `flatten`, `Option<T>`). On an enum of unit variants: the values. A field whose type is
+/// another struct or enum refers to it by name; put `#[params]` on it too to describe it.
+///
+/// Emits `params-{TypeName}.json`. `portaki build` joins it with the operations whose handler
+/// takes that type (`args` in `query-*.json` / `command-*.json`) → `manifest.commands[].params`.
+/// No runtime code is generated; unknown serde attributes are ignored rather than rejected.
+#[proc_macro_attribute]
+pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
+    params::expand(attr, item)
 }
 
 /// Declares a subscription to a platform event type.

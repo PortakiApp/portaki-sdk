@@ -8,15 +8,17 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = syn::parse_macro_input!(attr as command_attrs::NamedOpAttrs);
     let fn_name = function_item.sig.ident.to_string();
 
-    let json = format!(
-        r#"{{
-  "kind": "command",
-  "name": {},
-  "fn": {}
-}}"#,
-        serde_json::to_string(&attrs.name).unwrap(),
-        serde_json::to_string(&fn_name).unwrap(),
-    );
+    let mut declaration = serde_json::json!({
+        "kind": "command",
+        "name": attrs.name,
+        "fn": fn_name,
+    });
+    // Le type d'arguments, par son nom : `portaki build` y joint les champs émis par son
+    // `#[params]`, et la sandbox en tire un formulaire.
+    if let Some(args) = crate::params::args_type_name(&function_item) {
+        declaration["args"] = serde_json::Value::String(args);
+    }
+    let json = serde_json::to_string_pretty(&declaration).unwrap();
 
     let emission =
         crate::emit::write_emission("command", &crate::emit::sanitize_key(&attrs.name), &json);
