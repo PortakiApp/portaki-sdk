@@ -213,6 +213,26 @@ pub fn latest_stable(releases: &[SdkRelease]) -> Option<String> {
         .map(|(_, version)| version.clone())
 }
 
+/// What to say when the lock resolved something other than the version asked for.
+///
+/// A plain `"3.0.1"` requirement is a caret: once 3.1.0 is out, it resolves 3.1.0. That is
+/// usually what one wants — but not what one typed, and the commit message must not claim
+/// otherwise.
+pub fn resolution_note(target: &str, resolved: &str) -> Option<String> {
+    let (wanted, got) = (parse_version(target)?, parse_version(resolved)?);
+    if wanted == got {
+        return None;
+    }
+    Some(if got > wanted {
+        format!(
+            "the requirement {target} resolved {resolved}, the newest compatible release — \
+             write ={target} to hold {target} instead"
+        )
+    } else {
+        format!("the requirement {target} resolved {resolved}, below what was asked")
+    })
+}
+
 // ─── Rendus ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -578,9 +598,11 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         sandbox.session.release().now().await;
     }
     match outcome {
-        Ok(()) => {
+        Ok(resolved) => {
             ui::blank();
-            ui::success(format!("{module_id} is on portaki-sdk {target}"));
+            // La version résolue, pas la cible : `"3.0.1"` est un caret, et résout 3.1.0 dès
+            // que 3.1.0 existe. Annoncer la cible aurait fait committer un message faux.
+            ui::success(format!("{module_id} is on portaki-sdk {resolved}"));
             // Hérité, le changement est à la racine : un `git diff` lancé depuis le module ne
             // montrerait que son propre Cargo.toml, inchangé.
             let review = if declaration.inherited {
@@ -595,7 +617,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
                 ("review", &review),
                 (
                     "commit",
-                    &format!("chore(deps): bump portaki-sdk to {target}"),
+                    &format!("chore(deps): bump portaki-sdk to {resolved}"),
                 ),
             ]);
             Ok(())
@@ -620,7 +642,7 @@ async fn upgrade_and_verify(
     target: &str,
     sandbox: Option<&mut Sandbox>,
     baseline: Option<&BTreeMap<String, Rendered>>,
-) -> Result<()> {
+) -> Result<String> {
     let original = std::fs::read_to_string(&declaration.file)
         .with_context(|| format!("read {}", declaration.file.display()))?;
     let (bumped, changed) = bump_requirements(&original, declaration.inherited, target)?;
@@ -650,6 +672,16 @@ async fn upgrade_and_verify(
         update.push(name);
     }
     cargo(module_root, "resolving the new version", &update)?;
+    let resolved_version = cargo_metadata(module_root)?
+        .packages
+        .into_iter()
+        .find(|package| package.name == "portaki-sdk")
+        .map(|package| package.version)
+        .context("portaki-sdk left the dependency graph")?;
+    ui::field("resolved", &resolved_version);
+    if let Some(note) = resolution_note(target, &resolved_version) {
+        ui::warn(note);
+    }
 
     let scope: &[&str] = if declaration.inherited {
         &["--workspace"]
@@ -671,7 +703,7 @@ async fn upgrade_and_verify(
     crate::commands::lint::run(crate::commands::lint::LintArgs { manifest: None })?;
 
     let (Some(sandbox), Some(baseline)) = (sandbox, baseline) else {
-        return Ok(());
+        return Ok(resolved_version);
     };
     let after = sandbox.deploy_and_render(module_root).await?;
 
@@ -716,7 +748,7 @@ async fn upgrade_and_verify(
         }
         bail!("{} regression(s) after the upgrade", broken.len());
     }
-    Ok(())
+    Ok(resolved_version)
 }
 
 #[cfg(test)]
@@ -799,6 +831,16 @@ mod tests {
 
         assert!(bumped.contains("portaki-sdk = \"=3.0.1\""));
         assert!(bumped.contains("portaki-sdk-macros = { version = \"~3.0.1\" }"));
+    }
+
+    /// A caret requirement resolves the newest compatible release — say so, don't claim the target.
+    #[test]
+    fn a_newer_compatible_resolution_is_reported() {
+        let note = resolution_note("3.0.1", "3.1.0").unwrap();
+
+        assert!(note.contains("resolved 3.1.0"));
+        assert!(note.contains("=3.0.1"));
+        assert_eq!(resolution_note("3.1.0", "3.1.0"), None);
     }
 
     fn release(version: &str, channel: &str, supported: bool) -> SdkRelease {
