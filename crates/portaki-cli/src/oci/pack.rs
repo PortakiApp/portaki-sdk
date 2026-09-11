@@ -102,12 +102,8 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
     Ok(found)
 }
 
-/// Inscrit `requiresModuleSdk` dans le manifeste, ou refuse si l'auteur en annonce un autre.
-///
-/// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
-/// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
-/// rend exact par construction plutôt que par discipline.
-/// Recopie les surfaces emises par le build dans le manifeste envoye a la sandbox.
+/// Recopie ce que le build a emis dans le manifeste envoye a la sandbox : les surfaces, les
+/// queries et les commands.
 ///
 /// Deux manifestes coexistent et ne disent pas la meme chose. `portaki.module.json` decrit la
 /// navigation du dashboard : ses `hostSurfaces` portent un `pathSegment`, qui est un morceau
@@ -121,20 +117,40 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
 ///
 /// Corriger les vingt manifestes ecrits a la main serait une seconde source de verite pour une
 /// chose que le build sait deja. On transporte donc ce qu'il a emis.
-pub fn stamp_surfaces(raw: &str, built_manifest: &str) -> Result<String> {
+///
+/// Les operations suivent le meme chemin, pour la meme raison : `#[portaki_sdk::query]` et
+/// `#[portaki_sdk::command]` n'existent que dans le manifeste emis, et un module wasm n'exporte
+/// que `portaki_query` / `portaki_command` — le binaire ne sait pas dire ce qu'il sert. Sans
+/// elles, la sandbox ne pouvait proposer aucune liste d'operations et retombait sur un champ
+/// libre, ou une faute de frappe ne se decouvrait qu'au `handler_not_found`.
+pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<String> {
     let built: serde_json::Value =
         serde_json::from_str(built_manifest).context("parse built manifest")?;
-    let Some(surfaces) = built.get("surfaces") else {
+    let carried: Vec<(&str, &serde_json::Value)> = BUILT_DECLARATIONS
+        .iter()
+        .filter_map(|key| built.get(*key).map(|value| (*key, value)))
+        .collect();
+    if carried.is_empty() {
         return Ok(raw.to_string());
-    };
+    }
     let mut manifest: serde_json::Value =
         serde_json::from_str(raw).context("parse module manifest")?;
     if let Some(object) = manifest.as_object_mut() {
-        object.insert("surfaces".to_string(), surfaces.clone());
+        for (key, value) in carried {
+            object.insert(key.to_string(), value.clone());
+        }
     }
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
 }
 
+/// Ce que seul le build sait dire, et que la sandbox doit donc recevoir de lui.
+const BUILT_DECLARATIONS: [&str; 3] = ["surfaces", "queries", "commands"];
+
+/// Inscrit `requiresModuleSdk` dans le manifeste, ou refuse si l'auteur en annonce un autre.
+///
+/// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
+/// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
+/// rend exact par construction plutôt que par discipline.
 pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> {
     let Some(resolved) = resolved else {
         return Ok(raw.to_string());
@@ -606,8 +622,8 @@ mod tests {
 }
 
 #[cfg(test)]
-mod stamp_surfaces_tests {
-    use super::stamp_surfaces;
+mod stamp_built_declarations_tests {
+    use super::stamp_built_declarations as stamp_surfaces;
 
     const BUILT: &str = r#"{"id":"access-guide","surfaces":{"host":[{"id":"main","render_fn":"render_host_main"}],"guest":[]}}"#;
 
@@ -633,6 +649,33 @@ mod stamp_surfaces_tests {
         let stamped = stamp_surfaces(raw, r#"{"id":"access-guide"}"#).expect("stamp");
 
         assert_eq!(stamped, raw);
+    }
+
+    /// Les operations n'existent que dans le manifeste emis : sans elles, la sandbox ne peut
+    /// proposer que la saisie libre d'un nom d'operation.
+    #[test]
+    fn carries_the_built_operations_into_the_uploaded_manifest() {
+        let raw = r#"{"id":"ical-sync"}"#;
+        let built = r#"{"id":"ical-sync","queries":[{"name":"listSources","fn":"list_sources"}],"commands":[{"name":"syncNow","fn":"sync_now"}]}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(value["queries"][0]["name"], "listSources");
+        assert_eq!(value["commands"][0]["fn"], "sync_now");
+        // Une cle que le build n'a pas emise n'est pas inventee.
+        assert!(value.get("surfaces").is_none());
+    }
+
+    /// Une liste vide est une reponse : elle dit que le build n'expose rien, et elle voyage.
+    #[test]
+    fn carries_an_empty_operation_list_as_such() {
+        let stamped = stamp_surfaces(r#"{"id":"m"}"#, r#"{"id":"m","queries":[],"commands":[]}"#)
+            .expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(value["queries"], serde_json::json!([]));
+        assert_eq!(value["commands"], serde_json::json!([]));
     }
 
     /// Les surfaces emises font foi : elles decrivent les octets qui vont tourner.
