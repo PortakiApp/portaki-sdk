@@ -42,8 +42,6 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     let out_dir = module_root.join("target/portaki");
     std::fs::create_dir_all(&out_dir)?;
 
-    let catalog_path = module_root.join("portaki.module.json");
-
     if args.manifest_only {
         ui::skipped("cargo build skipped (--manifest-only)");
     } else {
@@ -62,68 +60,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
         .context("cargo build wasm32")?;
     }
 
-    if let Some(emissions_dir) = find_emissions_dir(&module_root) {
-        let emissions = collect_emissions(&emissions_dir)?;
-        let i18n_dir = module_root.join("i18n");
-        let supported = read_supported_locales(&i18n_dir)
-            .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
-        let default_locale = supported
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "fr-FR".to_string());
-
-        let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
-        let manifest_path = out_dir.join("manifest.json");
-        write_manifest(&manifest, &manifest_path)?;
-        ui::wrote("manifest", relative(&manifest_path, &module_root));
-        ui::detail(format!(
-            "{} entities · {} locales · default {default_locale}",
-            manifest.entities.len(),
-            supported.len()
-        ));
-
-        let schema_version = manifest
-            .entities
-            .iter()
-            .map(|entity| entity.schema_version)
-            .max()
-            .unwrap_or(1);
-        if let Some(bundle_path) =
-            write_migration_bundle(&module_root, &out_dir, &manifest.id, schema_version)?
-        {
-            ui::wrote("migrations", relative(&bundle_path, &module_root));
-            ui::detail(format!(
-                "applied on module install to schema module_{}",
-                manifest.id.replace('-', "_")
-            ));
-        }
-
-        let module_version =
-            catalog_module_version(&catalog_path).unwrap_or(manifest.version.clone());
-        if let Some(bundle_path) = write_operations_bundle(
-            &out_dir,
-            &manifest.id,
-            &module_version,
-            schema_version,
-            &manifest.entities,
-        )? {
-            ui::wrote("operations", relative(&bundle_path, &module_root));
-            ui::detail("v2 — schema.tables for typed-repo upsert");
-        }
-
-        if let Some(bundle_path) = bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))? {
-            ui::wrote("i18n", relative(&bundle_path, &module_root));
-            ui::detail(supported.join(" "));
-        }
-    } else if !catalog_path.exists() {
-        anyhow::bail!(
-            "no portaki.module.json and no SDK emissions — add portaki_module!(...) or a catalog manifest"
-        );
-    }
-
-    let publish_path = pack::assemble_publish_manifest(&module_root, &out_dir)?;
-    ui::wrote("publish", relative(&publish_path, &module_root));
-    ui::advice("OCI layer source — edit portaki.module.json then rebuild");
+    refresh_outputs(&module_root)?;
 
     if !args.manifest_only {
         let coords = pack::read_module_coordinates(&module_root, &out_dir)?;
@@ -154,6 +91,82 @@ pub async fn run(args: BuildArgs) -> Result<()> {
 /// l'exécution, loin d'ici, avec un message qui ne désigne pas la cause. Une dépendance tirée
 /// sans y penser suffit à les faire apparaître — c'est arrivé, et le contrôle vivait depuis
 /// dans le script bash d'un dépôt. Il appartient au build.
+/// Turns the latest SDK emissions into what the host reads: `manifest.json`, migrations,
+/// operations and i18n bundles, and the publish manifest.
+///
+/// Shared with `portaki dev`, which compiled but never ran this: it shipped whatever manifest
+/// the last `portaki build` had left in `target/portaki/`, so a new query or surface stayed
+/// invisible in the sandbox until someone thought of running `build` by hand.
+pub fn refresh_outputs(module_root: &std::path::Path) -> Result<()> {
+    let out_dir = module_root.join("target/portaki");
+    std::fs::create_dir_all(&out_dir)?;
+    let catalog_path = module_root.join("portaki.module.json");
+
+    if let Some(emissions_dir) = find_emissions_dir(module_root) {
+        let emissions = collect_emissions(&emissions_dir)?;
+        let i18n_dir = module_root.join("i18n");
+        let supported = read_supported_locales(&i18n_dir)
+            .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
+        let default_locale = supported
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "fr-FR".to_string());
+
+        let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
+        let manifest_path = out_dir.join("manifest.json");
+        write_manifest(&manifest, &manifest_path)?;
+        ui::wrote("manifest", relative(&manifest_path, module_root));
+        ui::detail(format!(
+            "{} entities · {} locales · default {default_locale}",
+            manifest.entities.len(),
+            supported.len()
+        ));
+
+        let schema_version = manifest
+            .entities
+            .iter()
+            .map(|entity| entity.schema_version)
+            .max()
+            .unwrap_or(1);
+        if let Some(bundle_path) =
+            write_migration_bundle(module_root, &out_dir, &manifest.id, schema_version)?
+        {
+            ui::wrote("migrations", relative(&bundle_path, module_root));
+            ui::detail(format!(
+                "applied on module install to schema module_{}",
+                manifest.id.replace('-', "_")
+            ));
+        }
+
+        let module_version =
+            catalog_module_version(&catalog_path).unwrap_or(manifest.version.clone());
+        if let Some(bundle_path) = write_operations_bundle(
+            &out_dir,
+            &manifest.id,
+            &module_version,
+            schema_version,
+            &manifest.entities,
+        )? {
+            ui::wrote("operations", relative(&bundle_path, module_root));
+            ui::detail("v2 — schema.tables for typed-repo upsert");
+        }
+
+        if let Some(bundle_path) = bundle_i18n(&i18n_dir, &out_dir.join("i18n.tar.gz"))? {
+            ui::wrote("i18n", relative(&bundle_path, module_root));
+            ui::detail(supported.join(" "));
+        }
+    } else if !catalog_path.exists() {
+        anyhow::bail!(
+            "no portaki.module.json and no SDK emissions — add portaki_module!(...) or a catalog manifest"
+        );
+    }
+
+    let publish_path = pack::assemble_publish_manifest(module_root, &out_dir)?;
+    ui::wrote("publish", relative(&publish_path, module_root));
+    ui::advice("OCI layer source — edit portaki.module.json then rebuild");
+    Ok(())
+}
+
 fn reject_wasm_bindgen(wasm: &std::path::Path) -> Result<()> {
     let bytes = std::fs::read(wasm).with_context(|| format!("read {}", wasm.display()))?;
     // Cherché dans les octets et non dans une table d'imports décodée : le nom apparaît en

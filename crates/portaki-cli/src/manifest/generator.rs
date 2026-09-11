@@ -278,20 +278,200 @@ pub fn write_manifest(manifest: &ModuleManifest, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Finds the most recent `portaki-emissions` directory under `target/`.
+/// Finds the `portaki-emissions` directory of the module's latest compile.
+///
+/// Cargo keeps one build directory per fingerprint — per profile, target, SDK version, feature
+/// set — so `target/` accumulates several emission trees, most of them stale. The right one is
+/// the **most recently written**, judged on the files it holds: a directory's own mtime only
+/// moves when an entry is created or removed, not when the macros rewrite a fragment in place.
+///
+/// This used to pick the last one *by path*. `release` sorts after `debug`, and a hash after
+/// another, so a module could have its manifest regenerated from six-week-old emissions on every
+/// build — the published version, the operations, the surfaces all silently stale.
+///
+/// Only the module's own crate is considered (`build/<crate>-<hash>/out/portaki-emissions`): in
+/// a `target/` shared by a workspace, another member's emissions are just as fresh and wrong.
 pub fn find_emissions_dir(module_root: &Path) -> Option<PathBuf> {
     let target = module_root.join("target");
     if !target.exists() {
         return None;
     }
+    let crate_name = fs::read_to_string(module_root.join("Cargo.toml"))
+        .ok()
+        .and_then(|cargo| package_name(&cargo));
 
-    let mut candidates = Vec::new();
-    for entry in WalkDir::new(&target).into_iter().filter_map(Result::ok) {
-        if entry.file_name() == "portaki-emissions" {
-            candidates.push(entry.path().to_path_buf());
+    // `target/<triple>/<profile>/build/<crate>-<hash>/out/portaki-emissions` is six levels deep;
+    // walking further only reads compiled artifacts.
+    let all: Vec<PathBuf> = WalkDir::new(&target)
+        .max_depth(6)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_dir() && entry.file_name() == "portaki-emissions")
+        .map(|entry| entry.path().to_path_buf())
+        .collect();
+
+    let own: Vec<&PathBuf> = match &crate_name {
+        Some(name) => all.iter().filter(|dir| built_for(dir, name)).collect(),
+        None => Vec::new(),
+    };
+    // Unknown crate name, or a layout we do not recognise: every tree competes, freshest wins.
+    let pool: Vec<&PathBuf> = if own.is_empty() {
+        all.iter().collect()
+    } else {
+        own
+    };
+
+    pool.into_iter()
+        .max_by_key(|dir| last_written(dir))
+        .cloned()
+}
+
+/// Whether `…/build/<crate>-<hash>/out/portaki-emissions` belongs to `crate_name`.
+///
+/// The hash is checked to be one: `ical-` prefixes both `ical-sync-9f3a…` and a crate named
+/// `ical`, and only the remainder tells them apart.
+fn built_for(emissions_dir: &Path, crate_name: &str) -> bool {
+    let Some(build_dir) = emissions_dir.parent().and_then(Path::parent) else {
+        return false;
+    };
+    let Some(dir_name) = build_dir.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    dir_name
+        .strip_prefix(crate_name)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .is_some_and(|hash| !hash.is_empty() && hash.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// The latest write inside an emission tree — its files; the directory itself only when empty.
+///
+/// Not the max of both: a directory recreated today would lend its date to fragments written
+/// weeks ago, which is the very staleness this avoids.
+fn last_written(dir: &Path) -> std::time::SystemTime {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.metadata().ok()?.modified().ok())
+        .max()
+        .or_else(|| fs::metadata(dir).and_then(|meta| meta.modified()).ok())
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+}
+
+/// The `[package]` name of a `Cargo.toml` — read in its own section, like the crate version.
+fn package_name(cargo: &str) -> Option<String> {
+    let mut in_package = false;
+    for line in cargo.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_package = line == "[package]";
+            continue;
+        }
+        if !in_package {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("name") {
+            let rest = rest.trim_start().strip_prefix('=')?.trim();
+            return rest
+                .strip_prefix('"')
+                .and_then(|rest| rest.strip_suffix('"'))
+                .map(str::to_string);
         }
     }
+    None
+}
 
-    candidates.sort();
-    candidates.pop()
+#[cfg(test)]
+mod emissions_dir_tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn emissions(root: &Path, rel: &str, written: SystemTime) -> PathBuf {
+        let dir = root.join("target").join(rel).join("out/portaki-emissions");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("module-x.json");
+        fs::write(&file, "{}").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(written)
+            .unwrap();
+        dir
+    }
+
+    fn module(name: &str) -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(
+            root.path().join("Cargo.toml"),
+            format!("[package]\nname = \"{name}\"\nversion = \"0.4.1\"\n\n[dependencies]\nname = \"not-this\"\n"),
+        )
+        .unwrap();
+        root
+    }
+
+    /// The case that shipped: a July release tree sorted after today's debug tree by path.
+    #[test]
+    fn the_freshest_tree_wins_over_the_last_by_path() {
+        let root = module("ical-sync");
+        let july = SystemTime::now() - Duration::from_secs(45 * 24 * 3600);
+        emissions(
+            root.path(),
+            "wasm32-unknown-unknown/release/build/ical-sync-58e578d3c53c15cd",
+            july,
+        );
+        let today = emissions(
+            root.path(),
+            "wasm32-unknown-unknown/debug/build/ical-sync-635b988b4e8d0e3c",
+            SystemTime::now(),
+        );
+
+        assert_eq!(find_emissions_dir(root.path()), Some(today));
+    }
+
+    /// A shared `target/` holds other members' trees — as fresh, and wrong.
+    #[test]
+    fn another_crate_s_tree_is_ignored_even_when_fresher() {
+        let root = module("ical-sync");
+        let mine = emissions(
+            root.path(),
+            "wasm32-unknown-unknown/release/build/ical-sync-447cb326d508cae4",
+            SystemTime::now() - Duration::from_secs(60),
+        );
+        emissions(
+            root.path(),
+            "wasm32-unknown-unknown/release/build/weather-0123abcd",
+            SystemTime::now(),
+        );
+        emissions(
+            root.path(),
+            "wasm32-unknown-unknown/release/build/ical-00ff00ff",
+            SystemTime::now(),
+        );
+
+        assert_eq!(find_emissions_dir(root.path()), Some(mine));
+    }
+
+    #[test]
+    fn without_a_readable_crate_name_the_freshest_tree_still_wins() {
+        let root = tempfile::tempdir().unwrap();
+        emissions(
+            root.path(),
+            "debug/build/a-01",
+            SystemTime::now() - Duration::from_secs(600),
+        );
+        let fresh = emissions(root.path(), "debug/build/b-02", SystemTime::now());
+
+        assert_eq!(find_emissions_dir(root.path()), Some(fresh));
+    }
+
+    #[test]
+    fn the_package_name_is_read_from_its_own_section() {
+        assert_eq!(
+            package_name("[dependencies]\nname = \"no\"\n[package]\nname = \"ical-sync\"\n")
+                .as_deref(),
+            Some("ical-sync")
+        );
+        assert_eq!(package_name("[package]\nname.workspace = true\n"), None);
+    }
 }
