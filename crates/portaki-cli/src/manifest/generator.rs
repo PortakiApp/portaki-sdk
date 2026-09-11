@@ -17,10 +17,12 @@ use portaki_sdk::capability::CapabilityId;
 use portaki_sdk::manifest::{
     ManifestAuthor, ManifestCapabilities, ManifestCommand, ManifestConnectors, ManifestEntity,
     ManifestEventSubscription, ManifestEvents, ManifestI18n, ManifestOptionalCapability,
-    ManifestQuery, ManifestSurface, ManifestSurfaces, ModuleManifest, UiSchemaVersions,
+    ManifestQuery, ManifestSurface, ManifestSurfaces, ModuleManifest, OperationParams, ParamShape,
+    ParamType, UiSchemaVersions,
 };
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use walkdir::WalkDir;
 
@@ -183,6 +185,7 @@ pub fn generate_manifest(
         }
     }
 
+    let shapes = param_shapes(emissions);
     let mut queries = Vec::new();
     let mut commands = Vec::new();
     let mut subscribes = Vec::new();
@@ -190,20 +193,34 @@ pub fn generate_manifest(
 
     for emission in emissions {
         match emission.kind.as_str() {
-            "query" => queries.push(ManifestQuery {
-                name: emission.data["name"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                r#fn: emission.data["fn"].as_str().unwrap_or_default().to_string(),
-            }),
-            "command" => commands.push(ManifestCommand {
-                name: emission.data["name"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                r#fn: emission.data["fn"].as_str().unwrap_or_default().to_string(),
-            }),
+            "query" => {
+                let args = emission.data["args"].as_str().map(str::to_string);
+                queries.push(ManifestQuery {
+                    name: emission.data["name"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                    r#fn: emission.data["fn"].as_str().unwrap_or_default().to_string(),
+                    params: args
+                        .as_deref()
+                        .and_then(|args| resolve_params(args, &shapes)),
+                    args,
+                })
+            }
+            "command" => {
+                let args = emission.data["args"].as_str().map(str::to_string);
+                commands.push(ManifestCommand {
+                    name: emission.data["name"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                    r#fn: emission.data["fn"].as_str().unwrap_or_default().to_string(),
+                    params: args
+                        .as_deref()
+                        .and_then(|args| resolve_params(args, &shapes)),
+                    args,
+                })
+            }
             "event_handler" => subscribes.push(ManifestEventSubscription {
                 r#type: emission.data["type"]
                     .as_str()
@@ -272,6 +289,62 @@ pub fn generate_manifest(
 }
 
 /// Writes `manifest.json` to `dest`.
+/// Les formes d'arguments émises par `#[params]`, par nom de type.
+fn param_shapes(emissions: &[EmissionFile]) -> BTreeMap<String, ParamShape> {
+    emissions
+        .iter()
+        .filter(|emission| emission.kind == "params")
+        .filter_map(|emission| {
+            let name = emission.data["name"].as_str()?.to_string();
+            let shape = serde_json::from_value(emission.data.clone()).ok()?;
+            Some((name, shape))
+        })
+        .collect()
+}
+
+/// Les arguments d'une opération, avec les types qu'ils nomment.
+///
+/// `None` quand le type ne porte pas `#[params]` : l'opération garde son `args`, et la sandbox
+/// dit quel type annoter plutôt que d'inventer une forme. `EmptyArgs` est connu sans émission —
+/// il vit dans le SDK, dont les émissions ne rejoignent pas celles du module.
+pub fn resolve_params(
+    args: &str,
+    shapes: &BTreeMap<String, ParamShape>,
+) -> Option<OperationParams> {
+    if args == "EmptyArgs" {
+        return Some(OperationParams::default());
+    }
+    let shape = shapes.get(args)?.clone();
+    let mut defs = BTreeMap::new();
+    let mut pending: Vec<String> = references(&shape);
+    while let Some(name) = pending.pop() {
+        if name == args || defs.contains_key(&name) {
+            continue;
+        }
+        if let Some(nested) = shapes.get(&name) {
+            pending.extend(references(nested));
+            defs.insert(name, nested.clone());
+        }
+    }
+    Some(OperationParams { shape, defs })
+}
+
+fn references(shape: &ParamShape) -> Vec<String> {
+    fn walk(ty: &ParamType, into: &mut Vec<String>) {
+        if let Some(name) = &ty.reference {
+            into.push(name.clone());
+        }
+        for inner in [&ty.items, &ty.values].into_iter().flatten() {
+            walk(inner, into);
+        }
+    }
+    let mut names = Vec::new();
+    for field in &shape.fields {
+        walk(&field.ty, &mut names);
+    }
+    names
+}
+
 pub fn write_manifest(manifest: &ModuleManifest, dest: &Path) -> Result<()> {
     let json = serde_json::to_string_pretty(manifest)?;
     fs::write(dest, json).with_context(|| format!("write {}", dest.display()))?;
@@ -473,5 +546,104 @@ mod emissions_dir_tests {
             Some("ical-sync")
         );
         assert_eq!(package_name("[package]\nname.workspace = true\n"), None);
+    }
+}
+
+#[cfg(test)]
+mod params_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn emission(value: Value) -> EmissionFile {
+        serde_json::from_value(value).unwrap()
+    }
+
+    /// What `#[params]` on ical-sync's argument types would emit.
+    fn ical_sync() -> Vec<EmissionFile> {
+        vec![
+            emission(json!({
+                "kind": "params",
+                "name": "UpdateConfigArgs",
+                "fields": [
+                    { "name": "calendars", "type": "array",
+                      "items": { "type": "ref", "ref": "CalendarInput" }, "required": false },
+                    { "name": "ical_url_primary", "type": "string", "required": false }
+                ]
+            })),
+            emission(json!({
+                "kind": "params",
+                "name": "CalendarInput",
+                "fields": [
+                    { "name": "url", "type": "string", "required": true },
+                    { "name": "format", "type": "ref", "ref": "CalendarFormat", "required": false }
+                ]
+            })),
+            emission(
+                json!({ "kind": "params", "name": "CalendarFormat", "enum": ["ical", "json"] }),
+            ),
+            emission(json!({ "kind": "params", "name": "Unrelated", "fields": [] })),
+        ]
+    }
+
+    #[test]
+    fn an_operation_carries_its_fields_and_the_types_they_name() {
+        let shapes = param_shapes(&ical_sync());
+
+        let params = resolve_params("UpdateConfigArgs", &shapes).unwrap();
+
+        assert_eq!(params.shape.fields.len(), 2);
+        assert_eq!(
+            params.defs.keys().collect::<Vec<_>>(),
+            vec!["CalendarFormat", "CalendarInput"],
+            "nested types resolve transitively, unrelated ones stay out"
+        );
+        assert_eq!(params.defs["CalendarFormat"].values, vec!["ical", "json"]);
+    }
+
+    /// The manifest says which type to annotate rather than inventing a shape.
+    #[test]
+    fn an_undescribed_type_has_no_params() {
+        assert_eq!(
+            resolve_params("StayArgs", &param_shapes(&ical_sync())),
+            None
+        );
+    }
+
+    #[test]
+    fn empty_args_needs_no_emission() {
+        assert_eq!(
+            resolve_params("EmptyArgs", &BTreeMap::new()),
+            Some(OperationParams::default())
+        );
+    }
+
+    /// The wire shape the sandbox reads — flat, with `defs` beside the fields.
+    #[test]
+    fn params_serialise_flat() {
+        let params = resolve_params("CalendarInput", &param_shapes(&ical_sync())).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&params).unwrap(),
+            json!({
+                "fields": [
+                    { "name": "url", "type": "string", "required": true },
+                    { "name": "format", "type": "ref", "ref": "CalendarFormat", "required": false }
+                ],
+                "defs": { "CalendarFormat": { "enum": ["ical", "json"] } }
+            })
+        );
+    }
+
+    /// A self-referencing type must not loop.
+    #[test]
+    fn a_recursive_type_resolves_once() {
+        let shapes = param_shapes(&[emission(json!({
+            "kind": "params",
+            "name": "Node",
+            "fields": [{ "name": "children", "type": "array",
+                         "items": { "type": "ref", "ref": "Node" }, "required": false }]
+        }))]);
+
+        assert!(resolve_params("Node", &shapes).unwrap().defs.is_empty());
     }
 }

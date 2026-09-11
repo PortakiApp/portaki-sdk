@@ -19,6 +19,8 @@
 //! - Optional capabilities listed here are not auto-granted — runtime checks still apply.
 //! - Entity `fields` in v1 emissions are simplified metadata; Atlas owns the real DDL.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -159,6 +161,12 @@ pub struct ManifestQuery {
     pub name: String,
     /// Rust function symbol exported through the query shim.
     pub r#fn: String,
+    /// The argument type the handler deserializes, by name — absent when it takes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<String>,
+    /// That type's fields, when it carries [`crate::params`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<OperationParams>,
 }
 
 /// Command operation — mutating handler with JSON params/response.
@@ -168,6 +176,82 @@ pub struct ManifestCommand {
     pub name: String,
     /// Rust function symbol exported through the command shim.
     pub r#fn: String,
+    /// The argument type the handler deserializes, by name — absent when it takes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<String>,
+    /// That type's fields, when it carries [`crate::params`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<OperationParams>,
+}
+
+/// The arguments an operation takes, described for tooling (the sandbox builds a form from it).
+///
+/// Descriptive only: the handler still deserializes with serde, and the platform never
+/// validates a dispatch against this.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct OperationParams {
+    /// The argument type itself.
+    #[serde(flatten)]
+    pub shape: ParamShape,
+    /// The module types its fields refer to, by name — those that carry `#[params]` too.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub defs: BTreeMap<String, ParamShape>,
+}
+
+/// A struct (its fields) or a unit enum (its values), as serde reads it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ParamShape {
+    /// First paragraph of the type's doc comment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
+    /// Struct fields, in declaration order, under their wire names.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<ParamField>,
+    /// Enum values, under their wire names.
+    #[serde(default, rename = "enum", skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
+    /// A shape the macro could not describe (tuple struct, enum with data) — edit it as JSON.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub opaque: bool,
+}
+
+/// One argument field.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ParamField {
+    /// Wire name — after `rename` / `rename_all`.
+    pub name: String,
+    /// Its type.
+    #[serde(flatten)]
+    pub ty: ParamType,
+    /// Neither `Option<T>` nor `#[serde(default)]`: the handler refuses a dispatch without it.
+    #[serde(default)]
+    pub required: bool,
+    /// `#[serde(flatten)]` — its fields sit at this level, not under its name.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flatten: bool,
+    /// First paragraph of the field's doc comment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
+}
+
+/// A wire type: `string`, `integer`, `number`, `boolean`, `array`, `map`, `json`, or `ref`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ParamType {
+    /// The kind of value.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Refinement of a string: `uuid`, `date`, `time`, `date-time`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Element type of an `array`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Box<ParamType>>,
+    /// Value type of a `map` (keys are strings).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Box<ParamType>>,
+    /// The module type a `ref` names — described in [`OperationParams::defs`] when it can be.
+    #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
 }
 
 /// Domain event declarations for publish/subscribe wiring.
