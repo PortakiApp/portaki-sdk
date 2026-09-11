@@ -56,7 +56,8 @@ pub use action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, Ove
 pub use common::{
     Animation, AnimationKind, ButtonVariant, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint,
     MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, RichTextDoc, StackDirection,
-    SurfaceLevel, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
+    SurfaceLevel, Swatch, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility,
+    VisibilityExpr,
 };
 pub use component::Component;
 pub use surface::Surface;
