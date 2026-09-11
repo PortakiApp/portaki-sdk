@@ -274,21 +274,16 @@ async fn cycle(
     session: Option<&str>,
 ) -> Result<()> {
     build(module_root)?;
+    // Ce que `portaki build` fait après la compilation, et que `dev` sautait : régénérer le
+    // manifeste depuis les émissions. Sans ça, la sandbox recevait celui du dernier `build`
+    // lancé à la main — une requête ajoutée restait invisible jusqu'à ce qu'on y pense.
+    crate::commands::build::refresh_outputs(module_root)?;
 
     // Le même résolveur que `publish`, et pas un chemin deviné : cargo nomme l'artefact
     // d'après la cible, donc `access-guide` produit `access_guide.wasm`.
     let wasm_path = crate::oci::pack::find_wasm_artifact(module_root, module_id)?;
     let wasm = std::fs::read(&wasm_path)
         .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
-    let digest = sha256(&wasm);
-
-    if digest == *last_digest {
-        ui::skipped(format!(
-            "unchanged ({}) — nothing to upload",
-            short(&digest)
-        ));
-        return Ok(());
-    }
 
     let raw_manifest =
         std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
@@ -310,6 +305,18 @@ async fn cycle(
             Err(_) => manifest,
         };
 
+    // L'empreinte porte sur le Wasm ET le manifeste. Sur le seul Wasm, un `--watch` qui relisait
+    // `portaki.module.json` modifié répondait « unchanged » et ne l'envoyait jamais : le fichier
+    // était surveillé pour rien. Elle reste locale — le digest serveur, lui, est celui du Wasm.
+    let fingerprint = upload_fingerprint(&wasm, &manifest);
+    if fingerprint == *last_digest {
+        ui::skipped(format!(
+            "unchanged ({}) — nothing to upload",
+            short(&sha256(&wasm))
+        ));
+        return Ok(());
+    }
+
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
     let uploading = ui::step(format!("deploying {module_id} to the sandbox"));
@@ -329,7 +336,7 @@ async fn cycle(
     uploading.done(format!("deployed {module_id}"));
     ui::field("digest", short(&deployed.digest));
     ui::field("size", ui::bytes(deployed.size_bytes));
-    *last_digest = digest;
+    *last_digest = fingerprint;
 
     if let Some(operation) = &args.dispatch {
         let running = ui::step(format!("dispatching {} {operation}", args.kind));
@@ -580,6 +587,11 @@ fn read_module_id(module_root: &Path) -> Result<String> {
         .context("portaki.module.json carries no id")
 }
 
+/// Ce qui décide qu'un cycle a quelque chose à envoyer : le binaire et le manifeste ensemble.
+fn upload_fingerprint(wasm: &[u8], manifest: &str) -> String {
+    sha256(&[wasm, b"\0", manifest.as_bytes()].concat())
+}
+
 fn sha256(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
@@ -591,6 +603,21 @@ fn short(digest: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// Un manifeste modifié sans toucher au code doit repartir : c'est ce que `--watch` surveille.
+    #[test]
+    fn a_manifest_change_alone_is_something_to_upload() {
+        let wasm = b"\0asm same bytes";
+        assert_ne!(
+            upload_fingerprint(wasm, r#"{"version":"0.4.0"}"#),
+            upload_fingerprint(wasm, r#"{"version":"0.4.1"}"#)
+        );
+        assert_eq!(
+            upload_fingerprint(wasm, "{}"),
+            upload_fingerprint(wasm, "{}")
+        );
+    }
+
     use super::*;
 
     const PROD: &str = "https://api.portaki.app";
