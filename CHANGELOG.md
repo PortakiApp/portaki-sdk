@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1](https://github.com/PortakiApp/portaki-sdk/compare/v3.0.0...v3.0.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **cli:** send built operations to the sandbox ([f5f47b3](https://github.com/PortakiApp/portaki-sdk/commit/f5f47b317ee0582297489e3934295b84d3098749))
+
 ## [3.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v2.6.0...v3.0.0) (2026-09-10)
 
 
