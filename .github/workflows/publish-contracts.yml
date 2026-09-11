@@ -25,6 +25,8 @@ on:
 
 concurrency:
   group: publish-contracts
+  # Pas d'annulation : une publication interrompue laisserait une version à moitié poussée au
+  # registre, et une version publiée ne se republie pas.
   cancel-in-progress: false
 
 permissions:
