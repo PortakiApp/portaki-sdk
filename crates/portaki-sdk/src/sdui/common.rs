@@ -170,6 +170,40 @@ pub enum TextVariant {
     Display,
 }
 
+/// A named tint — for a color that is information, not a theme role.
+///
+/// The yellow recycling bin is yellow because the municipality says so, whatever the property's
+/// brand: that is content, and `Tone` cannot say it. But a free CSS string (`color: "#f4c020"`)
+/// hard-codes a value the shell can't adapt — to its palette, to a dark theme, to contrast. A
+/// swatch names the tint and lets each shell resolve it.
+///
+/// Prefer `swatch` over the `color` string on `ColorDotItem` and `Dot`: shells honor `color`
+/// only for modules built before swatches existed.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Swatch {
+    /// Yellow.
+    Yellow,
+    /// Green.
+    Green,
+    /// Blue.
+    Blue,
+    /// Brown.
+    Brown,
+    /// Grey.
+    Grey,
+    /// Black.
+    Black,
+    /// White.
+    White,
+    /// Red.
+    Red,
+    /// Orange.
+    Orange,
+    /// Purple.
+    Purple,
+}
+
 /// Button visual variant.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -506,5 +540,27 @@ mod tone_tests {
             serde_json::from_str::<Tone>("\"secondary\"").unwrap(),
             Tone::Secondary
         );
+    }
+}
+
+#[cfg(test)]
+mod swatch_tests {
+    use crate::sdui::component::Component;
+    use crate::sdui::primitives::ColorDotItem;
+
+    use super::Swatch;
+
+    /// The wire shape both shells read: a named tint, no CSS.
+    #[test]
+    fn a_color_dot_carries_its_swatch_by_name() {
+        let dot: Component = ColorDotItem::new()
+            .label("Bac jaune")
+            .swatch(Swatch::Yellow)
+            .into();
+
+        let json = serde_json::to_value(&dot).unwrap();
+
+        assert_eq!(json["swatch"], "yellow");
+        assert!(json.get("color").is_none());
     }
 }
