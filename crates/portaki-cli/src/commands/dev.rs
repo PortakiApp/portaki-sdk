@@ -34,9 +34,8 @@ pub struct DevArgs {
     pub url: Option<String>,
 
     /// Operation to dispatch after each deploy. Bare, it lists what this module exposes.
-    ///
-    /// `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
-    /// laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
+    // `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
+    // laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub dispatch: Option<String>,
 

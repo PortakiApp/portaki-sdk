@@ -27,9 +27,10 @@ use crate::{auth, oci, oidc, ui};
 #[derive(Debug, Parser)]
 /// Arguments for `portaki publish`.
 pub struct PublishArgs {
-    /// OCI registry prefix (GitHub Container Registry).
-    #[arg(long, default_value = "ghcr.io/portakiapp")]
-    pub registry: String,
+    /// OCI registry prefix. Defaults to ghcr.io/portakiapp for official modules; required
+    /// for any other author.
+    #[arg(long)]
+    pub registry: Option<String>,
     /// Validate packaging without pushing.
     #[arg(long)]
     pub dry_run: bool,
@@ -39,18 +40,51 @@ pub struct PublishArgs {
     /// Skip the implicit `portaki build --release` (not recommended).
     #[arg(long)]
     pub skip_build: bool,
-    /// Canal de diffusion chez le registre Portaki.
+    /// Release channel at the Portaki registry.
     #[arg(long, default_value = "stable")]
     pub channel: String,
-    /// Base URL de la plateforme. Défaut : PORTAKI_API_URL, puis la production.
+    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
     #[arg(long)]
     pub url: Option<String>,
-    /// Pousser sur GHCR sans annoncer au registre — l'artefact n'entrera alors dans aucun catalogue.
+    /// Push to GHCR without announcing it — the artifact then enters no catalogue.
     #[arg(long)]
     pub no_announce: bool,
-    /// Annoncer une version déjà sur GHCR, sans rien compiler ni repousser.
+    /// Announce a version already on GHCR, compiling and pushing nothing.
     #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build"])]
     pub announce_only: bool,
+}
+
+/// The namespace Portaki publishes its own modules under.
+const OFFICIAL_REGISTRY: &str = "ghcr.io/portakiapp";
+
+/// Where this module's artifact belongs.
+///
+/// The old default pushed everything to the Portaki namespace. For a module whose manifest
+/// names someone else as its author that is the wrong place, and a default nobody notices is a
+/// default that gets noticed after the push.
+fn resolve_registry(flag: Option<&str>, module_root: &Path) -> Result<String> {
+    if let Some(registry) = flag {
+        return Ok(registry.to_string());
+    }
+    if author_type(module_root).as_deref() == Some("official") {
+        return Ok(OFFICIAL_REGISTRY.to_string());
+    }
+    anyhow::bail!(
+        "--registry is required: {OFFICIAL_REGISTRY} is the Portaki namespace, and \
+         portaki.module.json does not declare an official module — pass your own, \
+         e.g. --registry ghcr.io/<owner>"
+    )
+}
+
+/// `author.type` as the catalogue manifest declares it, when it can be read at all.
+fn author_type(module_root: &Path) -> Option<String> {
+    let raw = std::fs::read_to_string(module_root.join("portaki.module.json")).ok()?;
+    let manifest: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    manifest
+        .get("author")?
+        .get("type")?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// Runs `portaki publish`.
@@ -65,6 +99,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         .artifact_dir
         .clone()
         .unwrap_or_else(|| module_root.join("target/portaki"));
+    let registry = resolve_registry(args.registry.as_deref(), &module_root)?;
 
     // Reprise d'un catalogue déjà sur GHCR : on lit le digest de la version publiée et on
     // l'annonce. Rien n'est recompilé ni renvoyé, donc aucun droit d'écriture nécessaire — et
@@ -72,7 +107,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     if args.announce_only {
         let coords = oci::pack::read_source_coordinates(&module_root)?;
         let looking = ui::step("looking up the pushed artifact");
-        let pushed = oci::resolve_pushed_artifact(&module_root, &args.registry).await?;
+        let pushed = oci::resolve_pushed_artifact(&module_root, &registry).await?;
         looking.done("found the artifact on the registry");
         ui::field("image", &pushed.image_ref);
         ui::field("digest", &pushed.digest);
@@ -100,7 +135,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     if args.dry_run {
         ui::success("dry run — nothing was pushed, nothing was announced");
         ui::field("artifact", artifact_dir.display());
-        ui::field("registry", &args.registry);
+        ui::field("registry", &registry);
         ui::advice("drop --dry-run to push these layers and announce the version");
         ui::blank();
         return Ok(());
@@ -112,15 +147,15 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     let coords = oci::pack::read_module_coordinates(&module_root, &artifact_dir)?;
     refuse_if_already_published(&auth::api_base_url(args.url.as_deref()), &coords).await?;
 
-    let pushing = ui::step(format!("pushing to {}", args.registry));
-    let pushed = oci::push_artifact(&module_root, &artifact_dir, &args.registry)
+    let pushing = ui::step(format!("pushing to {registry}"));
+    let pushed = oci::push_artifact(&module_root, &artifact_dir, &registry)
         .await
         .map_err(|failure| {
             pushing.abandon();
             failure
         })
         .context("push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io")?;
-    pushing.done(format!("pushed to {}", args.registry));
+    pushing.done(format!("pushed to {registry}"));
     ui::field("manifest", &pushed.manifest_url);
 
     if args.no_announce {
@@ -402,8 +437,50 @@ fn assert_publish_version_matches_env(module_root: &Path, artifact_dir: &Path) -
 mod tests {
     use super::*;
     use std::fs;
-
     use tempfile::tempdir;
+
+    fn module_with_author(author_type: &str) -> tempfile::TempDir {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("portaki.module.json"),
+            format!(
+                r#"{{"id":"x","version":"0.1.0","author":{{"name":"n","type":"{author_type}"}}}}"#
+            ),
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn an_official_module_keeps_the_portaki_namespace() {
+        let dir = module_with_author("official");
+
+        assert_eq!(
+            resolve_registry(None, dir.path()).unwrap(),
+            OFFICIAL_REGISTRY
+        );
+    }
+
+    /// The default that only gets noticed after the push.
+    #[test]
+    fn anyone_else_has_to_name_their_own() {
+        let dir = module_with_author("community");
+
+        let error = resolve_registry(None, dir.path()).unwrap_err().to_string();
+        assert!(error.contains("--registry is required"), "{error}");
+        // Given explicitly, the namespace is theirs to choose.
+        assert_eq!(
+            resolve_registry(Some("ghcr.io/someone"), dir.path()).unwrap(),
+            "ghcr.io/someone"
+        );
+    }
+
+    #[test]
+    fn a_manifest_that_cannot_be_read_is_not_treated_as_official() {
+        let dir = tempdir().unwrap();
+
+        assert!(resolve_registry(None, dir.path()).is_err());
+    }
 
     /// Le catalogue rend toutes les versions : c'est la nôtre qu'il faut y trouver, pas la
     /// première venue — sans quoi une republication serait refusée au nom d'une autre version.
