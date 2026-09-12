@@ -91,6 +91,8 @@ enum Command {
     Ci(commands::ci::CiArgs),
     /// Run everything CI runs: fmt, clippy, tests, the wasm build, the manifest.
     Check(commands::check::CheckArgs),
+    /// Show every declared connector, and what it needs to actually call.
+    Connectors(commands::connectors::ConnectorsArgs),
     /// Validate manifest, i18n keys, and capability ids.
     Lint(commands::lint::LintArgs),
     /// Run `cargo test` in the module crate.
@@ -340,6 +342,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Build(args) => commands::build::run(args).await,
         Command::Ci(args) => commands::ci::run(args).await,
         Command::Check(args) => commands::check::run(args).await,
+        Command::Connectors(args) => commands::connectors::run(args),
         Command::Lint(args) => commands::lint::run(args),
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
