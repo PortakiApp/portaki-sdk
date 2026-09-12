@@ -66,6 +66,13 @@ pub mod wasm;
 /// released together but a module crate may pin an older one.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The SDUI primitive catalogue this SDK generates its components from.
+///
+/// The same file `build.rs` reads, carried into the binary: a tool that wants to know what the
+/// host can render — `portaki catalog` — should ask the SDK it was linked against, not a path
+/// in a source tree it may not have.
+pub const SDUI_PRIMITIVES_JSON: &str = include_str!("../sdui_primitives.json");
+
 /// Re-export for `inventory::submit!` in wasm handler registration (macro-generated).
 ///
 /// Module authors do not call this directly — `query!` / `command!` / `surface!`
