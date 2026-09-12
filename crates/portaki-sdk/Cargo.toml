@@ -38,3 +38,7 @@ serde_json = { workspace = true }
 [dev-dependencies]
 serde_json = { workspace = true }
 trybuild = "1.0.120"
+# Lit `sdui/common.rs` et `sdui/action.rs` pour en dériver `contracts/sdui_types.json`.
+# Dev uniquement : rien de tout ceci n'entre dans le Wasm d'un module.
+syn = { version = "2", features = ["full", "parsing", "printing", "extra-traits"] }
+quote = "1"
