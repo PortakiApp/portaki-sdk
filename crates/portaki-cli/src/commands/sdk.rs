@@ -743,7 +743,10 @@ async fn upgrade_and_verify(
     crate::commands::build::refresh_outputs(module_root)?;
     let test: Vec<&str> = ["test"].into_iter().chain(scope.iter().copied()).collect();
     cargo(module_root, "running the tests", &test)?;
-    crate::commands::lint::run(crate::commands::lint::LintArgs { manifest: None })?;
+    crate::commands::lint::run(crate::commands::lint::LintArgs {
+        manifest: None,
+        nested: false,
+    })?;
 
     let (Some(sandbox), Some(baseline)) = (sandbox, baseline) else {
         return Ok(resolved_version);

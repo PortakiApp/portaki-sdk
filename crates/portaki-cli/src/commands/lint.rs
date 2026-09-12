@@ -17,14 +17,20 @@ pub struct LintArgs {
     /// Path to `manifest.json` (defaults to `target/portaki/manifest.json`).
     #[arg(long)]
     pub manifest: Option<PathBuf>,
+
+    /// `check` enchaîne sur `lint` : un second en-tête ferait croire à deux commandes.
+    #[arg(skip)]
+    pub nested: bool,
 }
 
 /// Runs `portaki lint`.
 pub fn run(args: LintArgs) -> Result<()> {
-    ui::header(
-        "portaki lint",
-        "Check that everything the manifest names actually resolves.",
-    );
+    if !args.nested {
+        ui::header(
+            "portaki lint",
+            "Check that everything the manifest names actually resolves.",
+        );
+    }
 
     let module_root = std::env::current_dir().context("current_dir")?;
     let manifest_path = args

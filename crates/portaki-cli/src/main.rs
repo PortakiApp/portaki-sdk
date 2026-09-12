@@ -89,6 +89,8 @@ enum Command {
     Build(commands::build::BuildArgs),
     /// Answer the questions a CI workflow used to ask in bash.
     Ci(commands::ci::CiArgs),
+    /// Run everything CI runs: fmt, clippy, tests, the wasm build, the manifest.
+    Check(commands::check::CheckArgs),
     /// Validate manifest, i18n keys, and capability ids.
     Lint(commands::lint::LintArgs),
     /// Run `cargo test` in the module crate.
@@ -337,6 +339,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Dev(args) => commands::dev::run(args).await,
         Command::Build(args) => commands::build::run(args).await,
         Command::Ci(args) => commands::ci::run(args).await,
+        Command::Check(args) => commands::check::run(args).await,
         Command::Lint(args) => commands::lint::run(args),
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
