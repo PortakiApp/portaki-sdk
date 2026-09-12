@@ -54,6 +54,20 @@ pub struct PublishArgs {
     pub announce_only: bool,
 }
 
+/// A layer's size on disk, or zero when it cannot be read — the list is a report, not a gate.
+fn layer_size(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
+}
+
+/// `1 layer`, `5 layers`.
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("{count} {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
+}
+
 /// The namespace Portaki publishes its own modules under.
 const OFFICIAL_REGISTRY: &str = "ghcr.io/portakiapp";
 
@@ -128,9 +142,26 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     }
 
     let packing = ui::step("packing the OCI artifact");
-    oci::package_artifact_with_root(&module_root, &artifact_dir).context("package OCI artifact")?;
+    // The layer list the push would send, assembled here rather than at push time: it is what
+    // says the wasm exists. A dry run that skipped it answered a question it had not checked.
+    let layers =
+        oci::pack::collect_push_layers(&module_root, &artifact_dir).map_err(|failure| {
+            packing.abandon();
+            failure
+        })?;
     assert_publish_version_matches_env(&module_root, &artifact_dir)?;
-    packing.done("packed the OCI artifact");
+    packing.done(format!("packed {}", plural(layers.len(), "layer")));
+    for layer in &layers {
+        ui::detail(format!(
+            "{}  {}",
+            layer
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            ui::bytes(layer_size(&layer.path))
+        ));
+    }
 
     if args.dry_run {
         ui::success("dry run — nothing was pushed, nothing was announced");
@@ -449,6 +480,13 @@ mod tests {
         )
         .unwrap();
         dir
+    }
+
+    #[test]
+    fn one_layer_is_not_layers() {
+        assert_eq!(plural(1, "layer"), "1 layer");
+        assert_eq!(plural(5, "layer"), "5 layers");
+        assert_eq!(plural(0, "layer"), "0 layers");
     }
 
     #[test]
