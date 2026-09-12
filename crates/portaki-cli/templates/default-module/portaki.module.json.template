@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "{{MODULE_NAME}}",
+  "name": {
+    "fr": "{{MODULE_NAME}}",
+    "en": "{{MODULE_NAME}}"
+  },
+  "description": {
+    "fr": "Ce que ce module fait, en une phrase.",
+    "en": "What this module does, in one sentence."
+  },
+  "version": "0.1.0",
+  "author": {
+    "name": "TODO",
+    "url": "https://github.com/TODO",
+    "type": "community"
+  },
+  "icon": "Grid",
+  "type": "community",
+  "maturity": "beta",
+  "permissions": ["kv"],
+  "hostSurfaces": [
+    {
+      "type": "property-module-sheet",
+      "pathSegment": "{{MODULE_NAME}}",
+      "label": {
+        "fr": "{{MODULE_NAME}}",
+        "en": "{{MODULE_NAME}}"
+      },
+      "icon": "Grid"
+    }
+  ],
+  "guestSurfaces": [
+    {
+      "surfaceId": "home.card",
+      "path": "{{MODULE_NAME}}",
+      "labelKey": "home.card.title",
+      "role": "card"
+    }
+  ]
+}

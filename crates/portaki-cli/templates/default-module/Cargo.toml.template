@@ -22,3 +22,4 @@ extism-pdk = "1.4"
 
 [dev-dependencies]
 portaki-test-utils = "{{SDK_VERSION}}"
+serial_test = "4"

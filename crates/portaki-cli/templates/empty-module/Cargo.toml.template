@@ -11,3 +11,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 portaki-sdk = "{{SDK_VERSION}}"
 portaki-sdk-macros = "{{SDK_VERSION}}"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# `portaki_module!` expands to `use extism_pdk::{FnResult, plugin_fn}` — the entry points the
+# host calls live in this crate, so the pdk is this crate's dependency.
+extism-pdk = "1.4"

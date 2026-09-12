@@ -1,0 +1,36 @@
+# {{MODULE_NAME}}
+
+One sentence on what this module does for a host or a guest.
+
+A Portaki module: Rust compiled to wasm, published as an OCI artifact. Scaffolded with
+`portaki init`.
+
+## Module id
+
+`{{MODULE_NAME}}` — the id in `portaki.module.json`, the crate name, and the OCI tag all say it.
+
+## Surfaces
+
+| Surface | Where | What it shows |
+|---|---|---|
+| … | … | … |
+
+## Capabilities
+
+| Kind | Id | Why |
+|---|---|---|
+| Required | `core.storage` | … |
+
+## Development
+
+```
+cargo test
+portaki build --release && portaki lint
+portaki dev --watch
+```
+
+`portaki.module.json` and `Cargo.toml` both carry the version — keep them equal.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).
