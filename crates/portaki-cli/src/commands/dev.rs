@@ -436,6 +436,12 @@ struct HostCall {
     duration_micros: u64,
     #[serde(default)]
     error_code: String,
+    /// Ce que le module a demandé. La sandbox garde les valeurs, la production ne les garde pas :
+    /// absent veut dire « le runtime ne les a pas transmises », pas « le module n'a rien passé ».
+    #[serde(default)]
+    args_json: Option<String>,
+    #[serde(default)]
+    result_json: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -474,6 +480,12 @@ fn print_trace(trace: &DispatchResponse) {
         ui::detail("what the run asked the host for:");
     }
     for call in &trace.host_calls {
+        // Dans l'ordre des appels, la voix du module au milieu de ce qu'il a demandé : un `log`
+        // sorti de la liste dirait tout sauf entre quels appels il a été écrit.
+        if let Some(line) = log_line(call) {
+            ui::detail(line);
+            continue;
+        }
         let outcome = if call.error_code.is_empty() {
             String::new()
         } else {
@@ -483,6 +495,14 @@ fn print_trace(trace: &DispatchResponse) {
             "{:>7} µs  {}{}",
             call.duration_micros, call.op, outcome
         ));
+        if ui::verbose() {
+            if let Some(args) = value_line("args", call.args_json.as_deref()) {
+                ui::detail(args);
+            }
+            if let Some(result) = value_line("result", call.result_json.as_deref()) {
+                ui::detail(result);
+            }
+        }
     }
     for effect in &trace.captured_effects {
         ui::detail(format!("captured  {}  {}", effect.op, effect.detail_json));
@@ -498,6 +518,51 @@ fn print_trace(trace: &DispatchResponse) {
     if !trace.result_json.is_empty() {
         ui::result(&trace.result_json);
     }
+}
+
+/// Au-delà, une valeur noie la trace — le détail entier se lit dans l'espace développeur.
+const VALUE_WIDTH: usize = 160;
+
+/// Une ligne écrite par le module lui-même, ou `None` si cet appel n'est pas un `host::log`.
+///
+/// Un `log` passe par le même canal que `kv.get` : sans lire ses arguments, la trace affichait
+/// « 41 µs  log », et le message que le développeur venait d'écrire restait invisible.
+fn log_line(call: &HostCall) -> Option<String> {
+    if call.op != "log" {
+        return None;
+    }
+    let args: serde_json::Value = serde_json::from_str(call.args_json.as_deref()?).ok()?;
+    let level = args
+        .get("level")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("info");
+    let message = args.get("message").and_then(serde_json::Value::as_str)?;
+    let fields = args
+        .get("fieldsJson")
+        .and_then(serde_json::Value::as_str)
+        .filter(|fields| !fields.is_empty() && *fields != "{}")
+        .map(|fields| format!("  {}", truncate(fields)))
+        .unwrap_or_default();
+    // Cinq espaces, pas deux : le message se pose sous la colonne des opérations, là où « µs »
+    // décale les autres lignes.
+    Some(format!("{level:>7}     {message}{fields}"))
+}
+
+/// Ce qu'un appel a demandé ou reçu, sous sa ligne. Rien quand le runtime ne l'a pas transmis.
+fn value_line(label: &str, value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    Some(format!("{label:>7}  {}", truncate(value)))
+}
+
+fn truncate(value: &str) -> String {
+    if value.chars().count() <= VALUE_WIDTH {
+        return value.to_string();
+    }
+    let kept: String = value.chars().take(VALUE_WIDTH).collect();
+    format!("{kept}…")
 }
 
 /// Le seul échec dont on sait quoi faire : renouveler et rejouer. Il porte un type pour que
@@ -693,6 +758,97 @@ mod tests {
         assert_eq!(parsed.host_calls.len(), 1);
         assert_eq!(parsed.host_calls[0].duration_micros, 128);
         assert_eq!(parsed.captured_effects[0].detail_json, "{}");
+    }
+
+    /// La sandbox transmet les valeurs ; la CLI les ignorait, et c'est par là que passent les
+    /// lignes de journal du module.
+    #[test]
+    fn a_host_call_keeps_the_values_the_sandbox_sent() {
+        let body = r#"{"runId":"4d7a","hasResult":false,"resultJson":"","durationMs":3,
+            "hostCalls":[{"op":"kv.get","durationMicros":128,"errorCode":"",
+            "argsJson":"{\"key\":\"wifi\"}","resultJson":"{\"value\":\"soleil\"}"}]}"#;
+
+        let parsed: DispatchResponse =
+            serde_json::from_str(body).expect("réponse de dispatch lisible");
+
+        assert_eq!(
+            parsed.host_calls[0].args_json.as_deref(),
+            Some(r#"{"key":"wifi"}"#)
+        );
+        assert_eq!(
+            parsed.host_calls[0].result_json.as_deref(),
+            Some(r#"{"value":"soleil"}"#)
+        );
+    }
+
+    /// « 41 µs  log » ne disait pas ce que le module avait écrit — c'est tout l'intérêt d'un log.
+    #[test]
+    fn a_log_call_reads_as_the_line_the_module_wrote() {
+        let call = HostCall {
+            op: "log".into(),
+            duration_micros: 41,
+            error_code: String::new(),
+            args_json: Some(
+                r#"{"level":"warn","message":"clé absente","fieldsJson":"{\"key\":\"wifi\"}"}"#
+                    .into(),
+            ),
+            result_json: None,
+        };
+
+        let line = log_line(&call).expect("une ligne de journal");
+
+        assert!(line.contains("warn"), "{line}");
+        assert!(line.contains("clé absente"), "{line}");
+        assert!(line.contains(r#"{"key":"wifi"}"#), "{line}");
+    }
+
+    /// Des champs vides ajouteraient « {} » au bout de chaque ligne, pour rien.
+    #[test]
+    fn a_log_line_drops_empty_fields() {
+        let call = HostCall {
+            op: "log".into(),
+            duration_micros: 12,
+            error_code: String::new(),
+            args_json: Some(r#"{"level":"info","message":"prêt","fieldsJson":"{}"}"#.into()),
+            result_json: None,
+        };
+
+        assert_eq!(log_line(&call).unwrap().trim_end(), "   info     prêt");
+    }
+
+    /// Hors sandbox, le runtime ne transmet pas les valeurs : la ligne de journal est alors
+    /// indisponible, et l'appel doit rester affiché comme un appel hôte ordinaire.
+    #[test]
+    fn a_call_without_values_is_not_a_log_line() {
+        let without_values = HostCall {
+            op: "log".into(),
+            duration_micros: 41,
+            error_code: String::new(),
+            args_json: None,
+            result_json: None,
+        };
+        let other_op = HostCall {
+            op: "kv.get".into(),
+            duration_micros: 41,
+            error_code: String::new(),
+            args_json: Some(r#"{"key":"wifi"}"#.into()),
+            result_json: None,
+        };
+
+        assert!(log_line(&without_values).is_none());
+        assert!(log_line(&other_op).is_none());
+    }
+
+    #[test]
+    fn a_value_line_is_cut_before_it_floods_the_trace() {
+        let long = format!("{{\"v\":\"{}\"}}", "a".repeat(400));
+
+        let line = value_line("result", Some(&long)).expect("une ligne de valeur");
+
+        assert!(line.ends_with('…'), "{line}");
+        assert!(line.chars().count() <= VALUE_WIDTH + 12, "{line}");
+        assert!(value_line("result", None).is_none());
+        assert!(value_line("result", Some("   ")).is_none());
     }
 
     /// `PORTAKI_API_URL` est la variable que lisent `login` et `publish`. `dev` l'ignorait, et
