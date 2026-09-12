@@ -42,10 +42,11 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     let out_dir = module_root.join("target/portaki");
     std::fs::create_dir_all(&out_dir)?;
 
+    let profile = if args.release { "release" } else { "debug" };
+
     if args.manifest_only {
         ui::skipped("cargo build skipped (--manifest-only)");
     } else {
-        let profile = if args.release { "release" } else { "debug" };
         let mut cmd = Command::new("cargo");
         cmd.arg("build")
             .arg("--target")
@@ -64,7 +65,13 @@ pub async fn run(args: BuildArgs) -> Result<()> {
 
     if !args.manifest_only {
         let coords = pack::read_module_coordinates(&module_root, &out_dir)?;
-        reject_wasm_bindgen(&pack::find_wasm_artifact(&module_root, &coords.id)?)?;
+        // The profile that was just compiled — not the release one, which a debug build
+        // never produced.
+        reject_wasm_bindgen(&pack::find_wasm_artifact_in(
+            &module_root,
+            &coords.id,
+            profile,
+        )?)?;
     }
 
     ui::blank();
