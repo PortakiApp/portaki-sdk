@@ -53,6 +53,7 @@ rustup target add wasm32-unknown-unknown
 |---------|----------|
 | `portaki init` | Scaffold a module from a template |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
+| `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
 | `portaki lint` | Validate capabilities, connectors, i18n keys |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki publish` | Push the OCI artifact, then announce it to the registry |
@@ -198,8 +199,7 @@ portaki --plain ci sdk-version                       # 2.2.0
 
 ```bash
 cd modules/weather
-portaki build --release
-portaki lint
+portaki check
 PORTAKI_PUBLISH_VERSION=0.3.5 portaki publish --registry ghcr.io/portakiapp
 ```
 

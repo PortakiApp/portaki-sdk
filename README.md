@@ -91,8 +91,7 @@ cargo test --workspace
 
 cargo run -p portaki-cli -- init my-module --template default
 cd my-module
-portaki build --release
-portaki lint
+portaki check
 ```
 
 ## Publish (OCI / GHCR)
