@@ -319,11 +319,25 @@ pub fn layers_to_image_layers(layers: &[PushLayer]) -> Result<Vec<ImageLayer>> {
 /// Shared with `commands::dev`, deliberately: the two paths diverged, `publish` grew a
 /// directory scan that saved it and `dev` did not, so the same module built and deployed
 /// from CI while failing on the author's machine.
+/// The artifact a publish or a deploy ships — always the release one.
 pub(crate) fn find_wasm_artifact(module_root: &Path, module_id: &str) -> Result<PathBuf> {
-    let release_dir = module_root.join("target/wasm32-unknown-unknown/release");
+    find_wasm_artifact_in(module_root, module_id, "release")
+}
+
+/// The artifact of one profile.
+///
+/// `portaki build` without `--release` compiles debug and then has to look at what it just
+/// built; looking under `release` made a plain `portaki build` end on an error after having
+/// written every file it was asked for.
+pub(crate) fn find_wasm_artifact_in(
+    module_root: &Path,
+    module_id: &str,
+    profile: &str,
+) -> Result<PathBuf> {
+    let profile_dir = module_root.join(format!("target/wasm32-unknown-unknown/{profile}"));
     let candidates = [
-        release_dir.join(format!("{module_id}.wasm")),
-        release_dir.join(format!("{}.wasm", module_id.replace('-', "_"))),
+        profile_dir.join(format!("{module_id}.wasm")),
+        profile_dir.join(format!("{}.wasm", module_id.replace('-', "_"))),
     ];
     for candidate in &candidates {
         if candidate.exists() {
@@ -331,8 +345,8 @@ pub(crate) fn find_wasm_artifact(module_root: &Path, module_id: &str) -> Result<
         }
     }
 
-    if release_dir.is_dir() {
-        let mut wasm_files: Vec<PathBuf> = std::fs::read_dir(&release_dir)?
+    if profile_dir.is_dir() {
+        let mut wasm_files: Vec<PathBuf> = std::fs::read_dir(&profile_dir)?
             .filter_map(Result::ok)
             .map(|entry| entry.path())
             .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("wasm"))
@@ -343,9 +357,14 @@ pub(crate) fn find_wasm_artifact(module_root: &Path, module_id: &str) -> Result<
         }
     }
 
+    let rerun = if profile == "release" {
+        "portaki build --release"
+    } else {
+        "portaki build"
+    };
     anyhow::bail!(
-        "no wasm artifact under {} — run portaki build --release first",
-        release_dir.display()
+        "no wasm artifact under {} — run {rerun} first",
+        profile_dir.display()
     );
 }
 
@@ -565,6 +584,39 @@ mod tests {
         let root = tempdir().unwrap();
         let error = find_wasm_artifact(root.path(), "access-guide").unwrap_err();
         assert!(error.to_string().contains("no wasm artifact"));
+    }
+
+    /// A plain `portaki build` compiles debug, and then has to find what it just built.
+    #[test]
+    fn find_wasm_artifact_reads_the_profile_it_is_given() {
+        let root = tempdir().unwrap();
+        let debug_dir = root.path().join("target/wasm32-unknown-unknown/debug");
+        fs::create_dir_all(&debug_dir).unwrap();
+        fs::write(debug_dir.join("access_guide.wasm"), b"\0asm").unwrap();
+
+        let found = find_wasm_artifact_in(root.path(), "access-guide", "debug").unwrap();
+        assert_eq!(found, debug_dir.join("access_guide.wasm"));
+        // The release artifact is a different one, and is still missing.
+        assert!(find_wasm_artifact(root.path(), "access-guide").is_err());
+    }
+
+    /// Telling someone to rerun with `--release` when they did not ask for release is noise.
+    #[test]
+    fn the_rerun_hint_matches_the_profile_that_was_missing() {
+        let root = tempdir().unwrap();
+
+        let debug = find_wasm_artifact_in(root.path(), "access-guide", "debug")
+            .unwrap_err()
+            .to_string();
+        assert!(debug.contains("run portaki build first"), "{debug}");
+
+        let release = find_wasm_artifact(root.path(), "access-guide")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            release.contains("run portaki build --release first"),
+            "{release}"
+        );
     }
 
     #[test]
