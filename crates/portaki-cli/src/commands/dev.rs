@@ -33,6 +33,10 @@ pub struct DevArgs {
     #[arg(long)]
     pub url: Option<String>,
 
+    /// Remove this module from the sandbox, and deploy nothing.
+    #[arg(long, conflicts_with_all = ["watch", "dispatch"])]
+    pub forget: bool,
+
     /// Operation to dispatch after each deploy. Bare, it lists what this module exposes.
     // `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
     // laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
@@ -66,6 +70,12 @@ pub async fn run(args: DevArgs) -> Result<()> {
     let mut token = crate::auth::access_token()?;
     let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
+
+    // Avant le bail : oublier n'est pas déployer, et prendre la place pour la rendre aussitôt
+    // ferait attendre une autre session pour rien.
+    if args.forget {
+        return forget(&base_url, &module_id, &token).await;
+    }
 
     // Prise pour tout déploiement, `--watch` ou non. Un `portaki dev` seul écrase le bac à
     // sable exactement comme une session qui boucle — une fois au lieu de sans fin, ce qui ne
@@ -410,6 +420,36 @@ pub(crate) async fn deploy(
     read_json(response).await
 }
 
+/// Retire ce module du bac à sable.
+///
+/// Un déploiement dev s'écrase à chaque push mais ne s'efface jamais : un module essayé une fois
+/// restait dans l'inventaire, à côté de ceux sur lesquels on travaille. Rien n'est recompilé ici
+/// — c'est une ligne qu'on retire, pas un artefact qu'on remplace.
+async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
+    let forgetting = ui::step(format!("forgetting {module_id}"));
+    let response = reqwest::Client::new()
+        .delete(format!("{base_url}/dev/v1/modules/{module_id}/dev-deploy"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|failure| {
+            forgetting.abandon();
+            failure
+        })
+        .context("ask the dev platform to forget this module")?;
+
+    let status = response.status();
+    if !status.is_success() {
+        forgetting.abandon();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("the dev platform answered {status}: {}", body.trim());
+    }
+    forgetting.done(format!("{module_id} is gone from the sandbox"));
+    ui::advice("its inventory row is what goes — a published version, if any, is untouched");
+    ui::blank();
+    Ok(())
+}
+
 /// Même remarque, en pire : les `serde(default)` ci-dessous avalaient la non-correspondance en
 /// silence. `--dispatch` affichait un résultat vide, une durée nulle et aucun host call sur une
 /// invocation qui avait parfaitement tourné.
@@ -679,6 +719,23 @@ pub(crate) fn short(digest: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::DevArgs;
+    use clap::Parser;
+
+    /// Oublier n'est pas déployer : les deux drapeaux qui poussent sont refusés avec lui.
+    #[test]
+    fn forget_does_not_go_with_the_flags_that_deploy() {
+        let forgetting = DevArgs::try_parse_from(["dev", "--forget"]).expect("forget alone");
+        assert!(forgetting.forget);
+        assert!(!forgetting.watch && forgetting.dispatch.is_none());
+
+        for pushing in [
+            vec!["dev", "--forget", "--watch"],
+            vec!["dev", "--forget", "--dispatch", "getConfig"],
+        ] {
+            assert!(DevArgs::try_parse_from(&pushing).is_err(), "{pushing:?}");
+        }
+    }
 
     /// Un manifeste modifié sans toucher au code doit repartir : c'est ce que `--watch` surveille.
     #[test]
