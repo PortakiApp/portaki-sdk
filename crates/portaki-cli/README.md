@@ -54,6 +54,7 @@ rustup target add wasm32-unknown-unknown
 | `portaki init` | Scaffold a module from a template |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
 | `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
+| `portaki connectors` | Show each declared egress, its permission and its credential |
 | `portaki lint` | Validate capabilities, connectors, i18n keys |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki publish` | Push the OCI artifact, then announce it to the registry |
