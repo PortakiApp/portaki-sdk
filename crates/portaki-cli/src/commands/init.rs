@@ -1,12 +1,20 @@
 //! `portaki init` — scaffold a module from templates.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
+use include_dir::{include_dir, Dir};
 
 use crate::ui;
+
+/// The scaffolding, compiled into the binary.
+///
+/// Read from disk, it resolved against this crate's source directory — a path that exists in a
+/// checkout of this repository and nowhere else, so `cargo install portaki-cli` produced a
+/// command that could not scaffold anything.
+static TEMPLATES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
 #[derive(Debug, Clone, ValueEnum)]
 /// Template kind for `portaki init`.
@@ -46,24 +54,21 @@ pub fn run(args: InitArgs) -> Result<()> {
         bail!("destination already exists: {}", dest.display());
     }
 
-    let template_dir = match args.template {
-        InitTemplate::Default => template_root().join("default-module"),
-        InitTemplate::Empty => template_root().join("empty-module"),
-    };
-
-    if !template_dir.exists() {
-        bail!(
-            "template not found: {} (run from portaki-sdk checkout)",
-            template_dir.display()
-        );
-    }
+    let template_dir = TEMPLATES
+        .get_dir(directory(&args.template))
+        .with_context(|| {
+            format!(
+                "template missing from this build: {}",
+                label(&args.template)
+            )
+        })?;
 
     let scaffolding = ui::step(format!(
         "scaffolding {} from the {} template",
         args.name,
         label(&args.template)
     ));
-    copy_template(&template_dir, &dest, &args.name)?;
+    copy_template(template_dir, &dest, &args.name)?;
     scaffolding.done(format!("created {}", dest.display()));
 
     describe(&args.template);
@@ -114,38 +119,87 @@ fn label(template: &InitTemplate) -> &'static str {
     }
 }
 
-fn template_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../templates")
-        .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../templates"))
+fn directory(template: &InitTemplate) -> &'static str {
+    match template {
+        InitTemplate::Default => "default-module",
+        InitTemplate::Empty => "empty-module",
+    }
 }
 
-fn copy_template(source: &PathBuf, dest: &PathBuf, module_name: &str) -> Result<()> {
+/// Writes an embedded directory out, rendering each file on the way.
+fn copy_template(source: &Dir<'_>, dest: &Path, module_name: &str) -> Result<()> {
     fs::create_dir_all(dest).with_context(|| format!("create {}", dest.display()))?;
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        let name = file_name.to_string_lossy();
-        let target = dest.join(&*name);
-        if entry.file_type()?.is_dir() {
-            copy_template(&entry.path(), &target, module_name)?;
-            continue;
-        }
-        let source_path = entry.path();
-        let mut target_name = name.to_string();
-        if target_name.ends_with(".template") {
-            target_name = target_name.trim_end_matches(".template").to_string();
-        }
-        let target = dest.join(&target_name);
-        let text = fs::read_to_string(&source_path)?;
-        // La version du CLI est celle du SDK avec lequel il a été publié : un module scaffoldé
-        // compile donc contre le SDK que cette commande connaît, et non contre des chemins
-        // relatifs qui ne résolvent que dans un checkout du dépôt.
+
+    for file in source.files() {
+        let name = file
+            .path()
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        // `Cargo.toml.template` would otherwise make the scaffolded crate a cargo package the
+        // moment it is written, and cargo would read it while it still holds placeholders.
+        let name = name.strip_suffix(".template").unwrap_or(&name).to_string();
+        let target = dest.join(&name);
+
+        let text = file
+            .contents_utf8()
+            .with_context(|| format!("template {} is not UTF-8", file.path().display()))?;
+        // The CLI's version is the SDK it was published with: a scaffolded module compiles
+        // against the SDK this command knows, not against whatever is newest.
         let rendered = text
             .replace("{{MODULE_NAME}}", module_name)
             .replace("{{SDK_VERSION}}", env!("CARGO_PKG_VERSION"));
         fs::write(&target, rendered).with_context(|| format!("write {}", target.display()))?;
     }
+
+    for child in source.dirs() {
+        let name = child
+            .path()
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        copy_template(child, &dest.join(name), module_name)?;
+    }
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Both templates have to be in the binary, or `init` only fails for whoever installed it.
+    #[test]
+    fn every_template_is_embedded() {
+        for template in [InitTemplate::Default, InitTemplate::Empty] {
+            let dir = TEMPLATES
+                .get_dir(directory(&template))
+                .expect("template embedded");
+            assert!(dir.files().count() + dir.dirs().count() > 0);
+        }
+    }
+
+    #[test]
+    fn a_scaffolded_module_carries_its_name_and_the_sdk_version() {
+        let dest = std::env::temp_dir().join(format!("portaki-init-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dest);
+
+        copy_template(
+            TEMPLATES.get_dir("default-module").expect("template"),
+            &dest,
+            "concierge",
+        )
+        .expect("scaffold");
+
+        let cargo = fs::read_to_string(dest.join("Cargo.toml")).expect("Cargo.toml written");
+        assert!(cargo.contains("name = \"concierge\""));
+        assert!(cargo.contains(env!("CARGO_PKG_VERSION")));
+        assert!(!cargo.contains("{{"));
+        // Nested and dot directories come out too — the wasm rustflags live in one of them.
+        assert!(dest.join("src/host/mod.rs").exists());
+        assert!(dest.join(".cargo/config.toml").exists());
+        assert!(!dest.join("Cargo.toml.template").exists());
+
+        fs::remove_dir_all(&dest).ok();
+    }
 }
