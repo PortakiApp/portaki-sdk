@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::action::Action;
+use super::primitives::Component;
+
 /// Semantic color role.
 ///
 /// A role, never a color: each shell resolves it against its own theme — the host dashboard,
@@ -563,4 +566,89 @@ mod swatch_tests {
         assert_eq!(json["swatch"], "yellow");
         assert!(json.get("color").is_none());
     }
+}
+
+/// One tab of a [`BottomTabBar`](super::primitives::BottomTabBar).
+///
+/// The field was `Value` — untyped — and every shell read `{ id, label, action }` from it
+/// anyway. Naming the shape is what lets a module be told it got it wrong.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct TabBarItem {
+    /// Matches `activeTab` to mark the current tab.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Display label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Fired on tap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+}
+
+/// Marker clustering for a [`Map`](super::primitives::Map).
+///
+/// Also `Value` before: the shells read `{ enabled, radius, maxZoom }` and nothing said so.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MapClustering {
+    /// Cluster nearby markers.
+    pub enabled: bool,
+    /// Cluster radius in pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub radius: Option<f64>,
+    /// Zoom level past which markers separate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_zoom: Option<f64>,
+}
+
+/// One chip of a [`FilterBar`](super::primitives::FilterBar).
+///
+/// Not `FilterChip`: that name is already a primitive of its own in the contract.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct FilterBarChip {
+    /// Wire value submitted on selection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Display label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// One button of an [`ActionRow`](super::primitives::ActionRow).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ActionRowItem {
+    /// Display label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Fired on press.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+}
+
+/// One section of an [`Accordion`](super::primitives::Accordion).
+///
+/// `content` is a nested tree, not a string: a collapsed section holds a surface, and forcing it
+/// through `children` would tie sections to child order by index.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct AccordionItem {
+    /// Summary line, always visible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// What unfolds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<Box<Component>>,
+}
+
+/// One tab of a [`Tabs`](super::primitives::Tabs).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct TabItem {
+    /// Selection key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Display label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The panel this tab shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<Box<Component>>,
 }

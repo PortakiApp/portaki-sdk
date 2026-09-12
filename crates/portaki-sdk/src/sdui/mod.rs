@@ -54,10 +54,10 @@ pub mod surface;
 
 pub use action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation};
 pub use common::{
-    Animation, AnimationKind, ButtonVariant, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint,
-    MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, RichTextDoc, StackDirection,
-    SurfaceLevel, Swatch, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility,
-    VisibilityExpr,
+    AccordionItem, ActionRowItem, Animation, AnimationKind, ButtonVariant, ChoiceListLayout,
+    ChoiceOption, Emphasis, FilterBarChip, GeoPoint, MapClustering, MapInteractionMode, MapMarker,
+    MapMarkerKind, MapViewport, RichTextDoc, StackDirection, SurfaceLevel, Swatch, TabBarItem,
+    TabItem, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
 };
 pub use component::Component;
 pub use surface::Surface;
