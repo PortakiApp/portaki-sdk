@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v4.0.0...v4.1.0) (2026-09-12)
+
+
+### Features
+
+* **cli:** add portaki dev --forget ([e462051](https://github.com/PortakiApp/portaki-sdk/commit/e4620511c293404e906a647b2e7502206c21faa9))
+* **contracts:** describe the types the primitives only name ([f841209](https://github.com/PortakiApp/portaki-sdk/commit/f8412098e30f13931f87ad7eb73333d9036613b4))
+
+
+### Bug Fixes
+
+* **cli:** point both ways when the SDK versions disagree ([02b755c](https://github.com/PortakiApp/portaki-sdk/commit/02b755cdc35e65e61e1035a875b0ea3dcb8b73b2))
+
 ## [4.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v3.2.0...v4.0.0) (2026-09-12)
 
 
