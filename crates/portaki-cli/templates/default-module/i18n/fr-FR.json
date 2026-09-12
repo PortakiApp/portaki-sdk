@@ -2,5 +2,10 @@
   "module.displayName": "Module exemple",
   "module.description": "Module Portaki généré par portaki init",
   "home.card.title": "Bienvenue",
-  "home.card.body": "Contenu invité SDUI"
+  "home.card.body": "Contenu invité SDUI",
+  "host.section.greeting": "Accueil",
+  "host.section.greeting.help": "Ce que dit la carte du livret.",
+  "host.greeting.label": "Message d'accueil",
+  "host.greeting.placeholder": "Bienvenue, faites comme chez vous",
+  "host.greeting.hint": "Laissez vide pour garder le texte fourni."
 }

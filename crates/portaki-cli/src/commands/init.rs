@@ -102,7 +102,16 @@ fn describe(template: &InitTemplate) {
     if matches!(template, InitTemplate::Default) {
         rows.push(("src/host/", "surfaces the host dashboard renders"));
         rows.push(("src/guest/", "surfaces the guest booklet renders"));
-        rows.push(("tests/", "the mock host, one surface asserted"));
+        rows.push((
+            "src/commands.rs",
+            "updateConfig — what the sheet's Save posts",
+        ));
+        rows.push((
+            "src/queries.rs",
+            "getConfig — what the dashboard reads back",
+        ));
+        rows.push(("src/config.rs", "the settings blob, in the module's own KV"));
+        rows.push(("tests/", "the mock host, the settings round-tripped"));
     }
     rows.push((
         "i18n/*.json",
@@ -262,7 +271,8 @@ mod tests {
         // A crate name is not a module id: `use` statements need the snake_case spelling.
         let integration =
             fs::read_to_string(dest.join("tests/integration.rs")).expect("tests written");
-        assert!(integration.contains("use concierge::render_guest_home_card;"));
+        assert!(integration.contains("use concierge::{"));
+        assert!(!integration.contains("{{"));
         let catalog =
             fs::read_to_string(dest.join("portaki.module.json")).expect("catalogue written");
         assert!(catalog.contains("\"id\": \"concierge\""));

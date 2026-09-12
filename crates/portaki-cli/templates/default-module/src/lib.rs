@@ -2,13 +2,19 @@
 
 use portaki_sdk::prelude::*;
 
+mod commands;
+mod config;
 mod guest;
 mod host;
 mod ids;
+mod queries;
 
 // Re-exported so `tests/` can reach them: an integration test links the crate from outside.
+pub use commands::{update_config, UpdateConfigArgs};
+pub use config::ModuleConfig;
 pub use guest::render_guest_home_card;
 pub use host::render_host_main;
+pub use queries::get_config;
 
 portaki_sdk::portaki_module!(
     id = "{{MODULE_NAME}}",

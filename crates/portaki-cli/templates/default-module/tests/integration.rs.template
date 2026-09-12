@@ -5,17 +5,55 @@
 use portaki_sdk::capability;
 use portaki_test_utils::MockContext;
 use serial_test::serial;
-use {{CRATE_NAME}}::render_guest_home_card;
+use {{CRATE_NAME}}::{
+    get_config, render_guest_home_card, render_host_main, update_config, UpdateConfigArgs,
+};
 
 #[test]
 #[serial]
-fn the_guest_card_renders_under_its_own_id() {
+fn saving_the_settings_makes_them_readable_again() {
+    MockContext::host()
+        .with_capabilities(&[capability::core::STORAGE])
+        .run(|ctx| {
+            let args = UpdateConfigArgs {
+                greeting: "  Welcome home  ".to_string(),
+            };
+            update_config(ctx.clone(), args).expect("updateConfig");
+
+            assert_eq!(get_config(ctx).expect("getConfig").greeting, "Welcome home");
+        });
+}
+
+#[test]
+#[serial]
+fn the_settings_sheet_shows_what_was_saved() {
+    MockContext::host()
+        .with_capabilities(&[capability::core::STORAGE])
+        .run(|ctx| {
+            update_config(
+                ctx.clone(),
+                UpdateConfigArgs {
+                    greeting: "Welcome home".to_string(),
+                },
+            )
+            .expect("updateConfig");
+
+            let json = serde_json::to_string(&render_host_main(ctx)).expect("serialize");
+
+            assert!(json.contains("\"main\""));
+            assert!(json.contains("Welcome home"));
+        });
+}
+
+#[test]
+#[serial]
+fn the_guest_card_falls_back_to_the_bundled_wording() {
     MockContext::guest()
         .with_capabilities(&[capability::core::STORAGE])
         .run(|ctx| {
-            let surface = render_guest_home_card(ctx);
-            let json = serde_json::to_string(&surface).expect("serialize");
+            let json = serde_json::to_string(&render_guest_home_card(ctx)).expect("serialize");
 
             assert!(json.contains("home.card"));
+            assert!(json.contains("i18n:home.card.body"));
         });
 }
