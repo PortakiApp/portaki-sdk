@@ -50,10 +50,6 @@ pub fn run(args: InitArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| PathBuf::from(&args.name));
 
-    if dest.exists() {
-        bail!("destination already exists: {}", dest.display());
-    }
-
     let template_dir = TEMPLATES
         .get_dir(directory(&args.template))
         .with_context(|| {
@@ -62,6 +58,21 @@ pub fn run(args: InitArgs) -> Result<()> {
                 label(&args.template)
             )
         })?;
+
+    if dest.exists() && !dest.is_dir() {
+        bail!("destination is not a directory: {}", dest.display());
+    }
+
+    // A cloned repository is the usual starting point — the directory is there, and holds a
+    // `.git` and maybe a licence. Only a file the scaffold would overwrite is a reason to stop.
+    let clashes = clashes(&dest, &planned_paths(template_dir));
+    if !clashes.is_empty() {
+        bail!(
+            "{} already has {} — move them aside, or scaffold elsewhere",
+            dest.display(),
+            listed(&clashes)
+        );
+    }
 
     let scaffolding = ui::step(format!(
         "scaffolding {} from the {} template",
@@ -72,20 +83,21 @@ pub fn run(args: InitArgs) -> Result<()> {
     scaffolding.done(format!("created {}", dest.display()));
 
     describe(&args.template);
-    ui::next(&[
-        (
-            &format!("cd {}", dest.display()),
-            "everything below runs from the module root",
-        ),
-        (
-            "portaki build",
-            "compile to wasm32 and assemble the manifest",
-        ),
-        (
-            "portaki dev --watch",
-            "run it in the hosted sandbox on every save",
-        ),
-    ]);
+    let mut next: Vec<(&str, &str)> = Vec::new();
+    let cd = format!("cd {}", dest.display());
+    // Scaffolded in place — `cd .` would be a step that does nothing.
+    if dest != Path::new(".") {
+        next.push((cd.as_str(), "everything below runs from the module root"));
+    }
+    next.push((
+        "portaki build",
+        "compile to wasm32 and assemble the manifest",
+    ));
+    next.push((
+        "portaki dev --watch",
+        "run it in the hosted sandbox on every save",
+    ));
+    ui::next(&next);
     ui::blank();
     Ok(())
 }
@@ -135,6 +147,63 @@ fn label(template: &InitTemplate) -> &'static str {
         InitTemplate::Default => "default",
         InitTemplate::Empty => "empty",
     }
+}
+
+/// Names a few of the clashing paths and counts the rest.
+///
+/// Scaffolding over an existing module clashes on every file; seventeen paths on one line say
+/// less than three and a number.
+fn listed(paths: &[PathBuf]) -> String {
+    const SHOWN: usize = 3;
+    let named = paths
+        .iter()
+        .take(SHOWN)
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    match paths.len().saturating_sub(SHOWN) {
+        0 => named,
+        rest => format!("{named} and {rest} more"),
+    }
+}
+
+/// Every path this scaffold would write, relative to the destination.
+fn planned_paths(source: &Dir<'_>) -> Vec<PathBuf> {
+    let root = source.path();
+    let mut planned = Vec::new();
+    collect_paths(source, root, &mut planned);
+    planned
+}
+
+fn collect_paths(source: &Dir<'_>, root: &Path, planned: &mut Vec<PathBuf>) {
+    for file in source.files() {
+        let relative = file.path().strip_prefix(root).unwrap_or(file.path());
+        planned.push(rendered_path(relative));
+    }
+    for child in source.dirs() {
+        collect_paths(child, root, planned);
+    }
+}
+
+/// The same `.template` strip `copy_template` applies, on a whole path.
+fn rendered_path(relative: &Path) -> PathBuf {
+    let Some(name) = relative
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+    else {
+        return relative.to_path_buf();
+    };
+    let stripped = name.strip_suffix(".template").unwrap_or(&name);
+    relative.with_file_name(stripped)
+}
+
+/// Which of those already exist — the only reason to refuse a directory that is already there.
+fn clashes(dest: &Path, planned: &[PathBuf]) -> Vec<PathBuf> {
+    planned
+        .iter()
+        .filter(|path| dest.join(path).exists())
+        .cloned()
+        .collect()
 }
 
 /// What `use` statements have to spell: cargo turns a kebab-case package into a snake_case lib.
@@ -201,6 +270,50 @@ mod tests {
                 .expect("template embedded");
             assert!(dir.files().count() + dir.dirs().count() > 0);
         }
+    }
+
+    #[test]
+    fn what_a_scaffold_would_write_is_known_before_it_writes() {
+        let planned = planned_paths(TEMPLATES.get_dir("default-module").expect("template"));
+
+        // Rendered names, not template ones — that is what a clash has to be checked against.
+        assert!(planned.contains(&PathBuf::from("Cargo.toml")));
+        assert!(planned.contains(&PathBuf::from("portaki.module.json")));
+        assert!(planned.contains(&PathBuf::from("src/host/mod.rs")));
+        assert!(planned.contains(&PathBuf::from(".cargo/config.toml")));
+        assert!(!planned
+            .iter()
+            .any(|path| path.to_string_lossy().ends_with(".template")));
+    }
+
+    #[test]
+    fn a_long_clash_is_three_names_and_a_count() {
+        let paths: Vec<PathBuf> = ["Cargo.toml", "build.rs", "src/lib.rs", "i18n/en-US.json"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+
+        assert_eq!(listed(&paths[..2]), "Cargo.toml, build.rs");
+        assert_eq!(
+            listed(&paths),
+            "Cargo.toml, build.rs, src/lib.rs and 1 more"
+        );
+    }
+
+    /// The point of #115: a cloned repository is a directory that already exists.
+    #[test]
+    fn an_existing_directory_is_fine_until_a_file_would_be_overwritten() {
+        let dest = std::env::temp_dir().join(format!("portaki-clash-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dest);
+        fs::create_dir_all(dest.join(".git")).expect("a clone");
+        let planned = planned_paths(TEMPLATES.get_dir("default-module").expect("template"));
+
+        assert!(clashes(&dest, &planned).is_empty());
+
+        fs::write(dest.join("Cargo.toml"), "[package]").expect("an existing crate");
+        assert_eq!(clashes(&dest, &planned), vec![PathBuf::from("Cargo.toml")]);
+
+        fs::remove_dir_all(&dest).ok();
     }
 
     #[test]
