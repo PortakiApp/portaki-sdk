@@ -187,7 +187,7 @@ fn extract_fields(item: &ItemStruct) -> Vec<serde_json::Value> {
         .iter()
         .filter_map(|field| {
             let name = field.ident.as_ref()?.to_string();
-            let ty = quote!(#field.ty).to_string();
+            let ty = type_to_wire(&field.ty);
             Some(serde_json::json!({
                 "name": name,
                 "type": ty,
@@ -196,10 +196,77 @@ fn extract_fields(item: &ItemStruct) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// Renders a field type the way an author wrote it.
+///
+/// `quote!` prints one space between every token, so `uuid::Uuid` comes back as `uuid :: Uuid`
+/// and `Vec<String>` as `Vec < String >`. Only a space between two word characters carries
+/// meaning — `dyn Trait` — so every other one goes.
+fn type_to_wire(ty: &syn::Type) -> String {
+    let raw = quote!(#ty).to_string();
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut rendered = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(current) = chars.next() {
+        if current != ' ' {
+            rendered.push(current);
+            continue;
+        }
+        let before = rendered.chars().last().map(is_word).unwrap_or(false);
+        let after = chars.peek().copied().map(is_word).unwrap_or(false);
+        if before && after {
+            rendered.push(' ');
+        }
+    }
+    rendered
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{indexes_json, parse_index_field_names};
+    use super::{extract_fields, indexes_json, parse_index_field_names};
     use syn::parse_quote;
+
+    #[test]
+    fn field_types_are_the_type_alone() {
+        let item: syn::ItemStruct = parse_quote! {
+            struct Reminder {
+                pub id: uuid::Uuid,
+                pub title: String,
+                pub tags: Vec<String>,
+                pub note: Option<std::string::String>,
+            }
+        };
+
+        let fields = extract_fields(&item);
+
+        assert_eq!(
+            fields[0],
+            serde_json::json!({ "name": "id", "type": "uuid::Uuid" })
+        );
+        assert_eq!(
+            fields[1],
+            serde_json::json!({ "name": "title", "type": "String" })
+        );
+        assert_eq!(
+            fields[2],
+            serde_json::json!({ "name": "tags", "type": "Vec<String>" })
+        );
+        assert_eq!(
+            fields[3],
+            serde_json::json!({ "name": "note", "type": "Option<std::string::String>" })
+        );
+    }
+
+    /// The one space that means something: two words in a row.
+    #[test]
+    fn a_space_between_words_survives() {
+        let item: syn::ItemStruct = parse_quote! {
+            struct Holder {
+                pub handler: Box<dyn Fn() -> u8>,
+            }
+        };
+
+        assert_eq!(extract_fields(&item)[0]["type"], "Box<dyn Fn()->u8>");
+    }
 
     #[test]
     fn parse_index_field_names_from_array() {
