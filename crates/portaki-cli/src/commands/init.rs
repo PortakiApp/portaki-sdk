@@ -102,12 +102,21 @@ fn describe(template: &InitTemplate) {
     if matches!(template, InitTemplate::Default) {
         rows.push(("src/host/", "surfaces the host dashboard renders"));
         rows.push(("src/guest/", "surfaces the guest booklet renders"));
+        rows.push(("tests/", "the mock host, one surface asserted"));
     }
     rows.push((
         "i18n/*.json",
         "one file per locale — the keys ids.rs points at",
     ));
     rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
+    rows.push((
+        "build.rs",
+        "no build step — it exists so cargo gives the macros an OUT_DIR",
+    ));
+    rows.push((
+        "portaki.module.json",
+        "the catalogue entry — name, author, surfaces, permissions",
+    ));
 
     ui::list("what you got", &rows);
 }
@@ -117,6 +126,11 @@ fn label(template: &InitTemplate) -> &'static str {
         InitTemplate::Default => "default",
         InitTemplate::Empty => "empty",
     }
+}
+
+/// What `use` statements have to spell: cargo turns a kebab-case package into a snake_case lib.
+fn crate_name(module_name: &str) -> String {
+    module_name.replace('-', "_")
 }
 
 fn directory(template: &InitTemplate) -> &'static str {
@@ -148,6 +162,7 @@ fn copy_template(source: &Dir<'_>, dest: &Path, module_name: &str) -> Result<()>
         // against the SDK this command knows, not against whatever is newest.
         let rendered = text
             .replace("{{MODULE_NAME}}", module_name)
+            .replace("{{CRATE_NAME}}", &crate_name(module_name))
             .replace("{{SDK_VERSION}}", env!("CARGO_PKG_VERSION"));
         fs::write(&target, rendered).with_context(|| format!("write {}", target.display()))?;
     }
@@ -180,6 +195,51 @@ mod tests {
     }
 
     #[test]
+    fn a_kebab_case_module_becomes_a_snake_case_crate() {
+        assert_eq!(crate_name("pre-arrival-form"), "pre_arrival_form");
+        assert_eq!(crate_name("trmnl"), "trmnl");
+    }
+
+    /// What the two commands `init` recommends need in order to run at all.
+    #[test]
+    fn a_scaffold_has_what_build_and_dev_read() {
+        for template in [InitTemplate::Default, InitTemplate::Empty] {
+            let dir = TEMPLATES.get_dir(directory(&template)).expect("template");
+            let names: Vec<String> = dir
+                .files()
+                .map(|file| {
+                    file.path()
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string()
+                })
+                .collect();
+
+            // `portaki build` reads emissions from OUT_DIR, which only a build script creates.
+            assert!(names.iter().any(|name| name == "build.rs"), "{names:?}");
+            // `portaki dev`, `ci info` and `publish` all read the catalogue manifest.
+            assert!(
+                names
+                    .iter()
+                    .any(|name| name == "portaki.module.json.template"),
+                "{names:?}"
+            );
+            // Without the custom getrandom backend, the wasm32 build stops inside getrandom.
+            let cargo_config = dir
+                .get_file(format!(
+                    "{}/.cargo/config.toml.template",
+                    directory(&template)
+                ))
+                .expect("wasm rustflags");
+            assert!(cargo_config
+                .contents_utf8()
+                .unwrap_or_default()
+                .contains("getrandom_backend"));
+        }
+    }
+
+    #[test]
     fn a_scaffolded_module_carries_its_name_and_the_sdk_version() {
         let dest = std::env::temp_dir().join(format!("portaki-init-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dest);
@@ -199,6 +259,13 @@ mod tests {
         assert!(dest.join("src/host/mod.rs").exists());
         assert!(dest.join(".cargo/config.toml").exists());
         assert!(!dest.join("Cargo.toml.template").exists());
+        // A crate name is not a module id: `use` statements need the snake_case spelling.
+        let integration =
+            fs::read_to_string(dest.join("tests/integration.rs")).expect("tests written");
+        assert!(integration.contains("use concierge::render_guest_home_card;"));
+        let catalog =
+            fs::read_to_string(dest.join("portaki.module.json")).expect("catalogue written");
+        assert!(catalog.contains("\"id\": \"concierge\""));
 
         fs::remove_dir_all(&dest).ok();
     }

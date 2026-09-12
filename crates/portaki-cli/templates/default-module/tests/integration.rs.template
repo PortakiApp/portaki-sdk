@@ -1,0 +1,21 @@
+//! Integration-style unit tests with `portaki-test-utils`.
+//!
+//! The mock host is thread-global, hence `#[serial]` on every test.
+
+use portaki_sdk::capability;
+use portaki_test_utils::MockContext;
+use serial_test::serial;
+use {{CRATE_NAME}}::render_guest_home_card;
+
+#[test]
+#[serial]
+fn the_guest_card_renders_under_its_own_id() {
+    MockContext::guest()
+        .with_capabilities(&[capability::core::STORAGE])
+        .run(|ctx| {
+            let surface = render_guest_home_card(ctx);
+            let json = serde_json::to_string(&surface).expect("serialize");
+
+            assert!(json.contains("home.card"));
+        });
+}
