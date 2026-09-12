@@ -26,6 +26,10 @@ const CONTRACTS = {
   "module.v1.json": "schema/module.v1.json",
   "host-ops.json": "contracts/host-ops.json",
   "sdui_primitives.json": "crates/portaki-sdk/sdui_primitives.json",
+  // Ce que `sdui_primitives.json` nomme sans le décrire : les variantes d'`Action`, celles
+  // des enums, les champs des structures. Dérivé du Rust par le test `sdui_types_contract`,
+  // et optionnel comme `deprecations.json` — les versions publiées avant lui n'en portent pas.
+  "sdui_types.json": "contracts/sdui_types.json",
   "deprecations.json": "contracts/deprecations.json",
 };
 
