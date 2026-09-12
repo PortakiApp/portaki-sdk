@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["templates"]
+exclude = ["crates/portaki-cli/templates"]
 members = [
     "crates/portaki-sdk",
     "crates/portaki-sdk-macros",
@@ -52,6 +52,8 @@ notify = "8"
 keyring = { version = "3", features = ["apple-native", "linux-native", "windows-native"] }
 sha2 = "0.10"
 oci-distribution = "0.11"
+# Les gabarits de `portaki init`, embarqués dans le binaire.
+include_dir = "0.7"
 
 [profile.release]
 lto = true

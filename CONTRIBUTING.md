@@ -39,7 +39,7 @@ CI runs the same checks on every PR.
 | `crates/portaki-cli` | Binary UX — keep `--help` accurate |
 | `crates/portaki-connectors` | External connector clients used by modules |
 | `crates/portaki-test-utils` | Prefer these helpers over ad-hoc mocks in new tests |
-| `templates/` | Scaffolding for `portaki init` |
+| `crates/portaki-cli/templates/` | Scaffolding for `portaki init`, embedded in the binary |
 
 Source layout for the SDK crate and for Wasm modules (guest / host / connectors /
 ids separation): **[docs/module-layout.md](./docs/module-layout.md)**. Typed
