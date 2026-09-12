@@ -27,6 +27,24 @@
 //!     .with_connector_response("open-weather", "forecast", r#"{"list":[]}"#)
 //!     .run(|_ctx| { /* module under test */ });
 //! ```
+//!
+//! A third party that says no is the other half of the contract, and most of what a
+//! module's own code does — retry, cache, fall back, warn. [`MockContextBuilder::with_connector_error`]
+//! makes the call fail, and [`MockHostFunctions::connector_calls`] records what was sent.
+//!
+//! ```
+//! use portaki_test_utils::MockContext;
+//!
+//! let (ctx, host) = MockContext::host()
+//!     .with_connector_error("nuki", "remote_unlock", "connector_egress_failed")
+//!     .build();
+//! portaki_sdk::host::with_host(host.clone(), ctx.clone(), || {
+//!     let failed: portaki_sdk::Result<serde_json::Value> =
+//!         portaki_sdk::host::connectors::call("nuki", "remote_unlock", &());
+//!     assert!(failed.is_err());
+//! });
+//! assert_eq!(host.connector_calls().len(), 1);
+//! ```
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -47,6 +65,7 @@ pub struct MockContextBuilder {
     translations: HashMap<String, String>,
     kv: HashMap<String, Vec<u8>>,
     connector_responses: HashMap<(String, String), String>,
+    connector_errors: HashMap<(String, String), String>,
 }
 
 impl MockContextBuilder {
@@ -133,6 +152,23 @@ impl MockContextBuilder {
         self
     }
 
+    /// Makes `host::connectors::call(connector_id, operation, _)` fail.
+    ///
+    /// `reason` is the gateway's own wording — `connector_credential_missing`,
+    /// `connector_egress_failed`, an upstream status — and comes back as
+    /// [`portaki_sdk::PortakiError::Connector`]. An error registered for a pair wins over a
+    /// response registered for the same one.
+    pub fn with_connector_error(
+        mut self,
+        connector_id: impl Into<String>,
+        operation: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        self.connector_errors
+            .insert((connector_id.into(), operation.into()), reason.into());
+        self
+    }
+
     /// Returns a clone of the configured [`Context`] without installing a host backend.
     pub fn context(&self) -> Context {
         self.context.clone()
@@ -148,6 +184,8 @@ impl MockContextBuilder {
             translations: self.translations,
             kv: Mutex::new(self.kv),
             connector_responses: self.connector_responses,
+            connector_errors: self.connector_errors,
+            connector_calls: Mutex::new(Vec::new()),
         });
         (self.context, host)
     }
@@ -157,9 +195,29 @@ impl MockContextBuilder {
     /// Nested `run` calls replace the thread-local backend for the duration of the
     /// inner closure.
     pub fn run<R, F: FnOnce(Context) -> R>(self, f: F) -> R {
-        let (ctx, host) = self.build();
-        with_host(host, ctx.clone(), || f(ctx))
+        self.run_with(|ctx, _host| f(ctx))
     }
+
+    /// Same as [`Self::run`], with the backend handed to the closure.
+    ///
+    /// What a module *sent* is as much of its behaviour as what it did with the answer, and
+    /// reading it back took a manual `build` + `with_host` dance before.
+    pub fn run_with<R, F: FnOnce(Context, &MockHostFunctions) -> R>(self, f: F) -> R {
+        let (ctx, host) = self.build();
+        let backend = Arc::clone(&host);
+        with_host(host, ctx.clone(), || f(ctx, backend.as_ref()))
+    }
+}
+
+/// One `host::connectors::call`, as the module made it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectorCall {
+    /// The connector the module named — `trmnl`, `open-weather`…
+    pub connector_id: String,
+    /// The operation on it, as `#[connector_op]` declared it.
+    pub operation: String,
+    /// The serialized args, path parameters and body alike.
+    pub args_json: String,
 }
 
 /// Alias for [`MockContextBuilder`] — preferred name in module test code.
@@ -175,6 +233,18 @@ pub struct MockHostFunctions {
     translations: HashMap<String, String>,
     kv: Mutex<HashMap<String, Vec<u8>>>,
     connector_responses: HashMap<(String, String), String>,
+    connector_errors: HashMap<(String, String), String>,
+    connector_calls: Mutex<Vec<ConnectorCall>>,
+}
+
+impl MockHostFunctions {
+    /// Every connector call the module made, in order — failed ones included.
+    pub fn connector_calls(&self) -> Vec<ConnectorCall> {
+        self.connector_calls
+            .lock()
+            .expect("connector calls lock")
+            .clone()
+    }
 }
 
 impl HostBackend for MockHostFunctions {
@@ -236,11 +306,24 @@ impl HostBackend for MockHostFunctions {
         &self,
         connector_id: &str,
         operation: &str,
-        _args_json: &str,
+        args_json: &str,
     ) -> Result<String> {
+        let key = (connector_id.to_string(), operation.to_string());
+        self.connector_calls
+            .lock()
+            .expect("connector calls lock")
+            .push(ConnectorCall {
+                connector_id: connector_id.to_string(),
+                operation: operation.to_string(),
+                args_json: args_json.to_string(),
+            });
+
+        if let Some(reason) = self.connector_errors.get(&key) {
+            return Err(portaki_sdk::PortakiError::Connector(reason.clone()));
+        }
         Ok(self
             .connector_responses
-            .get(&(connector_id.to_string(), operation.to_string()))
+            .get(&key)
             .cloned()
             .unwrap_or_else(|| "{}".to_string()))
     }
@@ -293,6 +376,64 @@ impl HostBackend for MockHostFunctions {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// A third party that refuses is most of what a module's own code is about.
+    #[test]
+    fn a_connector_can_be_made_to_fail() {
+        let error = MockContextBuilder::host()
+            .with_connector_response("trmnl", "push", r#"{"ok":true}"#)
+            .with_connector_error("trmnl", "push", "connector_credential_missing")
+            .run(|_ctx| {
+                portaki_sdk::host::connectors::call::<serde_json::Value, serde_json::Value>(
+                    "trmnl",
+                    "push",
+                    &serde_json::json!({ "plugin_id": "7f1c" }),
+                )
+                .unwrap_err()
+            });
+
+        // The error wins over a response registered for the same pair.
+        assert!(error.to_string().contains("connector_credential_missing"));
+    }
+
+    #[test]
+    fn an_operation_without_an_error_still_answers() {
+        let value = MockContextBuilder::host()
+            .with_connector_response("trmnl", "push", r#"{"ok":true}"#)
+            .with_connector_error("trmnl", "other", "connector_egress_failed")
+            .run(|_ctx| {
+                portaki_sdk::host::connectors::call::<serde_json::Value, serde_json::Value>(
+                    "trmnl",
+                    "push",
+                    &serde_json::json!({}),
+                )
+                .expect("push")
+            });
+
+        assert_eq!(value["ok"], serde_json::json!(true));
+    }
+
+    /// What was sent is half of what a connector test wants to assert.
+    #[test]
+    fn every_call_is_recorded_failures_included() {
+        let calls = MockContextBuilder::host()
+            .with_connector_error("trmnl", "push", "connector_egress_failed")
+            .run_with(|_ctx, host| {
+                let _ = portaki_sdk::host::connectors::call::<serde_json::Value, serde_json::Value>(
+                    "trmnl",
+                    "push",
+                    &serde_json::json!({ "plugin_id": "7f1c" }),
+                );
+                host.connector_calls()
+            });
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].connector_id, "trmnl");
+        assert_eq!(calls[0].operation, "push");
+        assert!(calls[0].args_json.contains("7f1c"));
+    }
+
     use portaki_sdk::host::{self, i18n::Vars};
 
     use super::MockContext;
