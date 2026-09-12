@@ -151,6 +151,12 @@ const BUILT_DECLARATIONS: [&str; 3] = ["surfaces", "queries", "commands"];
 /// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
 /// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
 /// rend exact par construction plutôt que par discipline.
+///
+/// Le déclarer reste préférable quand on le peut, et le refus ne dit plus « retirez le champ ».
+/// Les vingt et un modules du catalogue l'écrivent : release-please n'attribue les commits que
+/// par chemin, donc une montée de SDK qui ne touchait qu'un manifeste de workspace ne publiait
+/// aucun d'entre eux. Un auteur qui tombe sur ce refus a deux issues, et les deux sont légitimes
+/// — aligner le manifeste, ou épingler l'autre version du crate.
 pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> {
     let Some(resolved) = resolved else {
         return Ok(raw.to_string());
@@ -160,7 +166,8 @@ pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> 
     match manifest.get("requiresModuleSdk").and_then(|v| v.as_str()) {
         Some(declared) if declared != resolved => anyhow::bail!(
             "portaki.module.json declares requiresModuleSdk {declared} but the build linked \
-             portaki-sdk {resolved} — drop the field and let the build stamp it"
+             portaki-sdk {resolved} — set the manifest to {resolved}, or pin the crate to \
+             {declared}"
         ),
         _ => {}
     }
