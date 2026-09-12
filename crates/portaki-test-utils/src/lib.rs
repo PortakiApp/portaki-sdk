@@ -57,4 +57,4 @@ mod mock_host;
 
 pub use assertions::SurfaceAssertions;
 pub use fixtures::{Booking, GuestIdentityFixture, Property};
-pub use mock_host::{MockContext, MockContextBuilder, MockHostFunctions};
+pub use mock_host::{ConnectorCall, MockContext, MockContextBuilder, MockHostFunctions};
