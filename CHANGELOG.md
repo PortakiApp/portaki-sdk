@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v3.2.0...v4.0.0) (2026-09-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdui:** BottomTabBar.tabs and Map.clustering go from serde_json::Value to Vec<TabBarItem> and MapClustering. A module building them by hand keeps working — the wire shape is unchanged.
+
+### Features
+
+* **cli:** add portaki check, the gate CI runs ([0f838d3](https://github.com/PortakiApp/portaki-sdk/commit/0f838d339104fe1522060a91d8b26a1f9efb157a)), closes [#120](https://github.com/PortakiApp/portaki-sdk/issues/120)
+* **cli:** add portaki connectors, and make lint keep its word ([1340c62](https://github.com/PortakiApp/portaki-sdk/commit/1340c629cd9d295cd22619a21fb91722f3485648)), closes [#121](https://github.com/PortakiApp/portaki-sdk/issues/121)
+* **cli:** give the scaffold a settings round trip ([7d8a33d](https://github.com/PortakiApp/portaki-sdk/commit/7d8a33da4277726cf3a0a7053f9c37eedcf67c75))
+* **cli:** show a module's log lines in the trace ([e5b08e0](https://github.com/PortakiApp/portaki-sdk/commit/e5b08e07f5bd993731e80f47a3bac3332502ad3f))
+* **sdui:** declare what the booklet actually renders ([3aafdb1](https://github.com/PortakiApp/portaki-sdk/commit/3aafdb1075d54751857f28e4e41a8c6b9c96a08d))
+* **test-utils:** let a connector fail, and record what was sent ([035de27](https://github.com/PortakiApp/portaki-sdk/commit/035de2756a58782dc1744dc1ec5686f385a375e7)), closes [#119](https://github.com/PortakiApp/portaki-sdk/issues/119)
+
+
+### Bug Fixes
+
+* **cli:** embed the init templates in the binary ([9592d94](https://github.com/PortakiApp/portaki-sdk/commit/9592d94587a02cc77a371255c0d9973b6c2c2539)), closes [#113](https://github.com/PortakiApp/portaki-sdk/issues/113)
+* **cli:** English help, and a registry the author owns ([b09b58f](https://github.com/PortakiApp/portaki-sdk/commit/b09b58fc4bfd11d6178ccee43c37531da188b766)), closes [#118](https://github.com/PortakiApp/portaki-sdk/issues/118)
+* **cli:** look for the wasm of the profile just built ([c70a826](https://github.com/PortakiApp/portaki-sdk/commit/c70a826922d36accc16a15742c941b4b1d392969)), closes [#117](https://github.com/PortakiApp/portaki-sdk/issues/117)
+* **cli:** make the dry run check what the push would send ([d9db0a6](https://github.com/PortakiApp/portaki-sdk/commit/d9db0a6161b6dc495031296575a92b5c45f398d0)), closes [#132](https://github.com/PortakiApp/portaki-sdk/issues/132)
+* **cli:** make the scaffold build, test and deploy ([e3e99b6](https://github.com/PortakiApp/portaki-sdk/commit/e3e99b6992a3dfb53ede4a5567fea75782204045)), closes [#114](https://github.com/PortakiApp/portaki-sdk/issues/114)
+* **cli:** print the catalogue of the linked SDK ([5307e1c](https://github.com/PortakiApp/portaki-sdk/commit/5307e1c03805b0e0355a1dd85e98e6353548c517))
+* **cli:** scaffold into a directory that already exists ([4900e5f](https://github.com/PortakiApp/portaki-sdk/commit/4900e5f9fed929d88cb3f42478dc6c248a694933)), closes [#115](https://github.com/PortakiApp/portaki-sdk/issues/115)
+* **macros:** emit the field type, not the whole field ([8286b48](https://github.com/PortakiApp/portaki-sdk/commit/8286b48ef26b4bd6db6e193fb61661f846d2542f)), closes [#116](https://github.com/PortakiApp/portaki-sdk/issues/116)
+
 ## [3.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v3.1.1...v3.2.0) (2026-09-11)
 
 
