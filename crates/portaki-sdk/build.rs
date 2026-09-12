@@ -115,6 +115,8 @@ fn collect_type_deps(
 ) {
     match ty {
         "String" | "bool" | "f64" | "u32" | "i64" => {}
+        // `Component` est généré dans CE module : il est déjà en portée, pas à importer.
+        "Component" => {}
         "Action" => *uses_action = true,
         "Value" => *uses_value = true,
         other if other.starts_with("Vec<") && other.ends_with('>') => {
@@ -130,6 +132,9 @@ fn collect_type_deps(
 fn rust_type(ty: &str) -> String {
     match ty {
         "Value" => "Value".to_string(),
+        // Un nœud imbriqué dans un primitif, qui est lui-même une variante de `Component` :
+        // sans `Box`, le type aurait une taille infinie. `Vec<Component>` n'en a pas besoin.
+        "Component" => "Box<Component>".to_string(),
         other => other.to_string(),
     }
 }
@@ -151,6 +156,14 @@ fn common_field_defs() -> &'static str {
 
 fn builder_setter(field: &str, ty: &str) -> String {
     match ty {
+        // Le champ est `Option<Box<Component>>`, mais l'appelant écrit `.left(Text::new()...)` :
+        // c'est le setter qui emballe, pas lui.
+        "Component" => format!(
+            "    pub fn {field}(mut self, value: impl Into<Component>) -> Self {{\n\
+             self.{field} = Some(Box::new(value.into()));\n\
+             self\n\
+             }}\n"
+        ),
         "String" => format!(
             "    pub fn {field}(mut self, value: impl Into<String>) -> Self {{\n\
              self.{field} = Some(value.into());\n\
