@@ -45,13 +45,54 @@
 //! });
 //! assert_eq!(host.connector_calls().len(), 1);
 //! ```
+//!
+//! # Email and event limits
+//!
+//! The mock enforces what the platform enforces per invocation, so a module test fails where
+//! production would silently drop mail: `email.send` re-checks
+//! [`SendEmailArgs::validate`], refuses past
+//! [`portaki_sdk::limits::EMAIL_SENDS_PER_INVOCATION`], and refuses a guest email once the
+//! mock stay's checkout is more than [`portaki_sdk::limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT`]
+//! days behind the mock clock; `events.emit` refuses past
+//! [`portaki_sdk::limits::EVENTS_PER_INVOCATION`]. One built backend is one invocation.
+//! The rolling per-stay / per-workspace caps span invocations and stay platform-only.
+//!
+//! ```
+//! use portaki_sdk::host::email::{self, EmailAudience, EmailError, LocalizedEmailText, ModuleEmailSdui, SendEmailArgs};
+//! use portaki_sdk::PortakiError;
+//! use portaki_test_utils::{Booking, MockContext};
+//!
+//! let checkout = Booking::default().check_out; // 2026-06-08T10:00:00Z
+//! MockContext::guest()
+//!     .with_stay(Booking::default())
+//!     .with_now(checkout + chrono::Duration::days(8))
+//!     .run_with(|_ctx, host| {
+//!         let args = SendEmailArgs {
+//!             email_id: "review-reminder".into(),
+//!             audience: EmailAudience::Guest,
+//!             content: ModuleEmailSdui {
+//!                 subject: LocalizedEmailText::both("Merci !"),
+//!                 body: LocalizedEmailText::both("…"),
+//!                 ..Default::default()
+//!             },
+//!             stay_id: None,
+//!             property_id: None,
+//!             action_url: None,
+//!         };
+//!         assert!(matches!(email::send(&args), Err(PortakiError::Email(EmailError::StayEnded))));
+//!         assert!(host.sent_emails().is_empty());
+//!     });
+//! ```
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use portaki_sdk::context::{CapabilityGrant, Context};
-use portaki_sdk::error::Result;
+use chrono::{DateTime, Utc};
+use portaki_sdk::context::{CapabilityGrant, Context, StayContext};
+use portaki_sdk::error::{PortakiError, Result};
+use portaki_sdk::host::email::{EmailError, SendEmailArgs};
 use portaki_sdk::host::{with_host, HostBackend};
+use portaki_sdk::limits;
 
 use crate::fixtures::Property;
 
@@ -66,6 +107,7 @@ pub struct MockContextBuilder {
     kv: HashMap<String, Vec<u8>>,
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
+    now: Option<DateTime<Utc>>,
 }
 
 impl MockContextBuilder {
@@ -169,6 +211,24 @@ impl MockContextBuilder {
         self
     }
 
+    /// Sets the invocation stay (`Context::stay`) — e.g. `.with_stay(Booking::default())`.
+    ///
+    /// Its checkout drives the after-stay email rule. Call after [`Self::with_capabilities`],
+    /// which rebuilds the context.
+    pub fn with_stay(mut self, stay: impl Into<StayContext>) -> Self {
+        self.context.stay = Some(stay.into());
+        self
+    }
+
+    /// Freezes the mock clock (`host::time::now`) at `now`.
+    ///
+    /// Without it the mock answers the real current time, which makes the after-stay email
+    /// rule depend on the day the test runs.
+    pub fn with_now(mut self, now: DateTime<Utc>) -> Self {
+        self.now = Some(now);
+        self
+    }
+
     /// Returns a clone of the configured [`Context`] without installing a host backend.
     pub fn context(&self) -> Context {
         self.context.clone()
@@ -186,6 +246,10 @@ impl MockContextBuilder {
             connector_responses: self.connector_responses,
             connector_errors: self.connector_errors,
             connector_calls: Mutex::new(Vec::new()),
+            now: self.now,
+            email_send_calls: Mutex::new(0),
+            sent_emails: Mutex::new(Vec::new()),
+            event_emits: Mutex::new(0),
         });
         (self.context, host)
     }
@@ -235,6 +299,10 @@ pub struct MockHostFunctions {
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
     connector_calls: Mutex<Vec<ConnectorCall>>,
+    now: Option<DateTime<Utc>>,
+    email_send_calls: Mutex<usize>,
+    sent_emails: Mutex<Vec<SendEmailArgs>>,
+    event_emits: Mutex<usize>,
 }
 
 impl MockHostFunctions {
@@ -244,6 +312,15 @@ impl MockHostFunctions {
             .lock()
             .expect("connector calls lock")
             .clone()
+    }
+
+    /// Emails the mock accepted, in order — refused ones are not included.
+    pub fn sent_emails(&self) -> Vec<SendEmailArgs> {
+        self.sent_emails.lock().expect("sent emails lock").clone()
+    }
+
+    fn now(&self) -> DateTime<Utc> {
+        self.now.unwrap_or_else(Utc::now)
     }
 }
 
@@ -329,10 +406,34 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn emit_event(&self, _event_type: &str, _payload_json: &str) -> Result<()> {
+        let mut emits = self.event_emits.lock().expect("event emits lock");
+        *emits += 1;
+        if *emits > limits::EVENTS_PER_INVOCATION {
+            return Err(PortakiError::EventLimitExceeded);
+        }
         Ok(())
     }
 
-    fn email_send(&self, _payload_json: &str) -> Result<()> {
+    fn email_send(&self, payload_json: &str) -> Result<()> {
+        // Comme la plateforme : chaque appel de l'op compte, même refusé ensuite.
+        {
+            let mut calls = self.email_send_calls.lock().expect("email calls lock");
+            *calls += 1;
+            if *calls > limits::EMAIL_SENDS_PER_INVOCATION {
+                return Err(EmailError::LimitExceeded.into());
+            }
+        }
+        // `email::send` a déjà validé ; le mock revérifie parce que la plateforme ne fait pas
+        // confiance au SDK non plus, et qu'un backend peut être appelé sans passer par lui.
+        let args: SendEmailArgs = serde_json::from_str(payload_json)?;
+        args.validate()?;
+        if args.is_after_stay(&self.context, self.now()) {
+            return Err(EmailError::StayEnded.into());
+        }
+        self.sent_emails
+            .lock()
+            .expect("sent emails lock")
+            .push(args);
         Ok(())
     }
 
@@ -341,7 +442,7 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn time_now_iso(&self) -> Result<String> {
-        Ok(chrono::Utc::now().to_rfc3339())
+        Ok(self.now().to_rfc3339())
     }
 
     fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
@@ -437,6 +538,164 @@ mod tests {
     use portaki_sdk::host::{self, i18n::Vars};
 
     use super::MockContext;
+
+    mod email_limits {
+        use chrono::Duration;
+        use portaki_sdk::host::email::{
+            self, EmailAudience, EmailError, EmailField, LocalizedEmailText, ModuleEmailSdui,
+            SendEmailArgs,
+        };
+        use portaki_sdk::limits;
+        use portaki_sdk::PortakiError;
+        use portaki_sdk::{contracts, host::HostBackend};
+
+        use crate::{Booking, MockContext};
+
+        fn guest_email() -> SendEmailArgs {
+            SendEmailArgs {
+                email_id: "checkout-tips".into(),
+                audience: EmailAudience::Guest,
+                content: ModuleEmailSdui {
+                    subject: LocalizedEmailText::both("Avant de partir"),
+                    body: LocalizedEmailText::both("Merci de laisser les clés."),
+                    ..Default::default()
+                },
+                stay_id: None,
+                property_id: None,
+                action_url: None,
+            }
+        }
+
+        fn during_stay() -> MockContext {
+            let booking = Booking::default();
+            let now = booking.check_in + Duration::days(1);
+            MockContext::guest().with_stay(booking).with_now(now)
+        }
+
+        #[test]
+        fn the_sixth_send_of_an_invocation_is_refused() {
+            during_stay().run_with(|_ctx, host| {
+                for _ in 0..limits::EMAIL_SENDS_PER_INVOCATION {
+                    email::send(&guest_email()).expect("within the cap");
+                }
+                let sixth = email::send(&guest_email());
+                assert!(matches!(
+                    sixth,
+                    Err(PortakiError::Email(EmailError::LimitExceeded))
+                ));
+                assert_eq!(host.sent_emails().len(), limits::EMAIL_SENDS_PER_INVOCATION);
+            });
+        }
+
+        #[test]
+        fn each_build_is_a_fresh_invocation() {
+            let config = during_stay();
+            for _ in 0..2 {
+                config.clone().run(|_ctx| {
+                    for _ in 0..limits::EMAIL_SENDS_PER_INVOCATION {
+                        email::send(&guest_email()).expect("fresh counter");
+                    }
+                });
+            }
+        }
+
+        #[test]
+        fn guest_email_seven_days_after_checkout_is_still_accepted() {
+            let booking = Booking::default();
+            let now = booking.check_out + Duration::days(limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT);
+            MockContext::guest()
+                .with_stay(booking)
+                .with_now(now)
+                .run_with(|_ctx, host| {
+                    email::send(&guest_email()).expect("on the boundary");
+                    assert_eq!(host.sent_emails().len(), 1);
+                });
+        }
+
+        #[test]
+        fn guest_email_after_the_grace_period_is_refused() {
+            let booking = Booking::default();
+            let now = booking.check_out
+                + Duration::days(limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT)
+                + Duration::seconds(1);
+            MockContext::guest()
+                .with_stay(booking)
+                .with_now(now)
+                .run_with(|_ctx, host| {
+                    let err = email::send(&guest_email()).unwrap_err();
+                    assert!(matches!(err, PortakiError::Email(EmailError::StayEnded)));
+                    assert!(err.to_string().starts_with("email_stay_ended"));
+
+                    // Host audience is not bound to the stay window.
+                    let mut to_host = guest_email();
+                    to_host.audience = EmailAudience::Host;
+                    email::send(&to_host).expect("host email");
+                    assert_eq!(host.sent_emails().len(), 1);
+                });
+        }
+
+        /// The backend applies the rules itself, not only through `email::send`.
+        #[test]
+        fn the_backend_checks_payloads_that_bypass_the_sdk() {
+            let booking = Booking::default();
+            let late = booking.check_out + Duration::days(30);
+            let (_ctx, host) = MockContext::guest()
+                .with_stay(booking)
+                .with_now(late)
+                .build();
+
+            let mut too_long = guest_email();
+            too_long.audience = EmailAudience::Host;
+            too_long.content.body =
+                LocalizedEmailText::both("x".repeat(limits::EMAIL_BODY_MAX_CHARS + 1));
+            let raw = serde_json::to_string(&too_long).unwrap();
+            assert!(matches!(
+                host.email_send(&raw),
+                Err(PortakiError::Email(EmailError::FieldTooLong {
+                    field: EmailField::Body,
+                    ..
+                }))
+            ));
+
+            let raw = serde_json::to_string(&guest_email()).unwrap();
+            assert!(matches!(
+                host.email_send(&raw),
+                Err(PortakiError::Email(EmailError::StayEnded))
+            ));
+            assert!(host.sent_emails().is_empty());
+        }
+
+        #[test]
+        fn invalid_content_never_reaches_the_host() {
+            during_stay().run_with(|_ctx, host| {
+                let mut bad = guest_email();
+                bad.action_url = Some("http://app.portaki.app/stays".into());
+                assert!(matches!(
+                    email::send(&bad),
+                    Err(PortakiError::Email(EmailError::ActionUrlNotHttps))
+                ));
+                // Refused by the SDK, so it did not count toward the per-invocation cap.
+                for _ in 0..limits::EMAIL_SENDS_PER_INVOCATION {
+                    email::send(&guest_email()).expect("cap untouched");
+                }
+                assert_eq!(host.sent_emails().len(), limits::EMAIL_SENDS_PER_INVOCATION);
+            });
+        }
+
+        #[test]
+        fn the_twenty_first_event_of_an_invocation_is_refused() {
+            MockContext::host().run(|_ctx| {
+                for _ in 0..limits::EVENTS_PER_INVOCATION {
+                    portaki_sdk::host::events::emit(contracts::platform::EMAIL_SEND, &())
+                        .expect("within the cap");
+                }
+                assert!(matches!(
+                    portaki_sdk::host::events::emit(contracts::platform::EMAIL_SEND, &()),
+                    Err(PortakiError::EventLimitExceeded)
+                ));
+            });
+        }
+    }
 
     #[test]
     fn mock_host_resolves_translations() {

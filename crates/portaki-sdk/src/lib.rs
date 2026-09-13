@@ -54,6 +54,7 @@ pub mod email;
 pub mod error;
 pub mod host;
 pub mod ids;
+pub mod limits;
 pub mod manifest;
 pub mod sdui;
 

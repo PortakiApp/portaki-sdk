@@ -228,7 +228,9 @@ fn parse_response(response_json: &str) -> Result<Value> {
             .and_then(Value::as_str)
             .unwrap_or("host_dispatch_error");
         let message = root.get("message").and_then(Value::as_str).unwrap_or("");
-        return Err(PortakiError::Host(format!("{code}: {message}")));
+        // Les codes connus (`email_stay_ended`, `email_limit_exceeded`, `event_limit_exceeded`)
+        // deviennent des variantes typées : un module les distingue sans parser de chaîne.
+        return Err(PortakiError::from_host_code(code, message));
     }
     Ok(root
         .get("result")
