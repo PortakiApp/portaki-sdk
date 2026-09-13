@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v4.1.0...v5.0.0) (2026-09-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **capability:** CapabilityId::IcalImport, CapabilityId::IcalExport and the core::ICAL_IMPORT / core::ICAL_EXPORT constants are gone. The enum mirrors the Java catalog, which drops them in the same release.
+
+### Features
+
+* **capability:** add core.modules.scheduled_sync ([ebe13d4](https://github.com/PortakiApp/portaki-sdk/commit/ebe13d4e9acd0b8d825b1abf246147b88a525916))
+* **capability:** drop the iCal capability ids ([96d7ad7](https://github.com/PortakiApp/portaki-sdk/commit/96d7ad7d3c24019fa236faef68e99dd725fcdae7))
+
 ## [4.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v4.0.0...v4.1.0) (2026-09-12)
 
 
