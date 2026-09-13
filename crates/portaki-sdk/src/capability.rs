@@ -50,12 +50,6 @@ pub enum CapabilityId {
     /// Guest push and in-app notification channel.
     #[serde(rename = "core.guests.notifications")]
     GuestsNotifications,
-    /// iCal feed import allowance.
-    #[serde(rename = "core.ical.import")]
-    IcalImport,
-    /// iCal export feature flag.
-    #[serde(rename = "core.ical.export")]
-    IcalExport,
     /// Transactional email send quota.
     #[serde(rename = "core.email.transactional")]
     EmailTransactional,
@@ -144,8 +138,6 @@ impl CapabilityId {
             Self::Bookings => "core.bookings",
             Self::ModulesActive => "core.modules.active",
             Self::GuestsNotifications => "core.guests.notifications",
-            Self::IcalImport => "core.ical.import",
-            Self::IcalExport => "core.ical.export",
             Self::EmailTransactional => "core.email.transactional",
             Self::HostNotifications => "core.host.notifications",
             Self::EmailCustomDomain => "core.email.custom_domain",
@@ -181,8 +173,6 @@ impl CapabilityId {
         Self::Bookings,
         Self::ModulesActive,
         Self::GuestsNotifications,
-        Self::IcalImport,
-        Self::IcalExport,
         Self::EmailTransactional,
         Self::HostNotifications,
         Self::EmailCustomDomain,
@@ -238,8 +228,6 @@ impl FromStr for CapabilityId {
             "core.bookings" => Ok(Self::Bookings),
             "core.modules.active" => Ok(Self::ModulesActive),
             "core.guests.notifications" => Ok(Self::GuestsNotifications),
-            "core.ical.import" => Ok(Self::IcalImport),
-            "core.ical.export" => Ok(Self::IcalExport),
             "core.email.transactional" => Ok(Self::EmailTransactional),
             "core.host.notifications" => Ok(Self::HostNotifications),
             "core.email.custom_domain" => Ok(Self::EmailCustomDomain),
@@ -308,10 +296,6 @@ pub mod core {
     pub const MODULES_ACTIVE: CapabilityId = CapabilityId::ModulesActive;
     /// Guest push and in-app notification channel.
     pub const GUESTS_NOTIFICATIONS: CapabilityId = CapabilityId::GuestsNotifications;
-    /// iCal feed import allowance.
-    pub const ICAL_IMPORT: CapabilityId = CapabilityId::IcalImport;
-    /// iCal export feature flag.
-    pub const ICAL_EXPORT: CapabilityId = CapabilityId::IcalExport;
     /// Transactional email send quota.
     pub const EMAIL_TRANSACTIONAL: CapabilityId = CapabilityId::EmailTransactional;
     /// Host in-app inbox + push notification channel (module-raised).
