@@ -86,6 +86,12 @@ pub enum CapabilityId {
     /// Image upload and transform pipeline.
     #[serde(rename = "core.images")]
     Images,
+    /// Maximum POI search radius around the property (quota, km).
+    #[serde(rename = "core.poi.radius_km")]
+    PoiRadiusKm,
+    /// POI catalogue re-imports (quota, per month).
+    #[serde(rename = "core.poi.reimports")]
+    PoiReimports,
     /// Google Places — platform-managed API pool.
     #[serde(rename = "external.google-places.pool")]
     GooglePlacesPool,
@@ -153,6 +159,8 @@ impl CapabilityId {
             Self::AnalyticsAdvanced => "core.analytics.advanced",
             Self::Storage => "core.storage",
             Self::Images => "core.images",
+            Self::PoiRadiusKm => "core.poi.radius_km",
+            Self::PoiReimports => "core.poi.reimports",
             Self::GooglePlacesPool => "external.google-places.pool",
             Self::GooglePlacesByok => "external.google-places.byok",
             Self::MapboxPool => "external.mapbox.pool",
@@ -189,6 +197,8 @@ impl CapabilityId {
         Self::AnalyticsAdvanced,
         Self::Storage,
         Self::Images,
+        Self::PoiRadiusKm,
+        Self::PoiReimports,
         Self::GooglePlacesPool,
         Self::GooglePlacesByok,
         Self::MapboxPool,
@@ -245,6 +255,8 @@ impl FromStr for CapabilityId {
             "core.analytics.advanced" => Ok(Self::AnalyticsAdvanced),
             "core.storage" => Ok(Self::Storage),
             "core.images" => Ok(Self::Images),
+            "core.poi.radius_km" => Ok(Self::PoiRadiusKm),
+            "core.poi.reimports" => Ok(Self::PoiReimports),
             "external.google-places.pool" => Ok(Self::GooglePlacesPool),
             "external.google-places.byok" => Ok(Self::GooglePlacesByok),
             "external.mapbox.pool" => Ok(Self::MapboxPool),
@@ -326,6 +338,10 @@ pub mod core {
     pub const STORAGE: CapabilityId = CapabilityId::Storage;
     /// Image upload and transform pipeline.
     pub const IMAGES: CapabilityId = CapabilityId::Images;
+    /// Maximum POI search radius around the property (quota, km).
+    pub const POI_RADIUS_KM: CapabilityId = CapabilityId::PoiRadiusKm;
+    /// POI catalogue re-imports (quota, per month).
+    pub const POI_REIMPORTS: CapabilityId = CapabilityId::PoiReimports;
 }
 
 /// External connector pool and bring-your-own-key (BYOK) capabilities.
@@ -419,5 +435,19 @@ mod tests {
             CapabilityId::Storage
         );
         assert!(serde_json::to_value(CapabilityId::Storage).unwrap() == "core.storage");
+        assert_eq!(core::POI_RADIUS_KM.as_str(), "core.poi.radius_km");
+        assert_eq!(core::POI_REIMPORTS.as_str(), "core.poi.reimports");
+    }
+
+    /// Four hand-kept lists (serde rename, `as_str`, `ALL`, `FromStr`) name each id; this
+    /// catches the one an addition forgets.
+    #[test]
+    fn every_id_round_trips_through_all_four_lists() {
+        for id in ALL {
+            assert_eq!(CapabilityId::from_str(id.as_str()).unwrap(), *id);
+            assert_eq!(serde_json::to_value(id).unwrap(), id.as_str());
+        }
+        let unique: std::collections::HashSet<_> = ALL.iter().collect();
+        assert_eq!(unique.len(), ALL.len(), "duplicate entry in ALL");
     }
 }

@@ -6,7 +6,7 @@
 //! an existing context.
 
 use chrono::{DateTime, Utc};
-use portaki_sdk::context::{Context, GuestIdentity, PropertyContext};
+use portaki_sdk::context::{Context, GuestIdentity, PropertyContext, StayContext};
 use uuid::Uuid;
 
 /// Sample rental property for tests.
@@ -66,6 +66,18 @@ impl Default for Booking {
             check_out: DateTime::parse_from_rfc3339("2026-06-08T10:00:00Z")
                 .expect("date")
                 .with_timezone(&Utc),
+        }
+    }
+}
+
+/// The booking as the invocation stay — for [`crate::MockContextBuilder::with_stay`].
+impl From<Booking> for StayContext {
+    fn from(value: Booking) -> Self {
+        StayContext {
+            stay_id: value.id,
+            checkin_at: Some(value.check_in),
+            checkout_at: Some(value.check_out),
+            booking_channel: None,
         }
     }
 }

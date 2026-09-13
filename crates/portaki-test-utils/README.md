@@ -74,7 +74,7 @@ MockContext::guest()
 | Type | Role |
 |------|------|
 | `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install |
-| `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs |
+| `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | SDUI tree helpers |
 

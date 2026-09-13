@@ -2,7 +2,19 @@
 //!
 //! Modules declare connectors in the manifest (`connector!`, `custom_connector!`)
 //! and invoke operations through [`call`]. The gateway enforces capability grants,
-//! resolves credentials, applies rate limits, and performs HTTP on behalf of the module.
+//! resolves credentials, and performs HTTP on behalf of the module.
+//!
+//! ## Limits the gateway enforces
+//!
+//! - At most [`crate::limits::CONNECTOR_CALLS_PER_INVOCATION`] connector calls per
+//!   invocation — cache results in `host::kv` rather than calling in a loop.
+//! - Responses are capped at [`crate::limits::CONNECTOR_RESPONSE_MAX_BYTES`] (1 MiB);
+//!   request narrower pages or fields from the upstream API.
+//! - `https` only, and targets resolving to private / loopback / link-local addresses
+//!   are blocked.
+//!
+//! There is no per-provider rate limiting on the module's behalf: an upstream `429`
+//! surfaces as a connector error like any other failure.
 //!
 //! ## Contract
 //!

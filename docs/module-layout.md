@@ -91,6 +91,27 @@ src/
   i18n/               # locale bundles (repo convention: crate-root i18n/, not src/)
 ```
 
+### Sending email (`email_send.rs`)
+
+`host::email::send` goes through limits the platform enforces; the SDK checks the
+per-invocation ones first, and `portaki-test-utils` mocks them, so a module test
+fails where production would drop the mail. Values live in `portaki_sdk::limits`.
+
+- Content, per locale, in characters: subject ≤ 200, eyebrow ≤ 120, title ≤ 200,
+  body ≤ 5000, CTA label ≤ 80. `email_id`, subject and body must not be blank.
+- `action_url` must be `https` on the Portaki web origin — the SDK checks the
+  scheme, the platform drops the link on any other origin.
+- Guest emails are refused once `checkout + 7 days` has passed (`email_stay_ended`).
+- At most 5 `email.send` (`email_limit_exceeded`) and 20 events
+  (`event_limit_exceeded`) per invocation; at most 5 connector calls.
+- Platform only, across invocations and modules: 3 module emails per guest stay
+  per rolling 24 h and 10 per stay; 20 host emails per module per workspace per
+  rolling 24 h. Past these, mail is dropped without an error — send on meaningful
+  transitions, not on every tick.
+
+Test with `MockContext::guest().with_stay(Booking::default()).with_now(…)` and
+assert on `host.sent_emails()`.
+
 ### Hard rules
 
 1. **Guest SDUI, host SDUI, connectors, commands/queries, and domain types must
