@@ -47,6 +47,9 @@ pub enum CapabilityId {
     /// Maximum concurrently active modules on the workspace.
     #[serde(rename = "core.modules.active")]
     ModulesActive,
+    /// Scheduled syncs per day for an installed module.
+    #[serde(rename = "core.modules.scheduled_sync")]
+    ModulesScheduledSync,
     /// Guest push and in-app notification channel.
     #[serde(rename = "core.guests.notifications")]
     GuestsNotifications,
@@ -137,6 +140,7 @@ impl CapabilityId {
             Self::Properties => "core.properties",
             Self::Bookings => "core.bookings",
             Self::ModulesActive => "core.modules.active",
+            Self::ModulesScheduledSync => "core.modules.scheduled_sync",
             Self::GuestsNotifications => "core.guests.notifications",
             Self::EmailTransactional => "core.email.transactional",
             Self::HostNotifications => "core.host.notifications",
@@ -172,6 +176,7 @@ impl CapabilityId {
         Self::Properties,
         Self::Bookings,
         Self::ModulesActive,
+        Self::ModulesScheduledSync,
         Self::GuestsNotifications,
         Self::EmailTransactional,
         Self::HostNotifications,
@@ -227,6 +232,7 @@ impl FromStr for CapabilityId {
             "core.properties" => Ok(Self::Properties),
             "core.bookings" => Ok(Self::Bookings),
             "core.modules.active" => Ok(Self::ModulesActive),
+            "core.modules.scheduled_sync" => Ok(Self::ModulesScheduledSync),
             "core.guests.notifications" => Ok(Self::GuestsNotifications),
             "core.email.transactional" => Ok(Self::EmailTransactional),
             "core.host.notifications" => Ok(Self::HostNotifications),
@@ -294,6 +300,8 @@ pub mod core {
     pub const BOOKINGS: CapabilityId = CapabilityId::Bookings;
     /// Maximum concurrently active modules on the workspace.
     pub const MODULES_ACTIVE: CapabilityId = CapabilityId::ModulesActive;
+    /// Scheduled syncs per day for an installed module.
+    pub const MODULES_SCHEDULED_SYNC: CapabilityId = CapabilityId::ModulesScheduledSync;
     /// Guest push and in-app notification channel.
     pub const GUESTS_NOTIFICATIONS: CapabilityId = CapabilityId::GuestsNotifications;
     /// Transactional email send quota.
