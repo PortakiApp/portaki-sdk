@@ -46,7 +46,7 @@
 //! assert_eq!(host.connector_calls().len(), 1);
 //! ```
 //!
-//! # Email and event limits
+//! # Platform limits
 //!
 //! The mock enforces what the platform enforces per invocation, so a module test fails where
 //! production would silently drop mail: `email.send` re-checks
@@ -54,7 +54,15 @@
 //! [`portaki_sdk::limits::EMAIL_SENDS_PER_INVOCATION`], and refuses a guest email once the
 //! mock stay's checkout is more than [`portaki_sdk::limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT`]
 //! days behind the mock clock; `events.emit` refuses past
-//! [`portaki_sdk::limits::EVENTS_PER_INVOCATION`]. One built backend is one invocation.
+//! [`portaki_sdk::limits::EVENTS_PER_INVOCATION`] and refuses payloads over
+//! [`portaki_sdk::limits::EVENT_PAYLOAD_MAX_BYTES`]. One built backend is one invocation.
+//!
+//! `kv.set` refuses keys over [`portaki_sdk::limits::KV_KEY_MAX_BYTES`], values over
+//! [`portaki_sdk::limits::KV_VALUE_MAX_BYTES`], and writes that would push the mock store past
+//! [`portaki_sdk::limits::KV_KEYS_PER_SCOPE`] or [`portaki_sdk::limits::KV_BYTES_PER_SCOPE`]
+//! (entries seeded with [`MockContextBuilder::with_kv`] count; replacing a key only counts the
+//! difference). Refusals come back as [`PortakiError::Host`] prefixed with the platform code
+//! (`kv_key_too_large`, `kv_value_too_large`, `kv_quota_exceeded`, `event_payload_too_large`).
 //! The rolling per-stay / per-workspace caps span invocations and stay platform-only.
 //!
 //! ```
@@ -338,10 +346,42 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn kv_set(&self, key: &str, value: &[u8], _ttl_seconds: Option<u32>) -> Result<()> {
-        self.kv
-            .lock()
-            .expect("kv lock")
-            .insert(key.to_string(), value.to_vec());
+        // Dans l'ordre de la plateforme : taille de clé, taille de valeur, puis quota de la
+        // portée — la clé écrite exclue du compte, la remplacer ne consomme que la différence.
+        if key.len() > limits::KV_KEY_MAX_BYTES {
+            return Err(PortakiError::Host(format!(
+                "kv_key_too_large: {} bytes exceed {} for a key",
+                key.len(),
+                limits::KV_KEY_MAX_BYTES
+            )));
+        }
+        if value.len() > limits::KV_VALUE_MAX_BYTES {
+            return Err(PortakiError::Host(format!(
+                "kv_value_too_large: {} bytes exceed {} for a value",
+                value.len(),
+                limits::KV_VALUE_MAX_BYTES
+            )));
+        }
+        let mut kv = self.kv.lock().expect("kv lock");
+        let (keys, bytes) = kv
+            .iter()
+            .filter(|(stored, _)| stored.as_str() != key)
+            .fold((0usize, 0usize), |(keys, bytes), (_, stored)| {
+                (keys + 1, bytes + stored.len())
+            });
+        if keys + 1 > limits::KV_KEYS_PER_SCOPE {
+            return Err(PortakiError::Host(format!(
+                "kv_quota_exceeded: more than {} keys for this module on this property",
+                limits::KV_KEYS_PER_SCOPE
+            )));
+        }
+        if bytes + value.len() > limits::KV_BYTES_PER_SCOPE {
+            return Err(PortakiError::Host(format!(
+                "kv_quota_exceeded: more than {} bytes for this module on this property",
+                limits::KV_BYTES_PER_SCOPE
+            )));
+        }
+        kv.insert(key.to_string(), value.to_vec());
         Ok(())
     }
 
@@ -405,7 +445,15 @@ impl HostBackend for MockHostFunctions {
             .unwrap_or_else(|| "{}".to_string()))
     }
 
-    fn emit_event(&self, _event_type: &str, _payload_json: &str) -> Result<()> {
+    fn emit_event(&self, _event_type: &str, payload_json: &str) -> Result<()> {
+        // Comme la plateforme : un payload trop gros est refusé avant d'être compté.
+        if payload_json.len() > limits::EVENT_PAYLOAD_MAX_BYTES {
+            return Err(PortakiError::Host(format!(
+                "event_payload_too_large: {} bytes exceed {} for an event",
+                payload_json.len(),
+                limits::EVENT_PAYLOAD_MAX_BYTES
+            )));
+        }
         let mut emits = self.event_emits.lock().expect("event emits lock");
         *emits += 1;
         if *emits > limits::EVENTS_PER_INVOCATION {
@@ -694,6 +742,100 @@ mod tests {
                     Err(PortakiError::EventLimitExceeded)
                 ));
             });
+        }
+    }
+
+    mod host_limits {
+        use portaki_sdk::host::{self, HostBackend};
+        use portaki_sdk::limits;
+        use portaki_sdk::PortakiError;
+
+        use crate::MockContext;
+
+        fn refused_with(result: portaki_sdk::Result<()>, code: &str) {
+            match result {
+                Err(PortakiError::Host(text)) => assert!(
+                    text.starts_with(&format!("{code}:")),
+                    "expected {code}, got {text}"
+                ),
+                other => panic!("expected {code}, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn kv_key_over_the_byte_cap_is_refused() {
+            MockContext::host().run_with(|_ctx, backend| {
+                host::kv::set(&"k".repeat(limits::KV_KEY_MAX_BYTES), b"v", None)
+                    .expect("on the boundary");
+                refused_with(
+                    host::kv::set(&"k".repeat(limits::KV_KEY_MAX_BYTES + 1), b"v", None),
+                    "kv_key_too_large",
+                );
+                // Bytes, not chars: 129 two-byte chars are 258 bytes.
+                refused_with(
+                    backend.kv_set(&"é".repeat(limits::KV_KEY_MAX_BYTES / 2 + 1), b"v", None),
+                    "kv_key_too_large",
+                );
+            });
+        }
+
+        #[test]
+        fn kv_value_over_the_byte_cap_is_refused() {
+            MockContext::host().run(|_ctx| {
+                host::kv::set("cache", &vec![0; limits::KV_VALUE_MAX_BYTES], None)
+                    .expect("on the boundary");
+                refused_with(
+                    host::kv::set("cache", &vec![0; limits::KV_VALUE_MAX_BYTES + 1], None),
+                    "kv_value_too_large",
+                );
+                assert_eq!(
+                    host::kv::get("cache").unwrap().map(|v| v.len()),
+                    Some(limits::KV_VALUE_MAX_BYTES)
+                );
+            });
+        }
+
+        #[test]
+        fn kv_key_count_is_capped_per_scope_but_replacing_is_free() {
+            let full = (0..limits::KV_KEYS_PER_SCOPE).fold(MockContext::host(), |ctx, i| {
+                ctx.with_kv(format!("k{i}"), vec![])
+            });
+            full.run(|_ctx| {
+                refused_with(host::kv::set("one-more", b"v", None), "kv_quota_exceeded");
+                host::kv::set("k0", b"replaced", None).expect("same key");
+            });
+        }
+
+        #[test]
+        fn kv_bytes_are_capped_per_scope_counting_only_the_difference() {
+            MockContext::host()
+                .with_kv("big", vec![0; limits::KV_BYTES_PER_SCOPE])
+                .run(|_ctx| {
+                    refused_with(host::kv::set("small", b"v", None), "kv_quota_exceeded");
+                    host::kv::set("big", b"shrunk", None).expect("replacing frees the old value");
+                    host::kv::set("small", b"v", None).expect("room again");
+                });
+        }
+
+        #[test]
+        fn oversized_event_payload_is_refused_without_counting() {
+            let (_ctx, host) = MockContext::host().build();
+            let max = "x".repeat(limits::EVENT_PAYLOAD_MAX_BYTES);
+            host.emit_event("module.test", &max)
+                .expect("on the boundary");
+            refused_with(
+                host.emit_event("module.test", &format!("{max}x")),
+                "event_payload_too_large",
+            );
+            // One accepted so far: the refused payload did not use a slot.
+            for _ in 1..limits::EVENTS_PER_INVOCATION {
+                host.emit_event("module.test", "{}")
+                    .expect("within the cap");
+            }
+            assert!(matches!(
+                host.emit_event("module.test", "{}"),
+                Err(PortakiError::EventLimitExceeded)
+            ));
         }
     }
 
