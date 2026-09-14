@@ -652,7 +652,7 @@ mod guard_tests {
                 stay_id,
                 checkin_at: None,
                 checkout_at: Some(instant(checkout)),
-                booking_channel: None,
+                ..StayContext::default()
             }),
             ..Context::default()
         }

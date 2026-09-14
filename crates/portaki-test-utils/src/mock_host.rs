@@ -220,6 +220,23 @@ impl MockContextBuilder {
         self
     }
 
+    /// Fills the guest's email and phone on the invocation stay, as the gateway does for a
+    /// module that declares [`portaki_sdk::permission::STAY_GUEST_CONTACT_READ`].
+    ///
+    /// The mock does not read the manifest: a test that leaves this out sees what an
+    /// undeclared module sees in production — both `None`. Without a stay set yet, a
+    /// [`crate::Booking::default`] one is created. Call after [`Self::with_stay`], which
+    /// replaces the stay.
+    pub fn with_guest_contact(mut self, email: Option<&str>, phone: Option<&str>) -> Self {
+        let stay = self
+            .context
+            .stay
+            .get_or_insert_with(|| crate::fixtures::Booking::default().into());
+        stay.guest_email = email.map(str::to_string);
+        stay.guest_phone = phone.map(str::to_string);
+        self
+    }
+
     /// Freezes the mock clock (`host::time::now`) at `now`.
     ///
     /// Without it the mock answers the real current time, which makes the after-stay email
@@ -695,6 +712,42 @@ mod tests {
                 ));
             });
         }
+    }
+
+    /// Sans déclaration, le runtime ne transmet pas le contact : le mock part du même vide.
+    #[test]
+    fn guest_contact_is_absent_unless_the_test_grants_it() {
+        let ctx = MockContext::guest()
+            .with_stay(crate::Booking::default())
+            .context();
+        let stay = ctx.stay.expect("stay");
+        assert_eq!(stay.guest_email, None);
+        assert_eq!(stay.guest_phone, None);
+    }
+
+    #[test]
+    fn with_guest_contact_fills_the_stay_it_finds() {
+        let booking = crate::Booking::default();
+        let stay_id = booking.id;
+        let ctx = MockContext::guest()
+            .with_stay(booking)
+            .with_guest_contact(Some("marie@example.com"), None)
+            .context();
+        let stay = ctx.stay.expect("stay");
+        assert_eq!(stay.stay_id, stay_id);
+        assert_eq!(stay.guest_email.as_deref(), Some("marie@example.com"));
+        assert_eq!(stay.guest_phone, None);
+    }
+
+    #[test]
+    fn with_guest_contact_creates_a_stay_when_none_is_set() {
+        MockContext::guest()
+            .with_guest_contact(None, Some("+33600000000"))
+            .run(|ctx| {
+                let stay = ctx.stay.expect("a default booking stay");
+                assert!(stay.checkout_at.is_some());
+                assert_eq!(stay.guest_phone.as_deref(), Some("+33600000000"));
+            });
     }
 
     #[test]

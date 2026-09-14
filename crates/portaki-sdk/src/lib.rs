@@ -56,6 +56,7 @@ pub mod host;
 pub mod ids;
 pub mod limits;
 pub mod manifest;
+pub mod permission;
 pub mod sdui;
 
 pub mod wasm;
