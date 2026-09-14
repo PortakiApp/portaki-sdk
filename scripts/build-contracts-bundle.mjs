@@ -31,11 +31,6 @@ const CONTRACTS = {
   // et optionnel comme `deprecations.json` — les versions publiées avant lui n'en portent pas.
   "sdui_types.json": "contracts/sdui_types.json",
   "deprecations.json": "contracts/deprecations.json",
-  // Copie de `contracts/module-limits.json` de portaki-platform, qui fait foi — pas un contrat
-  // du SDK. Il part quand même dans le bundle : c'est la table que les validations et le mock
-  // de cette version recopient, et un module construit contre elle est testé contre elle.
-  // Optionnel comme les deux précédents ; le registre garde les documents sans les interpréter.
-  "module-limits.json": "contracts/platform/module-limits.json",
 };
 
 /** Version de l'espace de travail — la source dont dérivent toutes les crates publiées. */
