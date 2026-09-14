@@ -62,6 +62,10 @@ pub fn run(args: LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
+    assert_known_permissions(&module_root).map_err(|failure| {
+        checking.abandon();
+        failure
+    })?;
     assert_connector_permissions(&module_root, &manifest).map_err(|failure| {
         checking.abandon();
         failure
@@ -101,6 +105,41 @@ fn assert_connector_permissions(
         missing.join(", "),
         missing.first().cloned().unwrap_or_default()
     )
+}
+
+/// A permission the manifest schema does not know.
+///
+/// The registry refuses it at publication, against the schema of the SDK the module targets.
+/// Saying so here is cheaper than a refused publish — and a misspelt `stay:guest_contact:read`
+/// would otherwise build, deploy, and quietly leave the guest's contact details empty.
+fn assert_known_permissions(module_root: &std::path::Path) -> Result<()> {
+    let unknown = unknown_permissions(&declared_permissions(module_root));
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "portaki.module.json declares unknown permission(s) {} — known: {}, connectors:<id>",
+        unknown.join(", "),
+        portaki_sdk::permission::FIXED.join(", ")
+    )
+}
+
+/// The `permissions` of `portaki.module.json`, empty when the file or the field is absent.
+fn declared_permissions(module_root: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(module_root.join("portaki.module.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|manifest| manifest.get("permissions").cloned())
+        .and_then(|permissions| serde_json::from_value::<Vec<String>>(permissions).ok())
+        .unwrap_or_default()
+}
+
+fn unknown_permissions(declared: &[String]) -> Vec<String> {
+    declared
+        .iter()
+        .filter(|permission| !portaki_sdk::permission::is_known(permission))
+        .cloned()
+        .collect()
 }
 
 fn assert_versions_agree(module_root: &std::path::Path, manifest: &ModuleManifest) -> Result<()> {
@@ -173,6 +212,52 @@ serde = { version = "1", features = ["derive"] }
         let cargo = "[dependencies]\nserde = { version = \"1\" }\n";
 
         assert!(crate_version(cargo).is_none());
+    }
+
+    #[test]
+    fn the_guest_contact_permission_is_accepted() {
+        let declared = vec![
+            "kv".to_string(),
+            "stay:guest_contact:read".to_string(),
+            "connectors:nuki".to_string(),
+        ];
+
+        assert!(unknown_permissions(&declared).is_empty());
+    }
+
+    /// `stay:read` est un scope de jeton, pas une permission de manifeste : le séjour se lit sans.
+    #[test]
+    fn an_unknown_or_misspelt_permission_is_named() {
+        let declared = vec![
+            "stay:read".to_string(),
+            "stay:guest-contact:read".to_string(),
+            "email".to_string(),
+        ];
+
+        assert_eq!(
+            unknown_permissions(&declared),
+            vec![
+                "stay:read".to_string(),
+                "stay:guest-contact:read".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn permissions_are_read_from_the_catalogue_manifest() {
+        let root = std::env::temp_dir().join(format!("portaki-lint-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("portaki.module.json"),
+            r#"{"id":"checkin","permissions":["stay:guest_contact:read","stay:read"]}"#,
+        )
+        .unwrap();
+
+        let failure = assert_known_permissions(&root).unwrap_err().to_string();
+        std::fs::remove_dir_all(&root).ok();
+
+        assert!(failure.contains("stay:read"), "{failure}");
+        assert!(!failure.contains("unknown permission(s) stay:guest_contact:read"));
     }
 
     #[test]

@@ -35,7 +35,7 @@
 //! assert!(render(ctx));
 //! ```
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -108,12 +108,26 @@ pub struct GuestIdentity {
     pub locale: Option<String>,
 }
 
-/// Stay window injected on guest booklet invocations.
+/// Stay injected on guest booklet invocations.
 ///
 /// Used for timed secret reveal (e.g. access codes). Instants are UTC ISO-8601
 /// from the gateway; calendar math for local-time policies uses
 /// [`Context::timezone`] / [`PropertyContext::timezone`] (`propertyTimezone`).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+///
+/// Every field beyond `stay_id` is optional: an older gateway does not send it,
+/// a preview session has no real stay behind it, and a stay entered by hand may
+/// simply not know it. Whether the stay came from manual entry, a calendar sync
+/// or a PMS changes nothing here — the vocabulary stays `stay`.
+///
+/// `guest_email` / `guest_phone` are the exception to "readable by every
+/// module": the gateway fills them only for a module whose manifest declares
+/// [`crate::permission::STAY_GUEST_CONTACT_READ`], and leaves them `None`
+/// otherwise. `None` therefore means "not granted *or* not known" — never read
+/// it as "the guest has no email".
+///
+/// Build one with `..StayContext::default()` so a field added later does not
+/// break the literal.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct StayContext {
     /// Stay identifier for the current guest booklet session.
     pub stay_id: Uuid,
@@ -126,6 +140,25 @@ pub struct StayContext {
     /// payloads / when the gateway did not resolve a channel — treat as unknown.
     #[serde(default)]
     pub booking_channel: Option<String>,
+    /// Number of guests on the stay (adults and children together — the platform
+    /// does not split them). `None` when unknown.
+    #[serde(default)]
+    pub party_size: Option<u32>,
+    /// Arrival time the guest announced, in the property's local time
+    /// ([`PropertyContext::timezone`]). `None` when nobody announced one.
+    #[serde(default)]
+    pub arrival_time_estimated: Option<NaiveTime>,
+    /// Language the guest communicates in, as the stay stores it (a BCP-47 tag,
+    /// often a bare language such as `fr`). Distinct from [`Context::locale`],
+    /// the language of the current request.
+    #[serde(default)]
+    pub guest_locale: Option<String>,
+    /// Guest email — filled only under [`crate::permission::STAY_GUEST_CONTACT_READ`].
+    #[serde(default)]
+    pub guest_email: Option<String>,
+    /// Guest phone — filled only under [`crate::permission::STAY_GUEST_CONTACT_READ`].
+    #[serde(default)]
+    pub guest_phone: Option<String>,
 }
 
 /// Shell accessibility and theme preferences from the client runtime.

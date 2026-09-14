@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveTime, Utc};
 
 use crate::context::{
     CapabilityGrant, Context, DisplayPreferences, GuestIdentity, PlanInfo, PropertyContext,
@@ -55,6 +55,21 @@ pub struct WasmContextEnvelope {
     /// backward compatibility with older orchestrators that do not send it.
     #[serde(rename = "bookingChannel", default)]
     pub booking_channel: Option<String>,
+    /// Number of guests on the stay.
+    #[serde(rename = "guestPartySize", default)]
+    pub guest_party_size: Option<u32>,
+    /// Announced arrival time, property-local (`HH:mm` or `HH:mm:ss`).
+    #[serde(rename = "arrivalTimeEstimated", default)]
+    pub arrival_time_estimated: Option<String>,
+    /// Language the guest communicates in, as the stay stores it.
+    #[serde(rename = "guestLocale", default)]
+    pub guest_locale: Option<String>,
+    /// Guest email — present only when the manifest declares `stay:guest_contact:read`.
+    #[serde(rename = "guestEmail", default)]
+    pub guest_email: Option<String>,
+    /// Guest phone — present only when the manifest declares `stay:guest_contact:read`.
+    #[serde(rename = "guestPhone", default)]
+    pub guest_phone: Option<String>,
     /// Property IANA timezone (`Europe/Paris`) — preferred over [`Self::timezone`].
     #[serde(rename = "propertyTimezone", default)]
     pub property_timezone: Option<String>,
@@ -120,6 +135,13 @@ impl WasmRequestEnvelope {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(|value| value.to_ascii_lowercase()),
+            party_size: ctx.guest_party_size.filter(|size| *size > 0),
+            arrival_time_estimated: parse_local_time_opt(ctx.arrival_time_estimated.as_deref()),
+            guest_locale: non_blank(ctx.guest_locale.as_deref()),
+            // Le runtime ne sérialise ces deux champs que pour un module qui déclare
+            // `stay:guest_contact:read` ; le SDK ne refait pas ce contrôle, il n'a pas le manifeste.
+            guest_email: non_blank(ctx.guest_email.as_deref()),
+            guest_phone: non_blank(ctx.guest_phone.as_deref()),
         });
         Ok(Context {
             property_id,
@@ -145,6 +167,20 @@ impl WasmRequestEnvelope {
             input: self.params.clone(),
         })
     }
+}
+
+/// `HH:mm` comme le runtime l'envoie, `HH:mm:ss` par tolérance ; illisible vaut absent.
+fn parse_local_time_opt(raw: Option<&str>) -> Option<NaiveTime> {
+    let value = raw?.trim();
+    NaiveTime::parse_from_str(value, "%H:%M")
+        .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S"))
+        .ok()
+}
+
+fn non_blank(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn parse_instant_opt(raw: Option<&str>) -> Option<DateTime<Utc>> {
@@ -274,5 +310,103 @@ mod tests {
         );
         assert_eq!(ctx.timezone, "Europe/Paris");
         assert_eq!(ctx.property.timezone, "Europe/Paris");
+        // Un runtime antérieur n'envoie aucun des champs enrichis : tous restent absents.
+        assert_eq!(stay.party_size, None);
+        assert_eq!(stay.arrival_time_estimated, None);
+        assert_eq!(stay.guest_locale, None);
+        assert_eq!(stay.guest_email, None);
+        assert_eq!(stay.guest_phone, None);
+    }
+
+    #[test]
+    fn reads_stay_details_and_granted_guest_contact() {
+        let raw = r#"{
+            "query": "render_guest_home_cards",
+            "params": {},
+            "context": {
+                "moduleId": "checkin",
+                "moduleVersion": "1.0.0",
+                "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                "stayId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "bookingChannel": "AIRBNB",
+                "guestPartySize": 4,
+                "arrivalTimeEstimated": "17:30",
+                "guestLocale": "de",
+                "guestEmail": "anna@example.com",
+                "guestPhone": " "
+            }
+        }"#;
+        let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
+        let stay = envelope
+            .to_context("render_guest_home_cards")
+            .expect("context")
+            .stay
+            .expect("stay");
+
+        assert_eq!(stay.booking_channel.as_deref(), Some("airbnb"));
+        assert_eq!(stay.party_size, Some(4));
+        assert_eq!(
+            stay.arrival_time_estimated,
+            chrono::NaiveTime::from_hms_opt(17, 30, 0)
+        );
+        assert_eq!(stay.guest_locale.as_deref(), Some("de"));
+        assert_eq!(stay.guest_email.as_deref(), Some("anna@example.com"));
+        assert_eq!(
+            stay.guest_phone, None,
+            "a blank value is not a phone number"
+        );
+    }
+
+    /// Les valeurs nulles — ce qu'un module non déclarant reçoit pour le contact — et une heure
+    /// illisible se lisent comme absentes, sans faire échouer l'invocation.
+    #[test]
+    fn null_contact_and_unreadable_arrival_time_are_absent() {
+        let raw = r#"{
+            "command": "submit",
+            "context": {
+                "moduleId": "checkin",
+                "moduleVersion": "1.0.0",
+                "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                "stayId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "guestPartySize": 0,
+                "arrivalTimeEstimated": "vers 18h",
+                "guestEmail": null,
+                "guestPhone": null
+            }
+        }"#;
+        let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
+        let stay = envelope
+            .to_context("submit")
+            .expect("context")
+            .stay
+            .expect("stay");
+
+        assert_eq!(stay.party_size, None);
+        assert_eq!(stay.arrival_time_estimated, None);
+        assert_eq!(stay.guest_email, None);
+        assert_eq!(stay.guest_phone, None);
+    }
+
+    /// `StayContext` round-trips, and a payload without the new fields still deserializes.
+    #[test]
+    fn stay_context_serde_keeps_optional_fields_optional() {
+        let legacy: crate::StayContext = serde_json::from_str(
+            r#"{"stay_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","checkin_at":null,"checkout_at":null}"#,
+        )
+        .expect("legacy stay");
+        assert_eq!(legacy.guest_email, None);
+        assert_eq!(legacy.party_size, None);
+
+        let full = crate::StayContext {
+            party_size: Some(2),
+            arrival_time_estimated: chrono::NaiveTime::from_hms_opt(9, 15, 0),
+            guest_locale: Some("fr".to_string()),
+            guest_email: Some("marie@example.com".to_string()),
+            guest_phone: Some("+33600000000".to_string()),
+            ..legacy
+        };
+        let wire = serde_json::to_string(&full).expect("serialize");
+        let back: crate::StayContext = serde_json::from_str(&wire).expect("deserialize");
+        assert_eq!(back, full);
     }
 }

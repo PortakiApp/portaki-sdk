@@ -77,7 +77,7 @@ impl From<Booking> for StayContext {
             stay_id: value.id,
             checkin_at: Some(value.check_in),
             checkout_at: Some(value.check_out),
-            booking_channel: None,
+            ..StayContext::default()
         }
     }
 }
