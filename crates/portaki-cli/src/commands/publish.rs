@@ -444,14 +444,20 @@ fn classify(status: u16, body: &str) -> Outcome {
 }
 
 fn assert_publish_version_matches_env(module_root: &Path, artifact_dir: &Path) -> Result<()> {
-    let expected = match std::env::var("PORTAKI_PUBLISH_VERSION") {
-        Ok(value) => value,
-        Err(_) => return Ok(()),
-    };
-    let expected = expected.trim();
-    if expected.is_empty() {
+    let expected = std::env::var("PORTAKI_PUBLISH_VERSION").ok();
+    assert_publish_version_matches(module_root, artifact_dir, expected.as_deref())
+}
+
+/// La comparaison, sans lire l'environnement : les tests tournent en parallèle dans le même
+/// processus, et deux tests qui posent puis retirent la même variable se marchent dessus.
+fn assert_publish_version_matches(
+    module_root: &Path,
+    artifact_dir: &Path,
+    expected: Option<&str>,
+) -> Result<()> {
+    let Some(expected) = expected.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(());
-    }
+    };
     let coords = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
     if coords.version == expected {
         return Ok(());
@@ -590,13 +596,7 @@ mod tests {
             r#"{"id":"weather","version":"0.2.1"}"#,
         )
         .unwrap();
-        unsafe {
-            std::env::set_var("PORTAKI_PUBLISH_VERSION", "0.2.1");
-        }
-        assert_publish_version_matches_env(root.path(), &artifact).unwrap();
-        unsafe {
-            std::env::remove_var("PORTAKI_PUBLISH_VERSION");
-        }
+        assert_publish_version_matches(root.path(), &artifact, Some("0.2.1")).unwrap();
     }
 
     #[test]
@@ -609,14 +609,9 @@ mod tests {
             r#"{"id":"weather","version":"0.1.0"}"#,
         )
         .unwrap();
-        unsafe {
-            std::env::set_var("PORTAKI_PUBLISH_VERSION", "0.2.1");
-        }
-        let err = assert_publish_version_matches_env(root.path(), &artifact).unwrap_err();
+        let err =
+            assert_publish_version_matches(root.path(), &artifact, Some("0.2.1")).unwrap_err();
         assert!(err.to_string().contains("0.1.0"));
         assert!(err.to_string().contains("0.2.1"));
-        unsafe {
-            std::env::remove_var("PORTAKI_PUBLISH_VERSION");
-        }
     }
 }
