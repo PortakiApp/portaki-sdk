@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v5.0.0...v5.1.0) (2026-09-14)
+
+
+### Features
+
+* **email:** check platform limits before sending ([aaecd6d](https://github.com/PortakiApp/portaki-sdk/commit/aaecd6d0a619c4b310472b9bf69a759ca81600dd))
+* **limits:** mirror the platform limits contract ([e9f5133](https://github.com/PortakiApp/portaki-sdk/commit/e9f5133f38957e2f994bd66b8599a047714f71f7))
+
+
+### Bug Fixes
+
+* **cli:** stop publish version tests racing on the env ([135e49e](https://github.com/PortakiApp/portaki-sdk/commit/135e49e0fe3c56c13007a8754225579e0176d017))
+
+
+### Reverts
+
+* mirror the platform limits contract ([6b41268](https://github.com/PortakiApp/portaki-sdk/commit/6b41268d03f761cd4666cacdfc41a0bcaa5704cb))
+
 ## [5.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v4.1.0...v5.0.0) (2026-09-13)
 
 
