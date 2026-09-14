@@ -50,6 +50,9 @@ pub enum CapabilityId {
     /// Scheduled syncs per day for an installed module.
     #[serde(rename = "core.modules.scheduled_sync")]
     ModulesScheduledSync,
+    /// Connected PMS accounts per workspace (quota; required by PMS connector modules).
+    #[serde(rename = "core.pms.connections")]
+    PmsConnections,
     /// Guest push and in-app notification channel.
     #[serde(rename = "core.guests.notifications")]
     GuestsNotifications,
@@ -122,6 +125,18 @@ pub enum CapabilityId {
     /// OpenAgenda — property-owned API key.
     #[serde(rename = "external.open-agenda.byok")]
     OpenAgendaByok,
+    /// Hostaway PMS — workspace-owned API credentials (BYOK only).
+    #[serde(rename = "external.hostaway.byok")]
+    HostawayByok,
+    /// Beds24 PMS — workspace-owned API credentials (BYOK only).
+    #[serde(rename = "external.beds24.byok")]
+    Beds24Byok,
+    /// Hospitable PMS — workspace-owned API credentials (BYOK only).
+    #[serde(rename = "external.hospitable.byok")]
+    HospitableByok,
+    /// Smily PMS — workspace-owned API credentials (BYOK only).
+    #[serde(rename = "external.smily.byok")]
+    SmilyByok,
     /// Inline text suggestion generation.
     #[serde(rename = "ai.text.suggestions")]
     TextSuggestions,
@@ -147,6 +162,7 @@ impl CapabilityId {
             Self::Bookings => "core.bookings",
             Self::ModulesActive => "core.modules.active",
             Self::ModulesScheduledSync => "core.modules.scheduled_sync",
+            Self::PmsConnections => "core.pms.connections",
             Self::GuestsNotifications => "core.guests.notifications",
             Self::EmailTransactional => "core.email.transactional",
             Self::HostNotifications => "core.host.notifications",
@@ -171,6 +187,10 @@ impl CapabilityId {
             Self::NukiByok => "external.nuki.byok",
             Self::OpenAgendaPool => "external.open-agenda.pool",
             Self::OpenAgendaByok => "external.open-agenda.byok",
+            Self::HostawayByok => "external.hostaway.byok",
+            Self::Beds24Byok => "external.beds24.byok",
+            Self::HospitableByok => "external.hospitable.byok",
+            Self::SmilyByok => "external.smily.byok",
             Self::TextSuggestions => "ai.text.suggestions",
             Self::Translation => "ai.translation",
             Self::ImageGeneration => "ai.image.generation",
@@ -185,6 +205,7 @@ impl CapabilityId {
         Self::Bookings,
         Self::ModulesActive,
         Self::ModulesScheduledSync,
+        Self::PmsConnections,
         Self::GuestsNotifications,
         Self::EmailTransactional,
         Self::HostNotifications,
@@ -209,6 +230,10 @@ impl CapabilityId {
         Self::NukiByok,
         Self::OpenAgendaPool,
         Self::OpenAgendaByok,
+        Self::HostawayByok,
+        Self::Beds24Byok,
+        Self::HospitableByok,
+        Self::SmilyByok,
         Self::TextSuggestions,
         Self::Translation,
         Self::ImageGeneration,
@@ -243,6 +268,7 @@ impl FromStr for CapabilityId {
             "core.bookings" => Ok(Self::Bookings),
             "core.modules.active" => Ok(Self::ModulesActive),
             "core.modules.scheduled_sync" => Ok(Self::ModulesScheduledSync),
+            "core.pms.connections" => Ok(Self::PmsConnections),
             "core.guests.notifications" => Ok(Self::GuestsNotifications),
             "core.email.transactional" => Ok(Self::EmailTransactional),
             "core.host.notifications" => Ok(Self::HostNotifications),
@@ -267,6 +293,10 @@ impl FromStr for CapabilityId {
             "external.nuki.byok" => Ok(Self::NukiByok),
             "external.open-agenda.pool" => Ok(Self::OpenAgendaPool),
             "external.open-agenda.byok" => Ok(Self::OpenAgendaByok),
+            "external.hostaway.byok" => Ok(Self::HostawayByok),
+            "external.beds24.byok" => Ok(Self::Beds24Byok),
+            "external.hospitable.byok" => Ok(Self::HospitableByok),
+            "external.smily.byok" => Ok(Self::SmilyByok),
             "ai.text.suggestions" => Ok(Self::TextSuggestions),
             "ai.translation" => Ok(Self::Translation),
             "ai.image.generation" => Ok(Self::ImageGeneration),
@@ -314,6 +344,8 @@ pub mod core {
     pub const MODULES_ACTIVE: CapabilityId = CapabilityId::ModulesActive;
     /// Scheduled syncs per day for an installed module.
     pub const MODULES_SCHEDULED_SYNC: CapabilityId = CapabilityId::ModulesScheduledSync;
+    /// Connected PMS accounts per workspace (quota; required by PMS connector modules).
+    pub const PMS_CONNECTIONS: CapabilityId = CapabilityId::PmsConnections;
     /// Guest push and in-app notification channel.
     pub const GUESTS_NOTIFICATIONS: CapabilityId = CapabilityId::GuestsNotifications;
     /// Transactional email send quota.
@@ -368,6 +400,14 @@ pub mod external {
     pub const OPEN_AGENDA_POOL: CapabilityId = CapabilityId::OpenAgendaPool;
     /// OpenAgenda — property-owned key.
     pub const OPEN_AGENDA_BYOK: CapabilityId = CapabilityId::OpenAgendaByok;
+    /// Hostaway PMS — workspace-owned API credentials (BYOK only).
+    pub const HOSTAWAY_BYOK: CapabilityId = CapabilityId::HostawayByok;
+    /// Beds24 PMS — workspace-owned API credentials (BYOK only).
+    pub const BEDS24_BYOK: CapabilityId = CapabilityId::Beds24Byok;
+    /// Hospitable PMS — workspace-owned API credentials (BYOK only).
+    pub const HOSPITABLE_BYOK: CapabilityId = CapabilityId::HospitableByok;
+    /// Smily PMS — workspace-owned API credentials (BYOK only).
+    pub const SMILY_BYOK: CapabilityId = CapabilityId::SmilyByok;
 }
 
 /// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).
@@ -437,6 +477,14 @@ mod tests {
         assert!(serde_json::to_value(CapabilityId::Storage).unwrap() == "core.storage");
         assert_eq!(core::POI_RADIUS_KM.as_str(), "core.poi.radius_km");
         assert_eq!(core::POI_REIMPORTS.as_str(), "core.poi.reimports");
+        assert_eq!(core::PMS_CONNECTIONS.as_str(), "core.pms.connections");
+        assert_eq!(external::HOSTAWAY_BYOK.as_str(), "external.hostaway.byok");
+        assert_eq!(external::BEDS24_BYOK.as_str(), "external.beds24.byok");
+        assert_eq!(
+            external::HOSPITABLE_BYOK.as_str(),
+            "external.hospitable.byok"
+        );
+        assert_eq!(external::SMILY_BYOK.as_str(), "external.smily.byok");
     }
 
     /// Four hand-kept lists (serde rename, `as_str`, `ALL`, `FromStr`) name each id; this
