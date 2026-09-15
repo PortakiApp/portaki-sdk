@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v5.1.0...v6.0.0) (2026-09-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **context:** StayContext has new fields; struct literals must add ..StayContext::default().
+
+### Features
+
+* **context:** add stay details and guest contact permission ([ef090f2](https://github.com/PortakiApp/portaki-sdk/commit/ef090f29d78f387849c0a88be72b98057f9ff0e7))
+
+
+### Bug Fixes
+
+* **deps:** update rustls for RUSTSEC-2026-0285 ([f9b844c](https://github.com/PortakiApp/portaki-sdk/commit/f9b844c2e04da743d6f6ebb56adf5a407f9c28fb))
+
 ## [5.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v5.0.0...v5.1.0) (2026-09-14)
 
 
