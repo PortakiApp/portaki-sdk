@@ -57,7 +57,8 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
     let source = if catalog_path.exists() {
         catalog_path
     } else if sdk_path.exists() {
-        sdk_path
+        // Cloné : le chemin resert plus bas pour savoir s'il faut y relire les déclarations.
+        sdk_path.clone()
     } else {
         anyhow::bail!(
             "missing portaki.module.json or {} — run portaki build first",
@@ -67,6 +68,21 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
 
     let raw = fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
     let stamped = stamp_sdk_version(&raw, resolved_sdk_version(module_root)?)?;
+
+    // Ce que le build a émis suit jusqu'au manifeste publié, et plus seulement jusqu'à la
+    // sandbox. La plateforme lit ce manifeste-là : sans les opérations, elle ne peut pas
+    // savoir à quel module demander quoi, et doit les interroger tous en aveugle pour
+    // récolter un `wasm_handler_not_found` de la part de ceux qui se taisent.
+    //
+    // Quand le manifeste du build est déjà la source, il les porte par construction.
+    let stamped = if source == sdk_path || !sdk_path.exists() {
+        stamped
+    } else {
+        let built = fs::read_to_string(&sdk_path)
+            .with_context(|| format!("read {}", sdk_path.display()))?;
+        stamp_built_declarations(&stamped, &built)?
+    };
+
     fs::write(&dest, stamped).with_context(|| format!("write {}", dest.display()))?;
     Ok(dest)
 }
@@ -746,5 +762,59 @@ mod stamp_built_declarations_tests {
         let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
 
         assert_eq!(value["surfaces"]["host"][0]["id"], "main");
+    }
+}
+
+#[cfg(test)]
+mod assemble_publish_manifest_tests {
+    use super::{assemble_publish_manifest, publish_manifest_path};
+    use std::fs;
+
+    fn module_with(catalogue: &str, built: Option<&str>) -> tempfile::TempDir {
+        let module = tempfile::tempdir().expect("tempdir");
+        let artifacts = module.path().join("target/portaki");
+        fs::create_dir_all(&artifacts).expect("artifact dir");
+        fs::write(module.path().join("portaki.module.json"), catalogue).expect("catalogue");
+        if let Some(built) = built {
+            fs::write(artifacts.join("manifest.json"), built).expect("built manifest");
+        }
+        module
+    }
+
+    /// Le manifeste publié est celui que la plateforme lit. Les opérations n'existent que
+    /// dans la sortie du build — un module wasm n'exporte que `portaki_query` et ne sait pas
+    /// dire ce qu'il sert. Sans ce report, la plateforme doit les interroger tous en aveugle.
+    #[test]
+    fn the_published_manifest_carries_the_built_operations() {
+        let module = module_with(
+            r#"{"id":"local-guide","hostSurfaces":[{"pathSegment":"local-guide"}]}"#,
+            Some(
+                r#"{"id":"local-guide","queries":[{"name":"mapMarkers","fn":"map_markers"}],"commands":[]}"#,
+            ),
+        );
+        let artifacts = module.path().join("target/portaki");
+
+        assemble_publish_manifest(module.path(), &artifacts).expect("assemble");
+
+        let raw = fs::read_to_string(publish_manifest_path(&artifacts)).expect("read");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("parse");
+        assert_eq!(value["queries"][0]["name"], "mapMarkers");
+        // Une liste vide est une réponse : le module ne mute rien, et il le dit.
+        assert_eq!(value["commands"], serde_json::json!([]));
+        // Ce que le manifeste catalogue portait déjà survit : le pathSegment reste une
+        // donnée de navigation du dashboard.
+        assert_eq!(value["hostSurfaces"][0]["pathSegment"], "local-guide");
+    }
+
+    /// Un module sans sortie de build reste publiable : rien n'est inventé.
+    #[test]
+    fn a_module_without_build_output_publishes_unchanged() {
+        let module = module_with(r#"{"id":"m"}"#, None);
+        let artifacts = module.path().join("target/portaki");
+
+        assemble_publish_manifest(module.path(), &artifacts).expect("assemble");
+
+        let raw = fs::read_to_string(publish_manifest_path(&artifacts)).expect("read");
+        assert!(!raw.contains("queries"), "{raw}");
     }
 }
