@@ -52,6 +52,16 @@
       "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, i18n.translate, log.",
       "items": { "$ref": "#/$defs/permission" }
     },
+    "queries": {
+      "type": "array",
+      "description": "Read-only operations the module exports. Never hand-written: stamped from the build output at publish time, because only the build knows what the binary serves — a wasm module exports portaki_query and nothing else. The platform reads this to know which module to ask for a given operation, instead of dispatching blind and collecting wasm_handler_not_found from the ones that stay silent.",
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Mutating operations the module exports. Same provenance as queries.",
+      "items": { "$ref": "#/$defs/operation" }
+    },
     "hostSurfaces": {
       "type": "array",
       "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (stats strip), stay-detail (SDUI embed on stay detail with stayId input), stay-action (stay detail button that opens a modal hosting module SDUI).",
