@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.2.0...v6.3.0) (2026-09-17)
+
+
+### Features
+
+* **cli:** run tests before publish ([43b0f07](https://github.com/PortakiApp/portaki-sdk/commit/43b0f0705d1494f85e7d18aba70ad18ce12f3ab8))
+* **test-utils:** add module conformance battery ([d205b00](https://github.com/PortakiApp/portaki-sdk/commit/d205b0091b539bdf5606b831207b230b898bb8f8))
+
 ## [6.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.1.0...v6.2.0) (2026-09-17)
 
 
