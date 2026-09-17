@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.1.0...v6.2.0) (2026-09-17)
+
+
+### Features
+
+* **test-utils:** cover every primitive in assertions ([b8a1aa3](https://github.com/PortakiApp/portaki-sdk/commit/b8a1aa34c66884a7769950c536cbd18037b13d8b))
+
+
+### Bug Fixes
+
+* **schema:** define the operation that queries reference ([82bf779](https://github.com/PortakiApp/portaki-sdk/commit/82bf7794ce19e274f6054d413cd05ce2b4b1b242))
+
 ## [6.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.0.0...v6.1.0) (2026-09-16)
 
 
