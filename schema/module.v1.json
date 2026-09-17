@@ -113,6 +113,18 @@
     }
   },
   "$defs": {
+    "operation": {
+      "type": "object",
+      "description": "An operation the module exports, stamped from the build output by `portaki build` — never hand-written. Same shape as portaki_sdk::manifest::ManifestQuery and ManifestCommand.",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The name the platform dispatches, e.g. mapMarkers." },
+        "fn": { "type": "string", "description": "The Rust function serving it, e.g. map_markers." },
+        "args": { "type": "string", "description": "The argument type name, when the handler takes one." },
+        "params": { "type": "object", "description": "The argument fields, when that type carries #[portaki_sdk::params]. Descriptive only: the platform never validates a dispatch against it." }
+      }
+    },
     "permission": {
       "type": "string",
       "pattern": "^(kv|repo|email|events|platform|stay:guest_contact:read|connectors:[a-z][a-z0-9-]*)$",
