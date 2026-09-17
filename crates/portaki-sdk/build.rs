@@ -41,6 +41,11 @@ fn main() {
 
     let mut enum_variants = String::new();
     let mut from_impls = String::new();
+    let mut type_name_arms = String::new();
+    let mut variant_name_arms = String::new();
+    let mut child_node_arms = String::new();
+    let mut type_names = String::new();
+    let mut variant_names = String::new();
 
     for primitive in &primitives {
         let struct_name = &primitive.name;
@@ -74,6 +79,18 @@ fn main() {
             "    #[serde(rename = \"{serde_name}\")]\n    {struct_name}({struct_name}),\n"
         ));
         from_impls.push_str(&impl_from_component(struct_name));
+        from_impls.push_str(&impl_sdui_primitive(struct_name, serde_name));
+        type_name_arms.push_str(&format!(
+            "            Component::{struct_name}(_) => \"{serde_name}\",\n"
+        ));
+        variant_name_arms.push_str(&format!(
+            "            Component::{struct_name}(_) => \"{struct_name}\",\n"
+        ));
+        type_names.push_str(&format!("        \"{serde_name}\",\n"));
+        variant_names.push_str(&format!("        \"{struct_name}\",\n"));
+        if let Some(arm) = child_node_arm(struct_name, has_children, fields) {
+            child_node_arms.push_str(&arm);
+        }
     }
 
     generated.push_str("/// Unified SDUI component tree node.\n");
@@ -85,6 +102,13 @@ fn main() {
     generated.push_str(&enum_variants);
     generated.push_str("}\n\n");
     generated.push_str(&from_impls);
+    generated.push_str(&impl_component_tree(
+        &type_names,
+        &variant_names,
+        &type_name_arms,
+        &variant_name_arms,
+        &child_node_arms,
+    ));
     generated.push_str(
         "impl Default for Component {\n\
          fn default() -> Self {\n\
@@ -97,6 +121,13 @@ fn main() {
     fs::write(&dest, generated).expect("write generated_sdui.rs");
     println!("cargo:rerun-if-changed=sdui_primitives.json");
 }
+
+/// Les types de `sdui/common.rs` qui portent un nœud dans `content: Option<Box<Component>>`.
+///
+/// `build.rs` ne lit que le contrat JSON, qui nomme ces types sans les décrire : il ne peut pas
+/// deviner qu'un `AccordionItem` contient un arbre. Le test `sdui_tree` relit `common.rs` et
+/// échoue si un type y porte un `Component` sans figurer ici.
+const NODE_ITEM_TYPES: [&str; 2] = ["AccordionItem", "TabItem"];
 
 #[derive(serde::Deserialize)]
 struct PrimitiveSpec {
@@ -202,6 +233,115 @@ fn impl_builder(name: &str, has_children: bool, fields: &BTreeMap<String, String
     }
     body.push_str("}\n\n");
     body
+}
+
+fn impl_sdui_primitive(name: &str, serde_name: &str) -> String {
+    format!(
+        "impl SduiPrimitive for {name} {{\n\
+         const TYPE_NAME: &'static str = \"{serde_name}\";\n\
+         fn from_component(node: &Component) -> Option<&Self> {{\n\
+         match node {{ Component::{name}(inner) => Some(inner), _ => None }}\n\
+         }}\n\
+         }}\n\n"
+    )
+}
+
+/// L'élément d'un champ `Vec<T>` ou `T`, tel que le contrat l'écrit.
+fn element_type(ty: &str) -> (&str, bool) {
+    match ty.strip_prefix("Vec<").and_then(|t| t.strip_suffix('>')) {
+        Some(inner) => (inner, true),
+        None => (ty, false),
+    }
+}
+
+/// Le bras de `Component::child_nodes` d'un primitif, ou `None` s'il ne porte aucun nœud.
+///
+/// Trois sources, dans cet ordre : les champs typés `Component` ou `Vec<Component>`, le
+/// `content` des éléments de [`NODE_ITEM_TYPES`] (champs dans l'ordre du contrat), puis
+/// `children`.
+fn child_node_arm(
+    name: &str,
+    has_children: bool,
+    fields: &BTreeMap<String, String>,
+) -> Option<String> {
+    let mut body = String::new();
+    for (field, ty) in fields {
+        let (element, is_vec) = element_type(ty);
+        let line = match (element, is_vec) {
+            // `Component` seul devient `Box<Component>` (voir `rust_type`).
+            ("Component", false) => {
+                format!("if let Some(node) = inner.{field}.as_deref() {{ nodes.push(node); }}")
+            }
+            ("Component", true) => {
+                format!("if let Some(items) = &inner.{field} {{ nodes.extend(items.iter()); }}")
+            }
+            (item, false) if NODE_ITEM_TYPES.contains(&item) => format!(
+                "if let Some(node) = inner.{field}.as_ref().and_then(|i| i.content.as_deref()) \
+                 {{ nodes.push(node); }}"
+            ),
+            (item, true) if NODE_ITEM_TYPES.contains(&item) => format!(
+                "if let Some(items) = &inner.{field} {{ \
+                 nodes.extend(items.iter().filter_map(|i| i.content.as_deref())); }}"
+            ),
+            _ => continue,
+        };
+        body.push_str("                ");
+        body.push_str(&line);
+        body.push('\n');
+    }
+    if has_children {
+        body.push_str("                nodes.extend(inner.children.iter());\n");
+    }
+    if body.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "            Component::{name}(inner) => {{\n{body}            }}\n"
+    ))
+}
+
+fn impl_component_tree(
+    type_names: &str,
+    variant_names: &str,
+    type_name_arms: &str,
+    variant_name_arms: &str,
+    child_node_arms: &str,
+) -> String {
+    let node_item_types = NODE_ITEM_TYPES
+        .iter()
+        .map(|ty| format!("\"{ty}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "impl Component {{\n\
+         /// Every primitive `type` declared by the contract, in contract order.\n\
+         pub const TYPE_NAMES: &'static [&'static str] = &[\n{type_names}    ];\n\n\
+         /// Every Rust variant name, in contract order (same index as [`Self::TYPE_NAMES`]).\n\
+         pub const VARIANT_NAMES: &'static [&'static str] = &[\n{variant_names}    ];\n\n\
+         /// Wire name of this node: the `type` field of its JSON (`\"Surface\"` for\n\
+         /// [`SurfacePrimitive`]).\n\
+         pub fn type_name(&self) -> &'static str {{\n\
+         match self {{\n{type_name_arms}        }}\n\
+         }}\n\n\
+         /// Rust variant name of this node (`\"SurfacePrimitive\"` for the `Surface` primitive).\n\
+         pub fn variant_name(&self) -> &'static str {{\n\
+         match self {{\n{variant_name_arms}        }}\n\
+         }}\n\n\
+         /// Direct child nodes, in order: fields holding a node (such as `Split::left`, or the\n\
+         /// `content` of `Accordion` and `Tabs` items), then `children`.\n\
+         ///\n\
+         /// Generated from `sdui_primitives.json`, so every primitive able to hold a node is\n\
+         /// covered.\n\
+         pub fn child_nodes(&self) -> Vec<&Component> {{\n\
+         let mut nodes: Vec<&Component> = Vec::new();\n\
+         match self {{\n{child_node_arms}            _ => {{}}\n        }}\n\
+         nodes\n\
+         }}\n\
+         }}\n\n\
+         /// Types of `sdui/common.rs` whose `content` field holds a nested node.\n\
+         #[doc(hidden)]\n\
+         pub const NODE_ITEM_TYPES: &[&str] = &[{node_item_types}];\n"
+    )
 }
 
 fn impl_from_component(name: &str) -> String {
