@@ -8,8 +8,13 @@
 //! 3. Invokes the author's function and serializes the return value.
 //! 4. Maps errors to `PortakiError::Host` with `wasm_params_invalid` / `wasm_handler_failed` prefixes.
 //!
-//! Registration is wrapped in `#[cfg(target_arch = "wasm32")]` so host `cargo test` builds do not
-//! require the `inventory` collector.
+//! Two registrations, one per target:
+//!
+//! - `wasm32`: a `HandlerRegistration` the Extism entry points dispatch through — unchanged, so a
+//!   module binary carries nothing more than before.
+//! - every other target: a `HandlerDeclaration` that also says what the handler is (query, command,
+//!   surface and its context). Native `cargo test` reads it: the conformance battery of
+//!   `portaki-test-utils` enumerates what a module declares from there, without a hand-kept list.
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -20,6 +25,10 @@ pub fn register_query(operation_name: &str, fn_name: &str, function_item: &ItemF
     register_handler(
         &[operation_name, fn_name],
         HandlerKind::Query,
+        Declared {
+            name: operation_name,
+            context: "",
+        },
         function_item,
     )
 }
@@ -33,13 +42,38 @@ pub fn register_command(
     register_handler(
         &[operation_name, fn_name],
         HandlerKind::Command,
+        Declared {
+            name: operation_name,
+            context: "",
+        },
         function_item,
     )
 }
 
 /// Registers a surface renderer (`render_fn` symbol only).
-pub fn register_surface(render_fn: &str, function_item: &ItemFn) -> TokenStream2 {
-    register_handler(&[render_fn], HandlerKind::Surface, function_item)
+pub fn register_surface(
+    context: &str,
+    surface_id: &str,
+    render_fn: &str,
+    function_item: &ItemFn,
+) -> TokenStream2 {
+    register_handler(
+        &[render_fn],
+        HandlerKind::Surface,
+        Declared {
+            name: surface_id,
+            context,
+        },
+        function_item,
+    )
+}
+
+/// What the attribute declared, carried into the native declaration.
+struct Declared<'a> {
+    /// Operation name, or surface id.
+    name: &'a str,
+    /// `guest` / `host` for a surface, empty otherwise.
+    context: &'a str,
 }
 
 enum HandlerKind {
@@ -48,8 +82,21 @@ enum HandlerKind {
     Surface,
 }
 
-fn register_handler(names: &[&str], kind: HandlerKind, function_item: &ItemFn) -> TokenStream2 {
+fn register_handler(
+    names: &[&str],
+    kind: HandlerKind,
+    declared: Declared<'_>,
+    function_item: &ItemFn,
+) -> TokenStream2 {
     let fn_ident = &function_item.sig.ident;
+    let fn_name = fn_ident.to_string();
+    let declared_name = declared.name;
+    let declared_context = declared.context;
+    let kind_tokens = match kind {
+        HandlerKind::Query => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Query },
+        HandlerKind::Command => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Command },
+        HandlerKind::Surface => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Surface },
+    };
     let shim_ident = format_ident!("__portaki_shim_{}", fn_ident);
     let name_literals: Vec<_> = names.iter().map(|n| quote! { #n }).collect();
 
@@ -117,6 +164,17 @@ fn register_handler(names: &[&str], kind: HandlerKind, function_item: &ItemFn) -
         ::portaki_sdk::inventory::submit! {
             ::portaki_sdk::wasm::HandlerRegistration {
                 operation_names: &[ #(#name_literals),* ],
+                dispatch: #shim_ident,
+            }
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        ::portaki_sdk::inventory::submit! {
+            ::portaki_sdk::wasm::registry::HandlerDeclaration {
+                kind: #kind_tokens,
+                name: #declared_name,
+                context: #declared_context,
+                fn_name: #fn_name,
                 dispatch: #shim_ident,
             }
         }

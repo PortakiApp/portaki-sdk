@@ -23,6 +23,7 @@
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#conformance-battery">Conformance</a> ·
   <a href="#what-you-get">What you get</a> ·
   <a href="#documentation">Docs</a> ·
   <a href="#license">License</a>
@@ -73,6 +74,26 @@ MockContext::guest()
     .run(|_ctx| { /* OpenWeather::current reads the stub */ });
 ```
 
+## Conformance battery
+
+Every module runs the same checks, from one file — `tests/conformance.rs`:
+
+```rust,ignore
+portaki_test_utils::conformance!();
+```
+
+It generates one test per check under `portaki_conformance::`. `portaki publish` runs them and refuses to publish while one fails.
+
+| Test | Fails when |
+|------|------------|
+| `manifest` | `portaki.module.json` does not validate against `module.v1.json` (bundled, no network) |
+| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell, sends a tree that does not parse as contract primitives, or a `guestSurfaces[].surfaceId` has no guest surface |
+| `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
+| `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/` |
+| `emails` | an `emails[]` command is not declared or panics around a mock stay, or `emailContext` panics for a template key |
+
+The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#[command]` and `#[surface]` register on native targets: nothing to list by hand. It needs `portaki-sdk-macros` from the same release. Not checked: the sandbox clock (`Utc::now()` runs natively — use clippy's `disallowed-methods`), `portaki_module!` display keys, and `#[event_handler]`s.
+
 ## What you get
 
 | Type | Role |
@@ -81,6 +102,7 @@ MockContext::guest()
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |
+| `conformance!` / `conformance::Module` | The shared battery: manifest, surfaces, operations, i18n, emails |
 
 ## Documentation
 

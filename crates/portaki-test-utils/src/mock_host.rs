@@ -102,7 +102,7 @@ use crate::fixtures::Property;
 /// isolated invocations (each `run` installs a fresh host scope).
 #[derive(Debug, Clone, Default)]
 pub struct MockContextBuilder {
-    context: Context,
+    pub(crate) context: Context,
     translations: HashMap<String, String>,
     kv: HashMap<String, Vec<u8>>,
     connector_responses: HashMap<(String, String), String>,
@@ -263,6 +263,7 @@ impl MockContextBuilder {
             connector_responses: self.connector_responses,
             connector_errors: self.connector_errors,
             connector_calls: Mutex::new(Vec::new()),
+            translated_keys: Mutex::new(Vec::new()),
             now: self.now,
             email_send_calls: Mutex::new(0),
             sent_emails: Mutex::new(Vec::new()),
@@ -316,6 +317,7 @@ pub struct MockHostFunctions {
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
     connector_calls: Mutex<Vec<ConnectorCall>>,
+    translated_keys: Mutex<Vec<String>>,
     now: Option<DateTime<Utc>>,
     email_send_calls: Mutex<usize>,
     sent_emails: Mutex<Vec<SendEmailArgs>>,
@@ -328,6 +330,17 @@ impl MockHostFunctions {
         self.connector_calls
             .lock()
             .expect("connector calls lock")
+            .clone()
+    }
+
+    /// Every key the module asked `host::i18n` to translate, in order — repeats included.
+    ///
+    /// The mock answers with the key itself when no translation is seeded, so a missing entry in
+    /// the module's bundles goes unnoticed in a rendered tree; this is where it shows.
+    pub fn translated_keys(&self) -> Vec<String> {
+        self.translated_keys
+            .lock()
+            .expect("translated keys lock")
             .clone()
     }
 
@@ -379,6 +392,10 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn i18n_translate(&self, key: &str, vars_json: &str) -> Result<String> {
+        self.translated_keys
+            .lock()
+            .expect("translated keys lock")
+            .push(key.to_string());
         let mut text = self
             .translations
             .get(key)

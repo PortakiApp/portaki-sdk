@@ -81,6 +81,13 @@ pub const SDUI_PRIMITIVES_JSON: &str = include_str!("../sdui_primitives.json");
 /// shims submit [`wasm::HandlerRegistration`] entries at link time.
 pub use inventory;
 
+/// Links the module crate under test into an integration test binary — `extern crate <lib> as _;`.
+///
+/// Not for module authors: `portaki_test_utils::conformance!` expands to it. A test binary only
+/// links the crates it names, and handler declarations of a crate that is not linked are invisible.
+#[doc(hidden)]
+pub use portaki_sdk_macros::link_module_crate as __link_module_crate;
+
 pub use capability::CapabilityId;
 pub use context::{
     Context, DisplayPreferences, GuestContext, GuestIdentity, HostContext, PlanInfo,

@@ -22,7 +22,8 @@
 //!
 //! ## Contract
 //!
-//! - Handler registration is static via `inventory` — see [`registry::HandlerRegistration`].
+//! - Handler registration is static via `inventory` — see [`registry::HandlerRegistration`], and
+//!   [`registry::HandlerDeclaration`] for what native tests read.
 //! - Query/command handlers return JSON [`serde_json::Value`] serialized back to the host.
 //! - Surface renders return SDUI JSON from the handler shim (not through `portaki_query`).
 //!
@@ -53,4 +54,4 @@ pub mod extism_host;
 pub mod registry;
 
 pub use envelope::{WasmContextEnvelope, WasmRequestEnvelope};
-pub use registry::{HandlerRegistration, WasmHandlerFn};
+pub use registry::{HandlerDeclaration, HandlerKind, HandlerRegistration, WasmHandlerFn};

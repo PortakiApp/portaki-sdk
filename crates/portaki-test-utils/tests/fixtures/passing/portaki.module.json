@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "fixture-passing",
+  "name": { "fr": "Module témoin", "en": "Fixture module" },
+  "description": { "fr": "Passe la batterie de conformité.", "en": "Passes the conformance battery." },
+  "version": "0.1.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "check",
+  "type": "official",
+  "permissions": ["kv", "email"],
+  "hostSurfaces": [
+    {
+      "type": "property-workspace-tab",
+      "pathSegment": "fixture-passing",
+      "label": { "fr": "Témoin", "en": "Fixture" }
+    }
+  ],
+  "guestSurfaces": [
+    { "surfaceId": "explore.detail", "path": "fixture-passing/detail", "labelKey": "nav.fixture" }
+  ],
+  "emails": [
+    {
+      "id": "reminder",
+      "audience": "guest",
+      "command": "sendReminder",
+      "trigger": { "type": "relativeToCheckIn", "offset": "-P1D" },
+      "requiresGuestEmail": true
+    }
+  ]
+}
