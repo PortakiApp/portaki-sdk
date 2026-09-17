@@ -572,7 +572,7 @@ pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
 }
 
 /// Rend la sortie d'un outil sans la maquiller : c'est elle qu'on lit pour corriger.
-fn emit_captured(bytes: &[u8]) {
+pub(crate) fn emit_captured(bytes: &[u8]) {
     let text = String::from_utf8_lossy(bytes);
     let text = text.trim_end();
     if text.is_empty() {

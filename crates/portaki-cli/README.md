@@ -207,6 +207,12 @@ PORTAKI_PUBLISH_VERSION=0.3.5 portaki publish --registry ghcr.io/portakiapp
 
 Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>`.
 
+`publish` runs the module's tests first — `cargo test` in the module crate, on the host — and
+refuses to build or push anything when they fail, or when the conformance battery
+(`tests/conformance.rs` with `portaki_test_utils::conformance!();`) is not among them. `--dry-run`
+and `--skip-build` run them too; there is no flag to skip them. Only `--announce-only`, which
+compiles and pushes nothing, does not.
+
 `publish` refuses a version the registry already holds, **before** pushing anything. Publications
 are immutable, so a second push could only leave the OCI tag pointing at something the catalogue
 does not reference — two sources of truth disagreeing, with nothing to say so. That covers a

@@ -1,6 +1,11 @@
 //! `portaki publish` — OCI push via `oci-distribution` (ORAS-compatible layout).
 //!
-//! Always runs `portaki build --release` first (unless `--skip-build`) so the OCI catalog layer
+//! Runs the module's tests first — `cargo test` on the host, the conformance battery of
+//! `portaki_test_utils::conformance!()` required among them — and refuses to go further when they
+//! fail. `--dry-run` and `--skip-build` run them too; only `--announce-only`, which compiles and
+//! pushes nothing, does not.
+//!
+//! Then runs `portaki build --release` (unless `--skip-build`) so the OCI catalog layer
 //! comes from `target/portaki/publish-manifest.json`, not a hand-edited repo file at publish time.
 //!
 //! Authenticates with `GITHUB_TOKEN` / `GHCR_TOKEN` or Docker `~/.docker/config.json`.
@@ -22,6 +27,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::commands::build::{self, BuildArgs};
+use crate::commands::test;
 use crate::{auth, oci, oidc, ui};
 
 #[derive(Debug, Parser)]
@@ -31,13 +37,13 @@ pub struct PublishArgs {
     /// for any other author.
     #[arg(long)]
     pub registry: Option<String>,
-    /// Validate packaging without pushing.
+    /// Run the tests and validate packaging without pushing.
     #[arg(long)]
     pub dry_run: bool,
     /// Artifact directory (defaults to `target/portaki`).
     #[arg(long)]
     pub artifact_dir: Option<PathBuf>,
-    /// Skip the implicit `portaki build --release` (not recommended).
+    /// Skip the implicit `portaki build --release` (not recommended). The tests still run.
     #[arg(long)]
     pub skip_build: bool,
     /// Release channel at the Portaki registry.
@@ -109,6 +115,12 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     );
 
     let module_root = std::env::current_dir().context("current_dir")?;
+    run_in(&module_root, args).await
+}
+
+/// `portaki publish` for the module in `module_root`.
+async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
+    let module_root = module_root.to_path_buf();
     let artifact_dir = args
         .artifact_dir
         .clone()
@@ -127,6 +139,13 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         ui::field("digest", &pushed.digest);
         return announce(&args, &coords, &pushed).await;
     }
+
+    // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie de
+    // conformité est ce que tous les modules doivent à la plateforme. Pas de drapeau pour
+    // l'éviter — `--skip-build` saute un artefact qu'un job précédent a produit, et les tests ne
+    // sont pas un artefact qu'on se passe.
+    test::gate_publish(&module_root).context("tests before publish")?;
+    ui::blank();
 
     if args.skip_build {
         ui::skipped("build skipped (--skip-build)");
@@ -475,6 +494,66 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    /// A module whose tests fail: no build, no packing, no push — whatever the flags.
+    fn module_with_failing_tests() -> tempfile::TempDir {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"failing-publish\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+        )
+        .unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        fs::write(dir.path().join("src/lib.rs"), "").unwrap();
+        fs::create_dir_all(dir.path().join("tests")).unwrap();
+        fs::write(
+            dir.path().join("tests/conformance.rs"),
+            "mod portaki_conformance { #[test] fn surfaces() { panic!(\"home.card panicked\") } }\n",
+        )
+        .unwrap();
+        dir
+    }
+
+    fn publish_args(flags: &[&str]) -> PublishArgs {
+        let mut argv = vec!["publish", "--registry", "ghcr.io/someone"];
+        argv.extend_from_slice(flags);
+        PublishArgs::try_parse_from(argv).unwrap()
+    }
+
+    /// The release action publishes with `--skip-build` after its own build, and `--dry-run` is
+    /// what a pull request runs: both must stop at failing tests, before any packing.
+    #[tokio::test]
+    async fn failing_tests_stop_every_publication_path() {
+        for flags in [
+            &["--dry-run"][..],
+            &["--skip-build"][..],
+            &["--dry-run", "--skip-build"][..],
+            &[][..],
+        ] {
+            let module = module_with_failing_tests();
+
+            let error = run_in(module.path(), publish_args(flags))
+                .await
+                .unwrap_err();
+
+            let chain = format!("{error:#}");
+            assert!(chain.contains("tests before publish"), "{flags:?}: {chain}");
+            assert!(chain.contains("tests fail"), "{flags:?}: {chain}");
+            assert!(
+                !module.path().join("target/portaki").exists(),
+                "{flags:?}: nothing may be built or packed once the tests fail"
+            );
+        }
+    }
+
+    /// Announcing a version already on GHCR compiles nothing: there is nothing to test.
+    #[test]
+    fn announce_only_does_not_take_the_other_flags() {
+        assert!(PublishArgs::try_parse_from(["publish", "--announce-only", "--dry-run"]).is_err());
+        assert!(
+            PublishArgs::try_parse_from(["publish", "--announce-only", "--skip-build"]).is_err()
+        );
+    }
 
     fn module_with_author(author_type: &str) -> tempfile::TempDir {
         let dir = tempdir().unwrap();
