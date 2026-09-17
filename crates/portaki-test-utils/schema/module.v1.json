@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "title": "Portaki module catalogue manifest (portaki.module.json)",
+  "type": "object",
+  "required": ["id", "name", "description", "version", "author", "icon", "type"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "name": { "$ref": "#/$defs/i18nStringMap" },
+    "description": { "$ref": "#/$defs/i18nStringMap" },
+    "details": { "$ref": "#/$defs/i18nStringMap" },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
+    },
+    "author": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "icon": { "type": "string" },
+    "type": { "type": "string" },
+    "maturity": {
+      "type": "string",
+      "enum": ["stable", "beta"],
+      "default": "stable",
+      "description": "Marketplace maturity. stable modules sort before beta; beta modules show a Beta badge in the host marketplace."
+    },
+    "sortOrder": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Marketplace sort key within a maturity band (lower first). Defaults to 1000 when omitted."
+    },
+    "license": { "type": "string" },
+    "requiresModuleSdk": {
+      "type": "string",
+      "description": "Minimum version of the Portaki module SDK this module compiles against — the Rust crate portaki-sdk, published on crates.io. Renamed from requiresHostSdk, which did not say which SDK it meant: an npm @portaki/sdk also describes itself as the module SDK and carries an unrelated version line (3.2.1 against the crate 2.1.1).",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, i18n.translate, log.",
+      "items": { "$ref": "#/$defs/permission" }
+    },
+    "queries": {
+      "type": "array",
+      "description": "Read-only operations the module exports. Never hand-written: stamped from the build output at publish time, because only the build knows what the binary serves — a wasm module exports portaki_query and nothing else. The platform reads this to know which module to ask for a given operation, instead of dispatching blind and collecting wasm_handler_not_found from the ones that stay silent.",
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Mutating operations the module exports. Same provenance as queries.",
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "hostSurfaces": {
+      "type": "array",
+      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (stats strip), stay-detail (SDUI embed on stay detail with stayId input), stay-action (stay detail button that opens a modal hosting module SDUI).",
+      "items": { "$ref": "#/$defs/hostSurface" }
+    },
+    "guestSurfaces": {
+      "type": "array",
+      "description": "Guest booklet URL routes beyond the implicit home.card (path may include :params).",
+      "items": { "$ref": "#/$defs/guestSurface" }
+    },
+    "emails": {
+      "type": "array",
+      "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches after draft publish; catchUpOnConfigUpdate after host updateConfig (promotes module KV then redispatches); dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
+      "items": { "$ref": "#/$defs/moduleEmail" }
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["guest", "host"],
+      "default": "guest",
+      "description": "Who the module works for. host modules (e.g. calendar import) are never shown to guests and cannot be placed on the booklet board. Any other value is read as guest."
+    },
+    "hostScheduledSync": {
+      "type": "object",
+      "description": "Host-side sync the platform runs on a schedule (and on demand), without business logic in the API. With platformFetch, the platform calls sourcesQuery to list what to fetch, downloads it, then hands the payloads to applyQuery; both are then required. Without it, the platform runs the module host action hostAction, then stayImportQuery if set to import the resulting stays.",
+      "properties": {
+        "hostAction": {
+          "type": "string",
+          "default": "sync",
+          "description": "Host action the platform runs when platformFetch is false. A host action with this name is treated as the scheduled sync."
+        },
+        "stayImportQuery": {
+          "type": "string",
+          "description": "Query read after hostAction to import stays, when platformFetch is false."
+        },
+        "platformFetch": {
+          "type": "boolean",
+          "default": false,
+          "description": "The platform fetches the sources, not the module."
+        },
+        "sourcesQuery": {
+          "type": "string",
+          "description": "Query listing the sources to fetch, when platformFetch is true."
+        },
+        "applyQuery": {
+          "type": "string",
+          "description": "Query receiving the fetched payloads, when platformFetch is true."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "operation": {
+      "type": "object",
+      "description": "An operation the module exports, stamped from the build output by `portaki build` — never hand-written. Same shape as portaki_sdk::manifest::ManifestQuery and ManifestCommand.",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The name the platform dispatches, e.g. mapMarkers." },
+        "fn": { "type": "string", "description": "The Rust function serving it, e.g. map_markers." },
+        "args": { "type": "string", "description": "The argument type name, when the handler takes one." },
+        "params": { "type": "object", "description": "The argument fields, when that type carries #[portaki_sdk::params]. Descriptive only: the platform never validates a dispatch against it." }
+      }
+    },
+    "permission": {
+      "type": "string",
+      "pattern": "^(kv|repo|email|events|platform|stay:guest_contact:read|connectors:[a-z][a-z0-9-]*)$",
+      "description": "kv — kv.get/set/delete/list, the module's own key-value namespace. repo — repo.find/create/delete over the module's own isolated schema; implies module-owned tables, reserved to official modules during beta. email — email.send, which reaches real guests. events — events.emit, which publishes to the platform outbox. platform — capabilities.has, module.status, module.listByCapability. stay:guest_contact:read — the guest's email and phone on the invocation stay context; the rest of the stay (dates, channel, party size, announced arrival, guest language) needs no permission. Not needed to email the guest: email.send with the guest audience lets the platform resolve the address. connectors:<id> — connector.call restricted to that connector (e.g. connectors:nuki); the credential resolver refuses any connector not listed here."
+    },
+    "i18nStringMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "hostSurface": {
+      "type": "object",
+      "required": ["type", "pathSegment", "label"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "property-workspace-tab | property-module-sheet | property-stats-card | stay-detail | stay-action"
+        },
+        "pathSegment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id)."
+        },
+        "label": { "$ref": "#/$defs/i18nStringMap" },
+        "icon": { "type": "string" },
+        "hostUi": {
+          "type": "object",
+          "properties": {
+            "designId": { "type": "string" }
+          }
+        }
+      }
+    },
+    "moduleEmail": {
+      "type": "object",
+      "required": ["id", "trigger"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable delivery id (dedup key with module + stay)"
+        },
+        "audience": {
+          "type": "string",
+          "description": "guest | host | propertyEligibleGuests"
+        },
+        "description": { "$ref": "#/$defs/i18nStringMap" },
+        "command": {
+          "type": "string",
+          "description": "Wasm command to dispatch (e.g. sendFormAvailable); module owns gate + email body"
+        },
+        "catchUpOnPropertyPublish": {
+          "type": "boolean",
+          "description": "When true, platform redispatches command for upcoming/active property stays after draft publish"
+        },
+        "catchUpOnConfigUpdate": {
+          "type": "boolean",
+          "description": "When true, after host updateConfig the platform promotes module KV draft then redispatches for upcoming/active property stays (Save without property Publish)"
+        },
+        "dispatchOnStayCreated": {
+          "type": "boolean",
+          "description": "When true, platform dispatches command on StayCreated"
+        },
+        "trigger": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string" },
+            "offset": { "type": "string" },
+            "atLocalTime": { "type": "string" },
+            "command": { "type": "string" },
+            "catchUpOnPropertyPublish": { "type": "boolean" },
+            "catchUpOnConfigUpdate": { "type": "boolean" },
+            "dispatchOnStayCreated": { "type": "boolean" }
+          }
+        },
+        "requiresGuestEmail": { "type": "boolean" },
+        "skipWhen": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "guestSurface": {
+      "type": "object",
+      "required": ["surfaceId", "path"],
+      "properties": {
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Wasm/guest surface id (e.g. explore.detail, explore.item)"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Guest URL path under /p/[accessKey]/ (e.g. appliances, appliances/:deviceId)"
+        },
+        "labelKey": {
+          "type": "string",
+          "description": "i18n key for booklet nav label (e.g. nav.appliances)"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["card", "arrival-formality", "post-stay", "upcoming"],
+          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form) | post-stay (rendered on the dedicated end-of-stay screen once the stay is over) | upcoming (compact prep card rendered on the pre-arrival timeline before check-in)"
+        },
+        "embedsHostFragments": {
+          "type": "array",
+          "description": "Host fragment ids this surface composes (e.g. regulatory.police-form). Shells skip standalone host UI for those fragments when such a surface is enabled.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

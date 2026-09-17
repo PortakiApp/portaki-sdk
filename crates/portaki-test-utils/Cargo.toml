@@ -23,3 +23,6 @@ chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
+# La batterie de conformité valide `portaki.module.json` contre le schéma embarqué : pas de
+# résolution réseau, donc sans les features par défaut (reqwest, rustls).
+jsonschema = { version = "0.56", default-features = false }

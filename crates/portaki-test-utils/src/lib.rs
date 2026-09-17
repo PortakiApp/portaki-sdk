@@ -62,12 +62,20 @@
 //! - [`MockContextBuilder`] / [`MockHostFunctions`] — mock host installation
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
 //! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
+//! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, surfaces,
+//!   operations, i18n, emails
 
 #![deny(missing_docs)]
 
 mod assertions;
+pub mod conformance;
 mod fixtures;
 mod mock_host;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use portaki_sdk;
+}
 
 pub use assertions::{PrimitiveTag, SurfaceAssertions};
 pub use fixtures::{Booking, GuestIdentityFixture, Property};

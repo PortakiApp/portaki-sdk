@@ -49,8 +49,10 @@
 //! `portaki_module` additionally emits Extism export shims (`portaki_query`, `portaki_command`) and
 //! a `__getrandom_v03_custom` hook when `target_arch = "wasm32"`.
 //!
-//! `query`, `command`, and `surface` emit `inventory::submit!` handler registrations (Wasm only)
-//! that wire manifest operation names to the annotated Rust function via JSON dispatch.
+//! `query`, `command`, and `surface` emit `inventory::submit!` handler registrations that wire
+//! manifest operation names to the annotated Rust function via JSON dispatch — a
+//! `HandlerRegistration` on `wasm32`, a `HandlerDeclaration` (with the handler's kind and surface
+//! context) on native targets, where the test-utils conformance battery reads it.
 
 #![deny(missing_docs)]
 
@@ -60,6 +62,7 @@ mod connector;
 mod emit;
 mod entity;
 mod event_handler;
+mod link;
 mod module;
 mod params;
 mod query;
@@ -562,4 +565,16 @@ pub fn wire(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn connector_op(attr: TokenStream, item: TokenStream) -> TokenStream {
     connector::expand_op(attr, item)
+}
+
+/// `extern crate <this package's lib> as _;` — hidden, for `portaki_test_utils::conformance!`.
+///
+/// Expanded inside an integration test of a module package, it names the package's library so the
+/// test binary links it, and with it the handler declarations the conformance battery reads. The
+/// library name comes from `[lib] name` in `Cargo.toml`, else the package name with `-` → `_`.
+/// An explicit identifier (`link_module_crate!(my_lib)`) wins over both.
+#[doc(hidden)]
+#[proc_macro]
+pub fn link_module_crate(input: TokenStream) -> TokenStream {
+    link::expand(input)
 }

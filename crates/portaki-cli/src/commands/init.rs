@@ -124,6 +124,10 @@ fn describe(template: &InitTemplate) {
         ));
         rows.push(("src/config.rs", "the settings blob, in the module's own KV"));
         rows.push(("tests/", "the mock host, the settings round-tripped"));
+        rows.push((
+            "tests/conformance.rs",
+            "the battery every module passes before it publishes",
+        ));
     }
     rows.push((
         "i18n/*.json",
@@ -386,6 +390,10 @@ mod tests {
             fs::read_to_string(dest.join("tests/integration.rs")).expect("tests written");
         assert!(integration.contains("use concierge::{"));
         assert!(!integration.contains("{{"));
+        // Every new module runs the conformance battery `portaki publish` gates on.
+        let conformance =
+            fs::read_to_string(dest.join("tests/conformance.rs")).expect("battery written");
+        assert!(conformance.contains("portaki_test_utils::conformance!();"));
         let catalog =
             fs::read_to_string(dest.join("portaki.module.json")).expect("catalogue written");
         assert!(catalog.contains("\"id\": \"concierge\""));

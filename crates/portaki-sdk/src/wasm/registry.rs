@@ -41,3 +41,45 @@ pub fn find_handler(operation: &str) -> Option<&'static HandlerRegistration> {
     }
     None
 }
+
+/// What a handler is, as its attribute declared it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HandlerKind {
+    /// `#[query(name = "…")]`.
+    Query,
+    /// `#[command(name = "…")]`.
+    Command,
+    /// `#[surface(guest|host, id = "…")]`.
+    Surface,
+}
+
+/// One handler as its attribute declared it — native targets only.
+///
+/// The Wasm binary dispatches by name through [`HandlerRegistration`] and needs nothing else. A
+/// native test does: to exercise every surface a module declares, it has to know which handlers
+/// are surfaces, and in which shell they render. `query`, `command` and `surface` submit one of
+/// these on every target but `wasm32`, so a module binary is unchanged.
+///
+/// Read with [`declarations`]; `portaki-test-utils`'s conformance battery is the intended reader.
+pub struct HandlerDeclaration {
+    /// Query, command or surface.
+    pub kind: HandlerKind,
+    /// The operation name (`getConfig`), or the surface id (`home.card`).
+    pub name: &'static str,
+    /// `guest` or `host` for a surface; empty for a query or a command.
+    pub context: &'static str,
+    /// The Rust function behind it (`render_home_card`).
+    pub fn_name: &'static str,
+    /// The same shim the Wasm entry points call: typed args from JSON, result to JSON.
+    pub dispatch: WasmHandlerFn,
+}
+
+inventory::collect!(HandlerDeclaration);
+
+/// Every handler the linked module crates declared, in no particular order.
+///
+/// Empty on `wasm32`, where handlers register as [`HandlerRegistration`] only. A crate is only in
+/// the list once it is linked: a test binary that never names the module crate sees nothing.
+pub fn declarations() -> impl Iterator<Item = &'static HandlerDeclaration> {
+    inventory::iter::<HandlerDeclaration>.into_iter()
+}
