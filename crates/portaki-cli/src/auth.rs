@@ -73,7 +73,7 @@ pub async fn refresh() -> Result<String> {
         None => bail!("no refresh token stored — run `portaki login`"),
     };
 
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .post(format!("{}/api/v1/auth/refresh", api_base_url(None)))
         .json(&serde_json::json!({ "refreshToken": refresh_token }))
         .send()

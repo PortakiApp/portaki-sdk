@@ -256,7 +256,7 @@ struct PublishedVersion {
 
 /// Le digest publié pour cette version, s'il y en a un.
 async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<String> {
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .get(format!(
             "{}/registry/v1/modules/{module_id}/versions",
             base.trim_end_matches('/')
@@ -411,7 +411,7 @@ enum Outcome {
 }
 
 async fn post_publication(base: &str, body: &serde_json::Value, token: &str) -> Result<Outcome> {
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .post(format!(
             "{}/registry/v1/publications",
             base.trim_end_matches('/')

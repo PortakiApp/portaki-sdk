@@ -406,7 +406,9 @@ pub(crate) async fn deploy(
         form = form.text("sessionId", session.to_owned());
     }
 
-    let response = reqwest::Client::new()
+    // Patient : un `.wasm` de plusieurs mégaoctets part d'ici, et le couper au bout de quinze
+    // secondes casserait le déploiement normal. L'échéance de connexion, elle, reste courte.
+    let response = crate::http::patient_client()
         .post(format!(
             "{}/dev/v1/modules/{module_id}/dev-deploy",
             base_url
@@ -427,7 +429,7 @@ pub(crate) async fn deploy(
 /// — c'est une ligne qu'on retire, pas un artefact qu'on remplace.
 async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
     let forgetting = ui::step(format!("forgetting {module_id}"));
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .delete(format!("{base_url}/dev/v1/modules/{module_id}/dev-deploy"))
         .bearer_auth(token)
         .send()
@@ -502,7 +504,8 @@ async fn dispatch(
         "kind": args.kind,
         "paramsJson": args.params,
     });
-    let response = reqwest::Client::new()
+    // Patient aussi : la plateforme exécute l'opération avant de répondre.
+    let response = crate::http::patient_client()
         .post(format!("{}/dev/v1/modules/{module_id}/dispatch", base_url))
         .bearer_auth(token)
         .json(&body)

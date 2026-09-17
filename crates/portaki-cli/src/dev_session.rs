@@ -82,7 +82,7 @@ impl Release {
         let Some(holder) = &self.lease else {
             return;
         };
-        let _ = reqwest::Client::new()
+        let _ = crate::http::client()
             .delete(format!("{}/dev/v1/dev-watch", holder.base_url))
             .query(&[("sessionId", &holder.session_id)])
             .bearer_auth(&holder.token)
@@ -165,7 +165,7 @@ enum Kept {
 }
 
 async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .put(format!("{}/dev/v1/dev-watch", holder.base_url))
         .bearer_auth(&holder.token)
         .json(&serde_json::json!({
