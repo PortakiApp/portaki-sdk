@@ -415,7 +415,7 @@ impl Sandbox {
         };
         deploying.done(format!("deployed {}", dev::short(&deployed.digest)));
 
-        let client = reqwest::Client::new();
+        let client = crate::http::client();
         let surfaces: Vec<DeclaredSurface> = dev::read_json(
             client
                 .get(format!(
@@ -470,7 +470,7 @@ impl Sandbox {
             detail: String,
         }
         let report: Report = dev::read_json(
-            reqwest::Client::new()
+            crate::http::client()
                 .get(format!(
                     "{}/dev/v1/modules/{}/conformance",
                     self.base_url, self.module_id
@@ -553,7 +553,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         None => {
             let reading = ui::step("reading the SDK releases the platform serves");
             let releases: Vec<SdkRelease> = dev::read_json(
-                reqwest::Client::new()
+                crate::http::client()
                     .get(format!("{base_url}/registry/v1/sdk-releases"))
                     .send()
                     .await

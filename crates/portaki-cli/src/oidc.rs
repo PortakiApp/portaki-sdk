@@ -49,7 +49,7 @@ pub async fn request_token(audience: &str) -> Result<String> {
     let url = non_empty(REQUEST_URL).context("ACTIONS_ID_TOKEN_REQUEST_URL absent")?;
     let bearer = non_empty(REQUEST_TOKEN).context("ACTIONS_ID_TOKEN_REQUEST_TOKEN absent")?;
 
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .get(url)
         .query(&[("audience", audience)])
         .header("Authorization", format!("bearer {bearer}"))
@@ -81,7 +81,7 @@ pub async fn exchange(
     channel: &str,
     oidc_token: &str,
 ) -> Result<String> {
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .post(format!(
             "{}/registry/v1/publications/token",
             base.trim_end_matches('/')

@@ -9,9 +9,22 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 
-use crate::{auth, ui};
+use crate::{auth, http, ui};
 
 const CLIENT_ID: &str = "portaki-cli";
+
+/// Combien d'échecs de transport **consécutifs** le sondage tolère avant d'abandonner.
+///
+/// La politique tient en deux phrases opposées. Un hoquet — un wifi qui bascule, un proxy qui
+/// recycle une connexion, un 502 le temps d'un déploiement — ne doit pas annuler une connexion
+/// que la personne est peut-être en train d'approuver dans son navigateur : on retente au même
+/// intervalle, sans rien dire. Mais une plateforme devenue injoignable ne doit pas faire tourner
+/// la roulette jusqu'à `expires_in` : au-delà de ce nombre d'échecs d'affilée, on s'arrête et on
+/// dit pourquoi.
+///
+/// Consécutifs, donc : un sondage qui aboutit remet le compteur à zéro. C'est une série qu'on
+/// compte, pas un total — sur un quart d'heure d'attente, des hoquets isolés sont normaux.
+const BLIPS_TOLERATED: u32 = 3;
 
 /// What the CLI may ask for. Narrowed server-side to what this client is allowed.
 ///
@@ -87,14 +100,18 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     );
 
     let base = base_url(args.url.as_deref());
-    let client = reqwest::Client::new();
+    // Le client par défaut : cinq secondes pour ouvrir la connexion, quinze pour la requête.
+    // La demande de code précède tout le reste, alors elle échoue vite — une adresse fausse ou
+    // une plateforme à terre se voit tout de suite, plutôt qu'au bout d'un spinner sans fin.
+    let client = http::client();
+    let code_url = format!("{base}/api/v1/auth/device/code");
 
     let asking = ui::step("asking the platform for a code");
     // What this machine says about itself. None of it proves anything — a hostile client would
     // lie — but the approval screen has nothing else to show, and a developer recognises their
     // own machine name at a glance. Absent fields simply render as unknown.
-    let response = client
-        .post(format!("{base}/api/v1/auth/device/code"))
+    let sent = client
+        .post(&code_url)
         .json(&serde_json::json!({
             "clientId": CLIENT_ID,
             "scopes": SCOPES,
@@ -103,13 +120,29 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             "sdkVersion": SDK_VERSION,
         }))
         .send()
-        .await
-        .map_err(|failure| {
+        .await;
+
+    // Chaque sortie d'ici éteint le spinner avant de remonter : une roue qui continue de tourner
+    // sous un message d'erreur laisse croire que la CLI travaille encore.
+    let response = match sent {
+        Ok(response) => response,
+        Err(failure) => {
             asking.abandon();
-            failure
-        })
-        .context("ask the platform for a device code")?;
-    let started: DeviceCode = crate::api::unwrap(&response.text().await.unwrap_or_default())?;
+            // Pas de `context` par-dessus : « cannot reach the platform at … » est la phrase
+            // qui doit arriver en tête, pas en « caused by » sous un intitulé de tâche.
+            return Err(http::unreachable(&code_url, failure));
+        }
+    };
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        asking.abandon();
+        bail!("{}", http::refused(&code_url, status.as_u16(), &body));
+    }
+    let started: DeviceCode = crate::api::unwrap(&body).map_err(|failure| {
+        asking.abandon();
+        failure
+    })?;
     asking.done("got a code");
 
     present(&started, args.no_browser);
@@ -117,7 +150,9 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     // Le serveur dicte l'intervalle : la spec veut qu'il puisse ralentir un client trop pressé.
     let mut interval = Duration::from_secs(started.interval.max(1));
     let deadline = std::time::Instant::now() + Duration::from_secs(started.expires_in);
+    let token_url = format!("{base}/api/v1/auth/device/token");
     let waiting = ui::step("waiting for approval");
+    let mut blips: u32 = 0;
 
     loop {
         let now = std::time::Instant::now();
@@ -131,18 +166,38 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         ));
         tokio::time::sleep(interval).await;
 
-        let response = client
-            .post(format!("{base}/api/v1/auth/device/token"))
+        let sent = client
+            .post(&token_url)
             .json(&serde_json::json!({ "deviceCode": started.device_code }))
+            // L'échéance du sondage se règle sur l'intervalle, pas sur celle du client : un
+            // sondage bloqué qui durerait quinze secondes à chaque tour mangerait la vie du
+            // code sans jamais poser la question.
+            .timeout(poll_timeout(interval))
             .send()
-            .await
-            .context("poll the platform")?;
+            .await;
+
+        let response = match sent {
+            Ok(response) => response,
+            Err(failure) => {
+                blips += 1;
+                if give_up_after(blips) {
+                    waiting.abandon();
+                    return Err(http::unreachable(&token_url, failure)).context(format!(
+                        "the platform stopped answering — {blips} polls in a row failed"
+                    ));
+                }
+                continue;
+            }
+        };
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
 
         if status.is_success() {
-            let granted: Granted = crate::api::unwrap(&body)?;
+            let granted: Granted = crate::api::unwrap(&body).map_err(|failure| {
+                waiting.abandon();
+                failure
+            })?;
             auth::store(&granted.access_token, &granted.refresh_token)?;
             waiting.done("approved");
             ui::success("signed in — token stored in the system keychain");
@@ -167,27 +222,84 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             return Ok(());
         }
 
-        // Les codes de la spec arrivent dans le `error_code` de l'enveloppe maison. Lus à plat,
-        // ils ressemblaient à une réponse inconnue et la CLI abandonnait dès le premier sondage.
-        let error = crate::api::error_code(&body).unwrap_or_else(|| body.clone());
-
-        match error.as_str() {
+        match interpret(status.as_u16(), &body, &token_url) {
             // Ni l'un ni l'autre n'est un échec : « pas encore » et « moins vite ».
-            "authorization_pending" => {}
-            "slow_down" => interval += Duration::from_secs(5),
-            "access_denied" => {
-                waiting.abandon();
-                bail!("the request was denied");
+            Pending::KeepWaiting => blips = 0,
+            Pending::SlowDown => {
+                blips = 0;
+                interval += Duration::from_secs(5);
             }
-            "expired_token" => {
-                waiting.abandon();
-                bail!("the code expired — run `portaki login` again");
+            // La plateforme a répondu, mais rien d'exploitable : même politique que le hoquet
+            // de transport, et même compteur — c'est la série qui décide.
+            Pending::Blip => {
+                blips += 1;
+                if give_up_after(blips) {
+                    waiting.abandon();
+                    bail!(
+                        "{} — {blips} polls in a row failed",
+                        http::refused(&token_url, status.as_u16(), &body)
+                    );
+                }
             }
-            other => {
+            Pending::GiveUp(reason) => {
                 waiting.abandon();
-                bail!("the platform answered {other}");
+                bail!(reason);
             }
         }
+    }
+}
+
+/// Faut-il abandonner, après `consecutive` sondages d'affilée qui n'ont rien donné ?
+///
+/// Voir [`BLIPS_TOLERATED`] pour le pourquoi de la politique.
+fn give_up_after(consecutive: u32) -> bool {
+    consecutive > BLIPS_TOLERATED
+}
+
+/// Combien de temps un sondage a le droit de durer.
+///
+/// Assez pour ne pas couper une réponse lente, jamais beaucoup plus qu'un tour d'intervalle : au
+/// delà, un sondage bloqué décale tous les suivants et la roue tourne sans que la question soit
+/// posée. Plancher parce qu'un intervalle d'une seconde ne laisserait pas le temps d'une poignée
+/// de main TLS ; plafond parce qu'un `slow_down` répété fait grimper l'intervalle sans fin.
+fn poll_timeout(interval: Duration) -> Duration {
+    (interval + Duration::from_secs(5)).clamp(Duration::from_secs(8), Duration::from_secs(20))
+}
+
+/// Ce que dit un sondage qui n'a pas rendu de jeton.
+#[derive(Debug, PartialEq, Eq)]
+enum Pending {
+    /// Pas encore approuvé : on repasse au même rythme.
+    KeepWaiting,
+    /// Le serveur demande qu'on ralentisse (RFC 8628 §3.5).
+    SlowDown,
+    /// Rien d'exploitable, mais rien de définitif non plus : à retenter, dans la limite tolérée.
+    Blip,
+    /// Fini, et voici quoi dire.
+    GiveUp(String),
+}
+
+/// Lit une réponse de sondage.
+///
+/// Les codes de la spec arrivent dans le `error_code` de l'enveloppe maison. Lus à plat, ils
+/// ressemblaient à une réponse inconnue et la CLI abandonnait dès le premier sondage.
+///
+/// Trois familles, et elles ne se disent pas pareil : un code OAuth est une réponse du protocole,
+/// un statut sans code est une panne de la route (un 404 ici veut dire « ce n'est pas une
+/// plateforme Portaki »), et une erreur de transport n'arrive même pas jusqu'ici.
+fn interpret(status: u16, body: &str, url: &str) -> Pending {
+    match crate::api::error_code(body).as_deref() {
+        Some("authorization_pending") => Pending::KeepWaiting,
+        Some("slow_down") => Pending::SlowDown,
+        Some("access_denied") => Pending::GiveUp("the request was denied".to_owned()),
+        Some("expired_token") => {
+            Pending::GiveUp("the code expired — run `portaki login` again".to_owned())
+        }
+        Some(other) => Pending::GiveUp(format!("the platform answered {other}")),
+        // 5xx sans code OAuth : la plateforme bafouille, elle ne refuse pas. Un redémarrage
+        // derrière un load balancer ne doit pas annuler une approbation en cours.
+        None if status >= 500 => Pending::Blip,
+        None => Pending::GiveUp(http::refused(url, status, body)),
     }
 }
 
@@ -261,17 +373,21 @@ pub async fn logout(args: LogoutArgs) -> Result<()> {
 /// Sans quoi `portaki logout` n'efface qu'un fichier : le jeton de rafraîchissement reste
 /// valide jusqu'à son expiration, et qui détient une copie du fichier reste connecté.
 async fn revoke(base: &str, refresh_token: &str) -> Result<()> {
-    let response = reqwest::Client::new()
-        .post(format!("{base}/api/v1/auth/logout"))
+    let url = format!("{base}/api/v1/auth/logout");
+    // Dix secondes en tout, mais désormais cinq pour ouvrir la connexion : sans échéance de
+    // connexion, une plateforme injoignable retenait `portaki logout` jusqu'au timeout du noyau.
+    let response = http::client()
+        .post(&url)
         .json(&serde_json::json!({ "refreshToken": refresh_token }))
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
-        .context("tell the platform to end this session")?;
+        .map_err(|failure| http::unreachable(&url, failure))?;
 
     let status = response.status();
     if !status.is_success() {
-        anyhow::bail!("the platform answered {status}");
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("{}", http::refused(&url, status.as_u16(), &body));
     }
     Ok(())
 }
@@ -377,5 +493,115 @@ mod tests {
             base_url(Some("https://api.example/")),
             "https://api.example"
         );
+    }
+
+    const TOKEN_URL: &str = "https://api-staging.portaki.app/api/v1/auth/device/token";
+
+    /// Un hoquet isolé ne doit pas annuler une connexion qu'on est en train d'approuver.
+    #[test]
+    fn a_blip_does_not_end_the_login() {
+        for consecutive in 1..=BLIPS_TOLERATED {
+            assert!(!give_up_after(consecutive), "gave up after {consecutive}");
+        }
+    }
+
+    /// Mais une plateforme devenue muette ne doit pas faire tourner la roue jusqu'à expiration.
+    #[test]
+    fn a_run_of_failures_ends_the_login() {
+        assert!(give_up_after(BLIPS_TOLERATED + 1));
+        assert!(give_up_after(BLIPS_TOLERATED + 9));
+    }
+
+    /// La série se compte, pas le total : ce que le compteur remis à zéro doit garantir.
+    #[test]
+    fn the_counter_is_a_run_and_not_a_total() {
+        let mut blips = 0_u32;
+
+        // Deux hoquets, un sondage qui aboutit, deux hoquets : cinq échecs en tout, jamais
+        // quatre d'affilée — la connexion continue.
+        for outcome in [false, false, true, false, false] {
+            if outcome {
+                blips = 0;
+            } else {
+                blips += 1;
+            }
+            assert!(!give_up_after(blips));
+        }
+    }
+
+    /// Un sondage ne doit pas durer plus longtemps que ce qui sépare deux sondages, ou presque :
+    /// sinon ils s'empilent et le code expire sans qu'on ait posé la question.
+    #[test]
+    fn a_poll_never_outlives_the_code_it_asks_about() {
+        let expires_in = Duration::from_secs(600);
+        let interval = Duration::from_secs(5);
+
+        assert!(poll_timeout(interval) < expires_in / 10);
+        // Un intervalle d'une seconde garde quand même de quoi faire une poignée de main TLS.
+        assert!(poll_timeout(Duration::from_secs(1)) >= Duration::from_secs(8));
+        // Et un `slow_down` répété ne fait pas grimper l'échéance sans fin.
+        assert_eq!(
+            poll_timeout(Duration::from_secs(600)),
+            Duration::from_secs(20)
+        );
+    }
+
+    /// Les deux réponses qui veulent dire « repasse ».
+    #[test]
+    fn pending_and_slow_down_are_not_failures() {
+        assert_eq!(
+            interpret(400, r#"{"error_code":"authorization_pending"}"#, TOKEN_URL),
+            Pending::KeepWaiting
+        );
+        assert_eq!(
+            interpret(429, r#"{"error_code":"slow_down"}"#, TOKEN_URL),
+            Pending::SlowDown
+        );
+    }
+
+    /// Un refus et un code périmé sont définitifs : les retenter ferait tourner la roue pour rien.
+    #[test]
+    fn a_denial_stops_the_login_at_once() {
+        let denied = interpret(403, r#"{"error_code":"access_denied"}"#, TOKEN_URL);
+        let expired = interpret(400, r#"{"error_code":"expired_token"}"#, TOKEN_URL);
+
+        assert!(matches!(denied, Pending::GiveUp(said) if said.contains("denied")));
+        assert!(matches!(expired, Pending::GiveUp(said) if said.contains("expired")));
+    }
+
+    /// Une panne de route n'est pas un code OAuth : elle se dit avec son statut et son URL, de
+    /// sorte qu'un `PORTAKI_API_URL` qui ne pointe pas sur une plateforme Portaki se voie.
+    #[test]
+    fn a_status_without_an_oauth_code_names_the_url_that_was_polled() {
+        let said = match interpret(404, "<html>not found</html>", TOKEN_URL) {
+            Pending::GiveUp(said) => said,
+            other => panic!("{other:?}"),
+        };
+
+        assert!(said.contains("404"), "{said}");
+        assert!(said.contains(TOKEN_URL), "{said}");
+    }
+
+    /// Un 502 le temps d'un redémarrage n'est pas un refus : la personne est peut-être devant
+    /// l'écran d'approbation, et abandonner là lui ferait tout recommencer.
+    #[test]
+    fn a_platform_hiccup_is_retried_rather_than_fatal() {
+        assert_eq!(
+            interpret(502, "<html>bad gateway</html>", TOKEN_URL),
+            Pending::Blip
+        );
+        assert_eq!(interpret(503, "", TOKEN_URL), Pending::Blip);
+    }
+
+    /// Un code inconnu de la spec reste une fin : on ne sait pas quoi en faire de mieux, et le
+    /// dire vaut mieux que sonder une plateforme qui répond toujours la même chose.
+    #[test]
+    fn an_unknown_oauth_code_is_reported_verbatim() {
+        let said = match interpret(400, r#"{"error_code":"invalid_client"}"#, TOKEN_URL) {
+            Pending::GiveUp(said) => said,
+            other => panic!("{other:?}"),
+        };
+
+        assert!(said.contains("invalid_client"), "{said}");
     }
 }

@@ -12,7 +12,8 @@ pub struct InspectArgs {
 
 /// Runs `portaki inspect`.
 pub async fn run(args: InspectArgs) -> Result<()> {
-    let client = reqwest::Client::new();
+    // Patient : un artefact OCI peut peser, mais la connexion doit s'ouvrir vite.
+    let client = crate::http::patient_client();
     let response = client
         .get(&args.artifact_url)
         .send()

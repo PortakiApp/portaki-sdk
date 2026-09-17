@@ -125,7 +125,7 @@ async fn deliver(base: &str, module_id: &str, outcome: &str, run_url: Option<&st
         anyhow::bail!("no OIDC token available — add `permissions: id-token: write` to the job");
     }
     let token = crate::oidc::request_token(&crate::oidc::audience(base)).await?;
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .post(format!("{}/registry/v1/runs", base.trim_end_matches('/')))
         .bearer_auth(token)
         .json(&serde_json::json!({
@@ -779,7 +779,7 @@ struct Withdrawn {
 /// publié — rend un 404. Ce n'est pas un défaut du module : il n'y a rien à dire, et on se tait.
 async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
     let base = crate::auth::api_base_url(None);
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .get(format!(
             "{base}/registry/v1/sdk-releases/{sdk_version}/deprecations"
         ))
@@ -798,7 +798,7 @@ async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
 
 /// La dernière version publiée du SDK.
 async fn latest_sdk() -> Result<String> {
-    let response = reqwest::Client::new()
+    let response = crate::http::client()
         .get("https://crates.io/api/v1/crates/portaki-sdk")
         // crates.io refuse une requête sans agent identifiable, et le dit en 403.
         .header(

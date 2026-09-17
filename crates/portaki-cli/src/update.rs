@@ -68,7 +68,7 @@ async fn latest() -> Option<String> {
 }
 
 async fn ask_crates_io() -> Result<String, reqwest::Error> {
-    let body: serde_json::Value = reqwest::Client::new()
+    let body: serde_json::Value = crate::http::client()
         .get("https://crates.io/api/v1/crates/portaki-cli")
         // crates.io refuse une requête sans agent identifiable, et le dit en 403.
         .header(

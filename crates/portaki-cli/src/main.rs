@@ -28,6 +28,7 @@ mod api;
 mod auth;
 mod commands;
 mod dev_session;
+mod http;
 mod manifest;
 mod oci;
 mod oidc;
