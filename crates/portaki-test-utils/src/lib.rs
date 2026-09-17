@@ -15,7 +15,21 @@
 //! 2. Seed translations, KV bytes, and connector JSON stubs.
 //! 3. Call [`MockContextBuilder::run`] to install the mock backend via
 //!    [`portaki_sdk::host::with_host`] and execute module code.
-//! 4. Assert rendered SDUI with [`SurfaceAssertions`].
+//! 4. Assert rendered SDUI with [`SurfaceAssertions`]. It walks every primitive of the
+//!    contract, so a module needs no `contains_component_type` helper of its own:
+//!
+//! ```
+//! use portaki_sdk::sdui::primitives::{Card, EmptyState, Stack};
+//! use portaki_sdk::sdui::surface::Surface;
+//! use portaki_test_utils::SurfaceAssertions;
+//!
+//! let surface = Surface::new(Stack::new().child(Card::new()));
+//! let tree = SurfaceAssertions::new(&surface);
+//!
+//! // Was: assert!(contains_component_type(&surface, "Card"));
+//! assert!(tree.contains_type("Card"));
+//! assert!(!tree.contains_primitive::<EmptyState>());
+//! ```
 //!
 //! # Relationship to `portaki-connectors`
 //!
@@ -47,7 +61,7 @@
 //!
 //! - [`MockContextBuilder`] / [`MockHostFunctions`] — mock host installation
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
-//! - [`SurfaceAssertions`] — SDUI tree helpers
+//! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
 
 #![deny(missing_docs)]
 
@@ -55,6 +69,6 @@ mod assertions;
 mod fixtures;
 mod mock_host;
 
-pub use assertions::SurfaceAssertions;
+pub use assertions::{PrimitiveTag, SurfaceAssertions};
 pub use fixtures::{Booking, GuestIdentityFixture, Property};
 pub use mock_host::{ConnectorCall, MockContext, MockContextBuilder, MockHostFunctions};

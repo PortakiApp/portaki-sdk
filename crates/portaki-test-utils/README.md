@@ -52,7 +52,11 @@ fn guest_home_renders() {
         .with_capabilities(&["core.storage"])
         .run(|ctx| {
             let surface = guest_home(ctx).expect("render");
-            SurfaceAssertions::new(&surface);
+            let tree = SurfaceAssertions::new(&surface);
+            // Every primitive of the SDUI contract is walked: no hand-written
+            // `contains_component_type` helper needed.
+            assert!(tree.contains_type("Card"));
+            assert_eq!(tree.count_type("ListItem"), 3);
         });
 }
 ```
@@ -76,7 +80,7 @@ MockContext::guest()
 | `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install |
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
-| `SurfaceAssertions` | SDUI tree helpers |
+| `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |
 
 ## Documentation
 
