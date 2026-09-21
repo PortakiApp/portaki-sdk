@@ -49,6 +49,9 @@ pub struct UpgradeArgs {
     /// Platform URL (defaults like `portaki dev`: PORTAKI_DEV_URL, PORTAKI_API_URL, production).
     #[arg(long)]
     pub url: Option<String>,
+    /// Run every check against the new version, then put every file it changed back.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 pub async fn run(args: SdkArgs) -> Result<()> {
@@ -502,8 +505,10 @@ struct Metadata {
 
 #[derive(Debug, Deserialize)]
 struct MetadataPackage {
+    id: String,
     name: String,
     version: String,
+    manifest_path: PathBuf,
 }
 
 fn cargo_metadata(module_root: &Path) -> Result<Metadata> {
@@ -604,27 +609,32 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
     let baseline = match sandbox.as_mut() {
         Some(sandbox) => {
             ui::section(&format!("before — portaki-sdk {current}"));
-            dev::build(&module_root)?;
-            crate::commands::build::refresh_outputs(&module_root)?;
-            let renders = sandbox.deploy_and_render(&module_root).await?;
-            let failing = sandbox.failing_checks().await?;
-            for check in &failing {
-                ui::detail(format!(
-                    "conformance {}: failing before the upgrade — {}",
-                    check.id, check.detail
-                ));
+            // Une version actuelle qui ne compile plus est justement une raison de monter :
+            // souvent le code attend déjà la suivante. On perd la comparaison des rendus, pas
+            // la montée — build, tests et lint la jugent toujours.
+            match take_baseline(sandbox, &module_root).await {
+                Ok(baseline) => Some(baseline),
+                Err(failure) => {
+                    ui::warn(format!(
+                        "portaki-sdk {current} does not build or render here — upgrading without a render comparison"
+                    ));
+                    ui::detail(format!("{failure:#}"));
+                    None
+                }
             }
-            Some(Baseline {
-                renders,
-                failing: failing.into_iter().map(|check| check.id).collect(),
-            })
         }
         None => None,
     };
 
     ui::section(&format!("after — portaki-sdk {target}"));
     let lock = metadata.workspace_root.join("Cargo.lock");
-    let backup = Backup::take(&[declaration.file.clone(), lock]);
+    let manifests = module_manifests(&metadata, &declaration, &module_root);
+    let backup = Backup::take(
+        &[declaration.file.clone(), lock]
+            .into_iter()
+            .chain(manifests.iter().cloned())
+            .collect::<Vec<_>>(),
+    );
 
     let outcome = upgrade_and_verify(
         &args,
@@ -640,21 +650,33 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
     if let Some(sandbox) = &sandbox {
         sandbox.session.release().now().await;
     }
+    if args.dry_run {
+        backup.restore()?;
+    }
     match outcome {
+        Ok(resolved) if args.dry_run => {
+            ui::blank();
+            ui::success(format!(
+                "{module_id} would move to portaki-sdk {resolved} — dry run, nothing was changed"
+            ));
+            if baseline.is_some() {
+                ui::advice(
+                    "the sandbox now holds the upgraded build: run `portaki dev` to put yours back",
+                );
+            }
+            Ok(())
+        }
         Ok(resolved) => {
             ui::blank();
             // La version résolue, pas la cible : `"3.0.1"` est un caret, et résout 3.1.0 dès
             // que 3.1.0 existe. Annoncer la cible aurait fait committer un message faux.
             ui::success(format!("{module_id} is on portaki-sdk {resolved}"));
             // Hérité, le changement est à la racine : un `git diff` lancé depuis le module ne
-            // montrerait que son propre Cargo.toml, inchangé.
+            // montrerait que son propre manifeste, pas ceux des autres membres.
             let review = if declaration.inherited {
-                format!(
-                    "git -C {} diff Cargo.toml Cargo.lock",
-                    metadata.workspace_root.display()
-                )
+                format!("git -C {} diff", metadata.workspace_root.display())
             } else {
-                "git diff Cargo.toml Cargo.lock".to_string()
+                "git diff Cargo.toml Cargo.lock portaki.module.json".to_string()
             };
             ui::next(&[
                 ("review", &review),
@@ -666,15 +688,70 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             Ok(())
         }
         Err(failure) => {
-            backup.restore()?;
+            if !args.dry_run {
+                backup.restore()?;
+            }
             ui::blank();
-            ui::failure("the upgrade broke something — Cargo.toml and Cargo.lock are restored");
-            if sandbox.is_some() {
+            ui::failure("the upgrade broke something — every file it changed is restored");
+            if baseline.is_some() {
                 ui::advice("the sandbox now holds the attempted build: run `portaki dev` to put yours back");
             }
             Err(failure)
         }
     }
+}
+
+/// Les `portaki.module.json` que la montée concerne : ceux de tous les membres quand la version
+/// vient du workspace, celui du module sinon.
+fn module_manifests(
+    metadata: &Metadata,
+    declaration: &Declaration,
+    module_root: &Path,
+) -> Vec<PathBuf> {
+    let roots: Vec<PathBuf> = if declaration.inherited {
+        metadata
+            .packages
+            .iter()
+            .filter(|package| metadata.workspace_members.contains(&package.id))
+            .filter_map(|package| package.manifest_path.parent().map(Path::to_path_buf))
+            .collect()
+    } else {
+        vec![module_root.to_path_buf()]
+    };
+    roots
+        .into_iter()
+        .map(|root| root.join("portaki.module.json"))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
+/// Remplace la valeur de `requiresModuleSdk` sans toucher au reste du fichier — relu et
+/// réécrit par serde, un manifeste perdrait son ordre et sa mise en forme dans le diff.
+/// `None` quand le champ n'y est pas : le build l'inscrit alors lui-même.
+pub fn set_required_sdk(raw: &str, version: &str) -> Option<String> {
+    const KEY: &str = "\"requiresModuleSdk\"";
+    let after_key = raw.find(KEY)? + KEY.len();
+    let colon = after_key + raw[after_key..].find(':')?;
+    let open = colon + 1 + raw[colon + 1..].find('"')?;
+    let close = open + 1 + raw[open + 1..].find('"')?;
+    Some(format!("{}{version}{}", &raw[..=open], &raw[close..]))
+}
+
+async fn take_baseline(sandbox: &mut Sandbox, module_root: &Path) -> Result<Baseline> {
+    dev::build(module_root)?;
+    crate::commands::build::refresh_outputs(module_root)?;
+    let renders = sandbox.deploy_and_render(module_root).await?;
+    let failing = sandbox.failing_checks().await?;
+    for check in &failing {
+        ui::detail(format!(
+            "conformance {}: failing before the upgrade — {}",
+            check.id, check.detail
+        ));
+    }
+    Ok(Baseline {
+        renders,
+        failing: failing.into_iter().map(|check| check.id).collect(),
+    })
 }
 
 async fn upgrade_and_verify(
@@ -724,6 +801,27 @@ async fn upgrade_and_verify(
     ui::field("resolved", &resolved_version);
     if let Some(note) = resolution_note(target, &resolved_version) {
         ui::warn(note);
+    }
+
+    // Le build refuse un manifeste qui annonce une autre version que celle liée : sans ceci,
+    // toute montée échouait au premier module, avec pour seul conseil d'éditer vingt fichiers.
+    let mut aligned = 0;
+    for path in &module_manifests(metadata, declaration, module_root) {
+        let raw =
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        if let Some(updated) = set_required_sdk(&raw, &resolved_version) {
+            if updated != raw {
+                std::fs::write(path, updated)
+                    .with_context(|| format!("write {}", path.display()))?;
+                aligned += 1;
+            }
+        }
+    }
+    if aligned > 0 {
+        ui::wrote(
+            "manifests",
+            format!("requiresModuleSdk → {resolved_version} in {aligned} portaki.module.json"),
+        );
     }
 
     let scope: &[&str] = if declaration.inherited {
@@ -807,6 +905,16 @@ async fn upgrade_and_verify(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_required_sdk_changes_alone() {
+        let raw = "{\n  \"id\": \"weather\",\n  \"requiresModuleSdk\": \"6.3.0\",\n  \"version\": \"0.3.24\"\n}\n";
+        assert_eq!(
+            set_required_sdk(raw, "6.4.0").unwrap(),
+            raw.replace("6.3.0", "6.4.0")
+        );
+        assert_eq!(set_required_sdk("{\"id\": \"weather\"}", "6.4.0"), None);
+    }
 
     #[test]
     fn a_workspace_inherited_sdk_points_at_the_workspace_root() {
