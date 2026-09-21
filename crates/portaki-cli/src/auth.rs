@@ -25,7 +25,8 @@
 //!
 //! `PORTAKI_CREDENTIALS=keychain` restaure l'ancien comportement, pour qui le préfère.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
@@ -67,14 +68,37 @@ pub fn access_token() -> Result<String> {
 /// La plateforme se souvient désormais du client et des scopes attachés au jeton de
 /// rafraîchissement, donc le jeton renouvelé ouvre les mêmes portes que le premier — sans cette
 /// mémoire, il repartait avec la seule audience `portaki-api`.
-pub async fn refresh() -> Result<String> {
+///
+/// # Un renouvellement à la fois
+///
+/// Chaque renouvellement révoque le jeton de rafraîchissement présenté, et la plateforme prend
+/// la présentation d'un jeton déjà tourné pour un vol : elle révoque alors toutes les sessions
+/// du compte. Deux `portaki` lancés ensemble — un `dev --watch` et un `sdk upgrade`, deux
+/// worktrees — expirent à la même minute et renouvellent ensemble : le second présentait le
+/// jeton que le premier venait de tourner, et tout le monde se retrouvait déconnecté.
+///
+/// D'où le verrou, puis la relecture : `stale` est le jeton qui vient d'essuyer le 401. Si le
+/// jeton rangé n'est plus celui-là, un autre processus a renouvelé pendant qu'on attendait, et
+/// sa paire est aussi la nôtre.
+///
+/// `auth_url` est la plateforme de la commande en cours (`--url`, puis `PORTAKI_API_URL`) :
+/// renouveler ailleurs que là où le jeton a été émis échoue, et se lisait « reconnecte-toi ».
+pub async fn refresh(auth_url: &str, stale: &str) -> Result<String> {
+    let _held = RefreshLock::acquire(&config_dir()?.join(REFRESH_LOCK)).await?;
+
+    if let Some(current) = read(ACCESS_ENTRY)? {
+        if current != stale {
+            return Ok(current);
+        }
+    }
+
     let refresh_token = match read(REFRESH_ENTRY)? {
         Some(token) => token,
         None => bail!("no refresh token stored — run `portaki login`"),
     };
 
     let response = crate::http::client()
-        .post(format!("{}/api/v1/auth/refresh", api_base_url(None)))
+        .post(format!("{auth_url}/api/v1/auth/refresh"))
         .json(&serde_json::json!({ "refreshToken": refresh_token }))
         .send()
         .await
@@ -86,6 +110,69 @@ pub async fn refresh() -> Result<String> {
     // reviendrait à se déconnecter au renouvellement suivant.
     store(&renewed.access_token, &renewed.refresh_token)?;
     Ok(renewed.access_token)
+}
+
+const REFRESH_LOCK: &str = "refresh.lock";
+
+/// Au-delà, le détenteur est mort sans rendre le verrou. Plus long que l'échéance d'une requête
+/// ([`crate::http::REQUEST`]) : un renouvellement vivant ne dure jamais autant.
+const ABANDONED: Duration = Duration::from_secs(20);
+
+/// Plus long que [`ABANDONED`] : un verrou laissé par un processus tué se libère pendant
+/// l'attente, au lieu de faire échouer celui qui attend.
+const LOCK_WAIT: Duration = Duration::from_secs(30);
+
+/// Un fichier créé en exclusif, et non `File::lock` : celui-ci demande Rust 1.89, au-delà de la
+/// version minimale déclarée.
+struct RefreshLock(PathBuf);
+
+impl RefreshLock {
+    async fn acquire(path: &Path) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create {}", parent.display()))?;
+        }
+        let deadline = Instant::now() + LOCK_WAIT;
+        loop {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+            {
+                Ok(_) => return Ok(Self(path.to_path_buf())),
+                Err(taken) if taken.kind() == std::io::ErrorKind::AlreadyExists => {
+                    // ponytail: deux processus peuvent déclarer le même verrou abandonné et le
+                    // reprendre ensemble — il faut un crash puis deux renouvellements à la
+                    // même seconde ; un `File::lock` le réglera quand la MSRV le permettra.
+                    if is_abandoned(path) {
+                        let _ = std::fs::remove_file(path);
+                        continue;
+                    }
+                    if Instant::now() >= deadline {
+                        bail!("another portaki process is renewing the session — try again");
+                    }
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(failure) => {
+                    return Err(failure).with_context(|| format!("create {}", path.display()))
+                }
+            }
+        }
+    }
+}
+
+impl Drop for RefreshLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn is_abandoned(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age > ABANDONED)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -299,6 +386,41 @@ mod tests {
     /// Une action de CI qui passe une entrée facultative non renseignée exporte une variable
     /// vide. Lue comme une URL, chaque appel partait vers `/registry/v1/...` — que reqwest
     /// refuse de construire, avec un « builder error » qui ne désigne rien.
+    #[tokio::test]
+    async fn a_second_refresh_waits_for_the_first() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join(REFRESH_LOCK);
+
+        let first = RefreshLock::acquire(&path).await.expect("first");
+        let second = tokio::spawn({
+            let path = path.clone();
+            async move { RefreshLock::acquire(&path).await }
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!second.is_finished(), "the second must wait");
+
+        drop(first);
+        let second = tokio::time::timeout(Duration::from_secs(2), second)
+            .await
+            .expect("released")
+            .expect("join");
+        assert!(second.is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_lock_left_by_a_dead_process_is_taken_back() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join(REFRESH_LOCK);
+        let left = std::fs::File::create(&path).expect("left behind");
+        left.set_modified(std::time::SystemTime::now() - ABANDONED * 2)
+            .expect("age it");
+
+        tokio::time::timeout(Duration::from_secs(1), RefreshLock::acquire(&path))
+            .await
+            .expect("no wait")
+            .expect("taken back");
+    }
+
     #[test]
     fn an_exported_but_empty_variable_means_unset() {
         assert_eq!(resolve_base_url(None, Some("")), PROD);

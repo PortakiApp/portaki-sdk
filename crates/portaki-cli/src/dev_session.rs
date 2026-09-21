@@ -85,7 +85,7 @@ impl Release {
         let _ = crate::http::client()
             .delete(format!("{}/dev/v1/dev-watch", holder.base_url))
             .query(&[("sessionId", &holder.session_id)])
-            .bearer_auth(&holder.token)
+            .bearer_auth(holder.token())
             .timeout(Duration::from_secs(3))
             .send()
             .await;
@@ -94,22 +94,41 @@ impl Release {
 
 struct LeaseHolder {
     base_url: String,
+    /// Où renouveler le jeton — la plateforme d'authentification, pas forcément devapi.
+    auth_url: String,
     session_id: String,
-    token: String,
+    /// Renouvelé sur place : le bail vit bien plus que les quinze minutes d'un jeton, et celui
+    /// du démarrage faisait échouer chaque renouvellement passé ce délai — en silence.
+    token: std::sync::Mutex<String>,
+}
+
+impl LeaseHolder {
+    fn token(&self) -> String {
+        self.token
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
 }
 
 /// Prend la place — localement d'abord, puis auprès de devapi.
 ///
 /// Le verrou local en premier parce qu'il est immédiat et sans réseau : inutile d'aller
 /// interroger le serveur pour se faire refuser par sa propre machine.
-pub async fn start(base_url: &str, module_id: &str, token: &str) -> Result<DevSession> {
+pub async fn start(
+    base_url: &str,
+    auth_url: &str,
+    module_id: &str,
+    token: &str,
+) -> Result<DevSession> {
     let local = crate::watch_lock::acquire(module_id)?;
     let session_id = uuid::Uuid::new_v4().to_string();
 
     let holder = Arc::new(LeaseHolder {
         base_url: base_url.trim_end_matches('/').to_string(),
+        auth_url: auth_url.to_string(),
         session_id,
-        token: token.to_string(),
+        token: std::sync::Mutex::new(token.to_string()),
     });
 
     match hold(&holder, module_id).await {
@@ -164,19 +183,19 @@ enum Kept {
     Theirs(Held),
 }
 
+/// Un 401 n'est pas un refus : le jeton a expiré. On le renouvelle une fois et on redemande —
+/// sans quoi un jeton périmé au lancement se lisait « plateforme injoignable ».
 async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
-    let response = crate::http::client()
-        .put(format!("{}/dev/v1/dev-watch", holder.base_url))
-        .bearer_auth(&holder.token)
-        .json(&serde_json::json!({
-            "sessionId": holder.session_id,
-            "moduleId": module_id,
-            "machine": machine(),
-        }))
-        .timeout(Duration::from_secs(10))
-        .send()
-        .await
-        .context("ask the dev platform for the watch session")?;
+    let stale = holder.token();
+    let mut response = request_hold(holder, module_id, &stale).await?;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        let renewed = crate::auth::refresh(&holder.auth_url, &stale).await?;
+        *holder
+            .token
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = renewed.clone();
+        response = request_hold(holder, module_id, &renewed).await?;
+    }
 
     if response.status() == reqwest::StatusCode::CONFLICT {
         return Ok(Kept::Theirs(
@@ -191,6 +210,25 @@ async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
         anyhow::bail!("the dev platform answered {status}");
     }
     Ok(Kept::Ours(response.json().await.context("read the lease")?))
+}
+
+async fn request_hold(
+    holder: &LeaseHolder,
+    module_id: &str,
+    token: &str,
+) -> Result<reqwest::Response> {
+    crate::http::client()
+        .put(format!("{}/dev/v1/dev-watch", holder.base_url))
+        .bearer_auth(token)
+        .json(&serde_json::json!({
+            "sessionId": holder.session_id,
+            "moduleId": module_id,
+            "machine": machine(),
+        }))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .context("ask the dev platform for the watch session")
 }
 
 /// Repousse le bail tant que la session vit.

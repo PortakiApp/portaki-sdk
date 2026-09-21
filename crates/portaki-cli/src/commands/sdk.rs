@@ -374,6 +374,7 @@ impl Backup {
 
 struct Sandbox {
     base_url: String,
+    auth_url: String,
     module_id: String,
     token: String,
     session: crate::dev_session::DevSession,
@@ -400,8 +401,11 @@ impl Sandbox {
         .await
         {
             Ok(deployed) => deployed,
-            Err(_) => {
-                self.token = dev::reauthenticate().await?;
+            // Sur un 401 seulement : renouveler sur n'importe quel échec faisait tourner le
+            // jeton pour rien, et chaque rotation de trop est une course de plus avec les autres
+            // `portaki` du compte.
+            Err(failure) if failure.is::<dev::Unauthorized>() => {
+                self.token = dev::renew(&self.auth_url, &self.token).await?;
                 dev::deploy(
                     &self.base_url,
                     &self.module_id,
@@ -411,6 +415,10 @@ impl Sandbox {
                     self.session.session_id(),
                 )
                 .await?
+            }
+            Err(failure) => {
+                deploying.abandon();
+                return Err(failure);
             }
         };
         deploying.done(format!("deployed {}", dev::short(&deployed.digest)));
@@ -592,9 +600,11 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
     } else {
         let token = crate::auth::access_token()
             .context("sign in with `portaki login`, or pass --no-render")?;
-        let session = crate::dev_session::start(&base_url, &module_id, &token).await?;
+        let auth_url = crate::auth::api_base_url(args.url.as_deref());
+        let session = crate::dev_session::start(&base_url, &auth_url, &module_id, &token).await?;
         Some(Sandbox {
             base_url: base_url.clone(),
+            auth_url,
             module_id: module_id.clone(),
             token,
             session,

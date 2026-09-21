@@ -83,7 +83,8 @@ pub async fn run(args: DevArgs) -> Result<()> {
     //
     // Avant le premier build, pas après : refuser une fois compilé et déployé aurait déjà
     // écrasé ce que l'autre session tenait.
-    let session = crate::dev_session::start(&base_url, &module_id, &token).await?;
+    let auth_url = crate::auth::api_base_url(args.url.as_deref());
+    let session = crate::dev_session::start(&base_url, &auth_url, &module_id, &token).await?;
 
     // Ctrl-c ne déroule rien : sans ceci, le bail resterait pris jusqu'à son échéance et le
     // verrou local jusqu'au prochain lancement. Ni l'un ni l'autre n'est grave — les deux se
@@ -315,7 +316,7 @@ async fn cycle(
     let deployed = match first {
         Err(failure) if failure.is::<Unauthorized>() => {
             uploading.say("renewing the access token");
-            *token = reauthenticate().await?;
+            *token = reauthenticate(args, token).await?;
             uploading.say(format!("deploying {module_id} to the sandbox"));
             deploy(base_url, module_id, token, &wasm, &manifest, session).await?
         }
@@ -335,7 +336,7 @@ async fn cycle(
         let trace = match first {
             Err(failure) if failure.is::<Unauthorized>() => {
                 running.say("renewing the access token");
-                *token = reauthenticate().await?;
+                *token = reauthenticate(args, token).await?;
                 dispatch(args, base_url, module_id, token, operation).await?
             }
             other => other.map_err(|failure| {
@@ -357,8 +358,12 @@ async fn cycle(
 /// Le renouvellement est tenté une fois, pas en boucle : si le jeton de rafraîchissement est
 /// lui aussi hors d'usage, réessayer ne ferait que masquer la seule chose à dire — il faut se
 /// reconnecter.
-pub(crate) async fn reauthenticate() -> Result<String> {
-    crate::auth::refresh()
+async fn reauthenticate(args: &DevArgs, stale: &str) -> Result<String> {
+    renew(&crate::auth::api_base_url(args.url.as_deref()), stale).await
+}
+
+pub(crate) async fn renew(auth_url: &str, stale: &str) -> Result<String> {
+    crate::auth::refresh(auth_url, stale)
         .await
         .context("renew the session — run `portaki login` if this keeps failing")
 }
@@ -610,7 +615,7 @@ fn truncate(value: &str) -> String {
 /// Le seul échec dont on sait quoi faire : renouveler et rejouer. Il porte un type pour que
 /// l'appelant le distingue d'un 500, qu'il serait absurde de rejouer avec un autre jeton.
 #[derive(Debug)]
-struct Unauthorized;
+pub(crate) struct Unauthorized;
 
 impl std::fmt::Display for Unauthorized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
