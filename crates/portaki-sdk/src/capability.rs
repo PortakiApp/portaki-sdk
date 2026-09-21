@@ -122,6 +122,12 @@ pub enum CapabilityId {
     /// OpenAgenda — property-owned API key.
     #[serde(rename = "external.open-agenda.byok")]
     OpenAgendaByok,
+    /// Tiqets Content & Availability — platform-managed partner key.
+    #[serde(rename = "external.tiqets.pool")]
+    TiqetsPool,
+    /// Tiqets Content & Availability — property-owned partner key.
+    #[serde(rename = "external.tiqets.byok")]
+    TiqetsByok,
     /// Inline text suggestion generation.
     #[serde(rename = "ai.text.suggestions")]
     TextSuggestions,
@@ -171,6 +177,8 @@ impl CapabilityId {
             Self::NukiByok => "external.nuki.byok",
             Self::OpenAgendaPool => "external.open-agenda.pool",
             Self::OpenAgendaByok => "external.open-agenda.byok",
+            Self::TiqetsPool => "external.tiqets.pool",
+            Self::TiqetsByok => "external.tiqets.byok",
             Self::TextSuggestions => "ai.text.suggestions",
             Self::Translation => "ai.translation",
             Self::ImageGeneration => "ai.image.generation",
@@ -209,6 +217,8 @@ impl CapabilityId {
         Self::NukiByok,
         Self::OpenAgendaPool,
         Self::OpenAgendaByok,
+        Self::TiqetsPool,
+        Self::TiqetsByok,
         Self::TextSuggestions,
         Self::Translation,
         Self::ImageGeneration,
@@ -267,6 +277,8 @@ impl FromStr for CapabilityId {
             "external.nuki.byok" => Ok(Self::NukiByok),
             "external.open-agenda.pool" => Ok(Self::OpenAgendaPool),
             "external.open-agenda.byok" => Ok(Self::OpenAgendaByok),
+            "external.tiqets.pool" => Ok(Self::TiqetsPool),
+            "external.tiqets.byok" => Ok(Self::TiqetsByok),
             "ai.text.suggestions" => Ok(Self::TextSuggestions),
             "ai.translation" => Ok(Self::Translation),
             "ai.image.generation" => Ok(Self::ImageGeneration),
@@ -368,6 +380,10 @@ pub mod external {
     pub const OPEN_AGENDA_POOL: CapabilityId = CapabilityId::OpenAgendaPool;
     /// OpenAgenda — property-owned key.
     pub const OPEN_AGENDA_BYOK: CapabilityId = CapabilityId::OpenAgendaByok;
+    /// Tiqets — platform-managed partner key (monthly quota per workspace).
+    pub const TIQETS_POOL: CapabilityId = CapabilityId::TiqetsPool;
+    /// Tiqets — property-owned partner key; links then carry the host's affiliate code.
+    pub const TIQETS_BYOK: CapabilityId = CapabilityId::TiqetsByok;
 }
 
 /// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).
@@ -437,6 +453,8 @@ mod tests {
         assert!(serde_json::to_value(CapabilityId::Storage).unwrap() == "core.storage");
         assert_eq!(core::POI_RADIUS_KM.as_str(), "core.poi.radius_km");
         assert_eq!(core::POI_REIMPORTS.as_str(), "core.poi.reimports");
+        assert_eq!(external::TIQETS_POOL.as_str(), "external.tiqets.pool");
+        assert_eq!(external::TIQETS_BYOK.as_str(), "external.tiqets.byok");
     }
 
     /// Four hand-kept lists (serde rename, `as_str`, `ALL`, `FromStr`) name each id; this

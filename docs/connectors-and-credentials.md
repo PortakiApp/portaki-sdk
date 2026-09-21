@@ -50,6 +50,7 @@ Prefer the constants in `portaki_sdk::capability::external::*` so ids stay align
 | `open-agenda` | `external.open-agenda.pool` | `external.open-agenda.byok` | `query_key` |
 | `osm` / `osm-nominatim` | `external.osm.pool` | — | `none` |
 | `nuki` | — | `external.nuki.byok` | `bearer` |
+| `tiqets` | `external.tiqets.pool` | `external.tiqets.byok` | `Authorization: Token <key>` — set by the platform catalogue; leave `auth` unset |
 
 Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_connector]` overrides the provider default. Paths may include `{argName}` templates; matching args are consumed from the JSON object. `POST` / `PUT` / `PATCH` send remaining args as a JSON body (empty → `{}`).
 

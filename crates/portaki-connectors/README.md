@@ -49,6 +49,7 @@ portaki-connectors = "0.1"
 | `google_places` | `google-places` | `nearby_search`, `text_search`, `details`, `photos` |
 | `mapbox` | `mapbox` | `geocode`, `reverse_geocode`, `directions`, `static_map` |
 | `osm_nominatim` | `osm-nominatim` | `geocode`, `reverse_geocode` |
+| `tiqets` | `tiqets` | `nearby_products` (Content API, read-only) |
 
 ## Example
 
