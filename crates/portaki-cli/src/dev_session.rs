@@ -121,8 +121,8 @@ pub async fn start(base_url: &str, module_id: &str, token: &str) -> Result<DevSe
             })
         }
         Ok(Kept::Theirs(held)) => anyhow::bail!(
-            "your account already has a dev --watch session on {} ({}) — stop it there, or \
-             run this one without --watch",
+            "your account already has a portaki dev session on {} ({}) — stop it there, or \
+             wait: one that ended without handing it back frees itself shortly",
             held.module_id,
             held.machine
         ),
@@ -209,7 +209,7 @@ fn spawn_renewal(holder: Arc<LeaseHolder>, module_id: String, first: Lease) {
                     // session — précisément ce que tout ceci existe pour empêcher.
                     ui::blank();
                     ui::failure(format!(
-                        "this account's dev --watch session was taken over by {} ({})",
+                        "this account's portaki dev session was taken over by {} ({})",
                         held.module_id, held.machine
                     ));
                     ui::detail("stopping — two sessions would undo each other's deploys");

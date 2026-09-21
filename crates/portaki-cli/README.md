@@ -114,8 +114,7 @@ Only one `portaki dev` runs at a time — with or without `--watch`. A second on
 and says who holds the session:
 
 ```
-✖ portaki dev --watch is already running on weather (pid 41999) — stop it first,
-  or run this one without --watch
+✖ a portaki dev session is already running on weather (pid 41999) — stop it first
 ```
 
 A one-shot `portaki dev` overwrites the sandbox exactly as a looping session does — once
