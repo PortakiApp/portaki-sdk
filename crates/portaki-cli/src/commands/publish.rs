@@ -308,7 +308,7 @@ async fn announce(
         Credential::Person(token) => {
             let first = post_publication(&base, &body, &token).await?;
             if first == Outcome::Unauthorized {
-                post_publication(&base, &body, &auth::refresh().await?).await?
+                post_publication(&base, &body, &auth::refresh(&base, &token).await?).await?
             } else {
                 first
             }
