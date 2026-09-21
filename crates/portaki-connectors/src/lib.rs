@@ -29,6 +29,7 @@
 //! | [`mapbox`] | `mapbox` | `geocode`, `reverse_geocode`, `directions`, `static_map` |
 //! | [`osm_nominatim`] | `osm-nominatim` | `geocode`, `reverse_geocode` |
 //! | [`nuki`] | `nuki` | `remote_unlock` |
+//! | [`tiqets`] | `tiqets` | `nearby_products` |
 //!
 //! The gateway resolves credentials (platform pool or BYOK) from the invocation
 //! [`portaki_sdk::context::Context`] capabilities before executing egress.
@@ -69,6 +70,7 @@ pub mod nuki;
 pub mod open_agenda;
 pub mod open_weather;
 pub mod osm_nominatim;
+pub mod tiqets;
 
 pub use google_places::GooglePlaces;
 pub use mapbox::Mapbox;
@@ -76,6 +78,7 @@ pub use nuki::Nuki;
 pub use open_agenda::OpenAgenda;
 pub use open_weather::OpenWeather;
 pub use osm_nominatim::OsmNominatim;
+pub use tiqets::Tiqets;
 
 /// Local validation failure for connector credentials (install-time / BYOK checks).
 ///
