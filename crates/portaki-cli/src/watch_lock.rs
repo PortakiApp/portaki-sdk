@@ -64,8 +64,7 @@ pub fn acquire(module: &str) -> Result<WatchLock> {
 
     if let Some(holder) = live_holder(&path) {
         anyhow::bail!(
-            "portaki dev --watch is already running on {} (pid {}) — stop it first, or run \
-             this one without --watch",
+            "a portaki dev session is already running on {} (pid {}) — stop it first",
             holder.module,
             holder.pid
         );
