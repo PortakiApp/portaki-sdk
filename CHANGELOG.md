@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.4.0...v6.5.0) (2026-09-21)
+
+
+### Features
+
+* **cli:** add sdk upgrade --dry-run ([19c4eb1](https://github.com/PortakiApp/portaki-sdk/commit/19c4eb1feaaf6b5810f18ed951db77a757b634f4))
+
+
+### Bug Fixes
+
+* **cli:** correct dev session busy messages ([60df1cd](https://github.com/PortakiApp/portaki-sdk/commit/60df1cd1fbcb7f39c6ee313b4e86f992b6d2fcf3))
+* **cli:** serialise token refresh across processes ([1720b91](https://github.com/PortakiApp/portaki-sdk/commit/1720b91a6794c450526ddc69d0a1b584e173fcd0))
+
 ## [6.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.3.1...v6.4.0) (2026-09-21)
 
 
