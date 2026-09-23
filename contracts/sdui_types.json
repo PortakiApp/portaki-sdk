@@ -305,6 +305,17 @@
     },
     "kind": "struct"
   },
+  "ImageSize": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "full"
+      },
+      {
+        "name": "thumb"
+      }
+    ]
+  },
   "MapClustering": {
     "fields": {
       "enabled": {

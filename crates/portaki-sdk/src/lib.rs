@@ -140,8 +140,8 @@ pub mod prelude {
     };
     pub use crate::sdui::common::{
         ButtonVariant, ChartKind, ChartPoint, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint,
-        MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, StackDirection, Swatch,
-        TempVariant, TemperatureUnit, TextVariant, Tone,
+        ImageSize, MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, StackDirection,
+        Swatch, TempVariant, TemperatureUnit, TextVariant, Tone,
     };
     pub use crate::sdui::component::Component;
     pub use crate::sdui::surface::Surface;
