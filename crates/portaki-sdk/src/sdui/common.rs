@@ -639,6 +639,65 @@ pub struct AccordionItem {
     pub content: Option<Box<Component>>,
 }
 
+/// Shape of a [`Chart`](super::primitives::Chart).
+///
+/// The data rides in `points`, not in children: a chart is **one** node, whatever its length,
+/// so it costs a placement's node budget once.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ChartKind {
+    /// Vertical bars, label under each; `highlight` picks the solid one (default: the last).
+    #[default]
+    Bars,
+    /// Horizontal bars, label left and `display` right, each scaled to `max` (default: the
+    /// largest value).
+    HorizontalBars,
+    /// Ring of parts; `value` is each part's percentage, `center` the text in the hole.
+    Donut,
+    /// Grid of cells, `columns` wide, each shaded by `value / max` (default max: the largest).
+    Heatmap,
+}
+
+/// One datum of a [`Chart`](super::primitives::Chart).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ChartPoint {
+    /// Axis or legend label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The number the mark is drawn from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<f64>,
+    /// What the shell prints for the value (« 2 signalements », « 6 h »); `value` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+    /// Per-point tint (donut parts); the chart's `swatch` otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub swatch: Option<Swatch>,
+}
+
+impl ChartPoint {
+    /// A labelled value.
+    pub fn new(label: impl Into<String>, value: f64) -> Self {
+        Self {
+            label: Some(label.into()),
+            value: Some(value),
+            ..Self::default()
+        }
+    }
+
+    /// Text shown for the value.
+    pub fn display(mut self, display: impl Into<String>) -> Self {
+        self.display = Some(display.into());
+        self
+    }
+
+    /// Tint of this point.
+    pub fn swatch(mut self, swatch: Swatch) -> Self {
+        self.swatch = Some(swatch);
+        self
+    }
+}
+
 /// One tab of a [`Tabs`](super::primitives::Tabs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct TabItem {

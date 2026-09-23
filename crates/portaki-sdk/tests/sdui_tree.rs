@@ -143,3 +143,32 @@ fn every_common_type_holding_a_node_is_walked() {
         .collect();
     assert_eq!(holders, walked);
 }
+
+/// A chart is one leaf, whatever its length: its data rides in `points`, never in children.
+#[test]
+fn chart_is_a_single_leaf_node() {
+    use portaki_sdk::sdui::primitives::Chart;
+    use portaki_sdk::sdui::{ChartKind, ChartPoint, Swatch};
+
+    let chart: Component = Chart::new()
+        .kind(ChartKind::HorizontalBars)
+        .swatch(Swatch::Red)
+        .points(vec![
+            ChartPoint::new("i18n:cat.appliance", 2.0).display("2 signalements"),
+            ChartPoint::new("i18n:cat.access", 1.0),
+        ])
+        .into();
+    assert!(chart.child_nodes().is_empty());
+    assert_eq!(
+        serde_json::to_value(&chart).unwrap(),
+        json!({
+            "type": "Chart",
+            "kind": "horizontal_bars",
+            "swatch": "red",
+            "points": [
+                { "label": "i18n:cat.appliance", "value": 2.0, "display": "2 signalements" },
+                { "label": "i18n:cat.access", "value": 1.0 }
+            ]
+        })
+    );
+}
