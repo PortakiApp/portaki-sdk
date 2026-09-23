@@ -79,3 +79,20 @@ pub const GUEST_STAY_EMAILS_TOTAL: usize = 10;
 ///
 /// Plateforme seule : le compte couvre les invocations passées.
 pub const HOST_EMAILS_PER_MODULE_PER_24H: usize = 20;
+
+// ── Fichiers invités (`ImageUpload`, permission `guest:files`) ───────────────────────────
+//
+// Appliqués par l'endpoint d'upload voyageur de la plateforme : le SDK ne voit jamais les
+// octets, seulement la référence ([`crate::files::FileRef`]) qu'un formulaire lui transmet.
+
+/// Taille maximale d'un fichier invité, en octets (5 Mio).
+pub const GUEST_FILE_MAX_BYTES: usize = 5 * 1024 * 1024;
+
+/// Types acceptés, vérifiés sur les octets et non sur l'en-tête déclaré. La plateforme
+/// réencode l'image, ce qui retire les métadonnées (EXIF, position GPS).
+pub const GUEST_FILE_CONTENT_TYPES: &[&str] = &["image/jpeg", "image/png"];
+
+/// Fichiers qu'un séjour peut envoyer, tous modules confondus.
+///
+/// Plateforme seule : le compte couvre les autres modules et les invocations passées.
+pub const GUEST_FILES_PER_STAY: usize = 20;
