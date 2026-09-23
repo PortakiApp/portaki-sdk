@@ -352,7 +352,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Publish(args) => commands::publish::run(args).await,
-        Command::Link(args) => commands::link::run(args),
+        Command::Link(args) => commands::link::run(args).await,
         Command::Docs(args) => commands::docs::run(args),
         Command::Catalog(args) => commands::catalog::run(args),
         Command::Inspect(args) => commands::inspect::run(args).await,

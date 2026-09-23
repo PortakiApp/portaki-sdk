@@ -111,18 +111,23 @@ pub async fn exchange(
 pub struct Refused {
     pub status: u16,
     pub code: String,
+    /// La page où corriger le refus, quand le registre la donne (`module_not_linked`).
+    pub link_url: Option<String>,
     text: String,
 }
 
 impl Refused {
     pub(crate) fn from_response(status: u16, body: &str) -> Self {
-        let code = serde_json::from_str::<serde_json::Value>(body)
-            .ok()
-            .and_then(|parsed| parsed.get("code")?.as_str().map(str::to_string))
-            .unwrap_or_default();
+        let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+        let field = |name: &str| {
+            parsed
+                .as_ref()
+                .and_then(|parsed| parsed.get(name)?.as_str().map(str::to_string))
+        };
         Self {
             status,
-            code,
+            code: field("code").unwrap_or_default(),
+            link_url: field("linkUrl"),
             text: refusal(status, body),
         }
     }
@@ -181,6 +186,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_not_linked_refusal_carries_the_page_the_registry_gives() {
+        let refused = Refused::from_response(
+            403,
+            r#"{"code":"module_not_linked","message":"x","linkUrl":"https://developer.portaki.app/nuki/repository"}"#,
+        );
+
+        assert_eq!(
+            refused.link_url.as_deref(),
+            Some("https://developer.portaki.app/nuki/repository")
+        );
+    }
+
+    #[test]
     fn the_audience_defaults_to_the_registry_of_the_target_platform() {
         assert_eq!(
             audience("https://api.portaki.app/"),
@@ -202,6 +220,7 @@ mod tests {
         let refused = Refused::from_response(403, r#"{"code":"module_not_linked","message":"x"}"#);
 
         assert_eq!(refused.code, "module_not_linked");
+        assert_eq!(refused.link_url, None);
         assert!(refused.to_string().contains("module_not_linked"));
     }
 
