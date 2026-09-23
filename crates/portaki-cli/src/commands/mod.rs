@@ -9,6 +9,7 @@ pub mod dev;
 pub mod docs;
 pub mod init;
 pub mod inspect;
+pub mod link;
 pub mod lint;
 pub mod login;
 pub mod publish;

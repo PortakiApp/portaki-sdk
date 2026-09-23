@@ -95,7 +95,7 @@ pub async fn exchange(
     let status = response.status().as_u16();
     let body = response.text().await.unwrap_or_default();
     if !(200..300).contains(&status) {
-        bail!("{}", refusal(status, &body));
+        return Err(Refused::from_response(status, &body).into());
     }
     let parsed: serde_json::Value =
         serde_json::from_str(&body).context("réponse d'échange illisible")?;
@@ -104,6 +104,37 @@ pub async fn exchange(
         _ => bail!("le registre n'a pas rendu de credential"),
     }
 }
+
+/// Un échange refusé, avec le code stable du registre : `publish` le lit pour reconnaître
+/// `module_not_linked` sans analyser un message.
+#[derive(Debug)]
+pub struct Refused {
+    pub status: u16,
+    pub code: String,
+    text: String,
+}
+
+impl Refused {
+    pub(crate) fn from_response(status: u16, body: &str) -> Self {
+        let code = serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|parsed| parsed.get("code")?.as_str().map(str::to_string))
+            .unwrap_or_default();
+        Self {
+            status,
+            code,
+            text: refusal(status, body),
+        }
+    }
+}
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text)
+    }
+}
+
+impl std::error::Error for Refused {}
 
 /// Le refus, traduit en ce qu'il y a à corriger.
 ///
@@ -164,6 +195,14 @@ mod tests {
 
         assert!(refused.contains("environment_required"));
         assert!(refused.contains("environment:"));
+    }
+
+    #[test]
+    fn a_refusal_keeps_its_code_for_the_caller() {
+        let refused = Refused::from_response(403, r#"{"code":"module_not_linked","message":"x"}"#);
+
+        assert_eq!(refused.code, "module_not_linked");
+        assert!(refused.to_string().contains("module_not_linked"));
     }
 
     #[test]

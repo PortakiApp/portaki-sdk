@@ -59,9 +59,33 @@ rustup target add wasm32-unknown-unknown
 | `portaki lint` | Validate capabilities, connectors, i18n keys |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki publish` | Push the OCI artifact, then announce it to the registry |
+| `portaki link` | Open the dashboard page that links this module — and its monorepo siblings — to a repository |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect` | Inspect a published OCI artifact |
 | `portaki docs` / `dev` | Docs helper / local mock gateway (evolves with the SDK) |
+
+## Monorepos
+
+A repository whose modules live under `modules/*/portaki.module.json` (the layout of
+`portaki-modules`) is a monorepo. Inside `modules/<id>/`, every command acts on that module as
+before. From the repository root, `portaki dev`, `portaki build` and `portaki publish` take
+`--module <id>`; `build` and `publish` also take `--all`. With neither, a terminal asks which one,
+and anything else — a CI — gets an error listing the ids.
+
+`portaki publish --all` publishes each module on its own — one OIDC token, one digest — prints a
+result per module, keeps going after a refusal, and exits non-zero if any module failed. Modules
+refused with `module_not_linked` are gathered into one link:
+
+```text
+✖ 403 module_not_linked — « access-guide » n'est lié à aucun dépôt
+  Modules non liés dans ce dépôt : access-guide, nuki
+  → Liez-les en une fois : https://developer.portaki.app/access-guide/repository?also=nuki
+```
+
+The CLI never creates the link itself: it needs a GitHub installation chosen in the dashboard.
+`portaki link` opens that same page for the current module and the other modules of the
+repository (`--no-browser` prints it). The developer console origin follows `PORTAKI_API_URL`
+(`api.<root>` → `developer.<root>`); `PORTAKI_DEVELOPER_URL` overrides it.
 
 ## Output
 

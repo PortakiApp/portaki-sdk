@@ -11,7 +11,7 @@ use crate::manifest::{
     write_migration_bundle, write_operations_bundle,
 };
 use crate::oci::pack;
-use crate::ui;
+use crate::{ui, workspace};
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki build`.
@@ -22,6 +22,12 @@ pub struct BuildArgs {
     /// Skip `cargo build` (manifest-only refresh).
     #[arg(long)]
     pub manifest_only: bool,
+    /// In a repository holding several modules, the one to build.
+    #[arg(long, conflicts_with = "all")]
+    pub module: Option<String>,
+    /// Build every module of the repository.
+    #[arg(long)]
+    pub all: bool,
 
     /// `publish` enchaîne sur `build` : un second en-tête ferait croire à deux commandes.
     #[arg(skip)]
@@ -36,6 +42,25 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             "Compile to wasm32, then turn the SDK's emissions into what the host reads.",
         );
     }
+    // `publish` s'est déjà placé dans le module qu'il publie.
+    if args.nested {
+        return build_here(&args).await;
+    }
+    let chosen = workspace::resolve(args.module.as_deref(), Some(args.all))?;
+    for member in &chosen {
+        if chosen.len() > 1 {
+            ui::rule(&member.id);
+        }
+        workspace::enter(member)?;
+        build_here(&args)
+            .await
+            .with_context(|| format!("build {}", member.id))?;
+    }
+    Ok(())
+}
+
+/// `portaki build` pour le module du dossier courant.
+async fn build_here(args: &BuildArgs) -> Result<()> {
     let started = std::time::Instant::now();
 
     let module_root = std::env::current_dir().context("current_dir")?;

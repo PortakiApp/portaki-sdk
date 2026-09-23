@@ -45,6 +45,8 @@ pub async fn run(args: CheckArgs) -> Result<()> {
     build::run(BuildArgs {
         release: true,
         manifest_only: false,
+        module: None,
+        all: false,
         nested: true,
     })
     .await?;

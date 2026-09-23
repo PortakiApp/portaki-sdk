@@ -50,6 +50,10 @@ pub struct DevArgs {
     /// `query` reads, `command` writes — the SDK's own distinction.
     #[arg(long, default_value = "query")]
     pub kind: String,
+
+    /// In a repository holding several modules, the one to deploy.
+    #[arg(long)]
+    pub module: Option<String>,
 }
 
 /// Runs `portaki dev`.
@@ -59,6 +63,10 @@ pub async fn run(args: DevArgs) -> Result<()> {
         "Runs against the real host in the hosted sandbox — not a local mock.",
     );
 
+    // Un seul module à la fois : le bac à sable et son bail se tiennent par module.
+    if let Some(member) = crate::workspace::resolve(args.module.as_deref(), None)?.first() {
+        crate::workspace::enter(member)?;
+    }
     let module_root = std::env::current_dir().context("current_dir")?;
 
     // `--dispatch` nu ne demande pas un déploiement : il demande les noms. On les montre et on
