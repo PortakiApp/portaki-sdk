@@ -146,6 +146,16 @@ fn every_common_type_holding_a_node_is_walked() {
 
 /// A chart is one leaf, whatever its length: its data rides in `points`, never in children.
 #[test]
+fn an_image_can_ask_for_a_thumbnail() {
+    use portaki_sdk::sdui::primitives::Image;
+    use portaki_sdk::sdui::ImageSize;
+
+    let json = serde_json::to_value(Image::new().url("portaki-file:x").size(ImageSize::Thumb))
+        .expect("image json");
+    assert_eq!(json["size"], "thumb");
+}
+
+#[test]
 fn chart_is_a_single_leaf_node() {
     use portaki_sdk::sdui::primitives::Chart;
     use portaki_sdk::sdui::{ChartKind, ChartPoint, Swatch};

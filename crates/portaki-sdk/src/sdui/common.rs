@@ -639,6 +639,18 @@ pub struct AccordionItem {
     pub content: Option<Box<Component>>,
 }
 
+/// How large an [`Image`](super::primitives::Image) renders.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageSize {
+    /// As wide as its container (default).
+    #[default]
+    Full,
+    /// A small square thumbnail; the host renderer opens the full image on click — e.g. a
+    /// guest photo in a list row.
+    Thumb,
+}
+
 /// Shape of a [`Chart`](super::primitives::Chart).
 ///
 /// The data rides in `points`, not in children: a chart is **one** node, whatever its length,
