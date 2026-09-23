@@ -27,10 +27,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::commands::build::{self, BuildArgs};
-use crate::commands::test;
-use crate::{auth, oci, oidc, ui};
+use crate::commands::{link, test};
+use crate::{auth, oci, oidc, ui, workspace};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 /// Arguments for `portaki publish`.
 pub struct PublishArgs {
     /// OCI registry prefix. Defaults to ghcr.io/portakiapp for official modules; required
@@ -58,6 +58,12 @@ pub struct PublishArgs {
     /// Announce a version already on GHCR, compiling and pushing nothing.
     #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build"])]
     pub announce_only: bool,
+    /// In a repository holding several modules, the one to publish.
+    #[arg(long, conflicts_with = "all")]
+    pub module: Option<String>,
+    /// Publish every module of the repository, each on its own.
+    #[arg(long)]
+    pub all: bool,
 }
 
 /// A layer's size on disk, or zero when it cannot be read — the list is a report, not a gate.
@@ -114,8 +120,95 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         "Push the OCI artifact, then announce it so a catalogue can carry it.",
     );
 
-    let module_root = std::env::current_dir().context("current_dir")?;
-    run_in(&module_root, args).await
+    // Un module après l'autre, chacun avec son jeton et son digest : un refus n'arrête pas les
+    // suivants, et le code de sortie dit s'il y en a eu un.
+    let chosen = workspace::resolve(args.module.as_deref(), Some(args.all))?;
+    let mut outcomes = Vec::with_capacity(chosen.len());
+    for member in &chosen {
+        if chosen.len() > 1 {
+            ui::rule(&member.id);
+        }
+        workspace::enter(member)?;
+        let outcome = run_in(&member.root, args.clone()).await;
+        outcomes.push((member.id.clone(), outcome));
+    }
+    let origin = link::developer_origin(&auth::api_base_url(args.url.as_deref()));
+    conclude(outcomes, &origin)
+}
+
+/// Le refus `module_not_linked` de l'échange OIDC, s'il est dans la chaîne.
+fn not_linked(failure: &anyhow::Error) -> Option<&oidc::Refused> {
+    failure
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<oidc::Refused>())
+        .filter(|refused| refused.code == "module_not_linked")
+}
+
+/// Les modules refusés faute de liaison, dans l'ordre du run.
+///
+/// Le CLI ne sait pas lister les liaisons — l'API qui le dit veut un jeton de développeur, et
+/// une CI n'a que son jeton OIDC. Ce sont donc les refus de ce run qui font la liste.
+fn unlinked(outcomes: &[(String, Result<()>)]) -> Vec<String> {
+    outcomes
+        .iter()
+        .filter(|(_, outcome)| outcome.as_ref().err().and_then(not_linked).is_some())
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+/// Un résultat par module, le lien pour lier d'un coup ceux qui ne le sont pas, et un échec
+/// si un seul module n'est pas passé.
+fn conclude(outcomes: Vec<(String, Result<()>)>, developer_origin: &str) -> Result<()> {
+    let unlinked = unlinked(&outcomes);
+    let total = outcomes.len();
+    let mut failed = 0;
+    let mut status = 403;
+
+    if total > 1 {
+        ui::section("results");
+    }
+    for (id, outcome) in outcomes {
+        let Err(failure) = outcome else {
+            if total > 1 {
+                ui::success(format!("{id} published"));
+            }
+            continue;
+        };
+        failed += 1;
+        if let Some(refused) = not_linked(&failure) {
+            status = refused.status;
+            if total > 1 {
+                ui::failure(format!("{id} — not linked to any repository"));
+            }
+        } else if total == 1 {
+            // Un module seul : l'échec remonte tel quel, comme avant.
+            return Err(failure);
+        } else {
+            ui::failure(format!("{id} — {failure:#}"));
+        }
+    }
+
+    if let Some(first) = unlinked.first() {
+        ui::blank();
+        ui::failure(format!(
+            "{status} module_not_linked — « {first} » n'est lié à aucun dépôt"
+        ));
+        ui::detail(format!(
+            "Modules non liés dans ce dépôt : {}",
+            unlinked.join(", ")
+        ));
+        ui::detail(format!(
+            "→ Liez-les en une fois : {}",
+            link::repository_url(developer_origin, &unlinked)
+        ));
+        ui::blank();
+    }
+
+    match failed {
+        0 => Ok(()),
+        _ if total == 1 => anyhow::bail!("{} was not published", unlinked.join(", ")),
+        _ => anyhow::bail!("{failed} of {total} modules were not published"),
+    }
 }
 
 /// `portaki publish` for the module in `module_root`.
@@ -153,6 +246,8 @@ async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
         build::run(BuildArgs {
             release: true,
             manifest_only: false,
+            module: None,
+            all: false,
             nested: true,
         })
         .await
@@ -512,6 +607,58 @@ mod tests {
         )
         .unwrap();
         dir
+    }
+
+    fn refused(code: &str) -> Result<()> {
+        let body = format!(r#"{{"code":"{code}","message":"x"}}"#);
+        Err(anyhow::Error::from(oidc::Refused::from_response(
+            403, &body,
+        )))
+    }
+
+    /// Un refus n'arrête pas les suivants ; la liste des non liés et le code de sortie
+    /// viennent du run entier.
+    #[test]
+    fn every_module_gets_a_result_and_one_failure_fails_the_run() {
+        let outcomes = vec![
+            ("access-guide".to_string(), refused("module_not_linked")),
+            ("checklist".to_string(), Ok(())),
+            ("nuki".to_string(), refused("module_not_linked")),
+            ("rules".to_string(), refused("workflow_not_allowed")),
+        ];
+
+        assert_eq!(unlinked(&outcomes), vec!["access-guide", "nuki"]);
+        let error = conclude(outcomes, "https://developer.portaki.app")
+            .unwrap_err()
+            .to_string();
+        assert_eq!(error, "3 of 4 modules were not published");
+    }
+
+    #[test]
+    fn a_run_where_everything_passed_succeeds() {
+        let outcomes = vec![("a".to_string(), Ok(())), ("b".to_string(), Ok(()))];
+
+        assert!(conclude(outcomes, "https://developer.portaki.app").is_ok());
+    }
+
+    /// Un module seul qui échoue pour une autre raison garde son erreur d'origine.
+    #[test]
+    fn a_single_module_keeps_its_own_error() {
+        let error = conclude(
+            vec![("nuki".to_string(), refused("environment_required"))],
+            "https://developer.portaki.app",
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("environment_required"), "{error}");
+        let error = conclude(
+            vec![("nuki".to_string(), refused("module_not_linked"))],
+            "https://developer.portaki.app",
+        )
+        .unwrap_err()
+        .to_string();
+        assert_eq!(error, "nuki was not published");
     }
 
     fn publish_args(flags: &[&str]) -> PublishArgs {

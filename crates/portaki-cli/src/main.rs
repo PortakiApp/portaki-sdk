@@ -18,6 +18,7 @@
 //! | `lint` | Validate capability ids, connector bindings, i18n keys |
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `publish` | Push OCI layers to a container registry |
+//! | `link` | Open the dashboard page that links modules to their repository |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
 //! | `inspect` | Fetch and summarize a published OCI artifact |
 //! | `docs` / `dev` | Docs helper / local mock gateway (evolve with the SDK) |
@@ -35,6 +36,7 @@ mod oidc;
 mod ui;
 mod update;
 mod watch_lock;
+mod workspace;
 
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
@@ -102,6 +104,8 @@ enum Command {
     Sdk(commands::sdk::SdkArgs),
     /// Push OCI artifact to Scaleway Container Registry.
     Publish(commands::publish::PublishArgs),
+    /// Open the page that links this module (and its monorepo siblings) to a repository.
+    Link(commands::link::LinkArgs),
     /// Print how to open local SDK documentation (no docs server).
     Docs(commands::docs::DocsArgs),
     /// Dump the SDUI catalog specification.
@@ -348,6 +352,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Publish(args) => commands::publish::run(args).await,
+        Command::Link(args) => commands::link::run(args),
         Command::Docs(args) => commands::docs::run(args),
         Command::Catalog(args) => commands::catalog::run(args),
         Command::Inspect(args) => commands::inspect::run(args).await,
