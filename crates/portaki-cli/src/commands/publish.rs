@@ -20,6 +20,9 @@
 //! Après la poussée OCI, la publication est **annoncée au registre Portaki**. Sans cette annonce
 //! l'artefact existe sur GHCR mais n'entre dans aucun catalogue : c'est ce qui manquait pour que
 //! l'orchestrator puisse lire son catalogue depuis le registre plutôt que depuis GHCR.
+//!
+//! Puis la fiche publique `listing.json`, si le module en a une, part au registre — y compris
+//! quand la version y était déjà.
 
 use std::path::{Path, PathBuf};
 
@@ -213,12 +216,186 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
     match failed {
         0 => Ok(()),
         _ if total == 1 => anyhow::bail!("{} was not published", unlinked.join(", ")),
-        _ => anyhow::bail!("{failed} of {total} modules were not published"),
+        _ => anyhow::bail!("{failed} of {total} modules failed"),
     }
 }
 
-/// `portaki publish` for the module in `module_root`.
+/// La fiche publique du module, versionnée à côté de `portaki.module.json`.
+const LISTING: &str = "listing.json";
+
+/// La fiche du module, lue et vérifiée avant toute publication : une fiche cassée découverte
+/// après la poussée laisserait un artefact publié et une vitrine en retard.
+///
+/// Le contenu part tel quel — c'est le registre qui en valide les champs.
+fn read_listing(module_root: &Path) -> Result<Option<serde_json::Value>> {
+    let path = module_root.join(LISTING);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(failure) => return Err(failure).with_context(|| format!("read {}", path.display())),
+    };
+    let listing: serde_json::Value = serde_json::from_str(&raw)
+        .with_context(|| format!("{LISTING} is not valid JSON — fix it before publishing"))?;
+    if !listing.is_object() {
+        anyhow::bail!("{LISTING} must hold a JSON object — fix it before publishing");
+    }
+    Ok(Some(listing))
+}
+
+/// Jusqu'où la publication est allée.
+#[derive(Debug, PartialEq, Eq)]
+enum Landed {
+    DryRun,
+    /// Poussé sur GHCR sans annonce (`--no-announce`) : le module peut n'être dans aucun catalogue.
+    Unannounced,
+    /// La version est au registre — annoncée à l'instant, ou déjà là.
+    InRegistry(String),
+}
+
+/// La version est déjà au registre : la publication s'arrête avant de pousser (ADR-0005).
+#[derive(Debug)]
+struct AlreadyInRegistry {
+    id: String,
+    version: String,
+    digest: String,
+}
+
+impl std::fmt::Display for AlreadyInRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} is already in the registry ({}) — publications are immutable, so \
+             pushing again would leave the OCI tag pointing at something the catalogue does not \
+             reference. Bump the version, or replay the announcement with \
+             portaki publish --announce-only",
+            self.id, self.version, self.digest
+        )
+    }
+}
+
+impl std::error::Error for AlreadyInRegistry {}
+
+/// Ce qu'on fait de la fiche, selon où la publication s'est arrêtée.
+#[derive(Debug, PartialEq, Eq)]
+enum ListingPlan<'a> {
+    Send(&'a str),
+    WouldSend,
+    Skip,
+}
+
+/// La fiche part dès que la version est au registre — y compris déjà publiée, sans quoi une
+/// fiche corrigée attendrait la release suivante.
+fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
+    match landed {
+        Ok(Landed::InRegistry(id)) => ListingPlan::Send(id),
+        Ok(Landed::DryRun) => ListingPlan::WouldSend,
+        Ok(Landed::Unannounced) => ListingPlan::Skip,
+        Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
+            Some(already) => ListingPlan::Send(&already.id),
+            None => ListingPlan::Skip,
+        },
+    }
+}
+
+/// `portaki publish` for the module in `module_root`, then its public listing.
 async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
+    let Some(listing) = read_listing(module_root)? else {
+        return release(module_root, &args).await.map(|_| ());
+    };
+    let landed = release(module_root, &args).await;
+    let sent = match listing_plan(&landed) {
+        ListingPlan::Send(id) => send_listing(&args, id, &listing).await,
+        ListingPlan::WouldSend => {
+            ui::field("listing", format!("would be sent ({LISTING})"));
+            Ok(())
+        }
+        ListingPlan::Skip => Ok(()),
+    };
+    match (landed, sent) {
+        (Err(failure), Ok(())) => Err(failure),
+        (Err(failure), Err(listing)) => Err(anyhow::anyhow!("{failure:#}\n{listing:#}")),
+        (Ok(_), sent) => sent,
+    }
+}
+
+/// Envoie la fiche au registre. Elle remplace celle éditée dans le dashboard : le dépôt fait foi.
+///
+/// Un credential de CI est à usage unique et l'annonce a consommé le sien : on en redemande un.
+async fn send_listing(
+    args: &PublishArgs,
+    module_id: &str,
+    listing: &serde_json::Value,
+) -> Result<()> {
+    let base = auth::api_base_url(args.url.as_deref());
+    let outcome = match credential(&base, module_id, &args.channel).await? {
+        Credential::Ci(token) => put_listing(&base, module_id, listing, &token).await?,
+        Credential::Person(token) => {
+            let first = put_listing(&base, module_id, listing, &token).await?;
+            if first == Outcome::Unauthorized {
+                put_listing(
+                    &base,
+                    module_id,
+                    listing,
+                    &auth::refresh(&base, &token).await?,
+                )
+                .await?
+            } else {
+                first
+            }
+        }
+    };
+    let verdict = listing_verdict(module_id, outcome);
+    match &verdict {
+        Ok(()) => ui::field("listing", "sent"),
+        Err(failure) => ui::field("listing", format!("{failure:#}")),
+    }
+    verdict
+}
+
+async fn put_listing(
+    base: &str,
+    module_id: &str,
+    listing: &serde_json::Value,
+    token: &str,
+) -> Result<Outcome> {
+    let response = crate::http::client()
+        .put(format!(
+            "{}/registry/v1/modules/{module_id}/listing",
+            base.trim_end_matches('/')
+        ))
+        .bearer_auth(token)
+        .json(listing)
+        .send()
+        .await
+        .context("send the public listing to the registry")?;
+
+    Ok(classify(
+        response.status().as_u16(),
+        &response.text().await.unwrap_or_default(),
+    ))
+}
+
+/// Une fiche refusée n'annule pas la publication : elle fait échouer le run, avec le motif.
+fn listing_verdict(module_id: &str, outcome: Outcome) -> Result<()> {
+    match outcome {
+        Outcome::Published => Ok(()),
+        Outcome::Refused {
+            status,
+            code,
+            message,
+        } => anyhow::bail!(
+            "the registry refused the listing of {module_id} ({status} {code}): {message} — \
+             the publication itself stands; fix {LISTING} and replay"
+        ),
+        Outcome::Unauthorized | Outcome::AlreadyPublished => anyhow::bail!(
+            "the registry refused the token for the listing of {module_id} — run portaki login, \
+             or replay the job; the publication itself stands"
+        ),
+    }
+}
+
+/// `portaki publish` for the module in `module_root`, up to the announcement.
+async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     let module_root = module_root.to_path_buf();
     let artifact_dir = args
         .artifact_dir
@@ -236,7 +413,8 @@ async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
         looking.done("found the artifact on the registry");
         ui::field("image", &pushed.image_ref);
         ui::field("digest", &pushed.digest);
-        return announce(&args, &coords, &pushed).await;
+        announce(args, &coords, &pushed).await?;
+        return Ok(Landed::InRegistry(coords.id));
     }
 
     // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie de
@@ -289,7 +467,7 @@ async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
         ui::field("registry", &registry);
         ui::advice("drop --dry-run to push these layers and announce the version");
         ui::blank();
-        return Ok(());
+        return Ok(Landed::DryRun);
     }
 
     // Demandé avant de pousser, pas découvert après. Une publication est immuable (ADR-0005) :
@@ -313,10 +491,11 @@ async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
         ui::warn("skipped the registry announcement — this version is in no catalogue");
         ui::advice("drop --no-announce, or replay with portaki publish --announce-only");
         ui::blank();
-        return Ok(());
+        return Ok(Landed::Unannounced);
     }
 
-    announce(&args, &coords, &pushed).await
+    announce(args, &coords, &pushed).await?;
+    Ok(Landed::InRegistry(coords.id))
 }
 
 /// Une version publiée ne se republie pas.
@@ -337,14 +516,12 @@ async fn refuse_if_already_published(
     let Some(published) = published_digest(base, &coords.id, &coords.version).await else {
         return Ok(());
     };
-    anyhow::bail!(
-        "{} {} is already in the registry ({published}) — publications are immutable, so \
-         pushing again would leave the OCI tag pointing at something the catalogue does not \
-         reference. Bump the version, or replay the announcement with \
-         portaki publish --announce-only",
-        coords.id,
-        coords.version
-    )
+    Err(AlreadyInRegistry {
+        id: coords.id.clone(),
+        version: coords.version.clone(),
+        digest: published,
+    }
+    .into())
 }
 
 /// Une version au catalogue, telle que le registre la rend.
@@ -635,7 +812,7 @@ mod tests {
 
         assert_eq!(unlinked(&outcomes), vec!["access-guide", "nuki"]);
         let error = conclude(outcomes).unwrap_err().to_string();
-        assert_eq!(error, "3 of 4 modules were not published");
+        assert_eq!(error, "3 of 4 modules failed");
     }
 
     #[test]
@@ -657,6 +834,97 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert_eq!(error, "nuki was not published");
+    }
+
+    #[test]
+    fn a_module_without_a_listing_reads_none() {
+        let dir = tempdir().unwrap();
+
+        assert!(read_listing(dir.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_listing_is_read_as_is() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join(LISTING),
+            r#"{"category":"access","tagline":"Open the door","publishedLangs":["fr"]}"#,
+        )
+        .unwrap();
+
+        let listing = read_listing(dir.path()).unwrap().unwrap();
+        assert_eq!(listing["tagline"], "Open the door");
+    }
+
+    /// Une fiche cassée arrête tout avant la poussée, pas après.
+    #[test]
+    fn a_broken_listing_fails_before_publishing() {
+        let dir = tempdir().unwrap();
+        for raw in [r#"{"category":"#, r#"["access"]"#] {
+            fs::write(dir.path().join(LISTING), raw).unwrap();
+
+            let error = format!("{:#}", read_listing(dir.path()).unwrap_err());
+            assert!(error.contains(LISTING), "{raw}: {error}");
+        }
+    }
+
+    #[test]
+    fn the_listing_goes_out_once_the_version_is_in_the_registry() {
+        let published = Ok(Landed::InRegistry("nuki".to_string()));
+        let already: Result<Landed> = Err(AlreadyInRegistry {
+            id: "nuki".to_string(),
+            version: "1.0.0".to_string(),
+            digest: "sha256:aaa".to_string(),
+        }
+        .into());
+
+        assert_eq!(listing_plan(&published), ListingPlan::Send("nuki"));
+        assert_eq!(listing_plan(&already), ListingPlan::Send("nuki"));
+        assert_eq!(listing_plan(&Ok(Landed::DryRun)), ListingPlan::WouldSend);
+        assert_eq!(listing_plan(&Ok(Landed::Unannounced)), ListingPlan::Skip);
+        assert_eq!(
+            listing_plan(&refused("module_not_linked").map(|()| Landed::DryRun)),
+            ListingPlan::Skip
+        );
+    }
+
+    #[test]
+    fn a_refused_listing_carries_the_registry_reasons() {
+        let outcome = classify(
+            400,
+            r#"{"code":"listing_invalid","message":"tagline too long; category unknown"}"#,
+        );
+
+        let error = listing_verdict("nuki", outcome).unwrap_err().to_string();
+        assert!(error.contains("listing_invalid"), "{error}");
+        assert!(error.contains("category unknown"), "{error}");
+        assert!(listing_verdict("nuki", classify(204, "")).is_ok());
+    }
+
+    /// Publié mais fiche refusée : un échec du run comme un autre, avec son motif.
+    #[test]
+    fn a_refused_listing_fails_the_run() {
+        let listing = listing_verdict(
+            "nuki",
+            classify(403, r#"{"code":"module_name_not_owned","message":"x"}"#),
+        );
+        let outcomes = vec![
+            ("checklist".to_string(), Ok(())),
+            ("nuki".to_string(), listing),
+        ];
+
+        assert_eq!(
+            conclude(outcomes).unwrap_err().to_string(),
+            "1 of 2 modules failed"
+        );
+        let alone = listing_verdict(
+            "nuki",
+            classify(403, r#"{"code":"module_name_not_owned","message":"x"}"#),
+        );
+        let error = conclude(vec![("nuki".to_string(), alone)])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("module_name_not_owned"), "{error}");
     }
 
     fn publish_args(flags: &[&str]) -> PublishArgs {
