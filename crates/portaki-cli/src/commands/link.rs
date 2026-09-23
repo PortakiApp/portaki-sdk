@@ -4,7 +4,7 @@
 //! GitHub, ce qui ne se fait que dans le dashboard. Il ouvre la page, avec les autres modules du
 //! monorepo en `?also=` — le dashboard ignore de lui-même ceux qui sont déjà liés ou inconnus.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::{auth, ui, workspace};
@@ -24,7 +24,7 @@ pub struct LinkArgs {
 }
 
 /// Runs `portaki link`.
-pub fn run(args: LinkArgs) -> Result<()> {
+pub async fn run(args: LinkArgs) -> Result<()> {
     ui::header(
         "portaki link",
         "Open the repository page — linking needs a GitHub installation, chosen in the dashboard.",
@@ -38,18 +38,14 @@ pub fn run(args: LinkArgs) -> Result<()> {
         anyhow::bail!("portaki.module.json carries no id — run from the module root");
     }
     let cwd = std::env::current_dir()?;
-    let mut ids = vec![current.clone()];
-    ids.extend(
-        workspace::members(&cwd)
-            .into_iter()
-            .map(|member| member.id)
-            .filter(|id| *id != current),
-    );
+    let others: Vec<String> = workspace::members(&cwd)
+        .into_iter()
+        .map(|member| member.id)
+        .filter(|id| *id != current)
+        .collect();
 
-    let target = repository_url(
-        &developer_origin(&auth::api_base_url(args.url.as_deref())),
-        &ids,
-    );
+    let page = link_page(&auth::api_base_url(args.url.as_deref()), &current).await?;
+    let target = with_also(&page, &others);
     if args.no_browser || !ui::open_browser(&target) {
         ui::field("open", &target);
     } else {
@@ -60,58 +56,39 @@ pub fn run(args: LinkArgs) -> Result<()> {
     Ok(())
 }
 
-/// La page Dépôt du premier module, les suivants en `?also=`.
+/// Ajoute les autres modules à la page Dépôt rendue par le registre, en `?also=`.
 ///
-/// Sur `developer.<racine>` les chemins n'ont pas de préfixe `/dev` : le proxy du dashboard
-/// réécrit `/x` en `/dev/x`, et redirige `/dev/x` vers `/x`.
-pub fn repository_url(origin: &str, ids: &[String]) -> String {
-    let (first, others) = ids.split_first().map_or(("", &[][..]), |(f, o)| (f, o));
-    let mut url = format!("{}/{first}/repository", origin.trim_end_matches('/'));
-    if !others.is_empty() {
-        url.push_str("?also=");
-        url.push_str(&others.join(","));
+/// L'adresse de la page vient de l'API (`link-page`, ou `linkUrl` d'un refus) : le CLI ne la
+/// déduit plus du nom de l'API, une règle de nommage qui casse au premier environnement qui ne
+/// la suit pas.
+pub fn with_also(page: &str, others: &[String]) -> String {
+    if others.is_empty() {
+        return page.to_string();
     }
-    url
+    let separator = if page.contains('?') { '&' } else { '?' };
+    format!("{page}{separator}also={}", others.join(","))
 }
 
-/// L'origine de la console développeur, déduite de l'API visée.
-///
-/// `api.<racine>` → `developer.<racine>`, `api-staging.portaki.app` →
-/// `developer.staging.portaki.app` : la même racine que le dashboard (`getRootDomain`). En local,
-/// la console est servie sous `/dev` du dashboard. `PORTAKI_DEVELOPER_URL` tranche sinon.
-pub fn developer_origin(api_base: &str) -> String {
-    if let Some(explicit) = std::env::var("PORTAKI_DEVELOPER_URL")
+/// La page Dépôt d'un module, telle que le registre la donne.
+async fn link_page(api_base: &str, module_id: &str) -> Result<String> {
+    let url = format!(
+        "{}/registry/v1/modules/{module_id}/link-page",
+        api_base.trim_end_matches('/')
+    );
+    let response = crate::http::client()
+        .get(&url)
+        .send()
+        .await
+        .with_context(|| format!("demander la page Dépôt au registre ({url})"))?;
+    let status = response.status().as_u16();
+    let body = response.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        anyhow::bail!("le registre n'a pas rendu la page Dépôt ({status}) : {body}");
+    }
+    serde_json::from_str::<serde_json::Value>(&body)
         .ok()
-        .map(|value| value.trim().trim_end_matches('/').to_string())
-        .filter(|value| !value.is_empty())
-    {
-        return explicit;
-    }
-    derive_origin(api_base)
-}
-
-/// La règle seule, sans l'environnement, pour être vérifiable.
-fn derive_origin(api_base: &str) -> String {
-    const PRODUCTION: &str = "https://developer.portaki.app";
-    let Some(host) = reqwest::Url::parse(api_base)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_string))
-    else {
-        return PRODUCTION.to_string();
-    };
-    if host == "localhost" || host == "127.0.0.1" {
-        return "http://localhost:3000/dev".to_string();
-    }
-    if let Some(root) = host.strip_prefix("api.") {
-        return format!("https://developer.{root}");
-    }
-    if let Some((env, root)) = host
-        .strip_prefix("api-")
-        .and_then(|rest| rest.split_once('.'))
-    {
-        return format!("https://developer.{env}.{root}");
-    }
-    PRODUCTION.to_string()
+        .and_then(|parsed| parsed.get("url")?.as_str().map(str::to_string))
+        .context("réponse link-page sans url")
 }
 
 #[cfg(test)]
@@ -123,34 +100,24 @@ mod tests {
     }
 
     #[test]
-    fn the_link_names_the_first_module_and_carries_the_others() {
+    fn the_other_modules_ride_along_in_also() {
         assert_eq!(
-            repository_url(
-                "https://developer.portaki.app",
-                &ids(&["access-guide", "nuki", "wifi-guest"])
+            with_also(
+                "https://developer.portaki.app/access-guide/repository",
+                &ids(&["nuki", "wifi-guest"])
             ),
             "https://developer.portaki.app/access-guide/repository?also=nuki,wifi-guest"
         );
         assert_eq!(
-            repository_url("https://developer.portaki.app/", &ids(&["weather"])),
+            with_also("https://developer.portaki.app/weather/repository", &[]),
             "https://developer.portaki.app/weather/repository"
         );
-    }
-
-    #[test]
-    fn the_console_follows_the_platform_it_talks_to() {
         assert_eq!(
-            derive_origin("https://api.portaki.app"),
-            "https://developer.portaki.app"
+            with_also(
+                "http://localhost:3000/dev/x/repository?from=cli",
+                &ids(&["y"])
+            ),
+            "http://localhost:3000/dev/x/repository?from=cli&also=y"
         );
-        assert_eq!(
-            derive_origin("https://api-staging.portaki.app"),
-            "https://developer.staging.portaki.app"
-        );
-        assert_eq!(
-            derive_origin("http://localhost:8080"),
-            "http://localhost:3000/dev"
-        );
-        assert_eq!(derive_origin("nope"), "https://developer.portaki.app");
     }
 }

@@ -84,8 +84,9 @@ refused with `module_not_linked` are gathered into one link:
 
 The CLI never creates the link itself: it needs a GitHub installation chosen in the dashboard.
 `portaki link` opens that same page for the current module and the other modules of the
-repository (`--no-browser` prints it). The developer console origin follows `PORTAKI_API_URL`
-(`api.<root>` → `developer.<root>`); `PORTAKI_DEVELOPER_URL` overrides it.
+repository (`--no-browser` prints it). The page's address comes from the registry — the
+`linkUrl` of the refusal, or `GET /registry/v1/modules/{id}/link-page` for `portaki link` — so
+the CLI never guesses where the developer console lives.
 
 ## Output
 

@@ -132,8 +132,7 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         let outcome = run_in(&member.root, args.clone()).await;
         outcomes.push((member.id.clone(), outcome));
     }
-    let origin = link::developer_origin(&auth::api_base_url(args.url.as_deref()));
-    conclude(outcomes, &origin)
+    conclude(outcomes)
 }
 
 /// Le refus `module_not_linked` de l'échange OIDC, s'il est dans la chaîne.
@@ -158,8 +157,13 @@ fn unlinked(outcomes: &[(String, Result<()>)]) -> Vec<String> {
 
 /// Un résultat par module, le lien pour lier d'un coup ceux qui ne le sont pas, et un échec
 /// si un seul module n'est pas passé.
-fn conclude(outcomes: Vec<(String, Result<()>)>, developer_origin: &str) -> Result<()> {
+fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
     let unlinked = unlinked(&outcomes);
+    // La page Dépôt vient du registre, dans le refus du premier module non lié.
+    let page = outcomes
+        .iter()
+        .find_map(|(_, outcome)| outcome.as_ref().err().and_then(not_linked))
+        .and_then(|refused| refused.link_url.clone());
     let total = outcomes.len();
     let mut failed = 0;
     let mut status = 403;
@@ -197,10 +201,12 @@ fn conclude(outcomes: Vec<(String, Result<()>)>, developer_origin: &str) -> Resu
             "Modules non liés dans ce dépôt : {}",
             unlinked.join(", ")
         ));
-        ui::detail(format!(
-            "→ Liez-les en une fois : {}",
-            link::repository_url(developer_origin, &unlinked)
-        ));
+        if let Some(page) = &page {
+            ui::detail(format!(
+                "→ Liez-les en une fois : {}",
+                link::with_also(page, &unlinked[1..])
+            ));
+        }
         ui::blank();
     }
 
@@ -628,9 +634,7 @@ mod tests {
         ];
 
         assert_eq!(unlinked(&outcomes), vec!["access-guide", "nuki"]);
-        let error = conclude(outcomes, "https://developer.portaki.app")
-            .unwrap_err()
-            .to_string();
+        let error = conclude(outcomes).unwrap_err().to_string();
         assert_eq!(error, "3 of 4 modules were not published");
     }
 
@@ -638,26 +642,20 @@ mod tests {
     fn a_run_where_everything_passed_succeeds() {
         let outcomes = vec![("a".to_string(), Ok(())), ("b".to_string(), Ok(()))];
 
-        assert!(conclude(outcomes, "https://developer.portaki.app").is_ok());
+        assert!(conclude(outcomes).is_ok());
     }
 
     /// Un module seul qui échoue pour une autre raison garde son erreur d'origine.
     #[test]
     fn a_single_module_keeps_its_own_error() {
-        let error = conclude(
-            vec![("nuki".to_string(), refused("environment_required"))],
-            "https://developer.portaki.app",
-        )
-        .unwrap_err()
-        .to_string();
+        let error = conclude(vec![("nuki".to_string(), refused("environment_required"))])
+            .unwrap_err()
+            .to_string();
 
         assert!(error.contains("environment_required"), "{error}");
-        let error = conclude(
-            vec![("nuki".to_string(), refused("module_not_linked"))],
-            "https://developer.portaki.app",
-        )
-        .unwrap_err()
-        .to_string();
+        let error = conclude(vec![("nuki".to_string(), refused("module_not_linked"))])
+            .unwrap_err()
+            .to_string();
         assert_eq!(error, "nuki was not published");
     }
 
