@@ -138,9 +138,9 @@ pub mod prelude {
         json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation,
     };
     pub use crate::sdui::common::{
-        ButtonVariant, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint, MapInteractionMode,
-        MapMarker, MapMarkerKind, MapViewport, StackDirection, Swatch, TempVariant,
-        TemperatureUnit, TextVariant, Tone,
+        ButtonVariant, ChartKind, ChartPoint, ChoiceListLayout, ChoiceOption, Emphasis, GeoPoint,
+        MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, StackDirection, Swatch,
+        TempVariant, TemperatureUnit, TextVariant, Tone,
     };
     pub use crate::sdui::component::Component;
     pub use crate::sdui::surface::Surface;

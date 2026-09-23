@@ -199,6 +199,44 @@
       }
     ]
   },
+  "ChartKind": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "bars"
+      },
+      {
+        "name": "horizontal_bars"
+      },
+      {
+        "name": "donut"
+      },
+      {
+        "name": "heatmap"
+      }
+    ]
+  },
+  "ChartPoint": {
+    "fields": {
+      "display": {
+        "optional": true,
+        "type": "String"
+      },
+      "label": {
+        "optional": true,
+        "type": "String"
+      },
+      "swatch": {
+        "optional": true,
+        "type": "Swatch"
+      },
+      "value": {
+        "optional": true,
+        "type": "f64"
+      }
+    },
+    "kind": "struct"
+  },
   "ChoiceListLayout": {
     "kind": "enum",
     "variants": [
