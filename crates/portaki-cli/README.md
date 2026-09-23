@@ -247,6 +247,20 @@ re-run; two jobs starting together both look before either announces, so seriali
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
 a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
 
+### Public listing
+
+A module can version its public catalogue listing in `listing.json`, next to
+`portaki.module.json` (`category`, `tagline`, `guestSurface`, `hostSurface`, `configItems`,
+`capabilities`, `publishedLangs`). `publish` reads it before anything else — invalid JSON stops the
+run before a push — and sends it as is once the version is in the registry: after the
+announcement, and also when the version was already there, so a fixed listing does not wait for
+the next release. `--dry-run` sends nothing; `--no-announce` skips it. In CI it takes a fresh
+OIDC exchange, the announcement having used its single-use credential.
+
+The file **overwrites the listing edited in the dashboard** — the repository is the source of
+truth. A refused listing does not undo the publication, but fails the run with the registry's
+reasons. No `listing.json`, nothing changes.
+
 ### Publishing from CI
 
 No publication secret to store. In a GitHub Actions job with `id-token: write`, the CLI asks
