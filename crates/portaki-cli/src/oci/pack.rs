@@ -724,7 +724,8 @@ mod stamp_built_declarations_tests {
     #[test]
     fn carries_the_built_entities_into_the_uploaded_manifest() {
         let raw = r#"{"id":"issue-report"}"#;
-        let built = r#"{"id":"issue-report","entities":[{"name":"IssueReport","schema_version":2}]}"#;
+        let built =
+            r#"{"id":"issue-report","entities":[{"name":"IssueReport","schema_version":2}]}"#;
 
         let stamped = stamp_surfaces(raw, built).expect("stamp");
         let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
