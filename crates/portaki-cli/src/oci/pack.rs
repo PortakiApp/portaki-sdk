@@ -119,7 +119,7 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
 }
 
 /// Recopie ce que le build a emis dans le manifeste envoye a la sandbox : les surfaces, les
-/// queries et les commands.
+/// queries, les commands et les entites.
 ///
 /// Deux manifestes coexistent et ne disent pas la meme chose. `portaki.module.json` decrit la
 /// navigation du dashboard : ses `hostSurfaces` portent un `pathSegment`, qui est un morceau
@@ -160,7 +160,11 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
 }
 
 /// Ce que seul le build sait dire, et que la sandbox doit donc recevoir de lui.
-const BUILT_DECLARATIONS: [&str; 3] = ["surfaces", "queries", "commands"];
+///
+/// `entities` aussi : `repo.find` verifie que l'entite est declaree dans le manifeste, et le
+/// runtime de la sandbox n'a que celui-ci. Sans elles, tout module a stockage type echouait en
+/// sandbox alors que son image publiee, qui porte le manifeste du build, marchait.
+const BUILT_DECLARATIONS: [&str; 4] = ["surfaces", "queries", "commands", "entities"];
 
 /// Inscrit `requiresModuleSdk` dans le manifeste, ou refuse si l'auteur en annonce un autre.
 ///
@@ -714,6 +718,18 @@ mod stamp_built_declarations_tests {
         // Ce que le manifeste disait deja n'est pas efface : le pathSegment reste une donnee
         // de navigation, utile au dashboard.
         assert_eq!(value["hostSurfaces"][0]["pathSegment"], "access-guide");
+    }
+
+    /// Le stockage type de la sandbox lit les entites dans ce manifeste, et nulle part ailleurs.
+    #[test]
+    fn carries_the_built_entities_into_the_uploaded_manifest() {
+        let raw = r#"{"id":"issue-report"}"#;
+        let built = r#"{"id":"issue-report","entities":[{"name":"IssueReport","schema_version":2}]}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(value["entities"][0]["name"], "IssueReport");
     }
 
     /// Un build sans emission ne doit pas empecher un deploiement.
