@@ -47,8 +47,22 @@ pub const CONNECTORS_PREFIX: &str = "connectors:";
 /// resolve the address.
 pub const STAY_GUEST_CONTACT_READ: &str = "stay:guest_contact:read";
 
+/// Files a guest attaches from the booklet (an `ImageUpload` field), see [`crate::files`].
+///
+/// Guards no host operation: the platform's guest upload endpoint refuses a module that does
+/// not declare it, so a host reviewing the manifest sees which modules collect guest photos.
+pub const GUEST_FILES: &str = "guest:files";
+
 /// Every permission without a parameter.
-pub const FIXED: &[&str] = &[KV, REPO, EMAIL, EVENTS, PLATFORM, STAY_GUEST_CONTACT_READ];
+pub const FIXED: &[&str] = &[
+    KV,
+    REPO,
+    EMAIL,
+    EVENTS,
+    PLATFORM,
+    STAY_GUEST_CONTACT_READ,
+    GUEST_FILES,
+];
 
 /// Whether `permission` is one the manifest schema accepts.
 pub fn is_known(permission: &str) -> bool {
