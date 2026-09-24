@@ -181,7 +181,8 @@ fn surfaces(
         host.push(entry);
     }
     host.sort_by_key(|e| (e["pathSegment"].to_string(), e["type"].to_string()));
-    guest.sort_by_key(|e| e["surfaceId"].to_string());
+    // Par route : la page du module avant ses sous-pages (`issue-report` avant `issue-report/form`).
+    guest.sort_by_key(|e| (e["path"].to_string(), e["surfaceId"].to_string()));
     (host, guest)
 }
 
