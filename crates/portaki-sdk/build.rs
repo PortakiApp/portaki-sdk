@@ -148,6 +148,8 @@ fn collect_type_deps(
         "String" | "bool" | "f64" | "u32" | "i64" => {}
         // `Component` est généré dans CE module : il est déjà en portée, pas à importer.
         "Component" => {}
+        // Déjà importés pour les champs communs : les réimporter serait un doublon.
+        "Animation" | "Emphasis" | "SurfaceLevel" | "Tone" | "Visibility" => {}
         "Action" => *uses_action = true,
         "Value" => *uses_value = true,
         other if other.starts_with("Vec<") && other.ends_with('>') => {
