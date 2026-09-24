@@ -92,6 +92,12 @@ before. From the repository root, `portaki dev`, `portaki build` and `portaki pu
 `--module <id>`; `build` and `publish` also take `--all`. With neither, a terminal asks which one,
 and anything else — a CI — gets an error listing the ids.
 
+`portaki sdk upgrade` moves the whole monorepo when the SDK is inherited from the workspace
+(`portaki-sdk = { workspace = true }`): the root `Cargo.toml`, `Cargo.lock` and
+`requiresModuleSdk` in every `portaki.module.json`, then builds and tests the workspace, and
+assembles and lints each module in turn. Run it from the repository root, or from any module —
+the render comparison, which needs one module's sandbox, only runs in the latter case.
+
 `portaki publish --all` publishes each module on its own — one OIDC token, one digest — prints a
 result per module, keeps going after a refusal, and exits non-zero if any module failed. Modules
 refused with `module_not_linked` are gathered into one link:

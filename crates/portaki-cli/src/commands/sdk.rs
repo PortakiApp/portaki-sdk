@@ -10,7 +10,7 @@ use serde::Deserialize;
 use toml_edit::{DocumentMut, Item, Value};
 
 use crate::commands::dev;
-use crate::ui;
+use crate::{ui, workspace};
 
 /// Les crates qui montent ensemble. Le SDK les publie à la même version, et en mélanger deux
 /// ferait compiler un module contre des macros d'une génération et un runtime d'une autre.
@@ -507,6 +507,8 @@ impl Sandbox {
 #[derive(Debug, Deserialize)]
 struct Metadata {
     workspace_root: PathBuf,
+    /// Où `cargo` écrit, selon la configuration vue depuis le dossier courant.
+    target_directory: PathBuf,
     packages: Vec<MetadataPackage>,
     workspace_members: Vec<String>,
 }
@@ -545,8 +547,15 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         "portaki sdk upgrade",
         "Move to another SDK version — then build, test, lint and render to prove nothing broke.",
     );
-    let module_root = std::env::current_dir().context("current_dir")?;
+    let cwd = std::env::current_dir().context("current_dir")?;
+    let (module_root, from_repository_root) = anchor(&cwd)?;
     let module_id = dev::read_module_id(&module_root)?;
+    if from_repository_root {
+        ui::field(
+            "anchor",
+            format!("{module_id} (repository root — every module moves)"),
+        );
+    }
     let base_url = dev::resolve_base_url(
         args.url.as_deref(),
         std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
@@ -599,8 +608,21 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         ));
     }
 
+    let members = verified_members(
+        &declaration,
+        &metadata.workspace_root,
+        &module_root,
+        &module_id,
+    );
+
     let mut sandbox = if args.no_render {
         ui::skipped("render comparison skipped (--no-render)");
+        None
+    } else if from_repository_root {
+        // Une session de sandbox vise un module : depuis la racine, aucun ne s'impose.
+        ui::skipped(
+            "render comparison skipped — run from a module directory to compare its renders",
+        );
         None
     } else {
         let token = crate::auth::access_token()
@@ -651,11 +673,15 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         &module_root,
         &declaration,
         &metadata,
+        &members,
         &target,
         sandbox.as_mut(),
         baseline.as_ref(),
     )
     .await;
+    // La vérification entre dans chaque module : on revient d'où l'on est parti.
+    std::env::set_current_dir(&cwd).context("return to the starting directory")?;
+    let subject = subject(&module_id, members.len());
 
     if let Some(sandbox) = &sandbox {
         sandbox.session.release().now().await;
@@ -667,7 +693,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         Ok(resolved) if args.dry_run => {
             ui::blank();
             ui::success(format!(
-                "{module_id} would move to portaki-sdk {resolved} — dry run, nothing was changed"
+                "{subject} would move to portaki-sdk {resolved} — dry run, nothing was changed"
             ));
             if baseline.is_some() {
                 ui::advice(
@@ -680,7 +706,8 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             ui::blank();
             // La version résolue, pas la cible : `"3.0.1"` est un caret, et résout 3.1.0 dès
             // que 3.1.0 existe. Annoncer la cible aurait fait committer un message faux.
-            ui::success(format!("{module_id} is on portaki-sdk {resolved}"));
+            let verb = if members.len() > 1 { "are" } else { "is" };
+            ui::success(format!("{subject} {verb} on portaki-sdk {resolved}"));
             // Hérité, le changement est à la racine : un `git diff` lancé depuis le module ne
             // montrerait que son propre manifeste, pas ceux des autres membres.
             let review = if declaration.inherited {
@@ -708,6 +735,55 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             }
             Err(failure)
         }
+    }
+}
+
+/// Le module d'où partir, et si l'on est à la racine d'un monorepo.
+///
+/// Depuis la racine, le premier module fait l'affaire : la version y est héritée du workspace,
+/// donc c'est la même pour tous, et c'est tout ce que ce module sert à trouver.
+fn anchor(cwd: &Path) -> Result<(PathBuf, bool)> {
+    if cwd.join("portaki.module.json").is_file() {
+        return Ok((cwd.to_path_buf(), false));
+    }
+    let members = workspace::members(cwd);
+    match members.first() {
+        Some(first) => Ok((first.root.clone(), true)),
+        None => anyhow::bail!(
+            "no portaki.module.json here, and no modules/*/ below — run from a module or a monorepo root"
+        ),
+    }
+}
+
+/// Les modules à assembler et linter : tous ceux du dépôt quand la version est héritée du
+/// workspace, le seul module sinon.
+fn verified_members(
+    declaration: &Declaration,
+    workspace_root: &Path,
+    module_root: &Path,
+    module_id: &str,
+) -> Vec<workspace::Member> {
+    let all = if declaration.inherited {
+        workspace::members(workspace_root)
+    } else {
+        Vec::new()
+    };
+    if all.is_empty() {
+        vec![workspace::Member {
+            id: module_id.to_string(),
+            root: module_root.to_path_buf(),
+        }]
+    } else {
+        all
+    }
+}
+
+/// « weather » ou « 21 modules » — la phrase dit combien ont bougé.
+fn subject(module_id: &str, count: usize) -> String {
+    if count > 1 {
+        format!("{count} modules")
+    } else {
+        module_id.to_string()
     }
 }
 
@@ -764,11 +840,15 @@ async fn take_baseline(sandbox: &mut Sandbox, module_root: &Path) -> Result<Base
     })
 }
 
+// Chaque argument est une décision déjà prise par l'appelant (déclaration, membres, sandbox) :
+// les regrouper ne ferait que déplacer la liste dans une structure lue à un seul endroit.
+#[allow(clippy::too_many_arguments)]
 async fn upgrade_and_verify(
     args: &UpgradeArgs,
     module_root: &Path,
     declaration: &Declaration,
     metadata: &Metadata,
+    members: &[workspace::Member],
     target: &str,
     sandbox: Option<&mut Sandbox>,
     baseline: Option<&Baseline>,
@@ -848,13 +928,24 @@ async fn upgrade_and_verify(
         "compiling wasm32-unknown-unknown (release)",
         &build,
     )?;
-    crate::commands::build::refresh_outputs(module_root)?;
     let test: Vec<&str> = ["test"].into_iter().chain(scope.iter().copied()).collect();
     cargo(module_root, "running the tests", &test)?;
-    crate::commands::lint::run(crate::commands::lint::LintArgs {
-        manifest: None,
-        nested: false,
-    })?;
+    // Sorties et lint pour chaque module qui a bougé, pas seulement celui d'où l'on part : sinon
+    // la sortie ne nommait que lui, et l'on croyait qu'il avait monté seul.
+    for member in members {
+        if members.len() > 1 {
+            ui::rule(&member.id);
+        }
+        // Les émissions sont là où le build du workspace a écrit — pas forcément sous le
+        // `target/` du membre, qu'un `.cargo/config.toml` peut fixer ailleurs.
+        crate::commands::build::refresh_outputs_from(&member.root, &metadata.target_directory)?;
+        workspace::enter(member)?;
+        crate::commands::lint::run(crate::commands::lint::LintArgs {
+            manifest: None,
+            nested: members.len() > 1,
+        })?;
+    }
+    std::env::set_current_dir(module_root).context("return to the module")?;
 
     let (Some(sandbox), Some(baseline)) = (sandbox, baseline) else {
         return Ok(resolved_version);
@@ -914,6 +1005,74 @@ async fn upgrade_and_verify(
 
 #[cfg(test)]
 mod tests {
+
+    fn monorepo(ids: &[&str]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        for id in ids {
+            let root = dir.path().join("modules").join(id);
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::write(
+                root.join("portaki.module.json"),
+                format!(r#"{{"id":"{id}","version":"0.1.0"}}"#),
+            )
+            .unwrap();
+        }
+        dir
+    }
+
+    /// Depuis la racine d'un monorepo, un module sert d'ancre : la version héritée est la même
+    /// pour tous.
+    #[test]
+    fn the_repository_root_anchors_on_a_module() {
+        let repo = monorepo(&["weather", "nuki"]);
+
+        let (root, from_repository_root) = anchor(repo.path()).unwrap();
+
+        assert!(from_repository_root);
+        assert_eq!(root, repo.path().join("modules/nuki"));
+        let (root, from_repository_root) = anchor(&repo.path().join("modules/weather")).unwrap();
+        assert!(!from_repository_root);
+        assert_eq!(root, repo.path().join("modules/weather"));
+        assert!(anchor(tempfile::tempdir().unwrap().path()).is_err());
+    }
+
+    /// Hérité du workspace, tous les modules sont vérifiés — pas seulement celui d'où l'on part.
+    #[test]
+    fn an_inherited_sdk_verifies_every_module() {
+        let repo = monorepo(&["weather", "nuki", "wifi-guest"]);
+        let weather = repo.path().join("modules/weather");
+        let inherited = Declaration {
+            file: repo.path().join("Cargo.toml"),
+            inherited: true,
+        };
+        let own = Declaration {
+            file: weather.join("Cargo.toml"),
+            inherited: false,
+        };
+
+        let ids = |members: Vec<workspace::Member>| {
+            members
+                .into_iter()
+                .map(|member| member.id)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ids(verified_members(
+                &inherited,
+                repo.path(),
+                &weather,
+                "weather"
+            )),
+            vec!["nuki", "weather", "wifi-guest"]
+        );
+        assert_eq!(
+            ids(verified_members(&own, repo.path(), &weather, "weather")),
+            vec!["weather"]
+        );
+        assert_eq!(subject("weather", 1), "weather");
+        assert_eq!(subject("weather", 3), "3 modules");
+    }
+
     use super::*;
 
     #[test]
