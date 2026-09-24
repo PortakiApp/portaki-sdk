@@ -154,7 +154,7 @@ vocabulary! {
 
 vocabulary! {
     /// A host fragment a guest route embeds (`#[surface(guest, embeds = …)]`).
-    HostFragment {
+    HostFragmentId {
         /// The police registration form — [`crate::contracts::host_fragments::POLICE_FORM`].
         PoliceForm = "regulatory.police-form",
     }
@@ -317,7 +317,7 @@ pub fn wire_of(vocabulary: &str, variant: &str) -> Option<&'static str> {
         "ModuleType" => find::<ModuleType>(variant),
         "EmailTrigger" => find::<EmailTrigger>(variant),
         "SkipWhen" => find::<SkipWhen>(variant),
-        "HostFragment" => find::<HostFragment>(variant),
+        "HostFragmentId" => find::<HostFragmentId>(variant),
         "DesignId" => find::<DesignId>(variant),
         "IconName" => find::<IconName>(variant),
         "EmailAudience" => find::<crate::host::email::EmailAudience>(variant),
@@ -379,7 +379,7 @@ mod tests {
         check::<ModuleType>();
         check::<EmailTrigger>();
         check::<SkipWhen>();
-        check::<HostFragment>();
+        check::<HostFragmentId>();
         check::<DesignId>();
         check::<IconName>();
         check::<crate::host::email::EmailAudience>();
@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(wire_of("HostPlacement", "Nope"), None);
         assert_eq!(wire_of("Nope", "StayAction"), None);
         assert_eq!(
-            HostFragment::PoliceForm.wire(),
+            HostFragmentId::PoliceForm.wire(),
             crate::contracts::host_fragments::POLICE_FORM.as_str()
         );
     }

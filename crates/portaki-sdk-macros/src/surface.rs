@@ -180,13 +180,13 @@ mod tests {
     fn a_guest_route_keeps_the_display_name_key_apart() {
         let attrs = parse(
             r#"guest, id = "home.card", display_name_key = "x", path = "pre-arrival-form",
-               role = GuestRole::ArrivalFormality, embeds = HostFragment::PoliceForm"#,
+               role = GuestRole::ArrivalFormality, embeds = HostFragmentId::PoliceForm"#,
         )
         .unwrap();
         assert_eq!(attrs.display_name_key.as_deref(), Some("x"));
         assert_eq!(
             attrs.catalog["embeds"],
-            serde_json::json!(["HostFragment::PoliceForm"])
+            serde_json::json!(["HostFragmentId::PoliceForm"])
         );
         assert_eq!(attrs.catalog["role"], "GuestRole::ArrivalFormality");
     }

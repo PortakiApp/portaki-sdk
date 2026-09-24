@@ -256,7 +256,7 @@ pub fn entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | guest | `path` | the route — a guest surface without one is rendered, never linked |
 /// | guest | `label_key` | i18n key |
 /// | guest | `role` | `GuestRole::…` |
-/// | guest | `embeds` (repeatable) | `HostFragment::…` |
+/// | guest | `embeds` (repeatable) | `HostFragmentId::…` |
 ///
 /// Wrong first token (not `id =`) → **compile error**. Bare const paths are not
 /// resolved at macro time — use a string lit or `Type::new("…")`.

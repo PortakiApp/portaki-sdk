@@ -148,7 +148,7 @@ pub mod prelude {
     pub use crate::sdui::component::Component;
     pub use crate::sdui::surface::Surface;
     pub use crate::vocab::{
-        DesignId, EmailTrigger, GuestRole, HostFragment, HostPlacement, IconName, Maturity,
+        DesignId, EmailTrigger, GuestRole, HostFragmentId, HostPlacement, IconName, Maturity,
         ModuleAudience, ModuleType, SkipWhen, Vocabulary,
     };
     pub use crate::{
