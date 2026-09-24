@@ -266,6 +266,7 @@ pub fn surface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | Key | Required |
 /// |-----|----------|
 /// | `name = "…"` | yes — gateway-visible operation name (camelCase convention) |
+/// | `guest` | no — bare flag: a guest may call it through the guest gateway. Absent, the platform refuses a guest with `operation_not_guest_callable` |
 ///
 /// Wrong key → **compile error** (`expected name = "…"`).
 ///
@@ -281,7 +282,7 @@ pub fn surface(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Emission
 ///
-/// `query-{name}.json` → `manifest.queries[]` with `{ name, fn }`.
+/// `query-{name}.json` → `manifest.queries[]` with `{ name, fn, guest }`.
 ///
 /// # Wasm registration
 ///
@@ -298,6 +299,9 @@ pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```text
 /// #[portaki_sdk::command(name = "refreshForecast")]
 /// pub fn refresh_forecast(ctx: Context) -> Result<()> { /* ... */ }
+///
+/// #[portaki_sdk::command(name = "submit", guest)]
+/// pub fn submit(ctx: Context, args: SubmitArgs) -> Result<()> { /* ... */ }
 /// ```
 ///
 /// Same attribute and signature rules as [`query`]. Emits `command-{name}.json` →

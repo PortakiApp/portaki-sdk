@@ -153,7 +153,8 @@
         "name": { "type": "string", "minLength": 1, "description": "The name the platform dispatches, e.g. mapMarkers." },
         "fn": { "type": "string", "description": "The Rust function serving it, e.g. map_markers." },
         "args": { "type": "string", "description": "The argument type name, when the handler takes one." },
-        "params": { "type": "object", "description": "The argument fields, when that type carries #[portaki_sdk::params]. Descriptive only: the platform never validates a dispatch against it." }
+        "params": { "type": "object", "description": "The argument fields, when that type carries #[portaki_sdk::params]. Descriptive only: the platform never validates a dispatch against it." },
+        "guest": { "type": "boolean", "description": "Whether a guest may call it through the guest gateway — the `guest` flag on #[query] / #[command]. Closed by default: the platform refuses a guest call to an operation without it (operation_not_guest_callable). Always written by portaki build; its absence marks a manifest stamped by an older SDK." }
       }
     },
     "permission": {
