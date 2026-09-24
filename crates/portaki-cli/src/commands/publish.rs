@@ -67,6 +67,13 @@ pub struct PublishArgs {
     /// Publish every module of the repository, each on its own.
     #[arg(long)]
     pub all: bool,
+    /// A line of what is new in this version, shown to hosts on an older one (repeatable, at
+    /// most 5). Without it, the version's section of the module's CHANGELOG.md.
+    #[arg(long = "notes", value_name = "LINE")]
+    pub notes: Vec<String>,
+    /// Language of the changelog lines.
+    #[arg(long, default_value = "en")]
+    pub notes_lang: String,
 }
 
 /// A layer's size on disk, or zero when it cannot be read — the list is a report, not a gate.
@@ -459,6 +466,8 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         ui::blank();
     }
 
+    stamp_changelog(&module_root, &artifact_dir, args)?;
+
     let packing = ui::step("packing the OCI artifact");
     // The layer list the push would send, assembled here rather than at push time: it is what
     // says the wasm exists. A dry run that skipped it answered a question it had not checked.
@@ -516,6 +525,22 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
 
     announce(args, &coords, &pushed).await?;
     Ok(Landed::InRegistry(coords.id))
+}
+
+/// Inscrit `changelog` dans `publish-manifest.json` : `--notes`, sinon la section de la version
+/// dans `CHANGELOG.md`. Fait ici et non au build, pour couvrir aussi `--skip-build`.
+fn stamp_changelog(module_root: &Path, artifact_dir: &Path, args: &PublishArgs) -> Result<()> {
+    let coords = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
+    let lines = crate::changelog::lines(&args.notes, module_root, &coords.version)?;
+    if lines.is_empty() {
+        return Ok(());
+    }
+    let path = oci::pack::publish_manifest_path(artifact_dir);
+    let raw = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let stamped = crate::changelog::stamp(&raw, &lines, &args.notes_lang)?;
+    std::fs::write(&path, stamped).with_context(|| format!("write {}", path.display()))?;
+    ui::field("changelog", plural(lines.len(), "line"));
+    Ok(())
 }
 
 /// Une version publiée ne se republie pas.
@@ -994,6 +1019,14 @@ mod tests {
                 "{flags:?}: nothing may be built or packed once the tests fail"
             );
         }
+    }
+
+    #[test]
+    fn notes_repeat_one_line_each() {
+        let args = publish_args(&["--notes", "Keypad code", "--notes", "Faster sync"]);
+
+        assert_eq!(args.notes, vec!["Keypad code", "Faster sync"]);
+        assert_eq!(args.notes_lang, "en");
     }
 
     /// Announcing a version already on GHCR compiles nothing: there is nothing to test.

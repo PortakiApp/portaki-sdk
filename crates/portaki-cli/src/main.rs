@@ -27,6 +27,7 @@
 
 mod api;
 mod auth;
+mod changelog;
 mod commands;
 mod dev_session;
 mod http;
