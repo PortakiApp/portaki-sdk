@@ -127,6 +127,28 @@
         "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 160 }
       }
     },
+    "config": {
+      "type": "object",
+      "description": "Host configuration form. The orchestrator reads fields and globalAlert: it renders the form, flags the install requiresConfig / incomplete while a required field is empty, and encrypts secret fields at rest. The dashboard also reads defaults.",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/configField" }
+        },
+        "globalAlert": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "message": { "$ref": "#/$defs/i18nStringMap" },
+            "helpUrl": { "type": "string" }
+          }
+        },
+        "defaults": {
+          "type": "object",
+          "description": "Initial values, by field key."
+        }
+      }
+    },
     "hostScheduledSync": {
       "type": "object",
       "description": "Host-side sync the platform runs on a schedule (and on demand), without business logic in the API. With platformFetch, the platform calls sourcesQuery to list what to fetch, downloads it, then hands the payloads to applyQuery; both are then required. Without it, the platform runs the module host action hostAction, then stayImportQuery if set to import the resulting stays.",
@@ -157,6 +179,34 @@
     }
   },
   "$defs": {
+    "configField": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": ["text", "textarea", "url", "number", "secret", "toggle", "select", "readonly"],
+          "default": "text",
+          "description": "secret values are encrypted at rest and masked when read back; readonly fields are never required."
+        },
+        "required": { "type": "boolean", "default": false },
+        "label": { "$ref": "#/$defs/i18nStringMap" },
+        "description": { "$ref": "#/$defs/i18nStringMap" },
+        "helpUrl": { "type": "string" },
+        "options": {
+          "type": "array",
+          "description": "Choices of a select field.",
+          "items": {
+            "type": "object",
+            "required": ["value"],
+            "properties": {
+              "value": { "type": "string" },
+              "label": { "$ref": "#/$defs/i18nStringMap" }
+            }
+          }
+        }
+      }
+    },
     "operation": {
       "type": "object",
       "description": "An operation the module exports, stamped from the build output by `portaki build` — never hand-written. Same shape as portaki_sdk::manifest::ManifestQuery and ManifestCommand.",
