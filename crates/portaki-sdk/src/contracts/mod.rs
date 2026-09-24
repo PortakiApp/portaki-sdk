@@ -10,7 +10,11 @@
 
 pub mod booking_channel;
 pub mod host_fragments;
+pub mod i18n;
 pub mod platform;
+pub mod publish;
 pub mod shell;
 pub mod smart_lock;
+pub mod stats;
 pub mod stay_import;
+pub mod timeline;

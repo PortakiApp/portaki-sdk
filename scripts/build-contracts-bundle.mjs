@@ -31,6 +31,11 @@ const CONTRACTS = {
   // et optionnel comme `deprecations.json` — les versions publiées avant lui n'en portent pas.
   "sdui_types.json": "contracts/sdui_types.json",
   "deprecations.json": "contracts/deprecations.json",
+  // Les réponses typées que la plateforme demande aux modules, hors SDUI. Le dashboard en
+  // génère ses types ; optionnels pour le registre, qui ne les lit pas.
+  "publish-readiness.v1.json": "contracts/publish-readiness.v1.json",
+  "stats-summary.v1.json": "contracts/stats-summary.v1.json",
+  "timeline-tasks.v1.json": "contracts/timeline-tasks.v1.json",
 };
 
 /** Version de l'espace de travail — la source dont dérivent toutes les crates publiées. */
