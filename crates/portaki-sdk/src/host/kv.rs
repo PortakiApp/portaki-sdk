@@ -9,7 +9,6 @@
 //! - Keys are module-private — the gateway namespaces by property and module id.
 //! - Values are opaque byte blobs — serialize JSON or protobuf yourself.
 //! - [`set`] rejects secret-like key names — never store API tokens in KV.
-//! - [`atomic_set`] provides compare-and-set for lightweight coordination.
 //!
 //! ## What modules must not assume
 //!
@@ -28,7 +27,6 @@
 //! struct NoopHost;
 //! impl HostBackend for NoopHost {
 //!     fn context(&self) -> Result<Context> { Ok(Context::default()) }
-//!     fn has_capability(&self, _: &str) -> Result<bool> { Ok(true) }
 //!     fn kv_get(&self, _: &str) -> Result<Option<Vec<u8>>> { Ok(None) }
 //!     fn kv_set(&self, _: &str, _: &[u8], _: Option<u32>) -> Result<()> { Ok(()) }
 //!     fn kv_delete(&self, _: &str) -> Result<()> { Ok(()) }
@@ -73,26 +71,6 @@ pub fn delete(key: &str) -> Result<()> {
 /// Lists keys beginning with `prefix` (module-scoped namespace).
 pub fn list(prefix: &str) -> Result<Vec<String>> {
     backend()?.kv_list(prefix)
-}
-
-/// Compare-and-set: writes `new` only when the stored value matches `expected`.
-///
-/// Pass `expected: None` to create only when the key is absent. Returns `true`
-/// when the write succeeded.
-pub fn atomic_set(key: &str, expected: Option<&[u8]>, new: &[u8]) -> Result<bool> {
-    lint_key(key)?;
-    let current = get(key)?;
-    let matches = match (current.as_deref(), expected) {
-        (Some(current), Some(expected)) => current == expected,
-        (None, None) => true,
-        _ => false,
-    };
-    if matches {
-        set(key, new, None)?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 fn lint_key(key: &str) -> Result<()> {

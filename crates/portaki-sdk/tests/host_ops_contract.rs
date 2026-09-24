@@ -35,16 +35,18 @@ fn host_ops_contract_matches_extism_host_backend() {
         );
     }
 
-    // Every dispatch_value("…") / first arg to dispatch must be in the contract.
-    for line in src.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("self.dispatch_value(\"") {
-            let op = rest.split('"').next().expect("dispatch_value op literal");
-            assert!(
-                contract.contains(op),
-                "ExtismHostBackend dispatches {op:?} not listed in contracts/host-ops.json"
-            );
-        }
+    // Every op passed to dispatch_value must be in the contract — including calls where
+    // rustfmt put the literal on the next line.
+    for call in src.split("self.dispatch_value(").skip(1) {
+        let op = call
+            .trim_start()
+            .strip_prefix('"')
+            .and_then(|rest| rest.split('"').next())
+            .expect("dispatch_value op literal");
+        assert!(
+            contract.contains(op),
+            "ExtismHostBackend dispatches {op:?} not listed in contracts/host-ops.json"
+        );
     }
 }
 

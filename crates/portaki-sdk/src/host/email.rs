@@ -586,9 +586,6 @@ mod guard_tests {
         fn context(&self) -> Result<Context> {
             Err(PortakiError::HostNotConfigured)
         }
-        fn has_capability(&self, _: &str) -> Result<bool> {
-            Ok(true)
-        }
         fn kv_get(&self, _: &str) -> Result<Option<Vec<u8>>> {
             Ok(None)
         }

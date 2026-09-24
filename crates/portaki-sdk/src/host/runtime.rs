@@ -22,7 +22,6 @@
 //! # Examples
 //!
 //! ```no_run
-//! use portaki_sdk::capability::core;
 //! use portaki_sdk::context::Context;
 //! use portaki_sdk::error::{PortakiError, Result};
 //! use portaki_sdk::host::runtime::{with_host, HostBackend};
@@ -31,7 +30,6 @@
 //! struct NoopHost;
 //! impl HostBackend for NoopHost {
 //!     fn context(&self) -> Result<Context> { Ok(Context::default()) }
-//!     fn has_capability(&self, _: &str) -> Result<bool> { Ok(false) }
 //!     fn kv_get(&self, _: &str) -> Result<Option<Vec<u8>>> { Ok(None) }
 //!     fn kv_set(&self, _: &str, _: &[u8], _: Option<u32>) -> Result<()> { Ok(()) }
 //!     fn kv_delete(&self, _: &str) -> Result<()> { Ok(()) }
@@ -45,7 +43,7 @@
 //! }
 //!
 //! with_host(Arc::new(NoopHost), Context::default(), || {
-//!     assert!(!portaki_sdk::host::capabilities::has(core::IMAGES).unwrap());
+//!     assert!(portaki_sdk::host::kv::get("missing").unwrap().is_none());
 //! });
 //! ```
 
@@ -64,9 +62,6 @@ thread_local! {
 pub trait HostBackend: Send + Sync {
     /// Loads the invocation [`Context`] when not already thread-local.
     fn context(&self) -> Result<Context>;
-
-    /// Live capability probe — see [`crate::host::capabilities::has`].
-    fn has_capability(&self, id: &str) -> Result<bool>;
 
     /// Reads a KV key scoped to property + module.
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>>;
@@ -99,11 +94,6 @@ pub trait HostBackend: Send + Sync {
 
     /// Requests a transactional email send (`email.send` — module-owned content).
     fn email_send(&self, _payload_json: &str) -> Result<()> {
-        Err(PortakiError::HostNotConfigured)
-    }
-
-    /// Raises a host inbox notification + push (`host.notify` — module-owned content).
-    fn notify_host(&self, _payload_json: &str) -> Result<()> {
         Err(PortakiError::HostNotConfigured)
     }
 

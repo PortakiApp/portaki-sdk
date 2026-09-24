@@ -11,11 +11,9 @@
 //! | [`kv`] | Store small opaque blobs scoped to property + module | Store secrets (keys are linted) |
 //! | [`repo`] | CRUD module-owned entities via typed builders | Issue SQL or access other modules' tables |
 //! | [`connectors`] | Invoke declared connector operations | Open raw HTTP clients |
-//! | [`capabilities`] | Probe grants (hint); prefer `Context::has_capability` | Assume optional capabilities are present |
 //! | [`module`] | Read install/config readiness from orchestrator | Mutate enablement or config |
 //! | [`events`] | Emit declared domain events | Assume delivery without checking `Result` |
 //! | [`email`] | Request transactional send with module-owned content | Assemble Portaki-core copy or module-named use cases |
-//! | [`notify`] | Raise a host inbox notification + push (module-owned copy) | Bypass the host push-preference category |
 //!
 //! ## Thread-local runtime
 //!
@@ -33,7 +31,6 @@
 //! # struct Mock;
 //! # impl portaki_sdk::host::runtime::HostBackend for Mock {
 //! #     fn context(&self) -> portaki_sdk::Result<portaki_sdk::Context> { Ok(Context::default()) }
-//! #     fn has_capability(&self, _: &str) -> portaki_sdk::Result<bool> { Ok(true) }
 //! #     fn kv_get(&self, _: &str) -> portaki_sdk::Result<Option<Vec<u8>>> { Ok(None) }
 //! #     fn kv_set(&self, _: &str, _: &[u8], _: Option<u32>) -> portaki_sdk::Result<()> { Ok(()) }
 //! #     fn kv_delete(&self, _: &str) -> portaki_sdk::Result<()> { Ok(()) }
@@ -48,16 +45,13 @@
 //! });
 //! ```
 
-pub mod capabilities;
 pub mod connectors;
 pub mod email;
 pub mod events;
-pub mod geo;
 pub mod i18n;
 pub mod kv;
 pub mod log;
 pub mod module;
-pub mod notify;
 pub mod repo;
 pub mod runtime;
 pub mod time;

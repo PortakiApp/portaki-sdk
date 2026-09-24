@@ -8,7 +8,7 @@
 //!
 //! - Entity type `E` resolves to the Rust struct name (e.g. `Poi` → `"Poi"`).
 //! - [`typed::Page`] returns items plus an optional total count for pagination UI.
-//! - Filters serialize to gateway Criteria — supported ops: eq, gte, in, spatial near.
+//! - Filters serialize to gateway Criteria — supported ops: eq, gte, in.
 //!
 //! ## What modules must not assume
 //!
@@ -73,11 +73,6 @@ enum Filter {
     Eq(String, serde_json::Value),
     Gte(String, serde_json::Value),
     In(String, Vec<serde_json::Value>),
-    SpatialNear {
-        lat: f64,
-        lng: f64,
-        radius_meters: f64,
-    },
 }
 
 impl<E> Default for Query<E> {
@@ -112,24 +107,6 @@ impl<E> Query<E> {
         self
     }
 
-    /// Adds a spatial near filter.
-    pub fn spatial(mut self, spec: SpatialExpr) -> Self {
-        match spec {
-            SpatialExpr::Near {
-                lat,
-                lng,
-                radius_meters,
-            } => {
-                self.filters.push(Filter::SpatialNear {
-                    lat,
-                    lng,
-                    radius_meters,
-                });
-            }
-        }
-        self
-    }
-
     /// Orders results.
     pub fn order_by(mut self, field: impl Into<String>, direction: Direction) -> Self {
         self.order = Some((field.into(), direction));
@@ -139,12 +116,6 @@ impl<E> Query<E> {
     /// Limits page size.
     pub fn limit(mut self, limit: u32) -> Self {
         self.limit = Some(limit);
-        self
-    }
-
-    /// Clears any page limit (used by [`count`]).
-    fn without_limit(mut self) -> Self {
-        self.limit = None;
         self
     }
 }
@@ -171,28 +142,6 @@ pub fn gte(field: impl Into<String>, value: impl Serialize) -> FilterExpr {
         field.into(),
         serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
     )
-}
-
-/// Spatial helpers.
-pub enum SpatialExpr {
-    /// Points within `radius_meters` of (`lat`, `lng`).
-    Near {
-        /// Latitude.
-        lat: f64,
-        /// Longitude.
-        lng: f64,
-        /// Radius in meters.
-        radius_meters: f64,
-    },
-}
-
-/// Builds a near filter.
-pub fn near(lat: f64, lng: f64, radius_meters: f64) -> SpatialExpr {
-    SpatialExpr::Near {
-        lat,
-        lng,
-        radius_meters,
-    }
 }
 
 /// Repository namespace marker for entity type `E`.
@@ -266,17 +215,9 @@ fn entity_type_name<E>() -> &'static str {
     full.rsplit("::").next().unwrap_or(full)
 }
 
-/// Counts rows matching a query (uses gateway `Page.total`, without a page limit).
-pub fn count<E>(query: Query<E>) -> Result<u64> {
-    let page: Page<serde_json::Value> = find(query.without_limit())?;
-    page.total.ok_or_else(|| {
-        PortakiError::Storage("repository count requires gateway total — none returned".into())
-    })
-}
-
 /// Repository free functions and types — primary module authoring API.
 pub mod typed {
-    pub use super::{count, create, delete, find, find_by_id, Direction, Page, Query, Repo};
+    pub use super::{create, delete, find, find_by_id, Direction, Page, Query, Repo};
 }
 
 /// Returns a [`Repo`] marker for entity `E` (alias for [`typed::Repo::new`]).

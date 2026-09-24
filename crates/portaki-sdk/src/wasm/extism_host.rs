@@ -34,19 +34,6 @@ impl HostBackend for ExtismHostBackend {
         context_or_load()
     }
 
-    fn has_capability(&self, id: &str) -> Result<bool> {
-        if let Ok(ctx) = context_or_load() {
-            if ctx.capabilities.iter().any(|grant| grant.id == id) {
-                return Ok(true);
-            }
-        }
-        let result = self.dispatch_value("capabilities.has", json!({ "id": id }))?;
-        Ok(result
-            .get("granted")
-            .and_then(Value::as_bool)
-            .unwrap_or(false))
-    }
-
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let result = self.dispatch_value("kv.get", json!({ "key": key }))?;
         let Some(encoded) = result.get("value").and_then(Value::as_str) else {
@@ -146,16 +133,6 @@ impl HostBackend for ExtismHostBackend {
     fn email_send(&self, payload_json: &str) -> Result<()> {
         self.dispatch_value(
             "email.send",
-            json!({
-                "payloadJson": payload_json,
-            }),
-        )?;
-        Ok(())
-    }
-
-    fn notify_host(&self, payload_json: &str) -> Result<()> {
-        self.dispatch_value(
-            "host.notify",
             json!({
                 "payloadJson": payload_json,
             }),

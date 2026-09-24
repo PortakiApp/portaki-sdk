@@ -16,10 +16,8 @@
 //!
 //! ## Capability checks
 //!
-//! Prefer [`Context::has_capability`] over [`crate::host::capabilities::has`] in
-//! render paths — the context snapshot is already paid for and matches what the
-//! gateway used to authorize the invocation. Use host probes only when you need
-//! a fresh grant after a long-lived cache window.
+//! Use [`Context::has_capability`] — the context snapshot matches what the
+//! gateway used to authorize the invocation.
 //!
 //! # Examples
 //!
