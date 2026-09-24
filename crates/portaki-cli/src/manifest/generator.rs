@@ -251,7 +251,14 @@ pub fn generate_manifest(
     let emails = emissions
         .iter()
         .filter(|e| e.kind == "email")
-        .map(|e| e.data.clone())
+        .map(|e| {
+            // La clé n'est pas du manifeste : le catalogue en tire la description traduite.
+            let mut email = e.data.clone();
+            if let Some(object) = email.as_object_mut() {
+                object.remove("descriptionKey");
+            }
+            email
+        })
         .collect();
 
     Ok(ModuleManifest {

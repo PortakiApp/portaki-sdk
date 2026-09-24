@@ -66,6 +66,14 @@ pub fn run(args: LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
+    // Le manifeste que `publish` enverra, écrit du code par `portaki build` : le registre le
+    // refuserait hors schéma, autant le dire ici.
+    portaki_test_utils::conformance::Module::at(&module_root)
+        .check_manifest()
+        .map_err(|findings| {
+            checking.abandon();
+            anyhow::anyhow!("{findings}")
+        })?;
     assert_versions_agree(&module_root, &manifest).map_err(|failure| {
         checking.abandon();
         failure

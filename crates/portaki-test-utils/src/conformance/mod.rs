@@ -147,10 +147,11 @@ impl Module {
         }
     }
 
-    /// The module's manifest, parsed: `portaki.module.json` when the module keeps one, the one
-    /// `portaki build` wrote from the code otherwise — `Ok(None)` when neither exists.
+    /// The module's manifest, parsed: the one `portaki build` wrote — the code, with a kept
+    /// `portaki.module.json` merged in — or that file alone before any build; `Ok(None)` when
+    /// neither exists.
     pub(crate) fn manifest(&self) -> Result<Option<Value>, String> {
-        let Some(path) = [MANIFEST_FILE, BUILT_MANIFEST_FILE]
+        let Some(path) = [BUILT_MANIFEST_FILE, MANIFEST_FILE]
             .iter()
             .map(|file| self.root.join(file))
             .find(|path| path.exists())
