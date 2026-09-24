@@ -723,3 +723,54 @@ pub struct TabItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Box<Component>>,
 }
+
+/// One row of an [`EditableList`](super::primitives::EditableList).
+///
+/// The list submits the rows as JSON under its `name`, in the order the host left them.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EditableListItem {
+    /// Stable id of an existing row; absent on a row the host just added.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Text (French when the list is `bilingual`).
+    pub label: String,
+    /// English text, when the list is `bilingual`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label_en: Option<String>,
+    /// « Photo » switched on, when the list has `photoToggle`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub photo: Option<bool>,
+    /// Ticked, when the list has `checkbox`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checked: Option<bool>,
+}
+
+impl EditableListItem {
+    /// A row showing `label`.
+    pub fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            ..Self::default()
+        }
+    }
+}
+
+/// Status pill on the right of a [`FeedItem`](super::primitives::FeedItem).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct FeedStatus {
+    /// Pill text (`En cours`, `Résolu`).
+    pub label: String,
+    /// Pill tint.
+    pub tone: Tone,
+}
+
+impl FeedStatus {
+    /// A `tone` pill reading `label`.
+    pub fn new(label: impl Into<String>, tone: Tone) -> Self {
+        Self {
+            label: label.into(),
+            tone,
+        }
+    }
+}

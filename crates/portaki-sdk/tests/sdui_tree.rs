@@ -182,3 +182,46 @@ fn chart_is_a_single_leaf_node() {
         })
     );
 }
+
+/// The two leaves the module stats and checklist editors need: rows ride in fields, not children.
+#[test]
+fn editable_list_and_feed_item_are_leaves_on_the_wire() {
+    use portaki_sdk::sdui::primitives::{EditableList, FeedItem};
+    use portaki_sdk::sdui::{EditableListItem, FeedStatus, Tone};
+
+    let list: Component = EditableList::new()
+        .name("items")
+        .photoToggle(true)
+        .addLabel("Ajouter une tâche")
+        .items(vec![EditableListItem {
+            photo: Some(true),
+            ..EditableListItem::new("Photo du salon")
+        }])
+        .into();
+    assert!(list.child_nodes().is_empty());
+    assert_eq!(
+        serde_json::to_value(&list).unwrap(),
+        json!({
+            "type": "EditableList",
+            "name": "items",
+            "photoToggle": true,
+            "addLabel": "Ajouter une tâche",
+            "items": [{ "label": "Photo du salon", "photo": true }]
+        })
+    );
+
+    let row: Component = FeedItem::new()
+        .title("Fuite sous l'évier")
+        .dotTone(Tone::Warning)
+        .status(FeedStatus::new("En cours", Tone::Warning))
+        .into();
+    assert_eq!(
+        serde_json::to_value(&row).unwrap(),
+        json!({
+            "type": "FeedItem",
+            "title": "Fuite sous l'évier",
+            "dotTone": "warning",
+            "status": { "label": "En cours", "tone": "warning" }
+        })
+    );
+}

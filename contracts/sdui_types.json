@@ -267,6 +267,30 @@
     },
     "kind": "struct"
   },
+  "EditableListItem": {
+    "fields": {
+      "checked": {
+        "optional": true,
+        "type": "bool"
+      },
+      "id": {
+        "optional": true,
+        "type": "String"
+      },
+      "label": {
+        "type": "String"
+      },
+      "labelEn": {
+        "optional": true,
+        "type": "String"
+      },
+      "photo": {
+        "optional": true,
+        "type": "bool"
+      }
+    },
+    "kind": "struct"
+  },
   "Emphasis": {
     "kind": "enum",
     "variants": [
@@ -280,6 +304,17 @@
         "name": "strong"
       }
     ]
+  },
+  "FeedStatus": {
+    "fields": {
+      "label": {
+        "type": "String"
+      },
+      "tone": {
+        "type": "Tone"
+      }
+    },
+    "kind": "struct"
   },
   "FilterBarChip": {
     "fields": {
