@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v7.0.0...v8.0.0) (2026-09-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** string values for placement, design_id, icon, role, embeds, audience, trigger, skip_when, module_type and maturity no longer compile; offset becomes offset_days/hours/minutes; .icon() takes an IconName.
+
+### Features
+
+* **sdk:** type manifest values and SDUI icons ([4369048](https://github.com/PortakiApp/portaki-sdk/commit/436904811609dbe0fc1fe80865cbdd2599100307))
+
+
+### Bug Fixes
+
+* **sdk:** name the fragment vocabulary HostFragmentId ([cf49891](https://github.com/PortakiApp/portaki-sdk/commit/cf49891ed54a7d6c02a1c52f62cd8af14c2807f3))
+* **sdk:** type the Icon primitive's name ([0fa494f](https://github.com/PortakiApp/portaki-sdk/commit/0fa494fbe0d5a1c7418d02b43d383c4af8720acf))
+
 ## [7.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.16.0...v7.0.0) (2026-09-24)
 
 
