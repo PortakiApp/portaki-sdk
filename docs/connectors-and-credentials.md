@@ -82,7 +82,7 @@ Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_c
 }
 ```
 
-When there is no `portaki.module.json`, publish copies this SDK manifest as the OCI host catalog layer. The runtime keeps `connectors` / `capabilities` on the catalog so the **orchestrator** can derive credential bindings.
+Publish pushes this SDK manifest as its own OCI layer (`vnd.portaki.sdk.manifest`) next to the host catalog `portaki build` writes from the code, so the **orchestrator** can derive credential bindings from `connectors` / `capabilities`. The `connectors:<id>` permission is written from the same declaration.
 
 ## Who consumes what
 
@@ -119,7 +119,7 @@ Legacy alias (deprecated): `GET /api/v1/workspace/mapbox-access-token` → same 
 
 ## Optional host catalog
 
-If you maintain a hand-written `portaki.module.json`, mirror `connectors` and `capabilities` there too (or rely on SDK-only publish). Dual-layer publish (`vnd.portaki.manifest` + `vnd.portaki.sdk.manifest`) is for host catalogs that are **not** SDK-shaped; credential fields must still be present on the host catalog layer.
+A module no longer writes `portaki.module.json`: `portaki build` derives the host catalog from the code, including `connectors:<id>` permissions. A module that still keeps one sees it merged under what the code declares — nothing to mirror by hand.
 
 ## Reference
 

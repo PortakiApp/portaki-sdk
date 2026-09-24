@@ -19,7 +19,7 @@ use crate::ui;
 const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// Le manifeste du module — lu à chaque cycle, et désormais surveillé comme les sources.
-const MANIFEST: &str = "portaki.module.json";
+use crate::manifest::source::MODULE_MANIFEST as MANIFEST;
 
 /// Les migrations de la base du module, rejouées à chaque push.
 const MIGRATIONS: &str = "db/migrations";
@@ -152,8 +152,12 @@ pub async fn run(args: DevArgs) -> Result<()> {
                 "every save rebuilds, redeploys and dispatches again",
             ),
             (
-                MANIFEST,
-                "surfaces and permissions take effect without touching a .rs file",
+                "Cargo.toml",
+                "a portaki-sdk feature added or dropped changes the permissions",
+            ),
+            (
+                "i18n/",
+                "the module's name, description and tab labels are read there",
             ),
             (
                 "db/migrations/",
@@ -179,9 +183,22 @@ pub async fn run(args: DevArgs) -> Result<()> {
     //
     // `NonRecursive` sur le fichier lui-même : surveiller la racine du module ferait entrer
     // `target/`, que chaque build réécrit — la boucle se relancerait elle-même sans fin.
-    watcher
-        .watch(&manifest, RecursiveMode::NonRecursive)
-        .with_context(|| format!("watch {}", manifest.display()))?;
+    //
+    // Le manifeste n'existe plus forcément : ce qu'il disait vient du code, de `Cargo.toml`
+    // (les features, donc les permissions) et d'`i18n/` (noms et libellés).
+    for watched in [manifest, module_root.join("Cargo.toml")] {
+        if watched.is_file() {
+            watcher
+                .watch(&watched, RecursiveMode::NonRecursive)
+                .with_context(|| format!("watch {}", watched.display()))?;
+        }
+    }
+    let i18n_dir = module_root.join("i18n");
+    if i18n_dir.is_dir() {
+        watcher
+            .watch(&i18n_dir, RecursiveMode::Recursive)
+            .with_context(|| format!("watch {}", i18n_dir.display()))?;
+    }
     // Une migration éditée se rejoue depuis zéro dans la sandbox : encore faut-il qu'un cycle parte.
     let migrations_dir = module_root.join(MIGRATIONS);
     if migrations_dir.is_dir() {
@@ -760,26 +777,21 @@ pub(crate) fn resolve_base_url(
 }
 
 pub(crate) fn read_module_id(module_root: &Path) -> Result<String> {
-    let manifest = module_root.join(MANIFEST);
-    let raw = std::fs::read_to_string(&manifest)
-        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
-    let parsed: serde_json::Value =
-        serde_json::from_str(&raw).context("parse portaki.module.json")?;
-    parsed
-        .get("id")
-        .and_then(|id| id.as_str())
-        .map(str::to_owned)
-        .context("portaki.module.json carries no id")
+    crate::manifest::source::module_id(module_root).with_context(|| {
+        format!(
+            "{} is not a module — run from the module root",
+            module_root.display()
+        )
+    })
 }
 
-/// Le manifeste que la sandbox reçoit : celui écrit à la main, tamponné de la version du SDK
-/// résolue par cargo et de ce que le build a émis.
+/// Le manifeste que la sandbox reçoit : celui écrit à la main s'il existe, `{ id, version }` du
+/// crate sinon, tamponné de la version du SDK résolue par cargo et de ce que le build a émis.
 ///
 /// Partagé avec `portaki sdk upgrade`, qui déploie deux fois — avant et après la montée de
 /// version — et doit envoyer exactement ce que `dev` enverrait.
 pub(crate) fn sandbox_manifest(module_root: &Path) -> Result<String> {
-    let raw_manifest =
-        std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
+    let raw_manifest = crate::manifest::source::source_manifest(module_root)?;
     // Ce que le code dit du module — nom, icône, maturité… — comble ce que le manifeste tait.
     let raw_manifest =
         match std::fs::read_to_string(module_root.join(crate::manifest::catalog::BUILT_CATALOG)) {

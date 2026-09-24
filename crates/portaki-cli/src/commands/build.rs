@@ -204,14 +204,12 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
             ui::detail(supported.join(" "));
         }
     } else if !catalog_path.exists() {
-        anyhow::bail!(
-            "no portaki.module.json and no SDK emissions — add portaki_module!(...) or a catalog manifest"
-        );
+        anyhow::bail!("no SDK emissions — add portaki_module!(...) to lib.rs");
     }
 
     let publish_path = pack::assemble_publish_manifest(module_root, &out_dir)?;
     ui::wrote("publish", relative(&publish_path, module_root));
-    ui::advice("OCI layer source — edit portaki.module.json then rebuild");
+    ui::advice("written from the code — portaki_module!, #[surface], #[email] and the portaki-sdk features");
     Ok(())
 }
 

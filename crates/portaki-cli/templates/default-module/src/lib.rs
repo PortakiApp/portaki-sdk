@@ -20,7 +20,11 @@ portaki_sdk::portaki_module!(
     id = "{{MODULE_NAME}}",
     display_name_key = "module.displayName",
     description_key = "module.description",
-    author = "Portaki",
+    author = "{{AUTHOR_NAME}}",
+    author_url = "https://github.com/TODO",
+    module_type = "community",
+    icon = "Grid",
+    maturity = "beta",
 );
 
 #[portaki_sdk::capability(required, id = "core.storage")]

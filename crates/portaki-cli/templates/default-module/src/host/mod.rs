@@ -10,7 +10,13 @@ use crate::ids::HOST_MAIN;
 ///
 /// No page title and no Save button: the sheet draws both, and posts the fields below to the
 /// `updateConfig` command. A surface that drew its own would show two.
-#[portaki_sdk::surface(host, id = "main")]
+#[portaki_sdk::surface(
+    host,
+    id = "main",
+    placement = "property-module-sheet",
+    label_key = "nav.main",
+    icon = "Grid"
+)]
 pub fn render_host_main(_ctx: HostContext) -> Surface {
     let config = load_config().unwrap_or_default();
 

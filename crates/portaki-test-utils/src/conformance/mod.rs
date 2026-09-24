@@ -147,12 +147,16 @@ impl Module {
         }
     }
 
-    /// `portaki.module.json`, parsed — `Ok(None)` when the file does not exist.
+    /// The module's manifest, parsed: `portaki.module.json` when the module keeps one, the one
+    /// `portaki build` wrote from the code otherwise — `Ok(None)` when neither exists.
     pub(crate) fn manifest(&self) -> Result<Option<Value>, String> {
-        let path = self.root.join(MANIFEST_FILE);
-        if !path.exists() {
+        let Some(path) = [MANIFEST_FILE, BUILT_MANIFEST_FILE]
+            .iter()
+            .map(|file| self.root.join(file))
+            .find(|path| path.exists())
+        else {
             return Ok(None);
-        }
+        };
         let raw = std::fs::read_to_string(&path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         serde_json::from_str(&raw)
@@ -168,8 +172,12 @@ impl Module {
     }
 }
 
-/// The catalogue manifest a module ships, at the crate root.
+/// The catalogue manifest a module may still write by hand, at the crate root.
 pub const MANIFEST_FILE: &str = "portaki.module.json";
+
+/// The manifest `portaki build` writes from the code — what is published when there is no
+/// hand-written one.
+pub const BUILT_MANIFEST_FILE: &str = "target/portaki/publish-manifest.json";
 
 /// Why a handler-based check found nothing to check.
 ///

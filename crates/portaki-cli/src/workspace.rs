@@ -1,8 +1,8 @@
 //! Quel module une commande vise, quand un dépôt en porte plusieurs.
 //!
 //! La GitHub App de la plateforme ne lit pas le code : c'est le CLI, qui a les fichiers sous la
-//! main, qui reconnaît un monorepo. La règle est celle de `portaki ci modules` — des
-//! `portaki.module.json` sous `modules/*/` — et un dépôt à un seul module ne voit rien changer.
+//! main, qui reconnaît un monorepo. La règle est celle de `portaki ci modules` — des modules
+//! sous `modules/*/` — et un dépôt à un seul module ne voit rien changer.
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -11,8 +11,7 @@ use anyhow::{Context, Result};
 
 use crate::ui;
 
-/// Le manifeste qui fait d'un dossier un module.
-const MODULE_MANIFEST: &str = "portaki.module.json";
+use crate::manifest::source::{is_module, module_id as manifest_id};
 
 /// Le dossier où un dépôt multi-modules les range.
 const MODULES_DIR: &str = "modules";
@@ -43,7 +42,7 @@ fn nested_members(repo: &Path) -> Vec<Member> {
     let mut found: Vec<Member> = entries
         .flatten()
         .map(|entry| entry.path())
-        .filter(|root| root.join(MODULE_MANIFEST).is_file())
+        .filter(|root| is_module(root))
         .map(|root| Member {
             id: manifest_id(&root).unwrap_or_else(|| {
                 root.file_name()
@@ -55,12 +54,6 @@ fn nested_members(repo: &Path) -> Vec<Member> {
         .collect();
     found.sort_by(|a, b| a.id.cmp(&b.id));
     found
-}
-
-fn manifest_id(root: &Path) -> Option<String> {
-    let raw = std::fs::read_to_string(root.join(MODULE_MANIFEST)).ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    parsed.get("id")?.as_str().map(str::to_string)
 }
 
 /// Ce qu'on peut décider sans demander à personne.
@@ -165,6 +158,7 @@ pub fn enter(member: &Member) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::source::MODULE_MANIFEST;
     use std::fs;
 
     fn module(dir: &Path, id: &str) {

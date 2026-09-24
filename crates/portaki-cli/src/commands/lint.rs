@@ -66,10 +66,6 @@ pub fn run(args: LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
-    assert_connector_permissions(&module_root, &manifest).map_err(|failure| {
-        checking.abandon();
-        failure
-    })?;
     assert_versions_agree(&module_root, &manifest).map_err(|failure| {
         checking.abandon();
         failure
@@ -88,33 +84,6 @@ pub fn run(args: LintArgs) -> Result<()> {
     ui::detail("capability ids, connector bindings and i18n keys all resolve");
     ui::blank();
     Ok(())
-}
-
-/// La crate et le manifeste doivent annoncer la même version.
-///
-/// `release-please` incrémente les deux ; si l'un des deux passe à travers, un artefact part
-/// sous un numéro que rien d'autre ne porte, et la version publiée cesse de désigner le code
-/// qu'elle contient. Le contrôle vivait dans le script bash d'un dépôt — il appartient au lint.
-/// A connector the catalogue manifest does not permit.
-///
-/// The success line has always claimed to check connector bindings; nothing did. The runtime
-/// does, at the first egress, as a `connector_credential_missing` that names a credential
-/// rather than the missing permission.
-fn assert_connector_permissions(
-    module_root: &std::path::Path,
-    manifest: &ModuleManifest,
-) -> Result<()> {
-    let granted = crate::commands::connectors::granted_connector_permissions(module_root);
-    let missing = crate::commands::connectors::missing_permissions(&manifest.connectors, &granted);
-    if missing.is_empty() {
-        return Ok(());
-    }
-    anyhow::bail!(
-        "connector {} is declared but portaki.module.json does not permit it — add \
-         \"connectors:{}\" to permissions",
-        missing.join(", "),
-        missing.first().cloned().unwrap_or_default()
-    )
 }
 
 /// A permission the manifest schema does not know.
@@ -209,6 +178,11 @@ fn feeds_problems(manifest: &serde_json::Value) -> Vec<String> {
     problems
 }
 
+/// La crate et le manifeste doivent annoncer la même version.
+///
+/// `release-please` incrémente les deux ; si l'un des deux passe à travers, un artefact part
+/// sous un numéro que rien d'autre ne porte, et la version publiée cesse de désigner le code
+/// qu'elle contient. Le contrôle vivait dans le script bash d'un dépôt — il appartient au lint.
 fn assert_versions_agree(module_root: &std::path::Path, manifest: &ModuleManifest) -> Result<()> {
     let cargo = module_root.join("Cargo.toml");
     let Ok(text) = std::fs::read_to_string(&cargo) else {

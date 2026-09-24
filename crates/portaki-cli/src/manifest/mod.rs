@@ -5,6 +5,7 @@ pub mod generator;
 pub mod loader;
 pub mod migration_bundle;
 pub mod operations_bundle;
+pub mod source;
 pub mod validator;
 
 pub use generator::{

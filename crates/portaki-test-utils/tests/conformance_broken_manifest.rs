@@ -32,7 +32,7 @@ fn a_missing_manifest_is_a_finding_not_a_pass() {
     let empty = portaki_test_utils::conformance::Module::at(env!("CARGO_MANIFEST_DIR"));
     let findings = failing("manifest", empty.check_manifest());
 
-    assert_reports(&findings, &["no portaki.module.json"]);
+    assert_reports(&findings, &["no manifest", "portaki build"]);
 }
 
 #[test]
