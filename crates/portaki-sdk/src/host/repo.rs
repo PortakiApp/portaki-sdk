@@ -36,9 +36,13 @@
 
 #![allow(dead_code)]
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+#[cfg(feature = "repo")]
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "repo")]
 use uuid::Uuid;
 
+#[cfg(feature = "repo")]
 use crate::error::{PortakiError, Result};
 
 /// Sort direction for repository queries.
@@ -171,6 +175,7 @@ impl<E> Default for Repo<E> {
 ///
 /// At runtime this is an upsert on the primary key (`id`): re-calling create with the same
 /// `id` updates non-key columns. Prefer this over delete-then-create.
+#[cfg(feature = "repo")]
 pub fn create<E, Create, Entity>(data: Create) -> Result<Entity>
 where
     Entity: DeserializeOwned,
@@ -184,12 +189,14 @@ where
 }
 
 /// Deletes a row by id.
+#[cfg(feature = "repo")]
 pub fn delete<E>(id: Uuid) -> Result<bool> {
     let entity_name = entity_type_name::<E>();
     crate::host::runtime::backend()?.repo_delete(entity_name, &id.to_string())
 }
 
 /// Finds a row by id via [`find`] with an equality filter on `id`.
+#[cfg(feature = "repo")]
 pub fn find_by_id<E, Entity>(id: Uuid) -> Result<Option<Entity>>
 where
     Entity: DeserializeOwned,
@@ -199,6 +206,7 @@ where
 }
 
 /// Runs a typed query.
+#[cfg(feature = "repo")]
 pub fn find<E, Entity>(query: Query<E>) -> Result<Page<Entity>>
 where
     Entity: DeserializeOwned,
@@ -217,7 +225,9 @@ fn entity_type_name<E>() -> &'static str {
 
 /// Repository free functions and types — primary module authoring API.
 pub mod typed {
-    pub use super::{create, delete, find, find_by_id, Direction, Page, Query, Repo};
+    #[cfg(feature = "repo")]
+    pub use super::{create, delete, find, find_by_id};
+    pub use super::{Direction, Page, Query, Repo};
 }
 
 /// Returns a [`Repo`] marker for entity `E` (alias for [`typed::Repo::new`]).

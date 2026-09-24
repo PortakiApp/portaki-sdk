@@ -126,6 +126,40 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
     Ok(found)
 }
 
+/// Features que le module active sur `portaki-sdk`, lues dans son propre `Cargo.toml` résolu.
+///
+/// Celles qu'il déclare et non celles que cargo unifie sur un workspace : un module ne réclame
+/// pas `email` parce que son voisin l'envoie.
+pub(crate) fn sdk_features(module_root: &Path) -> Result<Vec<String>> {
+    let output = std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .current_dir(module_root)
+        .output();
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return Ok(Vec::new()),
+    };
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("parse cargo metadata")?;
+    let own = module_root
+        .join("Cargo.toml")
+        .canonicalize()
+        .unwrap_or_else(|_| module_root.join("Cargo.toml"));
+    let features = metadata["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|p| p["manifest_path"].as_str().map(PathBuf::from) == Some(own.clone()))
+        .and_then(|p| p["dependencies"].as_array())
+        .into_iter()
+        .flatten()
+        .filter(|d| d["name"] == "portaki-sdk" && d["kind"].is_null())
+        .flat_map(|d| d["features"].as_array().cloned().unwrap_or_default())
+        .filter_map(|f| f.as_str().map(str::to_string))
+        .collect();
+    Ok(features)
+}
+
 /// Recopie ce que le build a emis dans le manifeste envoye a la sandbox : les surfaces, les
 /// queries, les commands et les entites.
 ///

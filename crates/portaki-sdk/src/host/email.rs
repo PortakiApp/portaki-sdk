@@ -40,7 +40,9 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::context::Context;
+#[cfg(feature = "email")]
 use crate::error::{PortakiError, Result};
+#[cfg(feature = "email")]
 use crate::host::runtime::{backend, context_or_load};
 use crate::limits;
 
@@ -532,6 +534,7 @@ fn is_absolute_https(url: &str) -> bool {
 /// email targets the invocation stay more than
 /// [`limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT`] days after its checkout. Host refusals with a
 /// known code come back as [`PortakiError::Email`] too. See the [module docs](self#limits).
+#[cfg(feature = "email")]
 pub fn send(args: &SendEmailArgs) -> Result<()> {
     args.validate()?;
     let backend = backend()?;
