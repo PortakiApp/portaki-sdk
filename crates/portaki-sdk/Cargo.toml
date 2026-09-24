@@ -26,8 +26,10 @@ repo = []
 email = []
 events = []
 platform = []
+# Ces deux-là ne gardent aucune API : elles déclarent seulement la permission. `FileRef` sert aussi
+# aux photos que l'hôte joint (checklist) ; la plateforme refuse l'upload voyageur sans
+# `guest:files`, et laisse StayContext::guest_email / guest_phone vides sans la seconde.
 guest-files = []
-# Ne garde aucune API : StayContext::guest_email / guest_phone restent vides sans la permission.
 stay-guest-contact = []
 
 [dependencies]
