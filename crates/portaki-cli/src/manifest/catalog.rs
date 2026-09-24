@@ -10,6 +10,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
+use portaki_sdk::permission;
+
 use super::generator::EmissionFile;
 
 /// Là où `portaki build` dépose le catalogue déduit.
@@ -139,6 +141,37 @@ fn surfaces(
     (host, guest)
 }
 
+/// Chaque feature de `portaki-sdk` et la permission qu'elle déclare.
+const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
+    ("kv", permission::KV),
+    ("repo", permission::REPO),
+    ("email", permission::EMAIL),
+    ("events", permission::EVENTS),
+    ("platform", permission::PLATFORM),
+    ("guest-files", permission::GUEST_FILES),
+    ("stay-guest-contact", permission::STAY_GUEST_CONTACT_READ),
+];
+
+/// Les permissions que le code réclame : une par feature de `portaki-sdk` activée — l'API
+/// qu'elle garde n'existe pas sans elle —, et `connectors:<id>` pour chaque connecteur déclaré.
+pub fn permissions(emissions: &[EmissionFile], sdk_features: &[String]) -> Vec<String> {
+    let mut found: Vec<String> = FEATURE_PERMISSIONS
+        .iter()
+        .filter(|(feature, _)| sdk_features.iter().any(|f| f == feature))
+        .map(|(_, permission)| permission.to_string())
+        .chain(
+            emissions
+                .iter()
+                .filter(|e| e.kind == "connector_builtin" || e.kind == "connector_custom")
+                .filter_map(|e| e.data["id"].as_str())
+                .map(|id| format!("{}{id}", permission::CONNECTORS_PREFIX)),
+        )
+        .collect();
+    found.sort();
+    found.dedup();
+    found
+}
+
 /// Comble les clés que le manifeste écrit à la main ne porte pas. Ce qu'il porte l'emporte.
 pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
     let catalog: Value = serde_json::from_str(catalog).context("parse built catalog")?;
@@ -157,6 +190,14 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
         match (object.get_mut(key), IDENTITY.iter().find(|(k, _)| k == key)) {
             (None, _) => {
                 object.insert(key.clone(), value.clone());
+            }
+            // Une permission que le code réclame s'ajoute ; celles écrites à la main restent.
+            (Some(Value::Array(declared)), None) if key == "permissions" => {
+                for permission in value.as_array().into_iter().flatten() {
+                    if !declared.contains(permission) {
+                        declared.push(permission.clone());
+                    }
+                }
             }
             (Some(Value::Array(declared)), Some((_, fields))) => merge_entries(
                 declared,
@@ -346,6 +387,31 @@ mod tests {
             fill_catalog(&filled.to_string(), catalog).expect("again"),
             filled.to_string()
         );
+    }
+
+    #[test]
+    fn permissions_come_from_sdk_features_and_connectors() {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "nuki" }),
+        });
+        let features = ["repo", "email", "not-a-permission", "guest-files"].map(String::from);
+
+        assert_eq!(
+            super::permissions(&emissions, &features),
+            ["connectors:nuki", "email", "guest:files", "repo"]
+        );
+    }
+
+    #[test]
+    fn permissions_add_to_the_hand_written_list() {
+        let raw = r#"{"permissions":["platform","email"]}"#;
+        let filled: serde_json::Value = serde_json::from_str(
+            &fill_catalog(raw, r#"{"permissions":["email","repo"]}"#).expect("fill"),
+        )
+        .expect("parse");
+        assert_eq!(filled["permissions"], json!(["platform", "email", "repo"]));
     }
 
     #[test]

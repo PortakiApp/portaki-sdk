@@ -4,10 +4,14 @@
 //! emits, and [`crate::contracts::platform`] for platform event names used in
 //! `#[event_handler]`. Bare strings are not accepted.
 
+#[cfg(feature = "events")]
 use serde::Serialize;
 
+#[cfg(feature = "events")]
 use crate::error::{PortakiError, Result};
+#[cfg(feature = "events")]
 use crate::host::runtime::backend;
+#[cfg(feature = "events")]
 use crate::ids::EventType;
 
 /// Emits `event_type` with a JSON payload.
@@ -16,6 +20,7 @@ use crate::ids::EventType;
 ///
 /// The gateway accepts at most [`crate::limits::EVENTS_PER_INVOCATION`] events per
 /// invocation; past that it answers [`crate::error::PortakiError::EventLimitExceeded`].
+#[cfg(feature = "events")]
 pub fn emit<T: Serialize>(event_type: EventType, payload: &T) -> Result<()> {
     let payload_json = serde_json::to_string(payload)?;
     backend()?

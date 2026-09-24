@@ -52,6 +52,7 @@ pub mod contracts;
 pub mod deprecation;
 pub mod email;
 pub mod error;
+#[cfg(feature = "guest-files")]
 pub mod files;
 pub mod host;
 pub mod ids;

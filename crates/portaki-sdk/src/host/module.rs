@@ -34,8 +34,11 @@
 
 use serde::Deserialize;
 
+#[cfg(feature = "platform")]
 use crate::capability::CapabilityId;
+#[cfg(feature = "platform")]
 use crate::error::Result;
+#[cfg(feature = "platform")]
 use crate::host::runtime::backend;
 use crate::ids::ModuleId;
 
@@ -80,6 +83,7 @@ pub struct ModulePeer {
 ///
 /// Requires an installed [`crate::host::runtime::HostBackend`] — unavailable in bare
 /// unit tests without [`crate::host::runtime::with_host`].
+#[cfg(feature = "platform")]
 pub fn status() -> Result<ModuleStatus> {
     backend()?.module_status()
 }
@@ -88,6 +92,7 @@ pub fn status() -> Result<ModuleStatus> {
 ///
 /// Provider modules declare the id under `capabilities.provided` in their SDK manifest.
 /// Pass [`crate::CapabilityId`] / [`crate::contracts::smart_lock::CAPABILITY`].
+#[cfg(feature = "platform")]
 pub fn list_by_capability(capability_id: CapabilityId) -> Result<Vec<ModulePeer>> {
     backend()?.module_list_by_capability(capability_id.as_str())
 }

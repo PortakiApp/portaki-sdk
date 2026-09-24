@@ -117,6 +117,7 @@ impl PortakiError {
     /// Backends other than the Extism one (test mocks, `portaki dev`) may still report host
     /// refusals as `Host("email_stay_ended: …")`; wrappers pass their result through here so
     /// the module sees the same variant whichever backend is installed.
+    #[cfg_attr(not(any(feature = "email", test)), allow(dead_code))]
     pub(crate) fn typed(self) -> Self {
         match self {
             Self::Host(text) => {

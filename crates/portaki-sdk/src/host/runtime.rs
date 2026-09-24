@@ -151,6 +151,7 @@ pub(crate) fn backend() -> Result<Arc<dyn HostBackend>> {
     HOST.with(|host| host.borrow().clone().ok_or(PortakiError::HostNotConfigured))
 }
 
+#[cfg_attr(not(feature = "email"), allow(dead_code))]
 pub(crate) fn context_or_load() -> Result<Context> {
     if let Some(ctx) = CTX.with(|cell| cell.borrow().clone()) {
         return Ok(ctx);

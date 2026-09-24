@@ -44,12 +44,16 @@
 //! });
 //! ```
 
+#[cfg(feature = "kv")]
 use crate::error::{PortakiError, Result};
+#[cfg(feature = "kv")]
 use crate::host::runtime::backend;
 
+#[cfg(feature = "kv")]
 const FORBIDDEN_SUBSTRINGS: &[&str] = &["token", "password", "secret", "credential", "auth"];
 
 /// Reads raw bytes at `key`, or `None` when unset / expired.
+#[cfg(feature = "kv")]
 pub fn get(key: &str) -> Result<Option<Vec<u8>>> {
     backend()?.kv_get(key)
 }
@@ -58,21 +62,25 @@ pub fn get(key: &str) -> Result<Option<Vec<u8>>> {
 ///
 /// Returns an error when `key` matches secret-like substrings — never store
 /// API tokens in KV (gateway holds connector secrets).
+#[cfg(feature = "kv")]
 pub fn set(key: &str, value: &[u8], ttl_seconds: Option<u32>) -> Result<()> {
     lint_key(key)?;
     backend()?.kv_set(key, value, ttl_seconds)
 }
 
 /// Deletes `key` if present.
+#[cfg(feature = "kv")]
 pub fn delete(key: &str) -> Result<()> {
     backend()?.kv_delete(key)
 }
 
 /// Lists keys beginning with `prefix` (module-scoped namespace).
+#[cfg(feature = "kv")]
 pub fn list(prefix: &str) -> Result<Vec<String>> {
     backend()?.kv_list(prefix)
 }
 
+#[cfg(feature = "kv")]
 fn lint_key(key: &str) -> Result<()> {
     let lower = key.to_ascii_lowercase();
     if FORBIDDEN_SUBSTRINGS

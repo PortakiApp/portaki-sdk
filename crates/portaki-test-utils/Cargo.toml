@@ -18,7 +18,8 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-portaki-sdk = { workspace = true }
+# Toutes les API hôte : le mock les sert toutes, quel que soit le module testé.
+portaki-sdk = { workspace = true, features = ["kv", "repo", "email", "events", "platform", "guest-files"] }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
