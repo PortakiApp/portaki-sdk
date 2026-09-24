@@ -12,7 +12,7 @@ use crate::wire_lit::WireLit;
 /// `name = "…"`, then an optional bare `guest` — shared by `query` and `command`.
 pub(crate) struct NamedOpAttrs {
     pub name: String,
-    /// Callable by a guest through the guest gateway. Closed unless the module says so.
+    /// Guest-only: callable through the guest gateway, refused through the host one. Host-only unless the module says so.
     pub guest: bool,
 }
 
