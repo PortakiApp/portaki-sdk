@@ -51,7 +51,7 @@ rustup target add wasm32-unknown-unknown
 
 | Command | Contract |
 |---------|----------|
-| `portaki init` | Scaffold a module from a template |
+| `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
 | `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
 | `portaki connectors` | Show each declared egress, its permission and its credential |
@@ -63,6 +63,26 @@ rustup target add wasm32-unknown-unknown
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect` | Inspect a published OCI artifact |
 | `portaki docs` / `dev` | Docs helper / local mock gateway (evolves with the SDK) |
+
+## Scaffolding a module
+
+`portaki init <id>` writes a buildable module crate, its `portaki.module.json` and its
+`listing.json` — the public listing, published with each release. In a terminal it asks five
+questions; Enter skips one and keeps the default:
+
+```
+    display name [<id>]:
+    description, in one sentence:
+    catalogue tagline, 90 characters at most:
+    category [stay]:        (1. arrival  2. stay  3. around  4. formalities)
+    author name [<git config user.name, or TODO>]:
+```
+
+A tagline past 90 characters is asked again. `--display-name`, `--description`, `--tagline` and
+`--category` answer ahead of time and are not asked; `--yes` — or no terminal, as in a CI — asks
+nothing and keeps the template for the rest. What is not answered keeps an instruction starting
+with « À compléter » / "To be completed", which the `listing` conformance check refuses to publish:
+fill `listing.json` in, or delete it to write the listing in the dashboard.
 
 ## Monorepos
 
@@ -250,8 +270,13 @@ a version already on GHCR without pushing anything, which is how an existing cat
 ### Public listing
 
 A module can version its public catalogue listing in `listing.json`, next to
-`portaki.module.json` (`category`, `tagline`, `guestSurface`, `hostSurface`, `configItems`,
-`capabilities`, `publishedLangs`). `publish` reads it before anything else — invalid JSON stops the
+`portaki.module.json` (`category`, `tagline`, `description`, `guestSurface`, `hostSurface`,
+`configItems`, `capabilities`, `publishedLangs`). Its schema is
+[`schema/listing.v1.json`](https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json)
+— point `"$schema"` at it and an editor completes and checks the file, each field describing what
+to write. The `listing` check of the conformance battery validates the file against it, so
+`publish`, which runs the battery, refuses an off-schema listing — or one still holding the
+`portaki init` instructions — before pushing. `publish` reads it before anything else — invalid JSON stops the
 run before a push — and sends it as is once the version is in the registry: after the
 announcement, and also when the version was already there, so a fixed listing does not wait for
 the next release. `--dry-run` sends nothing; `--no-announce` skips it. In CI it takes a fresh

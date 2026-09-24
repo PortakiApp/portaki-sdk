@@ -1,6 +1,7 @@
 //! `portaki init` — scaffold a module from templates.
 
 use std::fs;
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -36,6 +37,199 @@ pub struct InitArgs {
     /// Output directory (defaults to `./{name}`).
     #[arg(long)]
     pub path: Option<PathBuf>,
+    /// Ask nothing: the template as is, plus whatever the options below set.
+    #[arg(long, short = 'y')]
+    pub yes: bool,
+    /// Display name, in `portaki.module.json` (`name.fr` and `name.en`).
+    #[arg(long)]
+    pub display_name: Option<String>,
+    /// One-sentence description, in `portaki.module.json` and `listing.json` (French).
+    #[arg(long)]
+    pub description: Option<String>,
+    /// Catalogue tagline, in `listing.json` (French, 90 characters at most).
+    #[arg(long)]
+    pub tagline: Option<String>,
+    /// Catalogue category, in `listing.json`.
+    #[arg(long, value_enum)]
+    pub category: Option<Category>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+/// The moment of the stay a module belongs to — the closed list of the registry.
+pub enum Category {
+    /// Getting in, check-in.
+    Arrival,
+    /// Life in the rental.
+    Stay,
+    /// The neighbourhood, outings.
+    Around,
+    /// Forms, rules, paperwork.
+    Formalities,
+}
+
+impl Category {
+    const ALL: [Category; 4] = [
+        Category::Arrival,
+        Category::Stay,
+        Category::Around,
+        Category::Formalities,
+    ];
+
+    fn wire(self) -> &'static str {
+        match self {
+            Category::Arrival => "arrival",
+            Category::Stay => "stay",
+            Category::Around => "around",
+            Category::Formalities => "formalities",
+        }
+    }
+}
+
+/// The registry refuses a longer tagline: past it, the catalogue card truncates.
+const TAGLINE_MAX: usize = 90;
+
+/// What the author chose — `None` keeps the template's text.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct Answers {
+    display_name: Option<String>,
+    description: Option<String>,
+    tagline: Option<String>,
+    category: Option<Category>,
+    author: Option<String>,
+}
+
+impl Answers {
+    /// The JSON-string placeholders of the templates, each with its value or the template default.
+    ///
+    /// The defaults of `listing.json` start with « À compléter » on purpose: the `listing`
+    /// conformance check recognises them and refuses to publish them.
+    fn placeholders(&self, module_name: &str) -> [(&'static str, String); 6] {
+        let or = |value: &Option<String>, default: &str| {
+            value.clone().unwrap_or_else(|| default.to_string())
+        };
+        [
+            ("{{DISPLAY_NAME}}", or(&self.display_name, module_name)),
+            (
+                "{{DESCRIPTION}}",
+                or(&self.description, "Ce que ce module fait, en une phrase."),
+            ),
+            (
+                "{{LISTING_DESCRIPTION}}",
+                or(
+                    &self.description,
+                    "À compléter : ce que le module fait pour l'hôte et le voyageur, en quelques phrases.",
+                ),
+            ),
+            (
+                "{{TAGLINE}}",
+                or(
+                    &self.tagline,
+                    "À compléter : ce que le module apporte, en une phrase.",
+                ),
+            ),
+            (
+                "{{CATEGORY}}",
+                self.category.unwrap_or(Category::Stay).wire().to_string(),
+            ),
+            ("{{AUTHOR_NAME}}", or(&self.author, "TODO")),
+        ]
+    }
+}
+
+/// `value` as it goes between the quotes of a JSON string — quotes and backslashes escaped.
+fn json_escaped(value: &str) -> String {
+    let quoted = serde_json::to_string(value).expect("a string serialises");
+    quoted[1..quoted.len() - 1].to_string()
+}
+
+fn too_long(tagline: &str) -> bool {
+    tagline.chars().count() > TAGLINE_MAX
+}
+
+/// Asks for what the options did not set; Enter skips a question and keeps the default.
+///
+/// Reads from `input` rather than stdin so that a test can answer. End of input answers
+/// everything left with Enter.
+fn ask(
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    module_name: &str,
+    git_author: Option<String>,
+    mut answers: Answers,
+) -> Result<Answers> {
+    writeln!(output, "    Enter keeps the default.")?;
+    if answers.display_name.is_none() {
+        answers.display_name = prompt(input, output, "display name", module_name)?;
+    }
+    if answers.description.is_none() {
+        answers.description = prompt(input, output, "description, in one sentence", "")?;
+    }
+    if answers.tagline.is_none() {
+        answers.tagline = loop {
+            match prompt(
+                input,
+                output,
+                "catalogue tagline, 90 characters at most",
+                "",
+            )? {
+                Some(tagline) if too_long(&tagline) => writeln!(
+                    output,
+                    "    {} characters — {TAGLINE_MAX} at most, try shorter.",
+                    tagline.chars().count()
+                )?,
+                tagline => break tagline,
+            }
+        };
+    }
+    if answers.category.is_none() {
+        for (index, category) in Category::ALL.iter().enumerate() {
+            writeln!(output, "    {}. {}", index + 1, category.wire())?;
+        }
+        answers.category = loop {
+            let Some(choice) = prompt(input, output, "category", "stay")? else {
+                break None;
+            };
+            let found = Category::ALL.iter().enumerate().find(|(index, category)| {
+                choice == (index + 1).to_string() || choice.eq_ignore_ascii_case(category.wire())
+            });
+            match found {
+                Some((_, category)) => break Some(*category),
+                None => writeln!(output, "    no category {choice:?} — 1 to 4, or its name.")?,
+            }
+        };
+    }
+    let author_default = git_author.clone().unwrap_or_else(|| "TODO".to_string());
+    answers.author = prompt(input, output, "author name", &author_default)?.or(git_author);
+    Ok(answers)
+}
+
+/// One question. `None` when the answer is empty — the template keeps its text.
+fn prompt(
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    question: &str,
+    default: &str,
+) -> Result<Option<String>> {
+    if default.is_empty() {
+        write!(output, "    {question}: ")?;
+    } else {
+        write!(output, "    {question} [{default}]: ")?;
+    }
+    output.flush()?;
+    let mut answer = String::new();
+    input.read_line(&mut answer)?;
+    let answer = answer.trim();
+    Ok((!answer.is_empty()).then(|| answer.to_string()))
+}
+
+/// `git config user.name`, when git is there and has one.
+fn git_user_name() -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["config", "user.name"])
+        .output()
+        .ok()?;
+    let name = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (output.status.success() && !name.is_empty()).then_some(name)
 }
 
 /// Runs `portaki init`.
@@ -74,12 +268,35 @@ pub fn run(args: InitArgs) -> Result<()> {
         );
     }
 
+    if args.tagline.as_deref().is_some_and(too_long) {
+        bail!("--tagline is longer than {TAGLINE_MAX} characters — the registry refuses it");
+    }
+    let preset = Answers {
+        display_name: args.display_name.clone(),
+        description: args.description.clone(),
+        tagline: args.tagline.clone(),
+        category: args.category,
+        author: None,
+    };
+    // Outside a terminal (a CI, a pipe) a question would wait forever: the template as is.
+    let answers = if args.yes || !std::io::stdin().is_terminal() {
+        preset
+    } else {
+        ask(
+            &mut std::io::stdin().lock(),
+            &mut std::io::stdout(),
+            &args.name,
+            git_user_name(),
+            preset,
+        )?
+    };
+
     let scaffolding = ui::step(format!(
         "scaffolding {} from the {} template",
         args.name,
         label(&args.template)
     ));
-    copy_template(template_dir, &dest, &args.name)?;
+    copy_template(template_dir, &dest, &args.name, &answers)?;
     scaffolding.done(format!("created {}", dest.display()));
 
     describe(&args.template);
@@ -141,6 +358,10 @@ fn describe(template: &InitTemplate) {
     rows.push((
         "portaki.module.json",
         "the catalogue entry — name, author, surfaces, permissions",
+    ));
+    rows.push((
+        "listing.json",
+        "the public listing — published with each release",
     ));
 
     ui::list("what you got", &rows);
@@ -223,7 +444,12 @@ fn directory(template: &InitTemplate) -> &'static str {
 }
 
 /// Writes an embedded directory out, rendering each file on the way.
-fn copy_template(source: &Dir<'_>, dest: &Path, module_name: &str) -> Result<()> {
+fn copy_template(
+    source: &Dir<'_>,
+    dest: &Path,
+    module_name: &str,
+    answers: &Answers,
+) -> Result<()> {
     fs::create_dir_all(dest).with_context(|| format!("create {}", dest.display()))?;
 
     for file in source.files() {
@@ -242,7 +468,13 @@ fn copy_template(source: &Dir<'_>, dest: &Path, module_name: &str) -> Result<()>
             .with_context(|| format!("template {} is not UTF-8", file.path().display()))?;
         // The CLI's version is the SDK it was published with: a scaffolded module compiles
         // against the SDK this command knows, not against whatever is newest.
-        let rendered = text
+        let mut rendered = text.to_string();
+        // Inside JSON strings only, so escaped as JSON; before `{{MODULE_NAME}}`, which is a
+        // default of one of them.
+        for (placeholder, value) in answers.placeholders(module_name) {
+            rendered = rendered.replace(placeholder, &json_escaped(&value));
+        }
+        let rendered = rendered
             .replace("{{MODULE_NAME}}", module_name)
             .replace("{{CRATE_NAME}}", &crate_name(module_name))
             .replace("{{SDK_VERSION}}", env!("CARGO_PKG_VERSION"));
@@ -255,7 +487,7 @@ fn copy_template(source: &Dir<'_>, dest: &Path, module_name: &str) -> Result<()>
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
-        copy_template(child, &dest.join(name), module_name)?;
+        copy_template(child, &dest.join(name), module_name, answers)?;
     }
 
     Ok(())
@@ -374,6 +606,7 @@ mod tests {
             TEMPLATES.get_dir("default-module").expect("template"),
             &dest,
             "concierge",
+            &Answers::default(),
         )
         .expect("scaffold");
 
@@ -399,5 +632,146 @@ mod tests {
         assert!(catalog.contains("\"id\": \"concierge\""));
 
         fs::remove_dir_all(&dest).ok();
+    }
+
+    fn scaffold(template: &str, answers: &Answers) -> tempfile::TempDir {
+        let dest = tempfile::tempdir().expect("tempdir");
+        copy_template(
+            TEMPLATES.get_dir(template).expect("template"),
+            dest.path(),
+            "concierge",
+            answers,
+        )
+        .expect("scaffold");
+        dest
+    }
+
+    fn json(path: &Path) -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(path).expect("written")).expect("JSON")
+    }
+
+    /// `init --yes`: a listing the registry accepts, only waiting for its texts.
+    #[test]
+    fn the_scaffolded_listing_follows_the_schema() {
+        let schema: serde_json::Value =
+            serde_json::from_str(portaki_test_utils::conformance::LISTING_SCHEMA_V1).unwrap();
+        let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+        for (template, guest) in [("default-module", true), ("empty-module", false)] {
+            let dest = scaffold(template, &Answers::default());
+            let listing = json(&dest.path().join("listing.json"));
+
+            let errors: Vec<String> = validator
+                .iter_errors(&listing)
+                .map(|e| e.to_string())
+                .collect();
+            assert!(errors.is_empty(), "{template}: {errors:?}");
+            assert_eq!(listing["category"], "stay");
+            assert_eq!(listing["guestSurface"].is_object(), guest, "{template}");
+            // The instructions the `listing` conformance check refuses to publish.
+            let tagline = listing["tagline"]["fr"].as_str().unwrap();
+            assert!(portaki_test_utils::conformance::TEMPLATE_MARKERS
+                .iter()
+                .any(|marker| tagline.starts_with(marker)));
+
+            let manifest = json(&dest.path().join("portaki.module.json"));
+            assert_eq!(manifest["name"]["fr"], "concierge");
+            assert_eq!(manifest["author"]["name"], "TODO");
+        }
+    }
+
+    #[test]
+    fn the_answers_fill_both_files_escaped() {
+        let mut input =
+            std::io::Cursor::new("Le \"Concierge\"\nTout \\ en un.\nAccueil sans clé\n3\nCyril\n");
+        let mut output = Vec::new();
+        let answers = ask(
+            &mut input,
+            &mut output,
+            "concierge",
+            None,
+            Answers::default(),
+        )
+        .expect("answers");
+        let dest = scaffold("default-module", &answers);
+
+        let manifest = json(&dest.path().join("portaki.module.json"));
+        assert_eq!(manifest["name"]["fr"], "Le \"Concierge\"");
+        assert_eq!(manifest["name"]["en"], "Le \"Concierge\"");
+        assert_eq!(manifest["description"]["fr"], "Tout \\ en un.");
+        assert_eq!(manifest["author"]["name"], "Cyril");
+        // The label of the sheet keeps the id.
+        assert_eq!(manifest["hostSurfaces"][0]["label"]["fr"], "concierge");
+        let listing = json(&dest.path().join("listing.json"));
+        assert_eq!(listing["description"]["fr"], "Tout \\ en un.");
+        assert_eq!(listing["tagline"]["fr"], "Accueil sans clé");
+        assert_eq!(listing["category"], "around");
+    }
+
+    #[test]
+    fn enter_everywhere_keeps_the_template_and_the_git_author() {
+        let mut input = std::io::Cursor::new("\n\n\n\n\n");
+        let answers = ask(
+            &mut input,
+            &mut Vec::new(),
+            "concierge",
+            Some("Cyril".into()),
+            Answers::default(),
+        )
+        .expect("answers");
+
+        assert_eq!(
+            answers,
+            Answers {
+                author: Some("Cyril".into()),
+                ..Answers::default()
+            }
+        );
+    }
+
+    #[test]
+    fn a_tagline_too_long_is_asked_again() {
+        let long = "a".repeat(91);
+        let mut input = std::io::Cursor::new(format!("\n\n{long}\nCourte\nnope\nformalities\n\n"));
+        let mut output = Vec::new();
+        let answers = ask(
+            &mut input,
+            &mut output,
+            "concierge",
+            None,
+            Answers::default(),
+        )
+        .expect("answers");
+
+        assert_eq!(answers.tagline.as_deref(), Some("Courte"));
+        assert_eq!(answers.category, Some(Category::Formalities));
+        let shown = String::from_utf8(output).unwrap();
+        assert!(shown.contains("91 characters — 90 at most"), "{shown}");
+        assert!(shown.contains("no category \"nope\""), "{shown}");
+    }
+
+    /// An option answers its question: it is not asked.
+    #[test]
+    fn options_are_not_asked_again() {
+        let preset = Answers {
+            display_name: Some("Concierge".into()),
+            description: Some("Un module.".into()),
+            tagline: Some("Une accroche.".into()),
+            category: Some(Category::Arrival),
+            author: None,
+        };
+        let mut input = std::io::Cursor::new("Cyril\n");
+        let mut output = Vec::new();
+        let answers =
+            ask(&mut input, &mut output, "concierge", None, preset.clone()).expect("answers");
+
+        assert_eq!(
+            answers,
+            Answers {
+                author: Some("Cyril".into()),
+                ..preset
+            }
+        );
+        let shown = String::from_utf8(output).unwrap();
+        assert!(!shown.contains("tagline"), "{shown}");
     }
 }

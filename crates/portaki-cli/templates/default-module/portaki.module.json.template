@@ -2,16 +2,16 @@
   "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
   "id": "{{MODULE_NAME}}",
   "name": {
-    "fr": "{{MODULE_NAME}}",
-    "en": "{{MODULE_NAME}}"
+    "fr": "{{DISPLAY_NAME}}",
+    "en": "{{DISPLAY_NAME}}"
   },
   "description": {
-    "fr": "Ce que ce module fait, en une phrase.",
+    "fr": "{{DESCRIPTION}}",
     "en": "What this module does, in one sentence."
   },
   "version": "0.1.0",
   "author": {
-    "name": "TODO",
+    "name": "{{AUTHOR_NAME}}",
     "url": "https://github.com/TODO",
     "type": "community"
   },
