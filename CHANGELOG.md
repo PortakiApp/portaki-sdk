@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.14.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.13.0...v6.14.0) (2026-09-24)
+
+
+### Features
+
+* **manifest:** declare the modules a module feeds ([2eac50e](https://github.com/PortakiApp/portaki-sdk/commit/2eac50ea369c35642cdcf8ffa35123ad46b9e78f))
+
 ## [6.13.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.12.0...v6.13.0) (2026-09-24)
 
 
