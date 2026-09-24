@@ -28,6 +28,7 @@
   <a href="docs/connectors-and-credentials.md">Connectors & credentials</a> ·
   <a href="docs/module-layout.md">Module layout</a> ·
   <a href="docs/typed-ids.md">Typed ids</a> ·
+  <a href="docs/host-surfaces-and-contracts.md">Host surfaces & contracts</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
