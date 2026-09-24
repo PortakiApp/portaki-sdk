@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.16.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.15.1...v6.16.0) (2026-09-24)
+
+
+### Features
+
+* **cli:** warn on guest commands named like host ops ([d93ce2e](https://github.com/PortakiApp/portaki-sdk/commit/d93ce2ec9d0b73147a47935e4378e5aa954c18b9))
+* **sdk:** opt-in guest flag on queries and commands ([c70bc27](https://github.com/PortakiApp/portaki-sdk/commit/c70bc272c99a90c1935393096a584dc783b6b385))
+
 ## [6.15.1](https://github.com/PortakiApp/portaki-sdk/compare/v6.15.0...v6.15.1) (2026-09-24)
 
 
