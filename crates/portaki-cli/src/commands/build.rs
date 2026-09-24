@@ -152,6 +152,7 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
         let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
         let manifest_path = out_dir.join("manifest.json");
         write_manifest(&manifest, &manifest_path)?;
+        crate::manifest::catalog::check_references(&emissions, &i18n_dir, &supported)?;
         let mut catalog =
             crate::manifest::catalog::catalog_defaults(&emissions, &i18n_dir, &supported);
         let permissions =

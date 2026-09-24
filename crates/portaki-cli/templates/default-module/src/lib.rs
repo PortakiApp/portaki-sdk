@@ -22,9 +22,9 @@ portaki_sdk::portaki_module!(
     description_key = "module.description",
     author = "{{AUTHOR_NAME}}",
     author_url = "https://github.com/TODO",
-    module_type = "community",
-    icon = "Grid",
-    maturity = "beta",
+    module_type = ModuleType::Community,
+    icon = IconName::Grid,
+    maturity = Maturity::Beta,
 );
 
 #[portaki_sdk::capability(required, id = "core.storage")]

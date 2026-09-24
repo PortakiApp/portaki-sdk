@@ -13,9 +13,9 @@ use crate::ids::HOST_MAIN;
 #[portaki_sdk::surface(
     host,
     id = "main",
-    placement = "property-module-sheet",
+    placement = HostPlacement::PropertyModuleSheet,
     label_key = "nav.main",
-    icon = "Grid"
+    icon = IconName::Grid
 )]
 pub fn render_host_main(_ctx: HostContext) -> Surface {
     let config = load_config().unwrap_or_default();

@@ -59,6 +59,7 @@ pub mod limits;
 pub mod manifest;
 pub mod permission;
 pub mod sdui;
+pub mod vocab;
 
 pub mod wasm;
 
@@ -134,6 +135,7 @@ pub mod prelude {
     pub use crate::email::{EmailContextArgs, EmailTemplateKey};
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
+    pub use crate::host::email::EmailAudience;
     pub use crate::ids::{self, EventType, FragmentId, ModuleId, OperationName, SurfaceId};
     pub use crate::sdui::action::{
         json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation,
@@ -145,6 +147,10 @@ pub mod prelude {
     };
     pub use crate::sdui::component::Component;
     pub use crate::sdui::surface::Surface;
+    pub use crate::vocab::{
+        DesignId, EmailTrigger, GuestRole, HostFragment, HostPlacement, IconName, Maturity,
+        ModuleAudience, ModuleType, SkipWhen, Vocabulary,
+    };
     pub use crate::{
         command, connector, connector_op, custom_connector, define_event_types,
         define_operation_names, define_surface_ids, entity, entity_indexes, event_handler,
