@@ -104,6 +104,16 @@
         }
       }
     },
+    "changelog": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "What is new in this version, shown to hosts who have an older one installed: two or three short lines. Filled by portaki publish from --notes, or else from this version's section of the module's CHANGELOG.md; omitted when neither says anything.",
+      "items": {
+        "$ref": "#/$defs/i18nStringMap",
+        "minProperties": 1,
+        "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
     "hostScheduledSync": {
       "type": "object",
       "description": "Host-side sync the platform runs on a schedule (and on demand), without business logic in the API. With platformFetch, the platform calls sourcesQuery to list what to fetch, downloads it, then hands the payloads to applyQuery; both are then required. Without it, the platform runs the module host action hostAction, then stayImportQuery if set to import the resulting stays.",

@@ -273,6 +273,15 @@ re-run; two jobs starting together both look before either announces, so seriali
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
 a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
 
+### What is new
+
+`publish` writes `changelog` into the published manifest: two or three lines a host with an older
+version sees before updating. `--notes "<line>"` (repeatable, at most 5 lines of 160 characters,
+`--notes-lang` sets their language, `en` by default) wins; otherwise the lines come from this
+version's section of the module's `CHANGELOG.md` (`## [x.y.z]` or `## x.y.z`, then bullets — the
+release-please format, scope and commit link dropped), the first five kept. Neither: the field is
+left as `portaki.module.json` declares it, absent usually.
+
 ### Public listing
 
 A module can version its public catalogue listing in `listing.json`, next to
