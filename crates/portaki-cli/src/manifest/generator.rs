@@ -365,7 +365,16 @@ pub fn write_manifest(manifest: &ModuleManifest, dest: &Path) -> Result<()> {
 /// Only the module's own crate is considered (`build/<crate>-<hash>/out/portaki-emissions`): in
 /// a `target/` shared by a workspace, another member's emissions are just as fresh and wrong.
 pub fn find_emissions_dir(module_root: &Path) -> Option<PathBuf> {
-    let target = module_root.join("target");
+    find_emissions_dir_in(&module_root.join("target"), module_root)
+}
+
+/// The same, in a given `target/` — the one a workspace build actually wrote to.
+///
+/// A monorepo member may pin `target-dir` in its own `.cargo/config.toml`: a `cargo build
+/// --workspace` run from one member then writes every member's emissions under that member's
+/// `target/`, and the others' own `target/` holds nothing fresh.
+pub fn find_emissions_dir_in(target: &Path, module_root: &Path) -> Option<PathBuf> {
+    let target = target.to_path_buf();
     if !target.exists() {
         return None;
     }

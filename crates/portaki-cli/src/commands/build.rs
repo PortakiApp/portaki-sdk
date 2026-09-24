@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::manifest::{
-    collect_emissions, find_emissions_dir, generate_manifest, write_manifest,
+    collect_emissions, find_emissions_dir_in, generate_manifest, write_manifest,
     write_migration_bundle, write_operations_bundle,
 };
 use crate::oci::pack;
@@ -130,11 +130,16 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
 /// the last `portaki build` had left in `target/portaki/`, so a new query or surface stayed
 /// invisible in the sandbox until someone thought of running `build` by hand.
 pub fn refresh_outputs(module_root: &std::path::Path) -> Result<()> {
+    refresh_outputs_from(module_root, &module_root.join("target"))
+}
+
+/// The same, reading the emissions from a given `target/` — where a workspace build wrote them.
+pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::Path) -> Result<()> {
     let out_dir = module_root.join("target/portaki");
     std::fs::create_dir_all(&out_dir)?;
     let catalog_path = module_root.join("portaki.module.json");
 
-    if let Some(emissions_dir) = find_emissions_dir(module_root) {
+    if let Some(emissions_dir) = find_emissions_dir_in(target, module_root) {
         let emissions = collect_emissions(&emissions_dir)?;
         let i18n_dir = module_root.join("i18n");
         let supported = read_supported_locales(&i18n_dir)
