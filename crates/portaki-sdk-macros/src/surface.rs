@@ -13,7 +13,14 @@ struct SurfaceAttrs {
     context: String,
     id: String,
     display_name_key: Option<String>,
+    /// Where the dashboard or the booklet links to it — `portaki build` writes the catalog's
+    /// `hostSurfaces` / `guestSurfaces` from it. Empty: the surface is rendered, never linked.
+    catalog: serde_json::Map<String, serde_json::Value>,
 }
+
+/// Keys that describe where a surface is linked from, per context.
+const HOST_KEYS: [&str; 5] = ["placement", "design_id", "label_key", "icon", "path"];
+const GUEST_KEYS: [&str; 4] = ["path", "label_key", "role", "embeds"];
 
 impl Parse for SurfaceAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
@@ -35,19 +42,55 @@ impl Parse for SurfaceAttrs {
         let id: WireLit = input.parse()?;
 
         let mut display_name_key = None;
-        if input.peek(Token![,]) {
-            input.parse::<Token![,]>()?;
+        let mut catalog = serde_json::Map::new();
+        let allowed: &[&str] = if context == "host" {
+            &HOST_KEYS
+        } else {
+            &GUEST_KEYS
+        };
+        while input.parse::<Option<Token![,]>>()?.is_some() && !input.is_empty() {
             let key: syn::Ident = input.parse()?;
-            if key == "display_name_key" {
-                input.parse::<Token![=]>()?;
-                display_name_key = Some(input.parse::<LitStr>()?.value());
+            input.parse::<Token![=]>()?;
+            let value = input.parse::<LitStr>()?.value();
+            let name = key.to_string();
+            if name == "display_name_key" {
+                display_name_key = Some(value);
+                continue;
             }
+            if !allowed.contains(&name.as_str()) {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!(
+                        "unknown #[surface({context})] attribute: {name} — expected one of \
+                         display_name_key, {}",
+                        allowed.join(", ")
+                    ),
+                ));
+            }
+            // `placement` and `embeds` repeat: one surface can sit in several places.
+            if name == "placement" || name == "embeds" {
+                catalog
+                    .entry(name)
+                    .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+                    .as_array_mut()
+                    .expect("list")
+                    .push(value.into());
+            } else if catalog.insert(name.clone(), value.into()).is_some() {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!("{name} is given twice"),
+                ));
+            }
+        }
+        if !input.is_empty() {
+            return Err(input.error("expected `, key = \"…\"`"));
         }
 
         Ok(SurfaceAttrs {
             context,
             id: id.value,
             display_name_key,
+            catalog,
         })
     }
 }
@@ -68,7 +111,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         )
     };
 
-    let json = format!(
+    let mut json = format!(
         r#"{{
   "kind": "surface",
   "context": {},
@@ -80,6 +123,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&fn_name).unwrap(),
         display_fragment,
     );
+    if !attrs.catalog.is_empty() {
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value["catalog"] = serde_json::Value::Object(attrs.catalog.clone());
+        json = serde_json::to_string_pretty(&value).unwrap();
+    }
 
     let key = format!("{}_{}", attrs.context, attrs.id);
     let emission = write_emission("surface", &sanitize_key(&key), &json);
@@ -92,4 +140,53 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     output.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SurfaceAttrs;
+
+    fn parse(attr: &str) -> syn::Result<SurfaceAttrs> {
+        syn::parse_str(attr)
+    }
+
+    #[test]
+    fn a_host_surface_can_sit_in_several_places() {
+        let attrs = parse(
+            r#"host, id = "issue-stats", placement = "property-stats-card",
+               placement = "property-stats-detail", label_key = "nav.stats", icon = "chart","#,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::Value::Object(attrs.catalog),
+            serde_json::json!({
+                "placement": ["property-stats-card", "property-stats-detail"],
+                "label_key": "nav.stats",
+                "icon": "chart",
+            })
+        );
+    }
+
+    #[test]
+    fn a_guest_route_keeps_the_display_name_key_apart() {
+        let attrs = parse(
+            r#"guest, id = "home.card", display_name_key = "x", path = "pre-arrival-form",
+               role = "arrival-formality", embeds = "regulatory.police-form""#,
+        )
+        .unwrap();
+        assert_eq!(attrs.display_name_key.as_deref(), Some("x"));
+        assert_eq!(
+            attrs.catalog["embeds"],
+            serde_json::json!(["regulatory.police-form"])
+        );
+        assert_eq!(attrs.catalog["role"], "arrival-formality");
+    }
+
+    #[test]
+    fn keys_belong_to_their_context_and_appear_once() {
+        assert!(parse(r#"guest, id = "home.card", placement = "x""#).is_err());
+        assert!(parse(r#"host, id = "main", role = "x""#).is_err());
+        assert!(parse(r#"host, id = "main", icon = "a", icon = "b""#).is_err());
+        assert!(parse(r#"host, id = "main""#).unwrap().catalog.is_empty());
+    }
 }
