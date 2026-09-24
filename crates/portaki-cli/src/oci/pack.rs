@@ -51,26 +51,14 @@ pub fn publish_manifest_path(artifact_dir: &Path) -> PathBuf {
     artifact_dir.join(PUBLISH_MANIFEST)
 }
 
-/// Assembles `target/portaki/publish-manifest.json` from sources (catalog + optional SDK build output).
+/// Assembles `target/portaki/publish-manifest.json`: `portaki.module.json` when the module keeps
+/// one, `{ id, version }` from its crate otherwise, completed by what the build emitted.
 pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Result<PathBuf> {
     fs::create_dir_all(artifact_dir).context("create artifact dir")?;
     let dest = publish_manifest_path(artifact_dir);
-    let catalog_path = module_root.join("portaki.module.json");
     let sdk_path = artifact_dir.join("manifest.json");
 
-    let source = if catalog_path.exists() {
-        catalog_path
-    } else if sdk_path.exists() {
-        // Cloné : le chemin resert plus bas pour savoir s'il faut y relire les déclarations.
-        sdk_path.clone()
-    } else {
-        anyhow::bail!(
-            "missing portaki.module.json or {} — run portaki build first",
-            sdk_path.display()
-        );
-    };
-
-    let raw = fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
+    let raw = crate::manifest::source::source_manifest(module_root)?;
     let raw = match fs::read_to_string(artifact_dir.join("catalog.json")) {
         Ok(catalog) => crate::manifest::catalog::fill_catalog(&raw, &catalog)?,
         Err(_) => raw,
@@ -82,8 +70,7 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
     // savoir à quel module demander quoi, et doit les interroger tous en aveugle pour
     // récolter un `wasm_handler_not_found` de la part de ceux qui se taisent.
     //
-    // Quand le manifeste du build est déjà la source, il les porte par construction.
-    let stamped = if source == sdk_path || !sdk_path.exists() {
+    let stamped = if !sdk_path.exists() {
         stamped
     } else {
         let built = fs::read_to_string(&sdk_path)
@@ -309,20 +296,18 @@ pub fn read_module_coordinates(
     })
 }
 
-/// Lit id/version dans `portaki.module.json`, sans passer par un build.
+/// Lit id/version dans les sources — `portaki.module.json` ou le crate —, sans passer par un build.
 ///
 /// C'est ce qui permet d'annoncer au registre une version déjà présente sur GHCR : rien à
 /// recompiler, rien à repousser, donc aucun jeton d'écriture nécessaire.
 pub fn read_source_coordinates(module_root: &Path) -> Result<ModuleCoordinates> {
-    let manifest_path = module_root.join("portaki.module.json");
-    let raw = std::fs::read_to_string(&manifest_path)
-        .with_context(|| format!("read {}", manifest_path.display()))?;
-    let manifest: ArtifactManifest =
-        serde_json::from_str(&raw).context("parse portaki.module.json")?;
-    Ok(ModuleCoordinates {
-        id: manifest.id,
-        version: manifest.version,
-    })
+    let (id, version) = crate::manifest::source::coordinates(module_root).with_context(|| {
+        format!(
+            "{} carries no module id/version — no portaki.module.json and no [package] in Cargo.toml",
+            module_root.display()
+        )
+    })?;
+    Ok(ModuleCoordinates { id, version })
 }
 
 /// Builds the OCI image reference `registry/portaki-modules-{module_id}:version`.
@@ -596,18 +581,36 @@ mod tests {
     }
 
     #[test]
-    fn assemble_publish_manifest_copies_sdk_manifest_when_no_catalog() {
+    fn assemble_publish_manifest_needs_no_hand_written_manifest() {
         let root = tempdir().unwrap();
         let artifact = root.path().join("target/portaki");
         fs::create_dir_all(&artifact).unwrap();
         fs::write(
-            artifact.join("manifest.json"),
-            r#"{"id":"weather","version":"0.2.0"}"#,
+            root.path().join("Cargo.toml"),
+            "[package]\nname = \"weather\"\nversion = \"0.2.0\"\n",
         )
         .unwrap();
+        fs::write(
+            artifact.join("catalog.json"),
+            r#"{"id":"weather","icon":"sun","permissions":["kv"]}"#,
+        )
+        .unwrap();
+        fs::write(
+            artifact.join("manifest.json"),
+            r#"{"id":"weather","queries":[{"name":"current","fn":"current"}]}"#,
+        )
+        .unwrap();
+
         assemble_publish_manifest(root.path(), &artifact).unwrap();
-        let raw = fs::read_to_string(artifact.join(PUBLISH_MANIFEST)).unwrap();
-        assert!(raw.contains("\"version\":\"0.2.0\""));
+
+        let published: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(artifact.join(PUBLISH_MANIFEST)).unwrap())
+                .unwrap();
+        assert_eq!(published["id"], "weather");
+        assert_eq!(published["version"], "0.2.0");
+        assert_eq!(published["icon"], "sun");
+        assert_eq!(published["permissions"], serde_json::json!(["kv"]));
+        assert_eq!(published["queries"][0]["name"], "current");
     }
 
     #[test]

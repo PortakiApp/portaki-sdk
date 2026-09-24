@@ -66,8 +66,8 @@ rustup target add wasm32-unknown-unknown
 
 ## Scaffolding a module
 
-`portaki init <id>` writes a buildable module crate, its `portaki.module.json` and its
-`listing.json` — the public listing, published with each release. In a terminal it asks five
+`portaki init <id>` writes a buildable module crate and its `listing.json` — the public listing,
+published with each release. There is no catalogue manifest to write: see below. In a terminal it asks five
 questions; Enter skips one and keeps the default:
 
 ```
@@ -84,17 +84,34 @@ nothing and keeps the template for the rest. What is not answered keeps an instr
 with « À compléter » / "To be completed", which the `listing` conformance check refuses to publish:
 fill `listing.json` in, or delete it to write the listing in the dashboard.
 
+## The manifest is written from the code
+
+`portaki build` writes the catalogue manifest the platform reads; nobody writes it by hand.
+
+| Manifest field | Declared by |
+|---|---|
+| `id`, `version` | the crate's `name` and `version` in `Cargo.toml` |
+| `name`, `description` | `module.displayName` / `module.description` in `i18n/*.json` (keys set by `portaki_module!`) |
+| `author`, `icon`, `type`, `maturity`, `sortOrder` | `portaki_module!(author, author_url, icon, module_type, maturity, sort_order)` |
+| `hostSurfaces`, `guestSurfaces` | `#[surface(host, id, placement, design_id, label_key, icon, path)]` / `#[surface(guest, id, path, label_key, role, embeds)]` |
+| `emails` | `#[email(id, audience, …)]` above the `#[command]` that sends it |
+| `permissions` | the features enabled on `portaki-sdk` (`kv`, `repo`, `email`, `events`, `platform`, `guest-files`, `stay-guest-contact`) and each `#[connector]` id |
+| `requiresModuleSdk` | the `portaki-sdk` version cargo resolved |
+
+A module that still keeps a `portaki.module.json` is read as before: what it says wins, and the
+code fills what it leaves out. Delete a field there and the code takes over.
+
 ## Monorepos
 
-A repository whose modules live under `modules/*/portaki.module.json` (the layout of
-`portaki-modules`) is a monorepo. Inside `modules/<id>/`, every command acts on that module as
+A repository whose modules live under `modules/*/` — crates on `portaki-sdk` (the layout of
+`portaki-modules`) — is a monorepo. Inside `modules/<id>/`, every command acts on that module as
 before. From the repository root, `portaki dev`, `portaki build` and `portaki publish` take
 `--module <id>`; `build` and `publish` also take `--all`. With neither, a terminal asks which one,
 and anything else — a CI — gets an error listing the ids.
 
 `portaki sdk upgrade` moves the whole monorepo when the SDK is inherited from the workspace
 (`portaki-sdk = { workspace = true }`): the root `Cargo.toml`, `Cargo.lock` and
-`requiresModuleSdk` in every `portaki.module.json`, then builds and tests the workspace, and
+`requiresModuleSdk` in every `portaki.module.json` still kept, then builds and tests the workspace, and
 assembles and lints each module in turn. Run it from the repository root, or from any module —
 the render comparison, which needs one module's sandbox, only runs in the latter case.
 
@@ -226,8 +243,8 @@ invocation serves both.
 | `portaki ci check [--offline]` | Warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
 
-`ci modules` reads the layout from the manifests, not from a flag: a `portaki.module.json` at the
-root means one module, one under `modules/*/` means several. A change to the shared workspace
+`ci modules` reads the layout from the crates, not from a flag: a crate on `portaki-sdk` at the
+root means one module, crates under `modules/*/` mean several. A change to the shared workspace
 (`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain`) rebuilds everything; a change to a
 workflow file rebuilds nothing.
 
@@ -280,12 +297,12 @@ version sees before updating. `--notes "<line>"` (repeatable, at most 5 lines of
 `--notes-lang` sets their language, `en` by default) wins; otherwise the lines come from this
 version's section of the module's `CHANGELOG.md` (`## [x.y.z]` or `## x.y.z`, then bullets — the
 release-please format, scope and commit link dropped), the first five kept. Neither: the field is
-left as `portaki.module.json` declares it, absent usually.
+left as the manifest declares it, absent usually.
 
 ### Public listing
 
-A module can version its public catalogue listing in `listing.json`, next to
-`portaki.module.json` (`category`, `tagline`, `description`, `guestSurface`, `hostSurface`,
+A module can version its public catalogue listing in `listing.json`, at the crate root
+(`category`, `tagline`, `description`, `guestSurface`, `hostSurface`,
 `configItems`, `capabilities`, `publishedLangs`). Its schema is
 [`schema/listing.v1.json`](https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json)
 — point `"$schema"` at it and an editor completes and checks the file, each field describing what

@@ -127,7 +127,8 @@ a build, not to ship one.
 digest read-only and pushing nothing. That is how an existing catalogue is adopted by the
 registry — no rebuild, no re-upload, and no write credentials needed.
 
-When both `portaki.module.json` and SDK emissions exist, publish pushes catalog + SDK layers
+Publish pushes the catalog written by `portaki build` from the code (merged over a
+`portaki.module.json` when the module still keeps one) and the SDK layer
 (plus optional migrations / operations / i18n / wasm):
 
 - `application/vnd.portaki.manifest+json` — host catalog (`publish-manifest.json`)

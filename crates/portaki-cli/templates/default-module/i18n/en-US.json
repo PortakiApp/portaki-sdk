@@ -1,11 +1,12 @@
 {
-  "module.displayName": "Sample module",
-  "module.description": "Portaki module scaffolded with portaki init",
+  "module.displayName": "{{DISPLAY_NAME}}",
+  "module.description": "What this module does, in one sentence.",
   "home.card.title": "Welcome",
   "home.card.body": "Guest SDUI content",
   "host.section.greeting": "Greeting",
   "host.section.greeting.help": "What the guest card says.",
   "host.greeting.label": "Greeting",
   "host.greeting.placeholder": "Welcome, make yourself at home",
-  "host.greeting.hint": "Leave it empty to keep the bundled wording."
+  "host.greeting.hint": "Leave it empty to keep the bundled wording.",
+  "nav.main": "{{MODULE_NAME}}"
 }

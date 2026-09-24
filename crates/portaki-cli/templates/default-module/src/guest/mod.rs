@@ -6,7 +6,13 @@ use portaki_sdk::sdui::primitives::{Card, Stack, Text};
 use crate::config::load_config;
 use crate::ids::HOME_CARD;
 
-#[portaki_sdk::surface(guest, id = "home.card")]
+#[portaki_sdk::surface(
+    guest,
+    id = "home.card",
+    path = "{{MODULE_NAME}}",
+    label_key = "home.card.title",
+    role = "card"
+)]
 pub fn render_guest_home_card(_ctx: GuestContext) -> Surface {
     let config = load_config().unwrap_or_default();
     // What the host typed, or the bundled wording — a card the host never configured still

@@ -40,10 +40,10 @@ pub struct InitArgs {
     /// Ask nothing: the template as is, plus whatever the options below set.
     #[arg(long, short = 'y')]
     pub yes: bool,
-    /// Display name, in `portaki.module.json` (`name.fr` and `name.en`).
+    /// Display name, in `i18n/*.json` (`module.displayName`).
     #[arg(long)]
     pub display_name: Option<String>,
-    /// One-sentence description, in `portaki.module.json` and `listing.json` (French).
+    /// One-sentence description, in `i18n/fr-FR.json` and `listing.json` (French).
     #[arg(long)]
     pub description: Option<String>,
     /// Catalogue tagline, in `listing.json` (French, 90 characters at most).
@@ -356,8 +356,8 @@ fn describe(template: &InitTemplate) {
         "no build step — it exists so cargo gives the macros an OUT_DIR",
     ));
     rows.push((
-        "portaki.module.json",
-        "the catalogue entry — name, author, surfaces, permissions",
+        "src/lib.rs",
+        "portaki_module! — author, icon, maturity; build writes the catalogue from the code",
     ));
     rows.push((
         "listing.json",
@@ -514,7 +514,8 @@ mod tests {
 
         // Rendered names, not template ones — that is what a clash has to be checked against.
         assert!(planned.contains(&PathBuf::from("Cargo.toml")));
-        assert!(planned.contains(&PathBuf::from("portaki.module.json")));
+        // No manifest to write: `portaki build` derives it from the code.
+        assert!(!planned.contains(&PathBuf::from("portaki.module.json")));
         assert!(planned.contains(&PathBuf::from("src/host/mod.rs")));
         assert!(planned.contains(&PathBuf::from(".cargo/config.toml")));
         assert!(!planned
@@ -576,11 +577,11 @@ mod tests {
 
             // `portaki build` reads emissions from OUT_DIR, which only a build script creates.
             assert!(names.iter().any(|name| name == "build.rs"), "{names:?}");
-            // `portaki dev`, `ci info` and `publish` all read the catalogue manifest.
+            // Nothing hand-written for the catalogue: the code declares it.
             assert!(
-                names
+                !names
                     .iter()
-                    .any(|name| name == "portaki.module.json.template"),
+                    .any(|name| name.starts_with("portaki.module.json")),
                 "{names:?}"
             );
             // Without the custom getrandom backend, the wasm32 build stops inside getrandom.
@@ -627,9 +628,9 @@ mod tests {
         let conformance =
             fs::read_to_string(dest.join("tests/conformance.rs")).expect("battery written");
         assert!(conformance.contains("portaki_test_utils::conformance!();"));
-        let catalog =
-            fs::read_to_string(dest.join("portaki.module.json")).expect("catalogue written");
-        assert!(catalog.contains("\"id\": \"concierge\""));
+        let lib = fs::read_to_string(dest.join("src/lib.rs")).expect("lib written");
+        assert!(lib.contains("id = \"concierge\""));
+        assert!(!dest.join("portaki.module.json").exists());
 
         fs::remove_dir_all(&dest).ok();
     }
@@ -673,9 +674,10 @@ mod tests {
                 .iter()
                 .any(|marker| tagline.starts_with(marker)));
 
-            let manifest = json(&dest.path().join("portaki.module.json"));
-            assert_eq!(manifest["name"]["fr"], "concierge");
-            assert_eq!(manifest["author"]["name"], "TODO");
+            let fr = json(&dest.path().join("i18n/fr-FR.json"));
+            assert_eq!(fr["module.displayName"], "concierge");
+            let lib = fs::read_to_string(dest.path().join("src/lib.rs")).expect("lib");
+            assert!(lib.contains("author = \"TODO\""), "{template}");
         }
     }
 
@@ -694,13 +696,15 @@ mod tests {
         .expect("answers");
         let dest = scaffold("default-module", &answers);
 
-        let manifest = json(&dest.path().join("portaki.module.json"));
-        assert_eq!(manifest["name"]["fr"], "Le \"Concierge\"");
-        assert_eq!(manifest["name"]["en"], "Le \"Concierge\"");
-        assert_eq!(manifest["description"]["fr"], "Tout \\ en un.");
-        assert_eq!(manifest["author"]["name"], "Cyril");
+        let fr = json(&dest.path().join("i18n/fr-FR.json"));
+        let en = json(&dest.path().join("i18n/en-US.json"));
+        assert_eq!(fr["module.displayName"], "Le \"Concierge\"");
+        assert_eq!(en["module.displayName"], "Le \"Concierge\"");
+        assert_eq!(fr["module.description"], "Tout \\ en un.");
         // The label of the sheet keeps the id.
-        assert_eq!(manifest["hostSurfaces"][0]["label"]["fr"], "concierge");
+        assert_eq!(fr["nav.main"], "concierge");
+        let lib = fs::read_to_string(dest.path().join("src/lib.rs")).expect("lib");
+        assert!(lib.contains("author = \"Cyril\""));
         let listing = json(&dest.path().join("listing.json"));
         assert_eq!(listing["description"]["fr"], "Tout \\ en un.");
         assert_eq!(listing["tagline"]["fr"], "Accueil sans clé");

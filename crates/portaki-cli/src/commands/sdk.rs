@@ -746,14 +746,14 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
 /// Depuis la racine, le premier module fait l'affaire : la version y est héritée du workspace,
 /// donc c'est la même pour tous, et c'est tout ce que ce module sert à trouver.
 fn anchor(cwd: &Path) -> Result<(PathBuf, bool)> {
-    if cwd.join("portaki.module.json").is_file() {
+    if crate::manifest::source::is_module(cwd) {
         return Ok((cwd.to_path_buf(), false));
     }
     let members = workspace::members(cwd);
     match members.first() {
         Some(first) => Ok((first.root.clone(), true)),
         None => anyhow::bail!(
-            "no portaki.module.json here, and no modules/*/ below — run from a module or a monorepo root"
+            "no module here, and no modules/*/ below — run from a module or a monorepo root"
         ),
     }
 }

@@ -20,7 +20,7 @@ use crate::ui;
 use crate::update::outdated;
 
 /// Le manifeste qui fait d'un dossier un module.
-const MODULE_MANIFEST: &str = "portaki.module.json";
+use crate::manifest::source::{self, MODULE_MANIFEST};
 
 /// Le dossier où un dépôt multi-modules les range.
 const MODULES_DIR: &str = "modules";
@@ -155,15 +155,12 @@ fn github_run_url() -> Option<String> {
 /// Le template le tirait du nom du dépôt — faux dès qu'un dépôt en porte plusieurs, et fragile
 /// même seul : rien n'oblige un dépôt à porter le nom de son module.
 fn read_module_id(root: &Path) -> Result<String> {
-    let manifest = root.join(MODULE_MANIFEST);
-    let raw = std::fs::read_to_string(&manifest)
-        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
-    let parsed: serde_json::Value = serde_json::from_str(&raw)?;
-    parsed
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-        .with_context(|| format!("{MODULE_MANIFEST} carries no id"))
+    source::module_id(root).with_context(|| {
+        format!(
+            "{} is not a module — run from the module root",
+            root.display()
+        )
+    })
 }
 
 #[derive(Debug, Parser)]
@@ -185,23 +182,14 @@ fn info(args: InfoArgs) -> Result<()> {
         .map(Ok)
         .unwrap_or_else(std::env::current_dir)
         .context("resolve the module root")?;
-    let manifest = root.join(MODULE_MANIFEST);
-    let raw = std::fs::read_to_string(&manifest)
-        .with_context(|| format!("read {} — run from the module root", manifest.display()))?;
-    let parsed: serde_json::Value =
-        serde_json::from_str(&raw).with_context(|| format!("parse {}", manifest.display()))?;
-
-    let field = |key: &str| {
-        parsed
-            .get(key)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("")
-            .to_string()
-    };
-    let (id, version) = (field("id"), field("version"));
-    if id.is_empty() || version.is_empty() {
-        anyhow::bail!("{MODULE_MANIFEST} carries no id or no version");
-    }
+    let (id, version) = source::coordinates(&root)
+        .filter(|(id, version)| !id.is_empty() && !version.is_empty())
+        .with_context(|| {
+            format!(
+                "{} carries no module id or no version — run from the module root",
+                root.display()
+            )
+        })?;
 
     emit_outputs(&[("id", &id), ("version", &version)])?;
 
@@ -252,7 +240,7 @@ fn modules(args: ModulesArgs) -> Result<()> {
     let known = discover(&root)?;
     if known.is_empty() {
         anyhow::bail!(
-            "no module found — expected {MODULE_MANIFEST} here, or one under {MODULES_DIR}/*/"
+            "no module found — expected a crate on portaki-sdk here, or one under {MODULES_DIR}/*/"
         );
     }
 
@@ -302,23 +290,17 @@ fn modules(args: ModulesArgs) -> Result<()> {
 
 /// La version qu'un module déclare, pour la montrer en regard de son nom.
 fn declared_version(root: &Path, name: &str) -> Option<String> {
-    for candidate in [root.join(MODULES_DIR).join(name), root.to_path_buf()] {
-        let manifest = candidate.join(MODULE_MANIFEST);
-        if let Ok(raw) = std::fs::read_to_string(&manifest) {
-            let parsed: serde_json::Value = serde_json::from_str(&raw).ok()?;
-            return parsed
-                .get("version")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string);
-        }
-    }
-    None
+    [root.join(MODULES_DIR).join(name), root.to_path_buf()]
+        .iter()
+        .find(|candidate| source::is_module(candidate))
+        .and_then(|candidate| source::coordinates(candidate))
+        .map(|(_, version)| version)
 }
 
 /// Les modules du dépôt : `modules/*` s'il y en a, sinon le dossier courant lui-même.
 ///
 /// Les deux dispositions coexistent — un dépôt par module, ou un dépôt qui les rassemble — et
-/// aucune n'est déclarée nulle part. C'est la présence du manifeste qui tranche.
+/// aucune n'est déclarée nulle part. C'est un crate sur `portaki-sdk` — ou un manifeste — qui tranche.
 fn discover(root: &Path) -> Result<Vec<String>> {
     let nested = root.join(MODULES_DIR);
     if nested.is_dir() {
@@ -327,7 +309,7 @@ fn discover(root: &Path) -> Result<Vec<String>> {
             .with_context(|| format!("read {}", nested.display()))?
             .flatten()
         {
-            if entry.path().join(MODULE_MANIFEST).is_file() {
+            if source::is_module(&entry.path()) {
                 found.push(entry.file_name().to_string_lossy().to_string());
             }
         }
@@ -336,7 +318,7 @@ fn discover(root: &Path) -> Result<Vec<String>> {
             return Ok(found);
         }
     }
-    if root.join(MODULE_MANIFEST).is_file() {
+    if source::is_module(root) {
         let name = root
             .file_name()
             .map(|name| name.to_string_lossy().to_string())

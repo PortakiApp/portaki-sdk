@@ -7,7 +7,7 @@ A Portaki module: Rust compiled to wasm, published as an OCI artifact. Scaffolde
 
 ## Module id
 
-`{{MODULE_NAME}}` — the id in `portaki.module.json`, the crate name, and the OCI tag all say it.
+`{{MODULE_NAME}}` — the crate name, the module id and the OCI tag all say it.
 
 ## Surfaces
 
@@ -29,7 +29,7 @@ portaki build --release && portaki lint
 portaki dev --watch
 ```
 
-`portaki.module.json` and `Cargo.toml` both carry the version — keep them equal.
+The version lives in `Cargo.toml` only. There is no manifest to write: `portaki build` reads `portaki_module!`, `#[surface]`, `#[email]`, the `portaki-sdk` features and `i18n/`.
 
 ## License
 

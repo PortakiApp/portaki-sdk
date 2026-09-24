@@ -1,6 +1,6 @@
-//! `portaki.module.json` against the schema the registry validates with.
+//! The module's manifest — hand-written or built — against the schema the registry validates with.
 
-use super::{Findings, Module, MANIFEST_FILE};
+use super::{Findings, Module, BUILT_MANIFEST_FILE, MANIFEST_FILE};
 
 /// `schema/module.v1.json` of the SDK, carried in this crate so a check never needs the network.
 ///
@@ -17,7 +17,8 @@ fn problems(module: &Module) -> Vec<String> {
         Ok(Some(manifest)) => manifest,
         Ok(None) => {
             return vec![format!(
-                "no {MANIFEST_FILE} in {} — the registry has nothing to list the module with",
+                "no manifest in {} — run `portaki build`, which writes {BUILT_MANIFEST_FILE} \
+                 from the code; the registry has nothing to list the module with until then",
                 module.root().display()
             )]
         }
@@ -35,12 +36,17 @@ fn problems(module: &Module) -> Vec<String> {
         }
     };
 
+    let file = if module.root().join(MANIFEST_FILE).exists() {
+        MANIFEST_FILE
+    } else {
+        BUILT_MANIFEST_FILE
+    };
     validator
         .iter_errors(&manifest)
         .map(|error| {
             let at = error.instance_path().to_string();
             let at = if at.is_empty() { "/".to_string() } else { at };
-            format!("{MANIFEST_FILE} at {at}: {error}")
+            format!("{file} at {at}: {error}")
         })
         .collect()
 }
