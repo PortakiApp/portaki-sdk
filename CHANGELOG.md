@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.16.0...v7.0.0) (2026-09-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** portaki init writes no portaki.module.json, and the connector permission checks in lint/connectors are gone — the permission is derived from the declaration.
+* **sdk:** kv, repo, email::send, events::emit, module status and files need the matching feature (kv, repo, email, events, platform, guest-files) on portaki-sdk.
+
+### Features
+
+* **cli:** derive catalog metadata from code ([e8895a1](https://github.com/PortakiApp/portaki-sdk/commit/e8895a1f359516966977a9e8986ac2d5a4b50a37))
+* **cli:** derive surface navigation from code ([9a3c8bf](https://github.com/PortakiApp/portaki-sdk/commit/9a3c8bffcba44c2389bbf1e28163a7b441ed2584))
+* **cli:** stop requiring portaki.module.json ([4c64acb](https://github.com/PortakiApp/portaki-sdk/commit/4c64acbc8a17248fc4002e20439a57d1d322c887))
+* **macros:** declare module emails from code ([dd61005](https://github.com/PortakiApp/portaki-sdk/commit/dd610057c90f62bcf040190c9e812f866d558b94))
+* **sdk:** cover the last hand-written manifest fields ([f094416](https://github.com/PortakiApp/portaki-sdk/commit/f094416729af93bd9041420d7a8462471010ca66))
+* **sdk:** gate host APIs behind permission features ([88a0e77](https://github.com/PortakiApp/portaki-sdk/commit/88a0e77157c87160d0287a54dfeb9d030b666ee3))
+
+
+### Bug Fixes
+
+* **cli:** order guest routes by path ([bc55e13](https://github.com/PortakiApp/portaki-sdk/commit/bc55e137a7e34b5f00a0b6f2e82bb7d3f6cc8f16))
+* **schema:** allow module config block ([639d7a0](https://github.com/PortakiApp/portaki-sdk/commit/639d7a0346b4db17d8375d69e5ce7b97333d39d9))
+* **sdk:** keep FileRef outside guest-files ([204e574](https://github.com/PortakiApp/portaki-sdk/commit/204e574b56a6641342de6bd7dcd27c11f6058cf2))
+
 ## [6.16.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.15.1...v6.16.0) (2026-09-24)
 
 
