@@ -35,13 +35,19 @@ pub struct EmissionFile {
     pub data: Value,
 }
 
-/// Collects emission JSON files from a directory tree.
+/// Collects the emission JSON files of the latest compilation from a directory tree.
+///
+/// The macros never delete a fragment, so a renamed or removed declaration keeps its file from
+/// an earlier compilation — and would keep publishing a nav entry, surface or operation that no
+/// longer exists. Each compilation stamps its fragments with one `build` id; only those sharing
+/// the id of the most recently written file are kept. Fragments without an id (older SDKs) all
+/// share the absent one, as before.
 pub fn collect_emissions(root: &Path) -> Result<Vec<EmissionFile>> {
-    let mut files = Vec::new();
     if !root.exists() {
-        return Ok(files);
+        return Ok(Vec::new());
     }
 
+    let mut files = Vec::new();
     for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
         let path = entry.path();
         if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
@@ -53,10 +59,23 @@ pub fn collect_emissions(root: &Path) -> Result<Vec<EmissionFile>> {
             serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
         resolve_vocabulary(&mut parsed.data)
             .with_context(|| format!("resolve {}", path.display()))?;
-        files.push(parsed);
+        let written = entry
+            .metadata()
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        files.push((written, parsed));
     }
 
-    Ok(files)
+    let latest = files
+        .iter()
+        .max_by_key(|(written, _)| *written)
+        .map(|(_, emission)| emission.data.get("build").cloned());
+    Ok(files
+        .into_iter()
+        .filter(|(_, emission)| Some(emission.data.get("build").cloned()) == latest)
+        .map(|(_, emission)| emission)
+        .collect())
 }
 
 /// Replaces every `Vocabulary::Variant` a typed macro argument emitted by its wire string.
@@ -605,6 +624,72 @@ mod emissions_dir_tests {
             Some("ical-sync")
         );
         assert_eq!(package_name("[package]\nname.workspace = true\n"), None);
+    }
+}
+
+#[cfg(test)]
+mod collect_tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn write(dir: &Path, name: &str, json: &str, written: SystemTime) {
+        let file = dir.join(name);
+        fs::write(&file, json).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(written)
+            .unwrap();
+    }
+
+    /// The checklist case: `#[nav]` re-keyed, the old fragment left behind listed "Tâches" twice.
+    #[test]
+    fn a_fragment_from_an_earlier_compilation_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        write(
+            dir.path(),
+            "nav-tasks_workspace-timeline-task.json",
+            r#"{"kind":"nav","build":"1-10"}"#,
+            now - Duration::from_secs(3600),
+        );
+        write(
+            dir.path(),
+            "module-checklist.json",
+            r#"{"kind":"module","build":"2-20"}"#,
+            now - Duration::from_secs(1),
+        );
+        write(
+            dir.path(),
+            "nav-tasks_HostPlacement__WorkspaceTimelineTask.json",
+            r#"{"kind":"nav","build":"2-20"}"#,
+            now,
+        );
+
+        let kinds: Vec<String> = collect_emissions(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|emission| emission.kind)
+            .collect();
+
+        assert_eq!(kinds.len(), 2, "{kinds:?}");
+        assert_eq!(kinds.iter().filter(|kind| *kind == "nav").count(), 1);
+    }
+
+    #[test]
+    fn fragments_without_a_build_id_are_all_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        write(dir.path(), "module-x.json", r#"{"kind":"module"}"#, now);
+        write(
+            dir.path(),
+            "query-y.json",
+            r#"{"kind":"query"}"#,
+            now - Duration::from_secs(60),
+        );
+
+        assert_eq!(collect_emissions(dir.path()).unwrap().len(), 2);
     }
 }
 
