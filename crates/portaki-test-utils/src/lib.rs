@@ -62,8 +62,8 @@
 //! - [`MockContextBuilder`] / [`MockHostFunctions`] — mock host installation
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
 //! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
-//! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, surfaces,
-//!   operations, i18n, emails
+//! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, listing,
+//!   surfaces, operations, i18n, emails
 
 #![deny(missing_docs)]
 

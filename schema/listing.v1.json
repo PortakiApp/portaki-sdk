@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json",
+  "title": "Portaki module public listing (listing.json)",
+  "description": "What a host reads in the catalogue before installing the module. Optional: without listing.json the listing is written in the developer dashboard. With it, portaki publish sends it on every run and it overwrites the dashboard version. Every text is a dictionary keyed by language; fr is the fallback language and must always be written — the catalogue serves a listing only once its French tagline and description are filled.",
+  "type": "object",
+  "required": ["category", "tagline", "description", "hostSurface"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The schema this file follows — lets an editor offer completion and checks."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["arrival", "stay", "around", "formalities"],
+      "description": "The moment of the stay the module belongs to: arrival (getting in, check-in), stay (life in the rental), around (the neighbourhood, outings), formalities (forms, rules, paperwork)."
+    },
+    "tagline": {
+      "$ref": "#/$defs/i18nFrRequired",
+      "description": "One sentence, shown on the catalogue card and the landing: what the module brings to a host. 90 characters at most — past that the card truncates.",
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 90 }
+    },
+    "description": {
+      "$ref": "#/$defs/i18nFrRequired",
+      "description": "The body of the listing: what the module does for the host and the guest, in a few sentences. Say what they see and do, not how it is built."
+    },
+    "guestSurface": {
+      "$ref": "#/$defs/i18nText",
+      "description": "Only when the module shows something in the guest booklet: what the guest sees there. Omit it for a host-only module."
+    },
+    "hostSurface": {
+      "$ref": "#/$defs/i18nFrRequired",
+      "description": "What the host sees and sets in the dashboard — the sheet, the tab, the card. Required: the landing page shows it."
+    },
+    "configItems": {
+      "type": "array",
+      "description": "What the host fills in, one entry per setting (e.g. \"Temperature units\"). Short labels, not sentences. Empty when there is nothing to configure.",
+      "items": { "$ref": "#/$defs/i18nFrRequired" }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "The data and connections the module consumes, and where each comes from.",
+      "items": {
+        "type": "object",
+        "required": ["label", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "$ref": "#/$defs/i18nText",
+            "description": "What is consumed, as a host reads it (e.g. \"Weather data\", \"Your Nuki account\")."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["pool", "byok", "plan", "module_contract"],
+            "description": "pool: provided by Portaki, nothing to set up. byok: the host connects their own account or key. plan: included in a Portaki plan. module_contract: supplied by another module."
+          }
+        }
+      }
+    },
+    "publishedLangs": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "The languages the listing appears in. fr is always added by the registry. A published language missing a tagline or description falls back to French.",
+      "items": { "$ref": "#/$defs/language" }
+    }
+  },
+  "$defs": {
+    "language": {
+      "type": "string",
+      "enum": ["fr", "en", "es", "de", "it", "nl"]
+    },
+    "i18nText": {
+      "type": "object",
+      "description": "A text per language — keys among fr, en, es, de, it, nl.",
+      "propertyNames": { "$ref": "#/$defs/language" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "i18nFrRequired": {
+      "$ref": "#/$defs/i18nText",
+      "required": ["fr"]
+    }
+  }
+}

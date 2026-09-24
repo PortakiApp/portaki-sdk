@@ -87,6 +87,7 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 | Test | Fails when |
 |------|------------|
 | `manifest` | `portaki.module.json` does not validate against `module.v1.json` (bundled, no network) |
+| `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
 | `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell, sends a tree that does not parse as contract primitives, or a `guestSurfaces[].surfaceId` has no guest surface |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
 | `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/` |
@@ -102,7 +103,7 @@ The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |
-| `conformance!` / `conformance::Module` | The shared battery: manifest, surfaces, operations, i18n, emails |
+| `conformance!` / `conformance::Module` | The shared battery: manifest, listing, surfaces, operations, i18n, emails |
 
 ## Documentation
 
