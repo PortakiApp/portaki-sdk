@@ -279,7 +279,9 @@ to write. The `listing` check of the conformance battery validates the file agai
 `portaki init` instructions — before pushing. `publish` reads it before anything else — invalid JSON stops the
 run before a push — and sends it as is once the version is in the registry: after the
 announcement, and also when the version was already there, so a fixed listing does not wait for
-the next release. `--dry-run` sends nothing; `--no-announce` skips it. In CI it takes a fresh
+the next release. An already-published version is not a failure: nothing is pushed, a warning says so,
+the listing goes out and the command succeeds — re-running the publish workflow is enough to push
+a fixed listing. `--dry-run` sends nothing; `--no-announce` skips it. In CI it takes a fresh
 OIDC exchange, the announcement having used its single-use credential.
 
 The file **overwrites the listing edited in the dashboard** — the repository is the source of
