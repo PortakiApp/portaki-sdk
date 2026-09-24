@@ -14,6 +14,8 @@ fn a_manifest_off_schema_is_reported_where_it_breaks() {
     assert_reports(&findings, &["/id", "Fixture_Broken"]);
     // `version` must be semver.
     assert_reports(&findings, &["/version", "one"]);
+    // Host surface types are a closed list.
+    assert_reports(&findings, &["/hostSurfaces/0/type", "property-stats-strip"]);
     let rendered = findings.to_string();
     assert!(
         rendered.starts_with("portaki conformance — manifest:"),

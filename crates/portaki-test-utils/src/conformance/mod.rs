@@ -1,4 +1,4 @@
-//! The conformance battery every Portaki module runs — one call, six checks.
+//! The conformance battery every Portaki module runs — one call, seven checks.
 //!
 //! A module's own tests say what it does. These say what every module owes the platform, the same
 //! way for all of them: a manifest the registry accepts, a listing it can serve, surfaces that
@@ -24,10 +24,11 @@
 //! |------|-------|
 //! | `manifest` | `portaki.module.json` validates against the `module.v1.json` schema bundled in this crate |
 //! | `listing` | `listing.json`, when the module versions one, validates against the `listing.v1.json` schema bundled in this crate and no longer holds the `portaki init` instructions (`À compléter …` / `To be completed …`); no `listing.json` passes — the listing can be written in the dashboard |
-//! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract; every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface |
+//! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
 //! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` |
 //! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking |
+//! | `contracts` | a `property-stats-card` surface: `statsSummary` answers for its `pathSegment` over 30, 90 and 365 days, on the `stats-summary.v1.json` contract (`fr` and `en`, `value` ≤ 12 characters), within 300 ms; a `property-stats-detail`: a host surface of id `pathSegment` renders with `input.periodDays`; a `workspace-timeline-task`: `timelineTasks` answers on three fixture stays on the `timeline-tasks.v1.json` contract (ISO dates, items never empty), and `taskToggle` refuses a photo-required item ticked without a photo with `photo_required`; an exported `publishReadiness` answers on the `publish-readiness.v1.json` contract |
 //!
 //! "Empty mock" is [`MockContext::guest`](crate::MockContext::guest) or
 //! [`MockContext::host`](crate::MockContext::host) as they come: no KV, no seeded translation, no
@@ -51,6 +52,7 @@
 //!   is what the module's own tests are for.
 //! - **Event handlers.** `#[event_handler]` registers no dispatch shim to call.
 
+mod contracts;
 mod emails;
 mod findings;
 mod i18n;
@@ -65,6 +67,9 @@ use std::path::{Path, PathBuf};
 use portaki_sdk::wasm::registry::{self, HandlerDeclaration};
 use serde_json::Value;
 
+pub use contracts::{
+    PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1, TIMELINE_TASKS_SCHEMA_V1,
+};
 pub use findings::Findings;
 pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
 pub use manifest::MODULE_SCHEMA_V1;
@@ -116,7 +121,14 @@ impl Module {
         emails::check(self)
     }
 
-    /// All six checks; the findings of every failing one, together.
+    /// What the declared host surfaces commit the module to: `statsSummary` for a stats card, a
+    /// host surface for a stats detail, `timelineTasks` for a timeline task — and a
+    /// `publishReadiness` on the contract when it is exported.
+    pub fn check_contracts(&self) -> Result<(), Findings> {
+        contracts::check(self)
+    }
+
+    /// All seven checks; the findings of every failing one, together.
     pub fn check_all(&self) -> Result<(), Findings> {
         let results = [
             self.check_manifest(),
@@ -125,6 +137,7 @@ impl Module {
             self.check_operations(),
             self.check_i18n(),
             self.check_emails(),
+            self.check_contracts(),
         ];
         let failed: Vec<Findings> = results.into_iter().filter_map(Result::err).collect();
         if failed.is_empty() {
@@ -176,7 +189,7 @@ pub(crate) const NO_DECLARATIONS: &str =
 /// ```
 ///
 /// Expands to a `portaki_conformance` module with one `#[test]` per check — `manifest`,
-/// `listing`, `surfaces`, `operations`, `i18n`, `emails` — see
+/// `listing`, `surfaces`, `operations`, `i18n`, `emails`, `contracts` — see
 /// [`conformance`](mod@crate::conformance) for what each one verifies.
 ///
 /// # Forms
@@ -246,6 +259,13 @@ macro_rules! conformance {
             #[test]
             fn emails() {
                 if let Err(findings) = module().check_emails() {
+                    panic!("{findings}");
+                }
+            }
+
+            #[test]
+            fn contracts() {
+                if let Err(findings) = module().check_contracts() {
                     panic!("{findings}");
                 }
             }

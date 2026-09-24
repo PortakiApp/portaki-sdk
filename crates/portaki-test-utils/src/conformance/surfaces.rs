@@ -1,6 +1,7 @@
 //! Every declared surface renders in its shell with an empty mock, into contract primitives.
 
 use portaki_sdk::sdui::component::Component;
+use portaki_sdk::sdui::primitives::Select;
 use portaki_sdk::sdui::surface::Surface;
 use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
 use serde_json::Value;
@@ -66,7 +67,7 @@ fn problems(module: &Module) -> Vec<String> {
 }
 
 /// What the shell would refuse in the JSON a surface sends.
-fn contract_problems(tree: &Value) -> Vec<String> {
+pub(super) fn contract_problems(tree: &Value) -> Vec<String> {
     let surface: Surface = match serde_json::from_value(tree.clone()) {
         Ok(surface) => surface,
         Err(error) => {
@@ -79,19 +80,41 @@ fn contract_problems(tree: &Value) -> Vec<String> {
     // Typed Rust cannot build a node outside the contract; this guards the wire instead — a
     // tree that re-parsed into a variant the contract does not list would be a generator bug.
     let mut unknown: Vec<String> = Vec::new();
+    let mut problems = Vec::new();
     for node in SurfaceAssertions::new(&surface).nodes() {
         let name = node.type_name();
         if !Component::TYPE_NAMES.contains(&name) {
             unknown.push(name.to_string());
         }
+        if let Component::Select(select) = node {
+            problems.extend(select_problems(select));
+        }
     }
-    if unknown.is_empty() {
-        Vec::new()
-    } else {
-        vec![format!(
+    if !unknown.is_empty() {
+        problems.push(format!(
             "rendered nodes outside the SDUI contract: {}",
             unknown.join(", ")
-        )]
+        ));
+    }
+    problems
+}
+
+/// A `Select` the host cannot use: nothing to pick, or a value none of its options carry.
+///
+/// An empty `value` means « nothing picked yet » and passes.
+fn select_problems(select: &Select) -> Vec<String> {
+    let name = select.name.as_deref().unwrap_or("?");
+    let options = select.options.as_deref().unwrap_or_default();
+    if options.is_empty() {
+        return vec![format!("rendered Select `{name}` without options")];
+    }
+    match select.value.as_deref() {
+        Some(value) if !value.is_empty() && !options.iter().any(|o| o.value == value) => {
+            vec![format!(
+                "rendered Select `{name}` with value `{value}`, which none of its options carries"
+            )]
+        }
+        _ => Vec::new(),
     }
 }
 

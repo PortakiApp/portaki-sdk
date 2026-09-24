@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/contracts/timeline-tasks.v1.json",
+  "title": "timelineTasks query and task commands — portaki_sdk::contracts::timeline",
+  "$ref": "#/$defs/TimelineTasks",
+  "$defs": {
+    "TimelineTasksArgs": {
+      "type": "object",
+      "required": [
+        "propertyId",
+        "from",
+        "to",
+        "stays"
+      ],
+      "properties": {
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "from": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "stays": {
+          "type": "array",
+          "description": "Sorted by check-in, one stay past each end of the window.",
+          "items": {
+            "$ref": "#/$defs/TimelineStay"
+          }
+        }
+      }
+    },
+    "TimelineStay": {
+      "type": "object",
+      "required": [
+        "id",
+        "checkIn",
+        "checkOut",
+        "guestName",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkIn": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "checkOut": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "guestName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "TimelineTasks": {
+      "type": "object",
+      "description": "Answer of the timelineTasks query.",
+      "required": [
+        "tasks"
+      ],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TimelineTask"
+          }
+        }
+      }
+    },
+    "TimelineTask": {
+      "type": "object",
+      "required": [
+        "id",
+        "at",
+        "propertyId",
+        "title",
+        "context",
+        "items"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable across computations, e.g. cleaning:<stayId>."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 instant (RFC 3339)."
+        },
+        "stayId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "$ref": "#/$defs/I18nText"
+        },
+        "context": {
+          "$ref": "#/$defs/I18nText"
+        },
+        "assignee": {
+          "$ref": "#/$defs/TaskAssignee"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/TimelineTaskItem"
+          }
+        }
+      }
+    },
+    "TaskAssignee": {
+      "type": "object",
+      "required": [
+        "name",
+        "role"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/I18nText"
+        }
+      }
+    },
+    "TimelineTaskItem": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "done"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "$ref": "#/$defs/I18nText"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "photoRequired": {
+          "type": "boolean",
+          "default": false
+        },
+        "photo": {
+          "type": "string",
+          "pattern": "^portaki-file:"
+        }
+      }
+    },
+    "TaskToggleArgs": {
+      "type": "object",
+      "description": "Args of the taskToggle command. Refused with photo_required when done is true, the item requires a photo and none is given.",
+      "required": [
+        "propertyId",
+        "taskId",
+        "itemId",
+        "done"
+      ],
+      "properties": {
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "photo": {
+          "type": "string",
+          "pattern": "^portaki-file:"
+        }
+      }
+    },
+    "TaskCompleteArgs": {
+      "type": "object",
+      "description": "Args of the taskComplete command, which ticks every item. Refused with photo_required like taskToggle.",
+      "required": [
+        "propertyId",
+        "taskId"
+      ],
+      "properties": {
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      }
+    },
+    "TaskUpdated": {
+      "type": "object",
+      "description": "Payload of the checklist.task-updated event.",
+      "required": [
+        "propertyId",
+        "taskId",
+        "done",
+        "total"
+      ],
+      "properties": {
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "stayId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "done": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Items ticked."
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Items in the task."
+        },
+        "assigneeName": {
+          "type": "string"
+        }
+      }
+    },
+    "I18nText": {
+      "type": "object",
+      "description": "Display text: fr and en required, other locales beside them.",
+      "required": [
+        "fr",
+        "en"
+      ],
+      "properties": {
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
