@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.13.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.12.0...v6.13.0) (2026-09-24)
+
+
+### Features
+
+* **cli:** publish committed previews as a layer ([d7656a0](https://github.com/PortakiApp/portaki-sdk/commit/d7656a0cd35d929ec1881a47dbcc1253c9a864d0))
+* **schema:** enumerate host surface types ([9c74e06](https://github.com/PortakiApp/portaki-sdk/commit/9c74e061fec18b6855880256ac503eef315b1714))
+* **sdk:** add stats, timeline, publish contracts ([8e18549](https://github.com/PortakiApp/portaki-sdk/commit/8e18549f33b534d7309421f9960881dccc590cc3))
+* **sdui:** add EditableList and FeedItem ([a672dcf](https://github.com/PortakiApp/portaki-sdk/commit/a672dcfd9132a98ff096c119988f2b8d3f41b964))
+* **sdui:** add ToggleRow description ([16d60fb](https://github.com/PortakiApp/portaki-sdk/commit/16d60fb3d63752744bc28f6f20ba573249dbd10c))
+* **test-utils:** check stats/timeline contracts ([e38acae](https://github.com/PortakiApp/portaki-sdk/commit/e38acae805a98c338bb706b47e88060752226408))
+
 ## [6.12.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.11.0...v6.12.0) (2026-09-24)
 
 
