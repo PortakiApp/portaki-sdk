@@ -18,6 +18,8 @@ struct ModuleAttrs {
     description_key: Option<String>,
     author: Option<String>,
     version: Option<String>,
+    /// Catalog metadata: `portaki build` writes it to the manifest so no one else has to.
+    catalog: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Parse for ModuleAttrs {
@@ -28,11 +30,20 @@ impl Parse for ModuleAttrs {
             description_key: None,
             author: None,
             version: None,
+            catalog: serde_json::Map::new(),
         };
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
+            if key == "sort_order" {
+                let order: syn::LitInt = input.parse()?;
+                attrs
+                    .catalog
+                    .insert("sortOrder".into(), order.base10_parse::<i64>()?.into());
+                input.parse::<Option<Token![,]>>()?;
+                continue;
+            }
             let value: LitStr = input.parse()?;
             let text = value.value();
 
@@ -42,6 +53,18 @@ impl Parse for ModuleAttrs {
                 "description_key" => attrs.description_key = Some(text),
                 "author" => attrs.author = Some(text),
                 "version" => attrs.version = Some(text),
+                "icon" => {
+                    attrs.catalog.insert("icon".into(), text.into());
+                }
+                "maturity" => {
+                    attrs.catalog.insert("maturity".into(), text.into());
+                }
+                "module_type" => {
+                    attrs.catalog.insert("type".into(), text.into());
+                }
+                "author_url" => {
+                    attrs.catalog.insert("authorUrl".into(), text.into());
+                }
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -88,23 +111,18 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     let author = attrs.author.unwrap_or_else(|| "Portaki".to_string());
     let version = attrs.version.unwrap_or_else(default_crate_version);
 
-    let json = format!(
-        r#"{{
-  "kind": "module",
-  "id": {},
-  "displayName": {},
-  "description": {},
-  "author": {{ "name": {} }},
-  "version": {},
-  "manifestVersion": "1",
-  "uiSchema": {{ "host": "1", "guest": "1" }}
-}}"#,
-        serde_json::to_string(&id).unwrap(),
-        serde_json::to_string(&display_name_key).unwrap(),
-        serde_json::to_string(&description_key).unwrap(),
-        serde_json::to_string(&author).unwrap(),
-        serde_json::to_string(&version).unwrap(),
-    );
+    let json = serde_json::to_string_pretty(&serde_json::json!({
+        "kind": "module",
+        "id": id,
+        "displayName": display_name_key,
+        "description": description_key,
+        "author": { "name": author },
+        "version": version,
+        "manifestVersion": "1",
+        "uiSchema": { "host": "1", "guest": "1" },
+        "catalog": attrs.catalog,
+    }))
+    .unwrap();
 
     let emission = write_emission("module", &sanitize_key(&id), &json);
 
@@ -152,7 +170,27 @@ fn default_crate_version() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::default_crate_version;
+    use super::{default_crate_version, ModuleAttrs};
+
+    #[test]
+    fn catalog_metadata_is_collected_under_its_manifest_names() {
+        let attrs: ModuleAttrs = syn::parse_str(
+            r#"id = "issue-report", icon = "danger-triangle", maturity = "stable",
+               module_type = "official", author_url = "https://portaki.app", sort_order = 90,"#,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::Value::Object(attrs.catalog),
+            serde_json::json!({
+                "icon": "danger-triangle",
+                "maturity": "stable",
+                "type": "official",
+                "authorUrl": "https://portaki.app",
+                "sortOrder": 90,
+            })
+        );
+        assert!(syn::parse_str::<ModuleAttrs>(r#"sort_order = "90""#).is_err());
+    }
 
     #[test]
     fn default_crate_version_uses_compiling_crate_env() {

@@ -1,5 +1,6 @@
 //! Manifest generation from macro emissions.
 
+pub mod catalog;
 pub mod generator;
 pub mod loader;
 pub mod migration_bundle;

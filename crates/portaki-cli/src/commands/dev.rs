@@ -780,6 +780,12 @@ pub(crate) fn read_module_id(module_root: &Path) -> Result<String> {
 pub(crate) fn sandbox_manifest(module_root: &Path) -> Result<String> {
     let raw_manifest =
         std::fs::read_to_string(module_root.join(MANIFEST)).context("read portaki.module.json")?;
+    // Ce que le code dit du module — nom, icône, maturité… — comble ce que le manifeste tait.
+    let raw_manifest =
+        match std::fs::read_to_string(module_root.join(crate::manifest::catalog::BUILT_CATALOG)) {
+            Ok(catalog) => crate::manifest::catalog::fill_catalog(&raw_manifest, &catalog)?,
+            Err(_) => raw_manifest,
+        };
     // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
     // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
     // graphe résolu par cargo. Sans lui, la sandbox recevait un manifeste muet et
