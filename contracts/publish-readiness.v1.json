@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/contracts/publish-readiness.v1.json",
+  "title": "publishReadiness query — portaki_sdk::contracts::publish",
+  "$ref": "#/$defs/PublishReadiness",
+  "$defs": {
+    "PublishReadiness": {
+      "type": "object",
+      "description": "Answer of the publishReadiness query. Args: { propertyId }.",
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PublishCheck"
+          }
+        }
+      }
+    },
+    "PublishCheck": {
+      "type": "object",
+      "required": [
+        "id",
+        "level",
+        "ok",
+        "label",
+        "hint"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "level": {
+          "$ref": "#/$defs/PublishLevel"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "label": {
+          "$ref": "#/$defs/I18nText"
+        },
+        "hint": {
+          "$ref": "#/$defs/I18nText"
+        }
+      }
+    },
+    "PublishLevel": {
+      "type": "string",
+      "enum": [
+        "required",
+        "recommended",
+        "optional"
+      ],
+      "description": "required blocks the publication while not ok; the others never do."
+    },
+    "I18nText": {
+      "type": "object",
+      "description": "Display text: fr and en required, other locales beside them.",
+      "required": [
+        "fr",
+        "en"
+      ],
+      "properties": {
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

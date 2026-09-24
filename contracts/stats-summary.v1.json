@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/contracts/stats-summary.v1.json",
+  "title": "statsSummary query — portaki_sdk::contracts::stats",
+  "$ref": "#/$defs/StatsSummary",
+  "$defs": {
+    "StatsSummaryArgs": {
+      "type": "object",
+      "required": [
+        "propertyId",
+        "period",
+        "key"
+      ],
+      "properties": {
+        "propertyId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "period": {
+          "type": "integer",
+          "enum": [
+            30,
+            90,
+            365
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "pathSegment of the property-stats-card surface."
+        }
+      }
+    },
+    "StatsSummary": {
+      "type": "object",
+      "required": [
+        "value",
+        "label"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "label": {
+          "$ref": "#/$defs/I18nText"
+        },
+        "attention": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/StatsAttention"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trend": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/StatsTrend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "StatsAttention": {
+      "type": "object",
+      "required": [
+        "level",
+        "text"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "action",
+            "warning"
+          ]
+        },
+        "text": {
+          "$ref": "#/$defs/I18nText"
+        }
+      }
+    },
+    "StatsTrend": {
+      "type": "object",
+      "required": [
+        "delta",
+        "direction",
+        "good"
+      ],
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down"
+          ]
+        },
+        "good": {
+          "type": "boolean",
+          "description": "Whether that direction is good news."
+        }
+      }
+    },
+    "I18nText": {
+      "type": "object",
+      "description": "Display text: fr and en required, other locales beside them.",
+      "required": [
+        "fr",
+        "en"
+      ],
+      "properties": {
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
