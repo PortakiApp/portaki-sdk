@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.11.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.10.0...v6.11.0) (2026-09-24)
+
+
+### Features
+
+* **cli:** scaffold listing.json and ask in init ([d4610e0](https://github.com/PortakiApp/portaki-sdk/commit/d4610e060ad7651ff80d5df246a399d987697f06))
+* **schema:** add listing.json schema and check ([bbd4586](https://github.com/PortakiApp/portaki-sdk/commit/bbd458679c15d711a46383cf07ad1be1add43b20))
+
 ## [6.10.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.9.0...v6.10.0) (2026-09-23)
 
 
