@@ -20,10 +20,6 @@ impl HostBackend for WasmHostBackend {
         Err(PortakiError::HostNotConfigured)
     }
 
-    fn has_capability(&self, _id: &str) -> Result<bool> {
-        Ok(false)
-    }
-
     fn kv_get(&self, _key: &str) -> Result<Option<Vec<u8>>> {
         Err(PortakiError::HostNotConfigured)
     }

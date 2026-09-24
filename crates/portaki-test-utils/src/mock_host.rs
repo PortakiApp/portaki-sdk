@@ -359,10 +359,6 @@ impl HostBackend for MockHostFunctions {
         Ok(self.context.clone())
     }
 
-    fn has_capability(&self, id: &str) -> Result<bool> {
-        Ok(self.context.capabilities.iter().any(|grant| grant.id == id))
-    }
-
     fn kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         Ok(self.kv.lock().expect("kv lock").get(key).cloned())
     }
@@ -468,10 +464,6 @@ impl HostBackend for MockHostFunctions {
             .lock()
             .expect("sent emails lock")
             .push(args);
-        Ok(())
-    }
-
-    fn notify_host(&self, _payload_json: &str) -> Result<()> {
         Ok(())
     }
 

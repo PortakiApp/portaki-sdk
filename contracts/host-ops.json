@@ -7,7 +7,6 @@
     "kv.list",
     "time.now",
     "connector.call",
-    "capabilities.has",
     "i18n.translate",
     "log",
     "repo.find",
