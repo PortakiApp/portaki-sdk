@@ -9,7 +9,7 @@ use serde_json::from_reader;
 use crate::manifest::collect_emissions;
 use crate::manifest::{find_emissions_dir, generate_manifest, validate_manifest};
 use crate::ui;
-use portaki_sdk::manifest::ModuleManifest;
+use portaki_sdk::manifest::{ManifestCommand, ModuleManifest};
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki lint`.
@@ -79,6 +79,12 @@ pub fn run(args: LintArgs) -> Result<()> {
         failure
     })?;
     checking.done(format!("{} passes", manifest.id));
+    for name in host_like_guest_commands(&manifest.commands) {
+        ui::warn(format!(
+            "command {name} is open to guests but reads like a host operation — \
+             drop `guest` unless a guest really calls it"
+        ));
+    }
     ui::detail("capability ids, connector bindings and i18n keys all resolve");
     ui::blank();
     Ok(())
@@ -249,9 +255,44 @@ fn crate_version(cargo: &str) -> Option<String> {
     None
 }
 
+/// Guest commands named like the host's own gestures — a finding, not a failure: the name is
+/// only a hint, and the module may have a reason.
+fn host_like_guest_commands(commands: &[ManifestCommand]) -> Vec<&str> {
+    const HOST: [&str; 5] = [
+        "updateConfig",
+        "resolve",
+        "updateStatus",
+        "seedDefaults",
+        "replaceItems",
+    ];
+    commands
+        .iter()
+        .filter(|command| command.guest)
+        .map(|command| command.name.as_str())
+        .filter(|name| HOST.contains(name) || name.starts_with("task"))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_guest_command_named_like_a_host_one_is_flagged() {
+        let command = |name: &str, guest| ManifestCommand {
+            name: name.to_string(),
+            r#fn: String::new(),
+            args: None,
+            params: None,
+            guest,
+        };
+        let commands = [
+            command("taskToggle", true),
+            command("submit", true),
+            command("updateConfig", false),
+        ];
+        assert_eq!(host_like_guest_commands(&commands), ["taskToggle"]);
+    }
 
     #[test]
     fn the_crate_version_is_read_from_its_own_section() {
