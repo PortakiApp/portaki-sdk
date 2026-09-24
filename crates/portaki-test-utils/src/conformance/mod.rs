@@ -1,8 +1,9 @@
-//! The conformance battery every Portaki module runs — one call, five checks.
+//! The conformance battery every Portaki module runs — one call, six checks.
 //!
 //! A module's own tests say what it does. These say what every module owes the platform, the same
-//! way for all of them: a manifest the registry accepts, surfaces that render and parse, operations
-//! that do not bring the invocation down, i18n keys that exist in both bundles, emails that compose.
+//! way for all of them: a manifest the registry accepts, a listing it can serve, surfaces that
+//! render and parse, operations that do not bring the invocation down, i18n keys that exist in
+//! both bundles, emails that compose.
 //!
 //! # Adopting it
 //!
@@ -22,6 +23,7 @@
 //! | Test | Check |
 //! |------|-------|
 //! | `manifest` | `portaki.module.json` validates against the `module.v1.json` schema bundled in this crate |
+//! | `listing` | `listing.json`, when the module versions one, validates against the `listing.v1.json` schema bundled in this crate and no longer holds the `portaki init` instructions (`À compléter …` / `To be completed …`); no `listing.json` passes — the listing can be written in the dashboard |
 //! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract; every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
 //! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` |
@@ -53,6 +55,7 @@ mod emails;
 mod findings;
 mod i18n;
 mod invoke;
+mod listing;
 mod manifest;
 mod operations;
 mod surfaces;
@@ -63,6 +66,7 @@ use portaki_sdk::wasm::registry::{self, HandlerDeclaration};
 use serde_json::Value;
 
 pub use findings::Findings;
+pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
 pub use manifest::MODULE_SCHEMA_V1;
 
 /// The module under test: its crate directory, and the handlers linked into this test binary.
@@ -87,6 +91,11 @@ impl Module {
         manifest::check(self)
     }
 
+    /// `listing.json`, if any, validates against the bundled `listing.v1.json` and is filled in.
+    pub fn check_listing(&self) -> Result<(), Findings> {
+        listing::check(self)
+    }
+
     /// Every surface renders in its shell with an empty mock, into primitives of the contract.
     pub fn check_surfaces(&self) -> Result<(), Findings> {
         surfaces::check(self)
@@ -107,10 +116,11 @@ impl Module {
         emails::check(self)
     }
 
-    /// All five checks; the findings of every failing one, together.
+    /// All six checks; the findings of every failing one, together.
     pub fn check_all(&self) -> Result<(), Findings> {
         let results = [
             self.check_manifest(),
+            self.check_listing(),
             self.check_surfaces(),
             self.check_operations(),
             self.check_i18n(),
@@ -166,8 +176,8 @@ pub(crate) const NO_DECLARATIONS: &str =
 /// ```
 ///
 /// Expands to a `portaki_conformance` module with one `#[test]` per check — `manifest`,
-/// `surfaces`, `operations`, `i18n`, `emails` — see [`conformance`](mod@crate::conformance) for what
-/// each one verifies.
+/// `listing`, `surfaces`, `operations`, `i18n`, `emails` — see
+/// [`conformance`](mod@crate::conformance) for what each one verifies.
 ///
 /// # Forms
 ///
@@ -201,6 +211,13 @@ macro_rules! conformance {
             #[test]
             fn manifest() {
                 if let Err(findings) = module().check_manifest() {
+                    panic!("{findings}");
+                }
+            }
+
+            #[test]
+            fn listing() {
+                if let Err(findings) = module().check_listing() {
                     panic!("{findings}");
                 }
             }

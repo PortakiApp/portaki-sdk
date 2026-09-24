@@ -1,16 +1,31 @@
-//! The schema the battery bundles is the SDK's, byte for byte.
+//! The schemas the battery bundles are the SDK's, byte for byte.
 
-#[test]
-fn the_bundled_schema_is_the_repository_one() {
-    let repository = concat!(env!("CARGO_MANIFEST_DIR"), "/../../schema/module.v1.json");
+fn assert_same(file: &str, bundled: &str) {
+    let repository = format!("{}/../../schema/{file}", env!("CARGO_MANIFEST_DIR"));
     // Outside the SDK repository (a crates.io download) there is nothing to compare with.
     let Ok(expected) = std::fs::read_to_string(repository) else {
         return;
     };
 
     assert!(
-        expected == portaki_test_utils::conformance::MODULE_SCHEMA_V1,
-        "crates/portaki-test-utils/schema/module.v1.json drifted from schema/module.v1.json — \
-         copy it over: cp schema/module.v1.json crates/portaki-test-utils/schema/"
+        expected == bundled,
+        "crates/portaki-test-utils/schema/{file} drifted from schema/{file} — \
+         copy it over: cp schema/{file} crates/portaki-test-utils/schema/"
+    );
+}
+
+#[test]
+fn the_bundled_schema_is_the_repository_one() {
+    assert_same(
+        "module.v1.json",
+        portaki_test_utils::conformance::MODULE_SCHEMA_V1,
+    );
+}
+
+#[test]
+fn the_bundled_listing_schema_is_the_repository_one() {
+    assert_same(
+        "listing.v1.json",
+        portaki_test_utils::conformance::LISTING_SCHEMA_V1,
     );
 }
