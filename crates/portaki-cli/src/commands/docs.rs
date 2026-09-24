@@ -25,7 +25,7 @@ pub fn run(_args: DocsArgs) -> Result<()> {
                 "the SDK's API, rendered from the source you compile against",
             ),
             (
-                "portaki catalog --format json",
+                "portaki catalog",
                 "every SDUI primitive the host knows how to render",
             ),
         ],

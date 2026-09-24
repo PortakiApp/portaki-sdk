@@ -110,7 +110,7 @@ enum Command {
     /// Print how to open local SDK documentation (no docs server).
     Docs(commands::docs::DocsArgs),
     /// Dump the SDUI catalog specification.
-    Catalog(commands::catalog::CatalogArgs),
+    Catalog,
     /// Inspect a published OCI artifact URL.
     Inspect(commands::inspect::InspectArgs),
 }
@@ -355,7 +355,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Publish(args) => commands::publish::run(args).await,
         Command::Link(args) => commands::link::run(args).await,
         Command::Docs(args) => commands::docs::run(args),
-        Command::Catalog(args) => commands::catalog::run(args),
+        Command::Catalog => commands::catalog::run(),
         Command::Inspect(args) => commands::inspect::run(args).await,
     }
 }

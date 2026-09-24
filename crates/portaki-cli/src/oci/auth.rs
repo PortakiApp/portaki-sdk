@@ -30,14 +30,8 @@ pub fn resolve_read_auth(registry: &str) -> RegistryAuth {
     resolve_registry_auth(registry).unwrap_or(RegistryAuth::Anonymous)
 }
 
-/// OCI registry username. Prefers `OCI_USERNAME`; falls back to the legacy
-/// `PORTAKI_OCI_USERNAME` for backward compatibility.
-fn oci_username() -> Result<String, std::env::VarError> {
-    std::env::var("OCI_USERNAME").or_else(|_| std::env::var("PORTAKI_OCI_USERNAME"))
-}
-
 fn auth_from_env() -> Result<Option<RegistryAuth>> {
-    if let Ok(username) = oci_username() {
+    if let Ok(username) = std::env::var("OCI_USERNAME") {
         if !username.is_empty() {
             if let Ok(token) =
                 std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GHCR_TOKEN"))
@@ -52,7 +46,7 @@ fn auth_from_env() -> Result<Option<RegistryAuth>> {
         if let Ok(token) = std::env::var(key) {
             if !token.is_empty() {
                 let username = std::env::var("GITHUB_ACTOR")
-                    .or_else(|_| oci_username())
+                    .or_else(|_| std::env::var("OCI_USERNAME"))
                     .unwrap_or_else(|_| "github".to_string());
                 return Ok(Some(RegistryAuth::Basic(username, token)));
             }
