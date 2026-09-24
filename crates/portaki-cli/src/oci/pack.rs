@@ -15,6 +15,10 @@ const MIGRATIONS_BUNDLE_MEDIA: &str = "application/vnd.portaki.migrations+json";
 pub const MIGRATIONS_BUNDLE: &str = "migrations.bundle.json";
 const OPERATIONS_BUNDLE_MEDIA: &str = "application/vnd.portaki.operations+json";
 pub const OPERATIONS_BUNDLE: &str = "operations.bundle.json";
+/// Guest surfaces pre-rendered on sample config, committed by the module and served by the
+/// registry on the public catalogue sheet — never rendered on a host's data.
+const PREVIEWS_MEDIA: &str = "application/vnd.portaki.previews+json";
+pub const PREVIEWS: &str = "previews.json";
 
 /// OCI host-catalog layer (`portaki.module.json` freeze) — consumed by API / install.
 pub const PUBLISH_MANIFEST: &str = "publish-manifest.json";
@@ -291,6 +295,14 @@ pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Ve
         layers.push(PushLayer {
             path: operations_path,
             media_type: OPERATIONS_BUNDLE_MEDIA.to_string(),
+        });
+    }
+
+    let previews_path = module_root.join(PREVIEWS);
+    if previews_path.is_file() {
+        layers.push(PushLayer {
+            path: previews_path,
+            media_type: PREVIEWS_MEDIA.to_string(),
         });
     }
 
@@ -576,6 +588,29 @@ mod tests {
         assert_eq!(layers.len(), 2);
         assert_eq!(layers[0].path, artifact.join(PUBLISH_MANIFEST));
         assert_eq!(layers[0].media_type, MANIFEST_MEDIA);
+    }
+
+    #[test]
+    fn collect_push_layers_carries_the_committed_previews() {
+        let root = tempdir().unwrap();
+        let artifact = root.path().join("target/portaki");
+        fs::create_dir_all(&artifact).unwrap();
+        fs::write(
+            artifact.join(PUBLISH_MANIFEST),
+            r#"{"id":"weather","version":"0.1.0"}"#,
+        )
+        .unwrap();
+        let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm_dir).unwrap();
+        fs::write(wasm_dir.join("weather.wasm"), b"\0asm").unwrap();
+        fs::write(root.path().join(PREVIEWS), r#"{"surfaces":[]}"#).unwrap();
+
+        let layers = collect_push_layers(root.path(), &artifact).unwrap();
+        let previews = layers
+            .iter()
+            .find(|l| l.media_type == PREVIEWS_MEDIA)
+            .unwrap();
+        assert_eq!(previews.path, root.path().join(PREVIEWS));
     }
 
     /// Cargo nomme l'artefact d'après la cible : `access-guide` produit `access_guide.wasm`.
