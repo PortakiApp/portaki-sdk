@@ -83,6 +83,27 @@
       "default": "guest",
       "description": "Who the module works for. host modules (e.g. calendar import) are never shown to guests and cannot be placed on the booklet board. Any other value is read as guest."
     },
+    "feeds": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Modules this one supplies from behind the scenes, when it has no guest surface of its own (e.g. a lock that hands its keypad code to access-guide). The catalogue reads it as: <name> provides <what> to the <module> module.",
+      "items": {
+        "type": "object",
+        "required": ["module", "what"],
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "id of the module fed."
+          },
+          "what": {
+            "$ref": "#/$defs/i18nStringMap",
+            "description": "What it supplies, as a noun phrase: { \"fr\": \"le code clavier\", \"en\": \"the keypad code\" }."
+          }
+        }
+      }
+    },
     "hostScheduledSync": {
       "type": "object",
       "description": "Host-side sync the platform runs on a schedule (and on demand), without business logic in the API. With platformFetch, the platform calls sourcesQuery to list what to fetch, downloads it, then hands the payloads to applyQuery; both are then required. Without it, the platform runs the module host action hostAction, then stayImportQuery if set to import the resulting stays.",
