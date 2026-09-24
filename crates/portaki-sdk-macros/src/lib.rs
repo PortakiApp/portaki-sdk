@@ -108,6 +108,14 @@ use proc_macro::TokenStream;
 /// | `description_key` | no | `"module.description"` |
 /// | `author` | no | `"Portaki"` |
 /// | `version` | no | `CARGO_PKG_VERSION` of the **module crate** (not this proc-macro crate) |
+/// | `icon` | no | — catalog icon name |
+/// | `maturity` | no | — `stable`, `beta`… |
+/// | `module_type` | no | — catalog `type` and `author.type` (`official`…) |
+/// | `author_url` | no | — `author.url` |
+/// | `sort_order` | no | — integer, catalog position |
+///
+/// The catalog keys, with the name and description read from the i18n bundles, fill whatever
+/// `portaki.module.json` leaves out — `portaki build` writes them, the author never does.
 ///
 /// Unknown keys are a **compile error** (`unknown portaki_module attribute: …`).
 ///

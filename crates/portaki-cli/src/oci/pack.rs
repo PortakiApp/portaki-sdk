@@ -71,6 +71,10 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
     };
 
     let raw = fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
+    let raw = match fs::read_to_string(artifact_dir.join("catalog.json")) {
+        Ok(catalog) => crate::manifest::catalog::fill_catalog(&raw, &catalog)?,
+        Err(_) => raw,
+    };
     let stamped = stamp_sdk_version(&raw, resolved_sdk_version(module_root)?)?;
 
     // Ce que le build a émis suit jusqu'au manifeste publié, et plus seulement jusqu'à la

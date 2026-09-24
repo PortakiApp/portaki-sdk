@@ -152,6 +152,11 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
         let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
         let manifest_path = out_dir.join("manifest.json");
         write_manifest(&manifest, &manifest_path)?;
+        let catalog = crate::manifest::catalog::catalog_defaults(&emissions, &i18n_dir, &supported);
+        std::fs::write(
+            module_root.join(crate::manifest::catalog::BUILT_CATALOG),
+            serde_json::to_string_pretty(&catalog)?,
+        )?;
         ui::wrote("manifest", relative(&manifest_path, module_root));
         ui::detail(format!(
             "{} entities · {} locales · default {default_locale}",
