@@ -1,8 +1,9 @@
-# Guest-callable operations
+# Guest-only operations
 
-Every query and command is closed to guests unless the module opens it. The guest gateway
-refuses a guest call to a closed operation with `operation_not_guest_callable`; the host
-dashboard is not affected.
+An operation has exactly one audience. Without a flag it is **host-only**: the guest gateway
+refuses it with `operation_not_guest_callable`. With `guest` it is **guest-only**: the host
+gateway refuses it with `operation_not_host_callable`. There is no "both" — an operation that
+serves the two sides is two operations, each with the checks its caller needs.
 
 ```rust
 #[portaki_sdk::query(name = "listForStay", guest)]
@@ -18,7 +19,7 @@ SDK.
 
 ## When to open an operation
 
-Open it only when a guest screen calls it — a form the guest submits, a list the booklet shows.
+Open it only when a guest screen calls it, and no host screen does — a form the guest submits, a list the booklet shows.
 Configuration, moderation, status changes, seeding and task toggles are host gestures: leave
 them closed. `portaki lint` warns about a guest command named like one (`updateConfig`,
 `resolve`, `updateStatus`, `seedDefaults`, `replaceItems`, `task*`).
