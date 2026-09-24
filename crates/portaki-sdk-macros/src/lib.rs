@@ -59,6 +59,7 @@
 mod capability;
 mod command;
 mod connector;
+mod email;
 mod emit;
 mod entity;
 mod event_handler;
@@ -309,6 +310,35 @@ pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     command::expand(attr, item)
+}
+
+/// Declares an email the command sends, so the manifest lists it without anyone writing JSON.
+///
+/// # Syntax
+///
+/// ```text
+/// #[portaki_sdk::email(id = "submitted", audience = "host")]
+/// #[portaki_sdk::command(name = "submit", guest)]
+/// pub fn submit(ctx: Context, args: SubmitArgs) -> Result<()> { /* … host::email::send … */ }
+///
+/// #[portaki_sdk::email(
+///     id = "checkout-j2", audience = "guest",
+///     trigger = "relativeToCheckOut", offset = "P2D", requires_guest_email,
+/// )]
+/// #[portaki_sdk::command(name = "sendCheckoutFollowUp")]
+/// pub fn send_checkout_follow_up(ctx: Context) -> Result<()> { /* ... */ }
+/// ```
+///
+/// Goes **above** `#[command]`, whose name it reads. `id` is the `email_id` given to
+/// `host::email::send`, `audience` is `guest`, `host` or `propertyEligibleGuests`. `trigger`
+/// defaults to `moduleCommand` — sent when the command runs; `offset` and `at_local_time` time it
+/// against the stay. Bare flags: `dispatch_on_stay_created`, `catch_up_on_property_publish`,
+/// `catch_up_on_config_update`, `requires_guest_email`.
+///
+/// Emits `email-{id}.json` → `manifest.emails[]`, merged by `id` over `portaki.module.json`.
+#[proc_macro_attribute]
+pub fn email(attr: TokenStream, item: TokenStream) -> TokenStream {
+    email::expand(attr, item)
 }
 
 /// Describes the arguments of a query or command, so tooling can offer a form for them.

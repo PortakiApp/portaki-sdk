@@ -248,6 +248,12 @@ pub fn generate_manifest(
         }
     }
 
+    let emails = emissions
+        .iter()
+        .filter(|e| e.kind == "email")
+        .map(|e| e.data.clone())
+        .collect();
+
     Ok(ModuleManifest {
         manifest_version: MANIFEST_VERSION.to_string(),
         id,
@@ -279,6 +285,7 @@ pub fn generate_manifest(
         },
         queries,
         commands,
+        emails,
         events: ManifestEvents {
             emits: Vec::new(),
             subscribes,
