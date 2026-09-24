@@ -141,6 +141,7 @@ mod tests {
             surfaces: ManifestSurfaces::default(),
             queries: vec![],
             commands: vec![],
+            emails: vec![],
             events: ManifestEvents::default(),
             i18n: ManifestI18n {
                 default: "fr-FR".into(),

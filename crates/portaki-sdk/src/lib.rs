@@ -98,7 +98,7 @@ pub use email::{EmailContextArgs, EmailContextContribution, EmailTemplateKey};
 pub use error::{PortakiError, Result};
 pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
-    capability, command, connector, connector_op, custom_connector, entity, entity_indexes,
+    capability, command, connector, connector_op, custom_connector, email, entity, entity_indexes,
     event_handler, params, portaki_module_decl as portaki_module, query, surface, wire,
 };
 pub use sdui::{

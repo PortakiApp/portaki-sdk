@@ -56,6 +56,9 @@ pub struct ModuleManifest {
     pub queries: Vec<ManifestQuery>,
     /// Mutating command operations.
     pub commands: Vec<ManifestCommand>,
+    /// Emails the commands send, from `#[email]` — the catalog's `emails[]` shape.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub emails: Vec<Value>,
     /// Emitted and subscribed domain events.
     pub events: ManifestEvents,
     /// i18n bundle configuration.

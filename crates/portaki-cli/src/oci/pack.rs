@@ -150,7 +150,11 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
         .iter()
         .filter_map(|key| built.get(*key).map(|value| (*key, value)))
         .collect();
-    if carried.is_empty() {
+    let emails = built
+        .get("emails")
+        .and_then(serde_json::Value::as_array)
+        .filter(|emails| !emails.is_empty());
+    if carried.is_empty() && emails.is_none() {
         return Ok(raw.to_string());
     }
     let mut manifest: serde_json::Value =
@@ -159,8 +163,55 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
         for (key, value) in carried {
             object.insert(key.to_string(), value.clone());
         }
+        if let Some(emails) = emails {
+            merge_emails(object, emails);
+        }
     }
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
+}
+
+/// Verse les `#[email]` du build dans `emails[]`, par `id`, et accorde la permission `email`.
+///
+/// Fusion et non remplacement : un e-mail que le code ne décrit pas encore — `ical-sync` émet
+/// les siens pendant une query, pas une commande — reste tel que le manifeste l'écrit. Pour un
+/// `id` présent des deux côtés, le build l'emporte champ par champ ; ce qu'il ne dit pas, une
+/// `description` par exemple, est gardé.
+///
+/// La permission suit : un module qui déclare un envoi doit pouvoir le faire, et c'est elle
+/// que la conformité lit pour exiger qu'un `email.send` ait été observé.
+fn merge_emails(
+    manifest: &mut serde_json::Map<String, serde_json::Value>,
+    built: &[serde_json::Value],
+) {
+    let declared = manifest
+        .entry("emails")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    if !declared.is_array() {
+        *declared = serde_json::Value::Array(Vec::new());
+    }
+    let declared = declared.as_array_mut().expect("emails is an array");
+    for email in built {
+        let Some(fields) = email.as_object() else {
+            continue;
+        };
+        match declared
+            .iter_mut()
+            .find(|entry| entry.get("id").is_some() && entry.get("id") == email.get("id"))
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            Some(entry) => entry.extend(fields.clone()),
+            None => declared.push(email.clone()),
+        }
+    }
+
+    let permissions = manifest
+        .entry("permissions")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    if let Some(permissions) = permissions.as_array_mut() {
+        if !permissions.iter().any(|p| p == "email") {
+            permissions.push("email".into());
+        }
+    }
 }
 
 /// Ce que seul le build sait dire, et que la sandbox doit donc recevoir de lui.
@@ -766,6 +817,33 @@ mod stamp_built_declarations_tests {
         let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
 
         assert_eq!(value["entities"][0]["name"], "IssueReport");
+    }
+
+    /// Le code déclare ses e-mails ; le manifeste écrit à la main garde les siens et ses textes.
+    #[test]
+    fn merges_the_built_emails_by_id_and_grants_the_permission() {
+        let raw = r#"{"id":"issue-report","permissions":["repo"],"emails":[
+            {"id":"submitted","description":{"fr":"Alerte"},"trigger":{"type":"x"}},
+            {"id":"sync-failed","trigger":{"type":"onApplyFeeds"}}]}"#;
+        let built = r#"{"id":"issue-report","emails":[
+            {"id":"submitted","audience":"host","command":"submit","trigger":{"type":"moduleCommand"}},
+            {"id":"resolved","audience":"guest","command":"resolve","trigger":{"type":"moduleCommand"}}]}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        let emails = value["emails"].as_array().expect("emails");
+        assert_eq!(emails.len(), 3);
+        assert_eq!(emails[0]["trigger"]["type"], "moduleCommand");
+        assert_eq!(emails[0]["command"], "submit");
+        assert_eq!(emails[0]["description"]["fr"], "Alerte");
+        assert_eq!(emails[1]["id"], "sync-failed");
+        assert_eq!(emails[2]["id"], "resolved");
+        assert_eq!(value["permissions"], serde_json::json!(["repo", "email"]));
+
+        // Tamponné deux fois, rien ne double.
+        let again = stamp_surfaces(&stamped, built).expect("stamp");
+        assert_eq!(again, stamped);
     }
 
     /// Un build sans emission ne doit pas empecher un deploiement.
