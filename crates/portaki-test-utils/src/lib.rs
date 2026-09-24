@@ -63,7 +63,7 @@
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
 //! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
 //! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, listing,
-//!   surfaces, operations, i18n, emails
+//!   surfaces, operations, i18n, emails, contracts
 
 #![deny(missing_docs)]
 

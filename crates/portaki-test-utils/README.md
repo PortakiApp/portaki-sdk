@@ -88,10 +88,11 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 |------|------------|
 | `manifest` | `portaki.module.json` does not validate against `module.v1.json` (bundled, no network) |
 | `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
-| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell, sends a tree that does not parse as contract primitives, or a `guestSurfaces[].surfaceId` has no guest surface |
+| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell, sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
 | `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/` |
 | `emails` | an `emails[]` command is not declared or panics around a mock stay, or `emailContext` panics for a template key |
+| `contracts` | a `property-stats-card` has no `statsSummary`, or it answers off `stats-summary.v1.json` (`fr`/`en`, `value` ≤ 12 chars) or slower than 300 ms; a `property-stats-detail` has no host surface of id `pathSegment`, or it fails with `input.periodDays`; a `workspace-timeline-task` has no `timelineTasks`, or it answers off `timeline-tasks.v1.json` on three fixture stays (ISO dates, non-empty items), or `taskToggle` ticks a `photoRequired` item without a photo instead of refusing it with `photo_required`; an exported `publishReadiness` answers off `publish-readiness.v1.json` |
 
 The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#[command]` and `#[surface]` register on native targets: nothing to list by hand. It needs `portaki-sdk-macros` from the same release. Not checked: the sandbox clock (`Utc::now()` runs natively — use clippy's `disallowed-methods`), `portaki_module!` display keys, and `#[event_handler]`s.
 
@@ -103,7 +104,7 @@ The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |
-| `conformance!` / `conformance::Module` | The shared battery: manifest, listing, surfaces, operations, i18n, emails |
+| `conformance!` / `conformance::Module` | The shared battery: manifest, listing, surfaces, operations, i18n, emails, contracts |
 
 ## Documentation
 

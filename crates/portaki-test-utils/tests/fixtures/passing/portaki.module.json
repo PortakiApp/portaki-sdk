@@ -13,6 +13,22 @@
       "type": "property-workspace-tab",
       "pathSegment": "fixture-passing",
       "label": { "fr": "Témoin", "en": "Fixture" }
+    },
+    {
+      "type": "property-stats-card",
+      "pathSegment": "reports",
+      "label": { "fr": "Signalements", "en": "Reports" },
+      "icon": "flag"
+    },
+    {
+      "type": "property-stats-detail",
+      "pathSegment": "reports",
+      "label": { "fr": "Signalements", "en": "Reports" }
+    },
+    {
+      "type": "workspace-timeline-task",
+      "pathSegment": "cleaning",
+      "label": { "fr": "Ménage", "en": "Cleaning" }
     }
   ],
   "guestSurfaces": [

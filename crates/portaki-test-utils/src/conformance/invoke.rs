@@ -1,11 +1,13 @@
 //! Calling a declared handler the way the runtime would, and noting what happened.
 
 use std::panic::{self, AssertUnwindSafe};
+use std::sync::Arc;
 
 use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
+use portaki_sdk::Context;
 use serde_json::Value;
 
-use crate::MockContextBuilder;
+use crate::{MockContextBuilder, MockHostFunctions};
 
 /// How one invocation ended.
 pub(crate) enum Outcome {
@@ -30,7 +32,17 @@ pub(crate) fn invoke(
     params: Value,
 ) -> Invocation {
     let (ctx, host) = mock.build();
-    let backend = std::sync::Arc::clone(&host);
+    invoke_in(declaration, ctx, host, params)
+}
+
+/// Same, on a host already built — so a second call sees what the first one stored.
+pub(crate) fn invoke_in(
+    declaration: &HandlerDeclaration,
+    ctx: Context,
+    host: Arc<MockHostFunctions>,
+    params: Value,
+) -> Invocation {
+    let backend = Arc::clone(&host);
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
         portaki_sdk::host::with_host(backend, ctx.clone(), || (declaration.dispatch)(ctx, params))
     }));

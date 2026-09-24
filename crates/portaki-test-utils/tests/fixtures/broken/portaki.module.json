@@ -5,6 +5,9 @@
   "version": "one",
   "author": { "name": "Portaki", "type": "official" },
   "type": "official",
+  "hostSurfaces": [
+    { "type": "property-stats-strip", "pathSegment": "stats", "label": { "fr": "Stats", "en": "Stats" } }
+  ],
   "guestSurfaces": [
     { "surfaceId": "explore.missing", "path": "fixture-broken/missing", "labelKey": "nav.untranslated" }
   ],

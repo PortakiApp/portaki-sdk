@@ -4,7 +4,7 @@ mod common;
 
 use common::{assert_reports, broken, failing, passing};
 use portaki_sdk::prelude::*;
-use portaki_sdk::sdui::primitives::Text;
+use portaki_sdk::sdui::primitives::{Select, Stack, Text};
 
 #[portaki_sdk::surface(guest, id = "home.card")]
 pub fn render_home_card(ctx: GuestContext) -> Surface {
@@ -24,6 +24,44 @@ pub fn render_host_main(_ctx: HostContext) -> Result<Surface> {
 #[portaki_sdk::surface(guest, id = "explore.detail")]
 pub fn render_explore_detail(_ctx: GuestContext) -> Surface {
     Surface::new(Text::new().text("i18n:guest.empty.title"))
+}
+
+#[portaki_sdk::surface(guest, id = "explore.picker")]
+pub fn render_explore_picker(_ctx: GuestContext) -> Surface {
+    Surface::new(
+        Stack::new()
+            .child(Select::new().name("empty"))
+            .child(
+                Select::new()
+                    .name("size")
+                    .options(vec![
+                        ChoiceOption::new("s", "S"),
+                        ChoiceOption::new("m", "M"),
+                    ])
+                    .value("xl"),
+            )
+            .child(
+                Select::new()
+                    .name("unset")
+                    .options(vec![ChoiceOption::new("s", "S")])
+                    .value(""),
+            ),
+    )
+}
+
+#[test]
+fn a_select_without_options_or_with_a_stray_value_is_reported() {
+    let findings = failing("surfaces", passing().check_surfaces());
+
+    assert_reports(
+        &findings,
+        &["explore.picker", "Select `empty` without options"],
+    );
+    assert_reports(&findings, &["explore.picker", "Select `size`", "`xl`"]);
+    assert!(
+        !findings.problems().iter().any(|p| p.contains("`unset`")),
+        "{findings}"
+    );
 }
 
 #[test]

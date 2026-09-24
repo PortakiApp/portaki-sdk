@@ -97,7 +97,7 @@ fn declared_email_commands(module: &Module) -> Vec<(String, String)> {
         .collect()
 }
 
-fn find(
+pub(super) fn find(
     declarations: &[&'static HandlerDeclaration],
     kind: HandlerKind,
     name: &str,
