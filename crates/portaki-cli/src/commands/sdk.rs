@@ -392,6 +392,7 @@ impl Sandbox {
         let wasm =
             std::fs::read(&wasm_path).with_context(|| format!("read {}", wasm_path.display()))?;
         let manifest = dev::sandbox_manifest(module_root)?;
+        let migrations = dev::migrations_bundle(module_root)?;
         let deploying = ui::step(format!("deploying {} to the sandbox", self.module_id));
         let deployed = match dev::deploy(
             &self.base_url,
@@ -399,6 +400,7 @@ impl Sandbox {
             &self.token,
             &wasm,
             &manifest,
+            migrations.as_deref(),
             self.session.session_id(),
         )
         .await
@@ -415,6 +417,7 @@ impl Sandbox {
                     &self.token,
                     &wasm,
                     &manifest,
+                    migrations.as_deref(),
                     self.session.session_id(),
                 )
                 .await?

@@ -27,9 +27,10 @@ pub fn write_migration_bundle(
     module_id: &str,
     schema_version: u32,
 ) -> Result<Option<PathBuf>> {
+    let dest = out_dir.join("migrations.bundle.json");
     let migrations_dir = module_root.join("db/migrations");
     if !migrations_dir.is_dir() {
-        return Ok(None);
+        return remove_stale(&dest);
     }
 
     let mut sql_files: Vec<PathBuf> = fs::read_dir(&migrations_dir)?
@@ -40,7 +41,7 @@ pub fn write_migration_bundle(
     sql_files.sort();
 
     if sql_files.is_empty() {
-        return Ok(None);
+        return remove_stale(&dest);
     }
 
     let mut revisions = Vec::with_capacity(sql_files.len());
@@ -61,10 +62,20 @@ pub fn write_migration_bundle(
         revisions,
     };
 
-    let dest = out_dir.join("migrations.bundle.json");
     let json = serde_json::to_string_pretty(&bundle).context("serialize migrations.bundle.json")?;
     fs::write(&dest, format!("{json}\n")).context("write migrations.bundle.json")?;
     Ok(Some(dest))
+}
+
+/// Un bundle d'un build précédent survivrait à la dernière migration supprimée : `dev` et `publish`
+/// l'enverraient encore.
+fn remove_stale(dest: &Path) -> Result<Option<PathBuf>> {
+    match fs::remove_file(dest) {
+        Err(failure) if failure.kind() != std::io::ErrorKind::NotFound => {
+            Err(failure).with_context(|| format!("remove stale {}", dest.display()))
+        }
+        _ => Ok(None),
+    }
 }
 
 #[cfg(test)]
@@ -92,5 +103,18 @@ mod tests {
         let raw = fs::read_to_string(path).unwrap();
         assert!(raw.contains("\"module_id\": \"weather\""));
         assert!(raw.contains("20260526100000_v1_baseline"));
+    }
+
+    #[test]
+    fn when_the_last_migration_is_gone_then_the_stale_bundle_goes_too() {
+        let root = tempdir().unwrap();
+        let out = root.path().join("out");
+        fs::create_dir_all(&out).unwrap();
+        fs::write(out.join("migrations.bundle.json"), "{}").unwrap();
+
+        assert!(write_migration_bundle(root.path(), &out, "weather", 1)
+            .unwrap()
+            .is_none());
+        assert!(!out.join("migrations.bundle.json").exists());
     }
 }

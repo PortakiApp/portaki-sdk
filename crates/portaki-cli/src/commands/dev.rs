@@ -21,6 +21,9 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 /// Le manifeste du module — lu à chaque cycle, et désormais surveillé comme les sources.
 const MANIFEST: &str = "portaki.module.json";
 
+/// Les migrations de la base du module, rejouées à chaque push.
+const MIGRATIONS: &str = "db/migrations";
+
 #[derive(Debug, Parser)]
 /// Arguments for `portaki dev`.
 pub struct DevArgs {
@@ -152,6 +155,10 @@ pub async fn run(args: DevArgs) -> Result<()> {
                 MANIFEST,
                 "surfaces and permissions take effect without touching a .rs file",
             ),
+            (
+                "db/migrations/",
+                "an edited migration replays from zero in the sandbox",
+            ),
         ],
     );
     ui::blank();
@@ -175,6 +182,13 @@ pub async fn run(args: DevArgs) -> Result<()> {
     watcher
         .watch(&manifest, RecursiveMode::NonRecursive)
         .with_context(|| format!("watch {}", manifest.display()))?;
+    // Une migration éditée se rejoue depuis zéro dans la sandbox : encore faut-il qu'un cycle parte.
+    let migrations_dir = module_root.join(MIGRATIONS);
+    if migrations_dir.is_dir() {
+        watcher
+            .watch(&migrations_dir, RecursiveMode::Recursive)
+            .with_context(|| format!("watch {}", migrations_dir.display()))?;
+    }
 
     loop {
         // Bloque jusqu'à la première sauvegarde…
@@ -304,11 +318,14 @@ async fn cycle(
         .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
 
     let manifest = sandbox_manifest(module_root)?;
+    let migrations = migrations_bundle(module_root)?;
 
-    // L'empreinte porte sur le Wasm ET le manifeste. Sur le seul Wasm, un `--watch` qui relisait
-    // `portaki.module.json` modifié répondait « unchanged » et ne l'envoyait jamais : le fichier
-    // était surveillé pour rien. Elle reste locale — le digest serveur, lui, est celui du Wasm.
-    let fingerprint = upload_fingerprint(&wasm, &manifest);
+    // L'empreinte porte sur le Wasm, le manifeste ET les migrations. Sur le seul Wasm, un
+    // `--watch` qui relisait `portaki.module.json` modifié répondait « unchanged » et ne l'envoyait
+    // jamais : le fichier était surveillé pour rien. Une migration éditée, pareil. Elle reste
+    // locale — le digest serveur, lui, est celui du Wasm.
+    let fingerprint =
+        upload_fingerprint(&wasm, &manifest, migrations.as_deref().unwrap_or_default());
     if fingerprint == *last_digest {
         ui::skipped(format!(
             "unchanged ({}) — nothing to upload",
@@ -320,13 +337,31 @@ async fn cycle(
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
     let uploading = ui::step(format!("deploying {module_id} to the sandbox"));
-    let first = deploy(base_url, module_id, token, &wasm, &manifest, session).await;
+    let first = deploy(
+        base_url,
+        module_id,
+        token,
+        &wasm,
+        &manifest,
+        migrations.as_deref(),
+        session,
+    )
+    .await;
     let deployed = match first {
         Err(failure) if failure.is::<Unauthorized>() => {
             uploading.say("renewing the access token");
             *token = reauthenticate(args, token).await?;
             uploading.say(format!("deploying {module_id} to the sandbox"));
-            deploy(base_url, module_id, token, &wasm, &manifest, session).await?
+            deploy(
+                base_url,
+                module_id,
+                token,
+                &wasm,
+                &manifest,
+                migrations.as_deref(),
+                session,
+            )
+            .await?
         }
         other => other.map_err(|failure| {
             uploading.abandon();
@@ -336,6 +371,9 @@ async fn cycle(
     uploading.done(format!("deployed {module_id}"));
     ui::field("digest", short(&deployed.digest));
     ui::field("size", ui::bytes(deployed.size_bytes));
+    if let Some(install) = &deployed.install {
+        print_install(install);
+    }
     *last_digest = fingerprint;
 
     if let Some(operation) = &args.dispatch {
@@ -394,6 +432,41 @@ pub(crate) fn build(module_root: &Path) -> Result<()> {
 pub(crate) struct DeployResponse {
     pub(crate) digest: String,
     pub(crate) size_bytes: u64,
+    /// L'installation rejouée dans la sandbox. Absente d'une plateforme qui ne la rejoue pas.
+    #[serde(default)]
+    pub(crate) install: Option<InstallCheck>,
+}
+
+/// La case `install` de la checklist, telle que devapi la rend : `PASS`, `FAIL` ou `BLOCKED`.
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct InstallCheck {
+    pub(crate) status: String,
+    #[serde(default)]
+    pub(crate) detail: String,
+}
+
+/// Ce qu'un hôte verrait en installant : migrations, isolation par logement, réinstallation,
+/// deux installations à la fois. Rouge n'arrête pas la boucle — la checklist le retiendra.
+pub(crate) fn print_install(install: &InstallCheck) {
+    let line = format!("installation  {}", install.detail);
+    match install.status.as_str() {
+        "PASS" => ui::success(line),
+        "FAIL" => ui::failure(line),
+        _ => ui::warn(line),
+    }
+}
+
+/// Le `migrations.bundle.json` que `refresh_outputs` vient d'écrire, s'il y en a un.
+///
+/// Sans lui, la sandbox n'installait jamais les tables du module : une migration cassée ne se
+/// découvrait qu'à l'installation chez un hôte.
+pub(crate) fn migrations_bundle(module_root: &Path) -> Result<Option<Vec<u8>>> {
+    let path = module_root.join("target/portaki/migrations.bundle.json");
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(failure) => Err(failure).with_context(|| format!("read {}", path.display())),
+    }
 }
 
 /// `session` est celle du bail, quand nous l'avons obtenu.
@@ -407,6 +480,7 @@ pub(crate) async fn deploy(
     token: &str,
     wasm: &[u8],
     manifest: &str,
+    migrations: Option<&[u8]>,
     session: Option<&str>,
 ) -> Result<DeployResponse> {
     let mut form = reqwest::multipart::Form::new()
@@ -415,6 +489,13 @@ pub(crate) async fn deploy(
             reqwest::multipart::Part::bytes(wasm.to_vec()).file_name("backend.wasm"),
         )
         .text("manifest", manifest.to_owned());
+    if let Some(migrations) = migrations {
+        form = form.part(
+            "migrations",
+            reqwest::multipart::Part::bytes(migrations.to_vec())
+                .file_name("migrations.bundle.json"),
+        );
+    }
     if let Some(session) = session {
         form = form.text("sessionId", session.to_owned());
     }
@@ -719,9 +800,10 @@ pub(crate) fn sandbox_manifest(module_root: &Path) -> Result<String> {
     Ok(manifest)
 }
 
-/// Ce qui décide qu'un cycle a quelque chose à envoyer : le binaire et le manifeste ensemble.
-fn upload_fingerprint(wasm: &[u8], manifest: &str) -> String {
-    sha256(&[wasm, b"\0", manifest.as_bytes()].concat())
+/// Ce qui décide qu'un cycle a quelque chose à envoyer : le binaire, le manifeste et les
+/// migrations ensemble.
+fn upload_fingerprint(wasm: &[u8], manifest: &str, migrations: &[u8]) -> String {
+    sha256(&[wasm, b"\0", manifest.as_bytes(), b"\0", migrations].concat())
 }
 
 fn sha256(bytes: &[u8]) -> String {
@@ -758,13 +840,63 @@ mod tests {
     fn a_manifest_change_alone_is_something_to_upload() {
         let wasm = b"\0asm same bytes";
         assert_ne!(
-            upload_fingerprint(wasm, r#"{"version":"0.4.0"}"#),
-            upload_fingerprint(wasm, r#"{"version":"0.4.1"}"#)
+            upload_fingerprint(wasm, r#"{"version":"0.4.0"}"#, b""),
+            upload_fingerprint(wasm, r#"{"version":"0.4.1"}"#, b"")
         );
         assert_eq!(
-            upload_fingerprint(wasm, "{}"),
-            upload_fingerprint(wasm, "{}")
+            upload_fingerprint(wasm, "{}", b""),
+            upload_fingerprint(wasm, "{}", b"")
         );
+    }
+
+    /// Une migration éditée, sans toucher au code ni au manifeste, doit repartir aussi.
+    #[test]
+    fn a_migration_change_alone_is_something_to_upload() {
+        let wasm = b"\0asm same bytes";
+        assert_ne!(
+            upload_fingerprint(
+                wasm,
+                "{}",
+                br#"{"revisions":[{"sql":"CREATE TABLE a (id INT);"}]}"#
+            ),
+            upload_fingerprint(
+                wasm,
+                "{}",
+                br#"{"revisions":[{"sql":"CREATE TABLE b (id INT);"}]}"#
+            )
+        );
+    }
+
+    #[test]
+    fn the_migrations_bundle_is_the_one_the_build_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(migrations_bundle(dir.path()).unwrap().is_none());
+
+        std::fs::create_dir_all(dir.path().join("target/portaki")).unwrap();
+        std::fs::write(
+            dir.path().join("target/portaki/migrations.bundle.json"),
+            "{}",
+        )
+        .unwrap();
+
+        assert_eq!(
+            migrations_bundle(dir.path()).unwrap().as_deref(),
+            Some(&b"{}"[..])
+        );
+    }
+
+    /// Une plateforme qui ne rejoue pas l'installation n'en dit rien : la réponse reste lisible.
+    #[test]
+    fn a_deploy_response_reads_the_install_outcome_when_there_is_one() {
+        let body = r#"{"digest":"sha256:ab","sizeBytes":1,
+            "install":{"id":"install","status":"FAIL",
+              "detail":"installation : migration_apply_failed revision=002_add_status"}}"#;
+
+        let parsed: DeployResponse = serde_json::from_str(body).expect("réponse lisible");
+
+        let install = parsed.install.expect("install rendu");
+        assert_eq!(install.status, "FAIL");
+        assert!(install.detail.contains("002_add_status"));
     }
 
     use super::*;
@@ -812,6 +944,10 @@ mod tests {
 
         assert_eq!(parsed.size_bytes, 1_024_374);
         assert!(parsed.digest.starts_with("sha256:"));
+        assert!(
+            parsed.install.is_none(),
+            "devapi antérieur : pas d'installation rejouée"
+        );
     }
 
     /// Les `serde(default)` d'une réponse de dispatch avalent une non-correspondance en silence :
