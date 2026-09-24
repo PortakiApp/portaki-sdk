@@ -4,8 +4,12 @@
   "title": "Portaki module catalogue manifest (portaki.module.json)",
   "type": "object",
   "required": ["id", "name", "description", "version", "author", "icon", "type"],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint pointing at this schema. Ignored by the platform."
+    },
     "id": {
       "type": "string",
       "minLength": 1,
@@ -61,6 +65,15 @@
       "type": "array",
       "description": "Mutating operations the module exports. Same provenance as queries.",
       "items": { "$ref": "#/$defs/operation" }
+    },
+    "surfaces": {
+      "type": "object",
+      "description": "Surfaces the binary exports (host / guest ids and their render symbols). Never hand-written: stamped from the build output, like queries."
+    },
+    "entities": {
+      "type": "array",
+      "description": "Typed-storage entities the module declares. Never hand-written: stamped from the build output, like queries.",
+      "items": { "type": "object" }
     },
     "hostSurfaces": {
       "type": "array",
