@@ -42,7 +42,10 @@ pub struct WasmContextEnvelope {
     /// Property id.
     #[serde(rename = "propertyId", default)]
     pub property_id: Option<Uuid>,
-    /// Stay id for guest invocations.
+    /// Who calls: `host` or `guest`. Absent (older runtime) or unknown, a stay means a guest.
+    #[serde(default)]
+    pub caller: Option<String>,
+    /// Stay the invocation is about, for a guest or a host caller.
     #[serde(rename = "stayId", default)]
     pub stay_id: Option<Uuid>,
     /// Stay check-in instant (UTC ISO-8601) for guest reveal policies.
@@ -157,11 +160,14 @@ impl WasmRequestEnvelope {
             surface: Some(operation.to_string()),
             invocation_id: Uuid::new_v4(),
             display: DisplayPreferences::default(),
-            guest: ctx.stay_id.map(|session_id| GuestIdentity {
-                session_id,
-                display_name: None,
-                locale: None,
-            }),
+            guest: ctx
+                .stay_id
+                .filter(|_| ctx.caller.as_deref() != Some("host"))
+                .map(|session_id| GuestIdentity {
+                    session_id,
+                    display_name: None,
+                    locale: None,
+                }),
             stay,
             property,
             input: self.params.clone(),
@@ -355,6 +361,38 @@ mod tests {
             stay.guest_phone, None,
             "a blank value is not a phone number"
         );
+    }
+
+    fn context_for(caller: &str) -> crate::Context {
+        let raw = format!(
+            r#"{{
+                "command": "resolve",
+                "context": {{
+                    "moduleId": "issue-report",
+                    "moduleVersion": "1.0.0",
+                    "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                    "stayId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                    {caller}
+                }}
+            }}"#
+        );
+        let envelope: WasmRequestEnvelope = serde_json::from_str(&raw).expect("parse");
+        envelope.to_context("resolve").expect("context")
+    }
+
+    /// Le séjour reste là pour tout appelant ; seul un hôte déclaré n'est pas un voyageur.
+    #[test]
+    fn guest_follows_the_caller_and_the_stay_stays() {
+        for (caller, is_guest) in [
+            (r#","caller": "host""#, false),
+            (r#","caller": "guest""#, true),
+            ("", true),
+            (r#","caller": "robot""#, true),
+        ] {
+            let ctx = context_for(caller);
+            assert_eq!(ctx.guest.is_some(), is_guest, "{caller}");
+            assert!(ctx.stay.is_some(), "{caller}");
+        }
     }
 
     /// Les valeurs nulles — ce qu'un module non déclarant reçoit pour le contact — et une heure

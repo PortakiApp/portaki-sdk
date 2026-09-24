@@ -195,9 +195,11 @@ pub struct Context {
     pub invocation_id: Uuid,
     /// Client display preferences.
     pub display: DisplayPreferences,
-    /// Guest identity on guest surfaces only.
+    /// Guest identity when a guest calls; `None` when the host calls, even about a stay.
+    ///
+    /// Host-only commands refuse with `host_only` when `ctx.guest.is_some()`.
     pub guest: Option<GuestIdentity>,
-    /// Stay window on guest surfaces (`None` on host / when stay id is absent).
+    /// Stay the invocation is about, whoever calls (`None` when stay id is absent).
     #[serde(default)]
     pub stay: Option<StayContext>,
     /// Property metadata bundle.
