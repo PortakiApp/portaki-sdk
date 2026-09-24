@@ -297,12 +297,32 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
     }
 }
 
+/// Une version déjà au registre n'est pas un échec : rien n'est poussé, et la suite — la fiche —
+/// part quand même.
+///
+/// C'était une erreur, et c'est ce qui rendait rouge un run relancé seulement pour pousser une
+/// fiche corrigée. L'action de release attend d'ailleurs ce cas comme une issue normale
+/// (`already-published`) : elle lit « already in the registry » sur la sortie standard, d'où
+/// l'avertissement plutôt qu'une erreur.
+fn settle(landed: Result<Landed>) -> Result<Landed> {
+    match landed {
+        Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
+            Some(already) => {
+                ui::warn(already);
+                Ok(Landed::InRegistry(already.id.clone()))
+            }
+            None => Err(failure),
+        },
+        landed => landed,
+    }
+}
+
 /// `portaki publish` for the module in `module_root`, then its public listing.
 async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
     let Some(listing) = read_listing(module_root)? else {
-        return release(module_root, &args).await.map(|_| ());
+        return settle(release(module_root, &args).await).map(|_| ());
     };
-    let landed = release(module_root, &args).await;
+    let landed = settle(release(module_root, &args).await);
     let sent = match listing_plan(&landed) {
         ListingPlan::Send(id) => send_listing(&args, id, &listing).await,
         ListingPlan::WouldSend => {
@@ -886,6 +906,23 @@ mod tests {
             listing_plan(&refused("module_not_linked").map(|()| Landed::DryRun)),
             ListingPlan::Skip
         );
+    }
+
+    /// Relancé sur une version publiée — pour pousser une fiche corrigée —, le run réussit.
+    #[test]
+    fn an_already_published_version_settles_as_in_the_registry() {
+        let already: Result<Landed> = Err(AlreadyInRegistry {
+            id: "nuki".to_string(),
+            version: "1.0.0".to_string(),
+            digest: "sha256:aaa".to_string(),
+        }
+        .into());
+
+        assert_eq!(
+            settle(already).unwrap(),
+            Landed::InRegistry("nuki".to_string())
+        );
+        assert!(settle(refused("module_not_linked").map(|()| Landed::DryRun)).is_err());
     }
 
     #[test]
