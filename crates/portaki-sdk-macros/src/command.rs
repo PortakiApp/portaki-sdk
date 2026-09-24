@@ -5,13 +5,14 @@ use proc_macro::TokenStream;
 /// Expands `#[command(name = "…")]` on a handler function.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as syn::ItemFn);
-    let attrs = syn::parse_macro_input!(attr as command_attrs::NamedOpAttrs);
+    let attrs = syn::parse_macro_input!(attr as crate::query::NamedOpAttrs);
     let fn_name = function_item.sig.ident.to_string();
 
     let mut declaration = serde_json::json!({
         "kind": "command",
         "name": attrs.name,
         "fn": fn_name,
+        "guest": attrs.guest,
     });
     // Le type d'arguments, par son nom : `portaki build` y joint les champs émis par son
     // `#[params]`, et la sandbox en tire un formulaire.
@@ -31,30 +32,4 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     output.into()
-}
-
-mod command_attrs {
-    use syn::parse::{Parse, ParseStream};
-    use syn::Token;
-
-    use crate::wire_lit::WireLit;
-
-    pub struct NamedOpAttrs {
-        pub name: String,
-    }
-
-    impl Parse for NamedOpAttrs {
-        fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-            let key: syn::Ident = input.parse()?;
-            if key != "name" {
-                return Err(syn::Error::new(
-                    key.span(),
-                    "expected name = \"...\" or name = OperationName::new(\"...\")",
-                ));
-            }
-            input.parse::<Token![=]>()?;
-            let name: WireLit = input.parse()?;
-            Ok(NamedOpAttrs { name: name.value })
-        }
-    }
 }

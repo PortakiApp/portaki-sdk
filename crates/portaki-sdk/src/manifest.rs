@@ -167,6 +167,10 @@ pub struct ManifestQuery {
     /// That type's fields, when it carries [`crate::params`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<OperationParams>,
+    /// A guest may call it through the guest gateway (`guest` on the macro). Always written:
+    /// its absence marks a manifest stamped by an older SDK.
+    #[serde(default)]
+    pub guest: bool,
 }
 
 /// Command operation — mutating handler with JSON params/response.
@@ -182,6 +186,10 @@ pub struct ManifestCommand {
     /// That type's fields, when it carries [`crate::params`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<OperationParams>,
+    /// A guest may call it through the guest gateway (`guest` on the macro). Always written:
+    /// its absence marks a manifest stamped by an older SDK.
+    #[serde(default)]
+    pub guest: bool,
 }
 
 /// The arguments an operation takes, described for tooling (the sandbox builds a form from it).

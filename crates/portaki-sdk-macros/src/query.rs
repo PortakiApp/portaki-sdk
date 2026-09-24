@@ -9,8 +9,11 @@ use syn::{ItemFn, Token};
 use crate::emit::{sanitize_key, write_emission};
 use crate::wire_lit::WireLit;
 
-struct NamedOpAttrs {
-    name: String,
+/// `name = "…"`, then an optional bare `guest` — shared by `query` and `command`.
+pub(crate) struct NamedOpAttrs {
+    pub name: String,
+    /// Callable by a guest through the guest gateway. Closed unless the module says so.
+    pub guest: bool,
 }
 
 impl Parse for NamedOpAttrs {
@@ -24,7 +27,19 @@ impl Parse for NamedOpAttrs {
         }
         input.parse::<Token![=]>()?;
         let name: WireLit = input.parse()?;
-        Ok(NamedOpAttrs { name: name.value })
+        let mut guest = false;
+        if input.parse::<Option<Token![,]>>()?.is_some() && !input.is_empty() {
+            let flag: syn::Ident = input.parse()?;
+            if flag != "guest" {
+                return Err(syn::Error::new(flag.span(), "expected `guest`"));
+            }
+            guest = true;
+            input.parse::<Option<Token![,]>>()?;
+        }
+        Ok(NamedOpAttrs {
+            name: name.value,
+            guest,
+        })
     }
 }
 
@@ -38,6 +53,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         "kind": "query",
         "name": attrs.name,
         "fn": fn_name,
+        "guest": attrs.guest,
     });
     // Le type d'arguments, par son nom : `portaki build` y joint les champs émis par son
     // `#[params]`, et la sandbox en tire un formulaire.
@@ -56,4 +72,33 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     output.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NamedOpAttrs;
+
+    fn parse(attr: &str) -> syn::Result<NamedOpAttrs> {
+        syn::parse_str(attr)
+    }
+
+    #[test]
+    fn an_operation_is_closed_to_guests_by_default() {
+        let attrs = parse(r#"name = "listForStay""#).unwrap();
+        assert_eq!(attrs.name, "listForStay");
+        assert!(!attrs.guest);
+    }
+
+    #[test]
+    fn the_guest_flag_opens_it() {
+        assert!(parse(r#"name = "submit", guest"#).unwrap().guest);
+        assert!(parse(r#"name = "submit", guest,"#).unwrap().guest);
+    }
+
+    #[test]
+    fn guest_takes_no_value_and_nothing_else_is_accepted() {
+        assert!(parse(r#"name = "submit", guest = true"#).is_err());
+        assert!(parse(r#"name = "submit", host"#).is_err());
+        assert!(parse(r#"name = "submit", guest, guest"#).is_err());
+    }
 }

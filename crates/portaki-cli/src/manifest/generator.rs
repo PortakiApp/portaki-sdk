@@ -205,6 +205,7 @@ pub fn generate_manifest(
                         .as_deref()
                         .and_then(|args| resolve_params(args, &shapes)),
                     args,
+                    guest: emission.data["guest"].as_bool().unwrap_or(false),
                 })
             }
             "command" => {
@@ -219,6 +220,7 @@ pub fn generate_manifest(
                         .as_deref()
                         .and_then(|args| resolve_params(args, &shapes)),
                     args,
+                    guest: emission.data["guest"].as_bool().unwrap_or(false),
                 })
             }
             "event_handler" => subscribes.push(ManifestEventSubscription {
@@ -654,5 +656,24 @@ mod params_tests {
         }))]);
 
         assert!(resolve_params("Node", &shapes).unwrap().defs.is_empty());
+    }
+
+    /// `guest` is stamped on every operation, open or not: its absence marks an older SDK.
+    #[test]
+    fn every_operation_carries_guest() {
+        let manifest = generate_manifest(
+            &[
+                emission(json!({ "kind": "module", "id": "forms" })),
+                emission(json!({ "kind": "query", "name": "listForStay", "fn": "list", "guest": true })),
+                emission(json!({ "kind": "command", "name": "updateConfig", "fn": "update", "guest": false })),
+            ],
+            "fr-FR",
+            &["fr-FR".to_string()],
+        )
+        .unwrap();
+        let wire = serde_json::to_value(&manifest).unwrap();
+
+        assert_eq!(wire["queries"][0]["guest"], json!(true));
+        assert_eq!(wire["commands"][0]["guest"], json!(false));
     }
 }
