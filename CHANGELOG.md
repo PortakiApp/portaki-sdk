@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.12.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.11.0...v6.12.0) (2026-09-24)
+
+
+### Features
+
+* **cli:** send migrations bundle on dev deploy ([4d60fd2](https://github.com/PortakiApp/portaki-sdk/commit/4d60fd2df273cc6c380245d161cd95df497c0541))
+
+
+### Bug Fixes
+
+* **cli:** make sdk upgrade cover a whole monorepo ([a9b6145](https://github.com/PortakiApp/portaki-sdk/commit/a9b614522dfe9e4825b8ff526cc8cd6fe9ab8b91))
+* **cli:** treat an already-published version as done ([a4f80cf](https://github.com/PortakiApp/portaki-sdk/commit/a4f80cf023880e380fc9696d84854cac91406710))
+
 ## [6.11.0](https://github.com/PortakiApp/portaki-sdk/compare/v6.10.0...v6.11.0) (2026-09-24)
 
 
