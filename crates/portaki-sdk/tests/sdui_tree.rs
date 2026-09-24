@@ -225,3 +225,20 @@ fn editable_list_and_feed_item_are_leaves_on_the_wire() {
         })
     );
 }
+
+/// The toggle card reads a description under its label.
+#[test]
+fn toggle_row_carries_a_description() {
+    use portaki_sdk::sdui::primitives::ToggleRow;
+
+    let row: Component = ToggleRow::new()
+        .name("notifyAssignee")
+        .label("Prévenir la personne assignée")
+        .description("Par e-mail, à la création de la tâche")
+        .checked(true)
+        .into();
+    assert_eq!(
+        serde_json::to_value(&row).unwrap()["description"],
+        "Par e-mail, à la création de la tâche"
+    );
+}
