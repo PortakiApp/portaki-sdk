@@ -64,7 +64,79 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
             catalog[key] = value.clone();
         }
     }
+
+    let (host, guest) = surfaces(
+        emissions,
+        data["id"].as_str().unwrap_or_default(),
+        &translated,
+    );
+    if !host.is_empty() {
+        catalog["hostSurfaces"] = Value::Array(host);
+    }
+    if !guest.is_empty() {
+        catalog["guestSurfaces"] = Value::Array(guest);
+    }
     catalog
+}
+
+/// Les entrées de navigation que les `#[surface]` décrivent, triées pour un manifeste stable.
+///
+/// Côté hôte, une entrée par `placement` ; le `pathSegment` est l'id du module pour la surface
+/// `main` — l'onglet ou la fiche du module —, l'id de la surface sinon, sauf `path` explicite.
+/// Côté invité, une entrée par surface qui a une `path` : les autres se rendent sans lien.
+fn surfaces(
+    emissions: &[EmissionFile],
+    module_id: &str,
+    translated: &dyn Fn(&Value) -> Value,
+) -> (Vec<Value>, Vec<Value>) {
+    let mut host = Vec::new();
+    let mut guest = Vec::new();
+    for surface in emissions.iter().filter(|e| e.kind == "surface") {
+        let data = &surface.data;
+        let Some(nav) = data["catalog"].as_object() else {
+            continue;
+        };
+        let id = data["id"].as_str().unwrap_or_default();
+        if data["context"] == "host" {
+            let segment = nav
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or(if id == "main" { module_id } else { id });
+            for placement in nav
+                .get("placement")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let mut entry = json!({ "type": placement, "pathSegment": segment });
+                if let Some(key) = nav.get("label_key") {
+                    entry["label"] = translated(key);
+                }
+                if let Some(icon) = nav.get("icon") {
+                    entry["icon"] = icon.clone();
+                }
+                if let Some(design) = nav.get("design_id") {
+                    entry["hostUi"] = json!({ "designId": design });
+                }
+                host.push(entry);
+            }
+        } else if let Some(path) = nav.get("path") {
+            let mut entry = json!({ "surfaceId": id, "path": path });
+            for (from, to) in [
+                ("label_key", "labelKey"),
+                ("role", "role"),
+                ("embeds", "embedsHostFragments"),
+            ] {
+                if let Some(value) = nav.get(from) {
+                    entry[to] = value.clone();
+                }
+            }
+            guest.push(entry);
+        }
+    }
+    host.sort_by_key(|e| (e["pathSegment"].to_string(), e["type"].to_string()));
+    guest.sort_by_key(|e| e["surfaceId"].to_string());
+    (host, guest)
 }
 
 /// Comble les clés que le manifeste écrit à la main ne porte pas. Ce qu'il porte l'emporte.
@@ -77,17 +149,55 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
     let Some(object) = manifest.as_object_mut() else {
         return Ok(raw.to_string());
     };
-    let missing: Vec<_> = defaults
-        .iter()
-        .filter(|(key, value)| !object.contains_key(*key) && !is_empty(value))
-        .collect();
-    if missing.is_empty() {
+    let before = object.clone();
+    for (key, value) in defaults {
+        if is_empty(value) {
+            continue;
+        }
+        match (object.get_mut(key), IDENTITY.iter().find(|(k, _)| k == key)) {
+            (None, _) => {
+                object.insert(key.clone(), value.clone());
+            }
+            (Some(Value::Array(declared)), Some((_, fields))) => merge_entries(
+                declared,
+                value.as_array().map(Vec::as_slice).unwrap_or_default(),
+                fields,
+            ),
+            _ => {}
+        }
+    }
+    if *object == before {
         return Ok(raw.to_string());
     }
-    for (key, value) in missing {
-        object.insert(key.clone(), value.clone());
-    }
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
+}
+
+/// Les listes fusionnées entrée par entrée, et les champs qui identifient une entrée.
+const IDENTITY: [(&str, &[&str]); 2] = [
+    ("hostSurfaces", &["type", "pathSegment"]),
+    ("guestSurfaces", &["surfaceId"]),
+];
+
+/// Ajoute les entrées du code que le manifeste n'a pas, et comble les champs qu'il tait sur
+/// celles qu'il a. Une entrée écrite à la main que le code ignore — la tâche de frise de
+/// `checklist`, qui n'a pas de surface — reste telle quelle.
+fn merge_entries(declared: &mut Vec<Value>, built: &[Value], identity: &[&str]) {
+    let same = |a: &Value, b: &Value| identity.iter().all(|field| a.get(*field) == b.get(*field));
+    for entry in built {
+        match declared.iter_mut().find(|d| same(d, entry)) {
+            Some(Value::Object(existing)) => {
+                for (field, value) in entry.as_object().into_iter().flatten() {
+                    if !is_empty(value) {
+                        existing
+                            .entry(field.clone())
+                            .or_insert_with(|| value.clone());
+                    }
+                }
+            }
+            Some(_) => {}
+            None => declared.push(entry.clone()),
+        }
+    }
 }
 
 /// Un nom sans aucune traduction n'apprend rien au catalogue.
@@ -165,6 +275,76 @@ mod tests {
         assert!(
             filled.get("name").is_none(),
             "an untranslated name is left out"
+        );
+    }
+
+    #[test]
+    fn surfaces_become_navigation_entries() {
+        let mut emissions = module();
+        let surface = |data: serde_json::Value| EmissionFile {
+            kind: "surface".into(),
+            data,
+        };
+        emissions.push(surface(
+            json!({ "context": "host", "id": "main", "renderFn": "a",
+            "catalog": { "placement": ["property-workspace-tab"], "design_id": "report-v1",
+                         "label_key": "nav.tab", "icon": "danger-triangle" } }),
+        ));
+        emissions.push(surface(
+            json!({ "context": "host", "id": "issue-stats", "renderFn": "b",
+            "catalog": { "placement": ["property-stats-detail", "property-stats-card"] } }),
+        ));
+        emissions.push(surface(
+            json!({ "context": "guest", "id": "guest.form", "renderFn": "c",
+            "catalog": { "path": "issue-report/form", "label_key": "nav.form" } }),
+        ));
+        emissions.push(surface(
+            json!({ "context": "guest", "id": "home.card", "renderFn": "d" }),
+        ));
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("fr-FR.json"), r#"{"nav.tab":"Onglet"}"#).expect("fr");
+
+        let catalog = catalog_defaults(&emissions, dir.path(), &["fr-FR".to_string()]);
+
+        assert_eq!(
+            catalog["hostSurfaces"],
+            json!([
+                { "type": "property-workspace-tab", "pathSegment": "issue-report",
+                  "label": { "fr": "Onglet" }, "icon": "danger-triangle",
+                  "hostUi": { "designId": "report-v1" } },
+                { "type": "property-stats-card", "pathSegment": "issue-stats" },
+                { "type": "property-stats-detail", "pathSegment": "issue-stats" },
+            ])
+        );
+        assert_eq!(
+            catalog["guestSurfaces"],
+            json!([{ "surfaceId": "guest.form", "path": "issue-report/form", "labelKey": "nav.form" }])
+        );
+    }
+
+    #[test]
+    fn surfaces_merge_entry_by_entry_and_the_hand_written_ones_stay() {
+        let raw = r#"{"hostSurfaces":[
+            {"type":"property-stats-card","pathSegment":"s","label":{"fr":"Main"}},
+            {"type":"workspace-timeline-task","pathSegment":"tasks"}]}"#;
+        let catalog = r#"{"hostSurfaces":[
+            {"type":"property-stats-card","pathSegment":"s","label":{"fr":"Code"},"icon":"i"},
+            {"type":"property-stats-detail","pathSegment":"s"}]}"#;
+
+        let filled: serde_json::Value =
+            serde_json::from_str(&fill_catalog(raw, catalog).expect("fill")).expect("parse");
+
+        assert_eq!(
+            filled["hostSurfaces"],
+            json!([
+                { "type": "property-stats-card", "pathSegment": "s", "label": { "fr": "Main" }, "icon": "i" },
+                { "type": "workspace-timeline-task", "pathSegment": "tasks" },
+                { "type": "property-stats-detail", "pathSegment": "s" },
+            ])
+        );
+        assert_eq!(
+            fill_catalog(&filled.to_string(), catalog).expect("again"),
+            filled.to_string()
         );
     }
 
