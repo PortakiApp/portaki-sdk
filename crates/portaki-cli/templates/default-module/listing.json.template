@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json",
+  "category": "{{CATEGORY}}",
+  "tagline": {
+    "fr": "{{TAGLINE}}",
+    "en": "To be completed: what the module brings, in one sentence."
+  },
+  "description": {
+    "fr": "{{LISTING_DESCRIPTION}}",
+    "en": "To be completed: what the module does for the host and the guest, in a few sentences."
+  },
+  "guestSurface": {
+    "fr": "À compléter : ce que le voyageur voit dans le livret.",
+    "en": "To be completed: what the guest sees in the booklet."
+  },
+  "hostSurface": {
+    "fr": "À compléter : ce que l'hôte voit et règle dans le dashboard.",
+    "en": "To be completed: what the host sees and sets in the dashboard."
+  },
+  "configItems": [],
+  "capabilities": [],
+  "publishedLangs": ["fr", "en"]
+}

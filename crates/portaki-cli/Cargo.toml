@@ -51,3 +51,6 @@ open = "5.4.3"
 
 [dev-dependencies]
 tempfile = "3"
+# Le listing.json scaffoldé est validé contre le schéma embarqué par la batterie de conformité.
+portaki-test-utils = { workspace = true }
+jsonschema = { version = "0.56", default-features = false }
