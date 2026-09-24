@@ -18,6 +18,8 @@ fn a_manifest_off_schema_is_reported_where_it_breaks() {
     assert_reports(&findings, &["/hostSurfaces/0/type", "property-stats-strip"]);
     // The root is closed: keys the platform ignores (`runtime`, `artifacts`, `config`) are refused.
     assert_reports(&findings, &["portaki.module.json at /", "runtime"]);
+    // `config` is allowed, but its field types are the closed list the host form renders.
+    assert_reports(&findings, &["/config/fields/0/type", "password"]);
     let rendered = findings.to_string();
     assert!(
         rendered.starts_with("portaki conformance — manifest:"),

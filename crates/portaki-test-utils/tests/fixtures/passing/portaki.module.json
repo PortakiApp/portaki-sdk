@@ -8,6 +8,18 @@
   "icon": "check",
   "type": "official",
   "permissions": ["kv", "email"],
+  "config": {
+    "fields": [
+      { "key": "apiKey", "type": "secret", "required": true, "label": { "fr": "Clé", "en": "Key" } },
+      {
+        "key": "units",
+        "type": "select",
+        "options": [{ "value": "metric", "label": { "fr": "Métrique", "en": "Metric" } }]
+      }
+    ],
+    "globalAlert": { "type": "warning", "message": { "fr": "Clé requise", "en": "Key required" } },
+    "defaults": { "units": "metric" }
+  },
   "hostSurfaces": [
     {
       "type": "property-workspace-tab",

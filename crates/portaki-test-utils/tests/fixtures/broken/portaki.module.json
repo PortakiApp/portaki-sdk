@@ -6,6 +6,7 @@
   "author": { "name": "Portaki", "type": "official" },
   "type": "official",
   "runtime": { "wasm": "module.wasm" },
+  "config": { "fields": [{ "key": "apiKey", "type": "password" }] },
   "hostSurfaces": [
     { "type": "property-stats-strip", "pathSegment": "stats", "label": { "fr": "Stats", "en": "Stats" } }
   ],
