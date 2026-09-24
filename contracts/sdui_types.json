@@ -256,7 +256,7 @@
       },
       "icon": {
         "optional": true,
-        "type": "String"
+        "type": "IconName"
       },
       "label": {
         "type": "String"
@@ -340,6 +340,257 @@
     },
     "kind": "struct"
   },
+  "IconName": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "ban"
+      },
+      {
+        "name": "bell"
+      },
+      {
+        "name": "building"
+      },
+      {
+        "name": "calendar"
+      },
+      {
+        "name": "car"
+      },
+      {
+        "name": "check"
+      },
+      {
+        "name": "check-circle"
+      },
+      {
+        "name": "chevron-right"
+      },
+      {
+        "name": "circle-x"
+      },
+      {
+        "name": "clipboard"
+      },
+      {
+        "name": "clipboard-list"
+      },
+      {
+        "name": "clock"
+      },
+      {
+        "name": "clock-circle"
+      },
+      {
+        "name": "cloud"
+      },
+      {
+        "name": "cloud-fog"
+      },
+      {
+        "name": "cloud-lightning"
+      },
+      {
+        "name": "cloud-off"
+      },
+      {
+        "name": "cloud-rain"
+      },
+      {
+        "name": "cloud-snow"
+      },
+      {
+        "name": "cloud-sun"
+      },
+      {
+        "name": "danger-triangle"
+      },
+      {
+        "name": "dots"
+      },
+      {
+        "name": "droplets"
+      },
+      {
+        "name": "file-text"
+      },
+      {
+        "name": "fingerprint"
+      },
+      {
+        "name": "gauge"
+      },
+      {
+        "name": "gift"
+      },
+      {
+        "name": "grid"
+      },
+      {
+        "name": "guests"
+      },
+      {
+        "name": "handshake"
+      },
+      {
+        "name": "heart-handshake"
+      },
+      {
+        "name": "home"
+      },
+      {
+        "name": "info"
+      },
+      {
+        "name": "info-circle"
+      },
+      {
+        "name": "key"
+      },
+      {
+        "name": "link"
+      },
+      {
+        "name": "list"
+      },
+      {
+        "name": "list-checks"
+      },
+      {
+        "name": "lock"
+      },
+      {
+        "name": "logout"
+      },
+      {
+        "name": "mail"
+      },
+      {
+        "name": "map-pin"
+      },
+      {
+        "name": "message"
+      },
+      {
+        "name": "message-circle"
+      },
+      {
+        "name": "minus"
+      },
+      {
+        "name": "more-horizontal"
+      },
+      {
+        "name": "no"
+      },
+      {
+        "name": "noise"
+      },
+      {
+        "name": "ok"
+      },
+      {
+        "name": "package"
+      },
+      {
+        "name": "package-search"
+      },
+      {
+        "name": "parking"
+      },
+      {
+        "name": "paw"
+      },
+      {
+        "name": "paw-print"
+      },
+      {
+        "name": "pets"
+      },
+      {
+        "name": "phone"
+      },
+      {
+        "name": "plug"
+      },
+      {
+        "name": "plus"
+      },
+      {
+        "name": "quiet"
+      },
+      {
+        "name": "recycle"
+      },
+      {
+        "name": "refresh"
+      },
+      {
+        "name": "scale"
+      },
+      {
+        "name": "search"
+      },
+      {
+        "name": "search-x"
+      },
+      {
+        "name": "send"
+      },
+      {
+        "name": "sliders"
+      },
+      {
+        "name": "smile"
+      },
+      {
+        "name": "sparkles"
+      },
+      {
+        "name": "star"
+      },
+      {
+        "name": "sun"
+      },
+      {
+        "name": "thermometer"
+      },
+      {
+        "name": "ticket"
+      },
+      {
+        "name": "train"
+      },
+      {
+        "name": "triangle-alert"
+      },
+      {
+        "name": "user"
+      },
+      {
+        "name": "users"
+      },
+      {
+        "name": "volume-2"
+      },
+      {
+        "name": "volume-x"
+      },
+      {
+        "name": "wifi"
+      },
+      {
+        "name": "wind"
+      },
+      {
+        "name": "x"
+      },
+      {
+        "name": "zap"
+      }
+    ]
+  },
   "ImageSize": {
     "kind": "enum",
     "variants": [
@@ -386,7 +637,7 @@
       },
       "icon": {
         "optional": true,
-        "type": "String"
+        "type": "IconName"
       },
       "id": {
         "type": "String"
@@ -439,7 +690,7 @@
     "fields": {
       "icon": {
         "optional": true,
-        "type": "String"
+        "type": "IconName"
       },
       "title": {
         "optional": true,

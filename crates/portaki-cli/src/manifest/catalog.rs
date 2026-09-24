@@ -186,6 +186,80 @@ fn surfaces(
     (host, guest)
 }
 
+/// Ce que les macros nomment sans pouvoir le vérifier : des clés i18n, des queries.
+///
+/// Une macro ne voit ni les bundles ni les autres attributs du module. Le build, lui, a tout : une
+/// clé absente d'une langue ou une query mal orthographiée s'arrête ici, pas dans le dashboard
+/// d'un hôte.
+pub fn check_references(
+    emissions: &[EmissionFile],
+    i18n_dir: &Path,
+    locales: &[String],
+) -> anyhow::Result<()> {
+    let mut keys: Vec<String> = Vec::new();
+    for emission in emissions {
+        let data = &emission.data;
+        let named: Vec<Option<&Value>> = match emission.kind.as_str() {
+            "module" => {
+                for module in data["catalog"]["feeds"].as_array().into_iter().flatten() {
+                    keys.push(format!("feeds.{}", module.as_str().unwrap_or_default()));
+                }
+                vec![data.get("displayName"), data.get("description")]
+            }
+            "surface" => vec![data["catalog"].get("label_key")],
+            "nav" => vec![data.get("label_key")],
+            "email" => vec![data.get("descriptionKey")],
+            _ => Vec::new(),
+        };
+        keys.extend(
+            named
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string),
+        );
+    }
+
+    let mut missing = Vec::new();
+    for locale in locales {
+        let bundle: Value = std::fs::read_to_string(i18n_dir.join(format!("{locale}.json")))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
+        for key in &keys {
+            if bundle.get(key).is_none() {
+                missing.push(format!("{key} ({locale})"));
+            }
+        }
+    }
+    if !missing.is_empty() {
+        anyhow::bail!(
+            "i18n keys the module declares but does not translate: {}",
+            missing.join(", ")
+        );
+    }
+
+    let queries: Vec<&str> = emissions
+        .iter()
+        .filter(|e| e.kind == "query")
+        .filter_map(|e| e.data["name"].as_str())
+        .collect();
+    for emission in emissions.iter().filter(|e| e.kind == "module") {
+        let sync = &emission.data["catalog"]["hostScheduledSync"];
+        for (attribute, field) in [
+            ("scheduled_sync_sources", "sourcesQuery"),
+            ("scheduled_sync_apply", "applyQuery"),
+        ] {
+            if let Some(query) = sync[field].as_str() {
+                if !queries.contains(&query) {
+                    anyhow::bail!("{attribute} names `{query}`, and no #[query] has that name");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Chaque feature de `portaki-sdk` et la permission qu'elle déclare.
 const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
     ("kv", permission::KV),
@@ -499,6 +573,38 @@ mod tests {
             catalog["emails"],
             json!([{ "id": "sync-failed", "description": { "fr": "Échec" } }])
         );
+    }
+
+    #[test]
+    fn a_declared_key_or_query_that_does_not_exist_stops_the_build() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let both = |fr: &str, en: &str| {
+            std::fs::write(dir.path().join("fr-FR.json"), fr).expect("fr");
+            std::fs::write(dir.path().join("en-US.json"), en).expect("en");
+        };
+        let locales = ["fr-FR".to_string(), "en-US".to_string()];
+        let mut emissions = module();
+        emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "applyQuery": "applyFeeds" });
+        emissions.push(EmissionFile {
+            kind: "query".into(),
+            data: json!({ "name": "applyFeeds" }),
+        });
+        let keys = r#"{"module.displayName":"x","module.description":"y"}"#;
+
+        both(keys, keys);
+        super::check_references(&emissions, dir.path(), &locales).expect("all there");
+
+        both(keys, r#"{"module.displayName":"x"}"#);
+        let missing = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
+        assert!(
+            missing.to_string().contains("module.description (en-US)"),
+            "{missing}"
+        );
+
+        both(keys, keys);
+        emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "applyQuery": "applyFeed" });
+        let typo = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
+        assert!(typo.to_string().contains("applyFeed"), "{typo}");
     }
 
     #[test]

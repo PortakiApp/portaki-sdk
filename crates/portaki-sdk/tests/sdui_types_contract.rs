@@ -307,7 +307,19 @@ fn read_sources() -> Catalog {
             }
         }
     }
+    // Les icônes : une liste fermée tenue dans `vocab.rs` par une macro que syn ne déplie pas.
+    // Le contrat la lit donc sur le type lui-même — c'est ce que chaque shell doit savoir dessiner.
+    catalog.types.insert(
+        "IconName".into(),
+        vocabulary::<portaki_sdk::vocab::IconName>(),
+    );
     catalog
+}
+
+/// Une énumération de `vocab`, décrite comme serde l'écrit : une chaîne par variante.
+fn vocabulary<V: portaki_sdk::vocab::Vocabulary>() -> Value {
+    let variants: Vec<Value> = V::ALL.iter().map(|v| json!({ "name": v.wire() })).collect();
+    json!({ "kind": "enum", "variants": variants })
 }
 
 fn read_named_fields(

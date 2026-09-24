@@ -92,11 +92,15 @@ fill `listing.json` in, or delete it to write the listing in the dashboard.
 |---|---|
 | `id`, `version` | the crate's `name` and `version` in `Cargo.toml` |
 | `name`, `description` | `module.displayName` / `module.description` in `i18n/*.json` (keys set by `portaki_module!`) |
-| `author`, `icon`, `type`, `maturity`, `sortOrder` | `portaki_module!(author, author_url, icon, module_type, maturity, sort_order)` |
-| `hostSurfaces`, `guestSurfaces` | `#[surface(host, id, placement, design_id, label_key, icon, path)]` / `#[surface(guest, id, path, label_key, role, embeds)]` |
+| `author`, `icon`, `type`, `maturity`, `sortOrder` | `portaki_module!(author, author_url, icon = IconName::…, module_type = ModuleType::…, maturity = Maturity::…, sort_order)` |
+| `hostSurfaces`, `guestSurfaces` | `#[surface(host, id, placement = HostPlacement::…, design_id = DesignId::…, label_key, icon = IconName::…, path)]` / `#[surface(guest, id, path, label_key, role = GuestRole::…, embeds = HostFragment::…)]` |
 | `emails` | `#[email(id, audience, …)]` above the `#[command]` that sends it |
 | `permissions` | the features enabled on `portaki-sdk` (`kv`, `repo`, `email`, `events`, `platform`, `guest-files`, `stay-guest-contact`) and each `#[connector]` id |
 | `requiresModuleSdk` | the `portaki-sdk` version cargo resolved |
+
+Every closed list is a Rust enum in `portaki_sdk::vocab` (all in the prelude): the macros take
+`Enum::Variant` and refuse a string, so a typo does not compile. i18n keys and query names stay
+strings, and `portaki build` stops when one does not exist.
 
 A module that still keeps a `portaki.module.json` is read as before: what it says wins, and the
 code fills what it leaves out. Delete a field there and the code takes over.

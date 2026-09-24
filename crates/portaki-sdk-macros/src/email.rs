@@ -11,8 +11,7 @@ use syn::{ItemFn, LitStr, Token};
 
 use crate::emit::{sanitize_key, write_emission};
 use crate::query::NamedOpAttrs;
-
-const AUDIENCES: [&str; 3] = ["guest", "host", "propertyEligibleGuests"];
+use crate::typed::{self, EMAIL_AUDIENCE, EMAIL_TRIGGER, SKIP_WHEN};
 
 /// Bare flags, spelled as in Rust and written camelCase at the manifest's root.
 ///
@@ -24,9 +23,9 @@ const FLAGS: [(&str, &str); 3] = [
     ("catch_up_on_config_update", "catchUpOnConfigUpdate"),
 ];
 
-#[derive(Debug)]
 pub(crate) struct EmailAttrs {
     id: String,
+    /// `EmailAudience::Variant` — resolved to the wire string by `portaki build`.
     audience: String,
     /// `None` when the author left it to the default — `moduleCommand`, for a command only.
     trigger: Option<String>,
@@ -37,6 +36,8 @@ pub(crate) struct EmailAttrs {
     /// i18n key of the description the dashboard shows; `portaki build` translates it.
     description_key: Option<String>,
     skip_when: Vec<String>,
+    /// Compile-time checks that each typed value names a real variant.
+    checks: Vec<proc_macro2::TokenStream>,
 }
 
 impl Parse for EmailAttrs {
@@ -44,8 +45,9 @@ impl Parse for EmailAttrs {
         let mut id = None;
         let mut audience = None;
         let mut trigger = None;
-        let mut offset = None;
+        let mut offset = Offset::default();
         let mut at_local_time = None;
+        let mut checks = Vec::new();
         let mut flags = Vec::new();
         let mut requires_guest_email = false;
         let mut description_key = None;
@@ -60,22 +62,34 @@ impl Parse for EmailAttrs {
                 requires_guest_email = true;
             } else {
                 input.parse::<Token![=]>()?;
-                let value = input.parse::<LitStr>()?.value();
                 match name.as_str() {
-                    "id" => id = Some(value),
-                    "audience" if AUDIENCES.contains(&value.as_str()) => audience = Some(value),
                     "audience" => {
-                        return Err(syn::Error::new(
-                            key.span(),
-                            format!("audience must be one of {}", AUDIENCES.join(", ")),
-                        ))
+                        let value = typed::parse(input, &name, EMAIL_AUDIENCE)?;
+                        checks.push(value.check);
+                        audience = Some(value.emitted);
                     }
-                    "trigger" => trigger = Some(value),
-                    "offset" => offset = Some(value),
-                    "at_local_time" => at_local_time = Some(value),
-                    "description_key" => description_key = Some(value),
+                    "trigger" => {
+                        let value = typed::parse(input, &name, EMAIL_TRIGGER)?;
+                        checks.push(value.check);
+                        trigger = Some(value.emitted);
+                    }
                     // Repeats: each one a condition the platform skips the send on.
-                    "skip_when" => skip_when.push(value),
+                    "skip_when" => {
+                        let value = typed::parse(input, &name, SKIP_WHEN)?;
+                        checks.push(value.check);
+                        skip_when.push(value.emitted);
+                    }
+                    "offset_days" | "offset_hours" | "offset_minutes" => {
+                        let amount: syn::LitInt = input.parse()?;
+                        offset.set(&name, amount.base10_parse()?);
+                    }
+                    "offset" => return Err(syn::Error::new(
+                        key.span(),
+                        "write the offset as offset_days / offset_hours / offset_minutes = <int>",
+                    )),
+                    "at_local_time" => at_local_time = Some(typed::local_time(&input.parse()?)?),
+                    "id" => id = Some(input.parse::<LitStr>()?.value()),
+                    "description_key" => description_key = Some(input.parse::<LitStr>()?.value()),
                     other => {
                         return Err(syn::Error::new(
                             key.span(),
@@ -91,15 +105,69 @@ impl Parse for EmailAttrs {
 
         Ok(EmailAttrs {
             id: id.ok_or_else(|| input.error("#[email] needs id = \"…\""))?,
-            audience: audience.ok_or_else(|| input.error("#[email] needs audience = \"…\""))?,
+            audience: audience
+                .ok_or_else(|| input.error("#[email] needs audience = EmailAudience::…"))?,
             trigger,
-            offset,
+            offset: offset.iso8601().map_err(|message| input.error(message))?,
             at_local_time,
             flags,
             requires_guest_email,
             description_key,
             skip_when,
+            checks,
         })
+    }
+}
+
+/// An offset against the stay, in whole units — written ISO 8601 (`P2D`, `-PT3H`) for the platform.
+#[derive(Default)]
+struct Offset {
+    days: Option<i64>,
+    hours: Option<i64>,
+    minutes: Option<i64>,
+}
+
+impl Offset {
+    fn set(&mut self, unit: &str, value: i64) {
+        match unit {
+            "offset_days" => self.days = Some(value),
+            "offset_hours" => self.hours = Some(value),
+            _ => self.minutes = Some(value),
+        }
+    }
+
+    fn iso8601(&self) -> Result<Option<String>, &'static str> {
+        let parts = [self.days, self.hours, self.minutes];
+        if parts.iter().all(Option::is_none) {
+            return Ok(None);
+        }
+        let values: Vec<i64> = parts.iter().map(|p| p.unwrap_or(0)).collect();
+        if values.iter().any(|v| *v < 0) && values.iter().any(|v| *v > 0) {
+            return Err("an offset goes one way: its days, hours and minutes share a sign");
+        }
+        let sign = if values.iter().any(|v| *v < 0) {
+            "-"
+        } else {
+            ""
+        };
+        let [days, hours, minutes] = [values[0].abs(), values[1].abs(), values[2].abs()];
+        let mut iso = format!("{sign}P");
+        if days > 0 {
+            iso.push_str(&format!("{days}D"));
+        }
+        if hours > 0 || minutes > 0 {
+            iso.push('T');
+            if hours > 0 {
+                iso.push_str(&format!("{hours}H"));
+            }
+            if minutes > 0 {
+                iso.push_str(&format!("{minutes}M"));
+            }
+        }
+        if iso.ends_with('P') {
+            iso.push_str("0D");
+        }
+        Ok(Some(iso))
     }
 }
 
@@ -120,11 +188,10 @@ pub(crate) fn declaration(
 ) -> syn::Result<serde_json::Value> {
     let trigger_type = match (&attrs.trigger, operation) {
         (Some(trigger), _) => trigger.clone(),
-        (None, Operation::Command(_)) => "moduleCommand".to_string(),
+        (None, Operation::Command(_)) => "EmailTrigger::ModuleCommand".to_string(),
         (None, Operation::Query) => {
-            return Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
-                "#[email] on a query needs trigger = \"…\" — only a command can be dispatched",
+            return Err(typed::error(
+                "#[email] on a query needs trigger = EmailTrigger::… — only a command can be dispatched",
             ))
         }
     };
@@ -196,8 +263,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let json = serde_json::to_string_pretty(&entry).unwrap();
     let emission = write_emission("email", &sanitize_key(&attrs.id), &json);
+    let checks = &attrs.checks;
     quote! {
         #emission
+        #(#checks)*
         #function_item
     }
     .into()
@@ -217,15 +286,15 @@ mod tests {
 
     #[test]
     fn a_command_email_is_sent_when_the_command_runs() {
-        let attrs = parse(r#"id = "submitted", audience = "host""#).unwrap();
+        let attrs = parse(r#"id = "submitted", audience = EmailAudience::Host"#).unwrap();
         assert_eq!(
             declaration(&attrs, &command("submit")).unwrap(),
             serde_json::json!({
                 "kind": "email",
                 "id": "submitted",
-                "audience": "host",
+                "audience": "EmailAudience::Host",
                 "command": "submit",
-                "trigger": { "type": "moduleCommand" },
+                "trigger": { "type": "EmailTrigger::ModuleCommand" },
                 "requiresGuestEmail": false,
             })
         );
@@ -234,21 +303,22 @@ mod tests {
     #[test]
     fn a_timed_email_carries_its_offset_and_flags() {
         let attrs = parse(
-            r#"id = "checkout-j2", audience = "guest", trigger = "relativeToCheckOut",
-               offset = "P2D", requires_guest_email, dispatch_on_stay_created,
-               description_key = "email.checkout", skip_when = "guest.email.missing",
-               skip_when = "stay.cancelled","#,
+            r#"id = "checkout-j2", audience = EmailAudience::Guest,
+               trigger = EmailTrigger::RelativeToCheckOut, offset_days = 2,
+               requires_guest_email, dispatch_on_stay_created,
+               description_key = "email.checkout", skip_when = SkipWhen::GuestEmailMissing,
+               skip_when = SkipWhen::StayCancelled,"#,
         )
         .unwrap();
         let entry = declaration(&attrs, &command("sendCheckoutFollowUp")).unwrap();
         assert_eq!(entry["descriptionKey"], "email.checkout");
         assert_eq!(
             entry["skipWhen"],
-            serde_json::json!(["guest.email.missing", "stay.cancelled"])
+            serde_json::json!(["SkipWhen::GuestEmailMissing", "SkipWhen::StayCancelled"])
         );
         assert_eq!(
             entry["trigger"],
-            serde_json::json!({ "type": "relativeToCheckOut", "offset": "P2D" })
+            serde_json::json!({ "type": "EmailTrigger::RelativeToCheckOut", "offset": "P2D" })
         );
         assert_eq!(entry["requiresGuestEmail"], true);
         assert_eq!(entry["dispatchOnStayCreated"], true);
@@ -257,10 +327,15 @@ mod tests {
 
     #[test]
     fn id_and_a_known_audience_are_required() {
-        assert!(parse(r#"audience = "host""#).is_err());
+        assert!(parse(r#"audience = EmailAudience::Host"#).is_err());
         assert!(parse(r#"id = "x""#).is_err());
-        assert!(parse(r#"id = "x", audience = "hosts""#).is_err());
-        assert!(parse(r#"id = "x", audience = "host", subject = "y""#).is_err());
+        assert!(
+            parse(r#"id = "x", audience = "host""#).is_err(),
+            "a string is refused"
+        );
+        assert!(parse(r#"id = "x", audience = GuestRole::Card"#).is_err());
+        assert!(parse(r#"id = "x", audience = EmailAudience::Host, subject = "y""#).is_err());
+        assert!(parse(r#"id = "x", audience = EmailAudience::Host, offset = "P2D""#).is_err());
     }
 
     #[test]
@@ -290,12 +365,34 @@ mod tests {
     #[test]
     fn a_query_email_names_no_command_and_says_its_trigger() {
         let timed =
-            parse(r#"id = "sync-failed", audience = "host", trigger = "onApplyFeeds""#).unwrap();
+            parse(r#"id = "sync-failed", audience = EmailAudience::Host, trigger = EmailTrigger::OnApplyFeeds"#).unwrap();
         let entry = declaration(&timed, &Operation::Query).unwrap();
         assert!(entry.get("command").is_none());
-        assert_eq!(entry["trigger"]["type"], "onApplyFeeds");
+        assert_eq!(entry["trigger"]["type"], "EmailTrigger::OnApplyFeeds");
 
-        let untimed = parse(r#"id = "sync-failed", audience = "host""#).unwrap();
+        let untimed = parse(r#"id = "sync-failed", audience = EmailAudience::Host"#).unwrap();
         assert!(declaration(&untimed, &Operation::Query).is_err());
+    }
+
+    #[test]
+    fn an_offset_is_written_iso_8601_with_one_sign() {
+        let offset = |attr: &str| {
+            parse(&format!(
+                r#"id = "x", audience = EmailAudience::Guest, {attr}"#
+            ))
+            .map(|attrs| attrs.offset)
+        };
+        assert_eq!(offset("offset_days = 2").unwrap().as_deref(), Some("P2D"));
+        assert_eq!(
+            offset("offset_hours = -3").unwrap().as_deref(),
+            Some("-PT3H")
+        );
+        assert_eq!(
+            offset("offset_days = 1, offset_hours = 6, offset_minutes = 30")
+                .unwrap()
+                .as_deref(),
+            Some("P1DT6H30M")
+        );
+        assert!(offset("offset_days = 1, offset_hours = -6").is_err());
     }
 }

@@ -55,7 +55,7 @@
 //!     OverlayPresentation::BottomSheet,
 //!     SurfaceId::new("explore.forecast"),
 //!     OverlayArgs::new()
-//!         .icon("cloud-sun")
+//!         .icon(portaki_sdk::vocab::IconName::CloudSun)
 //!         .title("i18n:nav.weather"),
 //! );
 //! assert!(matches!(cmd, Action::Command { .. }));
@@ -106,9 +106,9 @@ pub struct OverlayArgs {
     /// Overlay chrome title (often an `i18n:` key).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// Lucide (or shell) icon name for the overlay header.
+    /// Icon of the overlay header.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<crate::vocab::IconName>,
 }
 
 impl OverlayArgs {
@@ -124,8 +124,8 @@ impl OverlayArgs {
     }
 
     /// Sets the overlay chrome icon name.
-    pub fn icon(mut self, icon: impl Into<String>) -> Self {
-        self.icon = Some(icon.into());
+    pub fn icon(mut self, icon: crate::vocab::IconName) -> Self {
+        self.icon = Some(icon);
         self
     }
 }
@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn overlay_args_serialize_camel_case() {
         let args = OverlayArgs::new()
-            .icon("cloud-sun")
+            .icon(crate::vocab::IconName::CloudSun)
             .title("i18n:nav.weather");
         let value = serde_json::to_value(&args).expect("serialize");
         assert_eq!(
@@ -383,7 +383,7 @@ mod tests {
         let action = Action::open_overlay(
             OverlayPresentation::BottomSheet,
             SurfaceId::new("explore.forecast"),
-            OverlayArgs::new().icon("cloud-sun"),
+            OverlayArgs::new().icon(crate::vocab::IconName::CloudSun),
         );
         match action {
             Action::OpenOverlay {
@@ -392,7 +392,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(surface_render, "explore.forecast");
-                assert_eq!(args.unwrap().icon.as_deref(), Some("cloud-sun"));
+                assert_eq!(args.unwrap().icon, Some(crate::vocab::IconName::CloudSun));
             }
             other => panic!("expected OpenOverlay, got {other:?}"),
         }
@@ -403,7 +403,9 @@ mod tests {
         let action = Action::open_host_fragment(
             crate::contracts::host_fragments::POLICE_FORM,
             OverlayPresentation::Fullscreen,
-            OverlayArgs::new().icon("scale").title("i18n:police.title"),
+            OverlayArgs::new()
+                .icon(crate::vocab::IconName::Scale)
+                .title("i18n:police.title"),
         );
         match action {
             Action::OpenHostFragment {
@@ -413,7 +415,7 @@ mod tests {
             } => {
                 assert_eq!(fragment_id, "regulatory.police-form");
                 assert_eq!(presentation, OverlayPresentation::Fullscreen);
-                assert_eq!(args.unwrap().icon.as_deref(), Some("scale"));
+                assert_eq!(args.unwrap().icon, Some(crate::vocab::IconName::Scale));
             }
             other => panic!("expected OpenHostFragment, got {other:?}"),
         }

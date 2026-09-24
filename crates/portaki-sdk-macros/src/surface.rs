@@ -16,6 +16,8 @@ struct SurfaceAttrs {
     /// Where the dashboard or the booklet links to it — `portaki build` writes the catalog's
     /// `hostSurfaces` / `guestSurfaces` from it. Empty: the surface is rendered, never linked.
     catalog: serde_json::Map<String, serde_json::Value>,
+    /// Compile-time checks that each typed value names a real variant.
+    checks: Vec<TokenStream2>,
 }
 
 /// Keys that describe where a surface is linked from, per context.
@@ -43,6 +45,7 @@ impl Parse for SurfaceAttrs {
 
         let mut display_name_key = None;
         let mut catalog = serde_json::Map::new();
+        let mut checks = Vec::new();
         let allowed: &[&str] = if context == "host" {
             &HOST_KEYS
         } else {
@@ -51,10 +54,9 @@ impl Parse for SurfaceAttrs {
         while input.parse::<Option<Token![,]>>()?.is_some() && !input.is_empty() {
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
-            let value = input.parse::<LitStr>()?.value();
             let name = key.to_string();
             if name == "display_name_key" {
-                display_name_key = Some(value);
+                display_name_key = Some(input.parse::<LitStr>()?.value());
                 continue;
             }
             if !allowed.contains(&name.as_str()) {
@@ -67,6 +69,7 @@ impl Parse for SurfaceAttrs {
                     ),
                 ));
             }
+            let value = crate::typed::nav_value(input, &name, &mut checks)?;
             // `placement` and `embeds` repeat: one surface can sit in several places.
             if name == "placement" || name == "embeds" {
                 catalog
@@ -74,8 +77,8 @@ impl Parse for SurfaceAttrs {
                     .or_insert_with(|| serde_json::Value::Array(Vec::new()))
                     .as_array_mut()
                     .expect("list")
-                    .push(value.into());
-            } else if catalog.insert(name.clone(), value.into()).is_some() {
+                    .push(value);
+            } else if catalog.insert(name.clone(), value).is_some() {
                 return Err(syn::Error::new(
                     key.span(),
                     format!("{name} is given twice"),
@@ -91,6 +94,7 @@ impl Parse for SurfaceAttrs {
             id: id.value,
             display_name_key,
             catalog,
+            checks,
         })
     }
 }
@@ -133,8 +137,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let emission = write_emission("surface", &sanitize_key(&key), &json);
     let wasm_registration =
         crate::wasm_handler::register_surface(&attrs.context, &attrs.id, &fn_name, &function_item);
+    let checks = &attrs.checks;
     let output: TokenStream2 = quote! {
         #emission
+        #(#checks)*
         #function_item
         #wasm_registration
     };
@@ -153,40 +159,51 @@ mod tests {
     #[test]
     fn a_host_surface_can_sit_in_several_places() {
         let attrs = parse(
-            r#"host, id = "issue-stats", placement = "property-stats-card",
-               placement = "property-stats-detail", label_key = "nav.stats", icon = "chart","#,
+            r#"host, id = "issue-stats", placement = HostPlacement::PropertyStatsCard,
+               placement = HostPlacement::PropertyStatsDetail, label_key = "nav.stats",
+               icon = IconName::DangerTriangle, design_id = DesignId::RulesEditorV1,"#,
         )
         .unwrap();
         assert_eq!(
             serde_json::Value::Object(attrs.catalog),
             serde_json::json!({
-                "placement": ["property-stats-card", "property-stats-detail"],
+                "placement": ["HostPlacement::PropertyStatsCard", "HostPlacement::PropertyStatsDetail"],
                 "label_key": "nav.stats",
-                "icon": "chart",
+                "icon": "IconName::DangerTriangle",
+                "design_id": "DesignId::RulesEditorV1",
             })
         );
+        assert_eq!(attrs.checks.len(), 4);
     }
 
     #[test]
     fn a_guest_route_keeps_the_display_name_key_apart() {
         let attrs = parse(
             r#"guest, id = "home.card", display_name_key = "x", path = "pre-arrival-form",
-               role = "arrival-formality", embeds = "regulatory.police-form""#,
+               role = GuestRole::ArrivalFormality, embeds = HostFragment::PoliceForm"#,
         )
         .unwrap();
         assert_eq!(attrs.display_name_key.as_deref(), Some("x"));
         assert_eq!(
             attrs.catalog["embeds"],
-            serde_json::json!(["regulatory.police-form"])
+            serde_json::json!(["HostFragment::PoliceForm"])
         );
-        assert_eq!(attrs.catalog["role"], "arrival-formality");
+        assert_eq!(attrs.catalog["role"], "GuestRole::ArrivalFormality");
     }
 
     #[test]
     fn keys_belong_to_their_context_and_appear_once() {
-        assert!(parse(r#"guest, id = "home.card", placement = "x""#).is_err());
-        assert!(parse(r#"host, id = "main", role = "x""#).is_err());
-        assert!(parse(r#"host, id = "main", icon = "a", icon = "b""#).is_err());
+        assert!(
+            parse(r#"guest, id = "home.card", placement = HostPlacement::StayAction"#).is_err()
+        );
+        assert!(parse(r#"host, id = "main", role = GuestRole::Card"#).is_err());
+        assert!(
+            parse(r#"host, id = "main", icon = IconName::Key, icon = IconName::Lock"#).is_err()
+        );
+        assert!(
+            parse(r#"host, id = "main", icon = "key""#).is_err(),
+            "a string is refused"
+        );
         assert!(parse(r#"host, id = "main""#).unwrap().catalog.is_empty());
     }
 }

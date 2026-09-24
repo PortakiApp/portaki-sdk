@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::action::Action;
 use super::primitives::Component;
+pub use crate::vocab::IconName;
 
 /// Semantic color role.
 ///
@@ -316,9 +317,9 @@ pub struct MapMarker {
     /// Optional category slug.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
-    /// Optional Lucide icon name.
+    /// Optional icon.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<IconName>,
     /// Optional semantic tone.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tone: Option<Tone>,
@@ -361,8 +362,8 @@ impl MapMarker {
     }
 
     /// Sets the icon name.
-    pub fn icon(mut self, value: impl Into<String>) -> Self {
-        self.icon = Some(value.into());
+    pub fn icon(mut self, value: IconName) -> Self {
+        self.icon = Some(value);
         self
     }
 }
@@ -377,9 +378,9 @@ pub struct ChoiceOption {
     /// Optional description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Optional Lucide icon name.
+    /// Optional icon.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<IconName>,
 }
 
 impl ChoiceOption {
@@ -400,8 +401,8 @@ impl ChoiceOption {
     }
 
     /// Sets the icon.
-    pub fn icon(mut self, value: impl Into<String>) -> Self {
-        self.icon = Some(value.into());
+    pub fn icon(mut self, value: IconName) -> Self {
+        self.icon = Some(value);
         self
     }
 }

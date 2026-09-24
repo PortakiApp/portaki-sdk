@@ -10,9 +10,9 @@ portaki_sdk::portaki_module!(
     description_key = "module.description",
     author = "{{AUTHOR_NAME}}",
     author_url = "https://github.com/TODO",
-    module_type = "community",
-    icon = "Grid",
-    maturity = "beta",
+    module_type = ModuleType::Community,
+    icon = IconName::Grid,
+    maturity = Maturity::Beta,
 );
 
 // Add `guest/` and `host/` surface modules when the module gains UI.

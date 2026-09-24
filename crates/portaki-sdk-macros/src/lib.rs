@@ -69,6 +69,7 @@ mod nav;
 mod params;
 mod query;
 mod surface;
+mod typed;
 mod wasm_handler;
 mod wire;
 mod wire_lit;
@@ -242,6 +243,21 @@ pub fn entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | 2nd | `id = "…"` or `id = SurfaceId::new("…")` | yes — stable surface id in the manifest |
 /// | 3rd | `display_name_key = "…"` | no — i18n key; omitted from JSON when absent |
 ///
+/// Where the surface is linked from — its catalogue entry — follows, in any order. Closed lists
+/// take their enum (in the prelude), and a string there does not compile:
+///
+/// | Context | Key | Value |
+/// |---------|-----|-------|
+/// | host | `placement` (repeatable) | `HostPlacement::…` — one entry per placement |
+/// | host | `design_id` | `DesignId::…` |
+/// | host | `icon` | `IconName::…` |
+/// | host | `label_key` | i18n key, checked against every bundle by `portaki build` |
+/// | host | `path` | `pathSegment`; defaults to the module id for `main`, the surface id otherwise |
+/// | guest | `path` | the route — a guest surface without one is rendered, never linked |
+/// | guest | `label_key` | i18n key |
+/// | guest | `role` | `GuestRole::…` |
+/// | guest | `embeds` (repeatable) | `HostFragment::…` |
+///
 /// Wrong first token (not `id =`) → **compile error**. Bare const paths are not
 /// resolved at macro time — use a string lit or `Type::new("…")`.
 ///
@@ -326,23 +342,30 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Syntax
 ///
 /// ```text
-/// #[portaki_sdk::email(id = "submitted", audience = "host")]
+/// #[portaki_sdk::email(id = "submitted", audience = EmailAudience::Host)]
 /// #[portaki_sdk::command(name = "submit", guest)]
 /// pub fn submit(ctx: Context, args: SubmitArgs) -> Result<()> { /* … host::email::send … */ }
 ///
 /// #[portaki_sdk::email(
-///     id = "checkout-j2", audience = "guest",
-///     trigger = "relativeToCheckOut", offset = "P2D", requires_guest_email,
+///     id = "checkout-j2", audience = EmailAudience::Guest,
+///     trigger = EmailTrigger::RelativeToCheckOut, offset_days = 2, requires_guest_email,
+///     skip_when = SkipWhen::StayCancelled, description_key = "email.checkout-j2.description",
 /// )]
 /// #[portaki_sdk::command(name = "sendCheckoutFollowUp")]
 /// pub fn send_checkout_follow_up(ctx: Context) -> Result<()> { /* ... */ }
 /// ```
 ///
-/// Goes **above** `#[command]`, whose name it reads. `id` is the `email_id` given to
-/// `host::email::send`, `audience` is `guest`, `host` or `propertyEligibleGuests`. `trigger`
-/// defaults to `moduleCommand` — sent when the command runs; `offset` and `at_local_time` time it
+/// Goes **above** `#[command]` (or a `#[query]`, with a `trigger`), whose name it reads. `id` is
+/// the `email_id` given to `host::email::send`. Typed values — a string does not compile:
+/// `audience` an [`EmailAudience`], `trigger` an [`EmailTrigger`] (default `ModuleCommand`, sent
+/// when the command runs), `skip_when` a [`SkipWhen`] (repeatable). `offset_days` /
+/// `offset_hours` / `offset_minutes` (integers, one sign) and `at_local_time = "HH:MM"` time it
 /// against the stay. Bare flags: `dispatch_on_stay_created`, `catch_up_on_property_publish`,
 /// `catch_up_on_config_update`, `requires_guest_email`.
+///
+/// [`EmailAudience`]: https://docs.rs/portaki-sdk/latest/portaki_sdk/host/email/enum.EmailAudience.html
+/// [`EmailTrigger`]: https://docs.rs/portaki-sdk/latest/portaki_sdk/vocab/enum.EmailTrigger.html
+/// [`SkipWhen`]: https://docs.rs/portaki-sdk/latest/portaki_sdk/vocab/enum.SkipWhen.html
 ///
 /// Emits `email-{id}.json` → `manifest.emails[]`, merged by `id` over `portaki.module.json`.
 #[proc_macro_attribute]
@@ -356,8 +379,8 @@ pub fn email(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```text
 /// #[portaki_sdk::nav(
-///     placement = "workspace-timeline-task", path = "tasks",
-///     label_key = "nav.tasks", icon = "sparkles",
+///     placement = HostPlacement::WorkspaceTimelineTask, path = "tasks",
+///     label_key = "nav.tasks", icon = IconName::Sparkles,
 /// )]
 /// #[portaki_sdk::surface(host, id = "cleaning", …)]
 /// pub fn render_host_cleaning(ctx: HostContext) -> Surface { /* ... */ }

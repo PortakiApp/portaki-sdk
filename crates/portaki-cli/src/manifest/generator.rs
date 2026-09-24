@@ -49,12 +49,46 @@ pub fn collect_emissions(root: &Path) -> Result<Vec<EmissionFile>> {
         }
         let text = fs::read_to_string(path)
             .with_context(|| format!("read emission {}", path.display()))?;
-        let parsed: EmissionFile =
+        let mut parsed: EmissionFile =
             serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+        resolve_vocabulary(&mut parsed.data)
+            .with_context(|| format!("resolve {}", path.display()))?;
         files.push(parsed);
     }
 
     Ok(files)
+}
+
+/// Replaces every `Vocabulary::Variant` a typed macro argument emitted by its wire string.
+///
+/// The macros cannot read the SDK's enums — they see tokens — so they emit the variant and let the
+/// compiler check it exists. The wire string comes from here, through the same enum: there is no
+/// second list to drift.
+pub fn resolve_vocabulary(value: &mut Value) -> Result<()> {
+    match value {
+        Value::String(text) => {
+            if let Some((vocabulary, variant)) = text.split_once("::") {
+                let typed = |s: &str| {
+                    s.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                        && s.chars().all(|c| c.is_ascii_alphanumeric())
+                };
+                if typed(vocabulary) && typed(variant) {
+                    let wire =
+                        portaki_sdk::vocab::wire_of(vocabulary, variant).with_context(|| {
+                            format!(
+                            "{text} is not in this CLI's portaki-sdk — build with the CLI of the \
+                             SDK the module links"
+                        )
+                        })?;
+                    *text = wire.to_string();
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().try_for_each(resolve_vocabulary)?,
+        Value::Object(fields) => fields.values_mut().try_for_each(resolve_vocabulary)?,
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Generates a [`ModuleManifest`] from emission files and crate metadata.
@@ -689,5 +723,31 @@ mod params_tests {
 
         assert_eq!(wire["queries"][0]["guest"], json!(true));
         assert_eq!(wire["commands"][0]["guest"], json!(false));
+    }
+}
+
+#[cfg(test)]
+mod vocabulary_tests {
+    use super::resolve_vocabulary;
+    use serde_json::json;
+
+    #[test]
+    fn typed_arguments_become_wire_strings() {
+        let mut data = json!({
+            "catalog": { "placement": ["HostPlacement::PropertyStatsCard"], "icon": "IconName::Key",
+                         "label_key": "nav.stats", "path": "a::b" },
+            "audience": "EmailAudience::PropertyEligibleGuests",
+        });
+        resolve_vocabulary(&mut data).unwrap();
+        assert_eq!(data["catalog"]["placement"], json!(["property-stats-card"]));
+        assert_eq!(data["catalog"]["icon"], "key");
+        assert_eq!(
+            data["catalog"]["path"], "a::b",
+            "not a typed value: left alone"
+        );
+        assert_eq!(data["audience"], "propertyEligibleGuests");
+
+        let mut unknown = json!({ "icon": "IconName::Nope" });
+        assert!(resolve_vocabulary(&mut unknown).is_err());
     }
 }

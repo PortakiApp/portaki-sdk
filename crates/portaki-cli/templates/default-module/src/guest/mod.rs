@@ -11,7 +11,7 @@ use crate::ids::HOME_CARD;
     id = "home.card",
     path = "{{MODULE_NAME}}",
     label_key = "home.card.title",
-    role = "card"
+    role = GuestRole::Card
 )]
 pub fn render_guest_home_card(_ctx: GuestContext) -> Surface {
     let config = load_config().unwrap_or_default();

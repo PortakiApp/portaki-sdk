@@ -19,13 +19,14 @@
 //! ```
 //! use portaki_sdk::ids::{convention, SurfaceId};
 //! use portaki_sdk::sdui::action::{Action, OverlayArgs, OverlayPresentation};
+//! use portaki_sdk::vocab::IconName;
 //!
 //! const FORECAST: SurfaceId = SurfaceId::new("explore.forecast");
 //!
 //! let overlay = Action::open_overlay(
 //!     OverlayPresentation::BottomSheet,
 //!     FORECAST,
-//!     OverlayArgs::new().icon("cloud-sun"),
+//!     OverlayArgs::new().icon(IconName::CloudSun),
 //! );
 //! let home = Action::navigate(convention::HOME_CARD, None);
 //! assert!(matches!(overlay, Action::OpenOverlay { .. }));

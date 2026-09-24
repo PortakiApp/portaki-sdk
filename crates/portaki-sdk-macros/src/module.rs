@@ -20,7 +20,17 @@ struct ModuleAttrs {
     version: Option<String>,
     /// Catalog metadata: `portaki build` writes it to the manifest so no one else has to.
     catalog: serde_json::Map<String, serde_json::Value>,
+    /// Compile-time checks that each typed value names a real variant.
+    checks: Vec<TokenStream2>,
 }
+
+/// Typed keys of `portaki_module!`, their catalogue name and vocabulary.
+const TYPED: [(&str, &str, crate::typed::Vocab); 4] = [
+    ("icon", "icon", crate::typed::ICON_NAME),
+    ("maturity", "maturity", crate::typed::MATURITY),
+    ("module_type", "type", crate::typed::MODULE_TYPE),
+    ("audience", "audience", crate::typed::MODULE_AUDIENCE),
+];
 
 impl Parse for ModuleAttrs {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
@@ -31,6 +41,7 @@ impl Parse for ModuleAttrs {
             author: None,
             version: None,
             catalog: serde_json::Map::new(),
+            checks: Vec::new(),
         };
 
         while !input.is_empty() {
@@ -50,6 +61,13 @@ impl Parse for ModuleAttrs {
                 input.parse::<Option<Token![,]>>()?;
                 continue;
             }
+            if let Some((name, wire, vocab)) = TYPED.iter().find(|(name, _, _)| key == name) {
+                let typed = crate::typed::parse(input, name, *vocab)?;
+                attrs.checks.push(typed.check);
+                attrs.catalog.insert((*wire).into(), typed.emitted.into());
+                input.parse::<Option<Token![,]>>()?;
+                continue;
+            }
             let value: LitStr = input.parse()?;
             let text = value.value();
 
@@ -59,25 +77,19 @@ impl Parse for ModuleAttrs {
                 "description_key" => attrs.description_key = Some(text),
                 "author" => attrs.author = Some(text),
                 "version" => attrs.version = Some(text),
-                "icon" => {
-                    attrs.catalog.insert("icon".into(), text.into());
-                }
-                "maturity" => {
-                    attrs.catalog.insert("maturity".into(), text.into());
-                }
-                "module_type" => {
-                    attrs.catalog.insert("type".into(), text.into());
-                }
-                "author_url" => {
+                "author_url" if is_https_url(&text) => {
                     attrs.catalog.insert("authorUrl".into(), text.into());
                 }
-                "audience" if text == "guest" || text == "host" => {
-                    attrs.catalog.insert("audience".into(), text.into());
-                }
-                "audience" => {
+                "author_url" => {
                     return Err(syn::Error::new(
-                        key.span(),
-                        "audience must be \"guest\" or \"host\"",
+                        value.span(),
+                        "author_url must be an https:// URL",
+                    ));
+                }
+                "feeds" if !is_module_id(&text) => {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "feeds takes a module id: lowercase, digits and dashes, e.g. \"access-guide\"",
                     ));
                 }
                 // Repeats: each one a module this one supplies from behind the scenes. What it
@@ -112,6 +124,18 @@ impl Parse for ModuleAttrs {
 
         Ok(attrs)
     }
+}
+
+/// `^[a-z][a-z0-9-]*$` — the schema's module id pattern.
+fn is_module_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    matches!(chars.next(), Some(first) if first.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+fn is_https_url(url: &str) -> bool {
+    url.strip_prefix("https://")
+        .is_some_and(|rest| !rest.is_empty() && !rest.contains(char::is_whitespace))
 }
 
 /// The catalogue's `hostScheduledSync`, created on first use.
@@ -168,9 +192,11 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     .unwrap();
 
     let emission = write_emission("module", &sanitize_key(&id), &json);
+    let checks = &attrs.checks;
 
     quote! {
         #emission
+        #(#checks)*
         #[cfg(target_arch = "wasm32")]
         mod __portaki_wasm_getrandom {
             #[no_mangle]
@@ -218,16 +244,16 @@ mod tests {
     #[test]
     fn catalog_metadata_is_collected_under_its_manifest_names() {
         let attrs: ModuleAttrs = syn::parse_str(
-            r#"id = "issue-report", icon = "danger-triangle", maturity = "stable",
-               module_type = "official", author_url = "https://portaki.app", sort_order = 90,"#,
+            r#"id = "issue-report", icon = IconName::DangerTriangle, maturity = Maturity::Stable,
+               module_type = ModuleType::Official, author_url = "https://portaki.app", sort_order = 90,"#,
         )
         .unwrap();
         assert_eq!(
             serde_json::Value::Object(attrs.catalog),
             serde_json::json!({
-                "icon": "danger-triangle",
-                "maturity": "stable",
-                "type": "official",
+                "icon": "IconName::DangerTriangle",
+                "maturity": "Maturity::Stable",
+                "type": "ModuleType::Official",
                 "authorUrl": "https://portaki.app",
                 "sortOrder": 90,
             })
@@ -238,7 +264,7 @@ mod tests {
     #[test]
     fn a_host_module_declares_its_sync_and_what_it_feeds() {
         let attrs: ModuleAttrs = syn::parse_str(
-            r#"id = "ical-sync", audience = "host", scheduled_sync_platform_fetch,
+            r#"id = "ical-sync", audience = ModuleAudience::Host, scheduled_sync_platform_fetch,
                scheduled_sync_sources = "listSources", scheduled_sync_apply = "applyFeeds",
                feeds = "access-guide", feeds = "wifi-guest""#,
         )
@@ -246,7 +272,7 @@ mod tests {
         assert_eq!(
             serde_json::Value::Object(attrs.catalog),
             serde_json::json!({
-                "audience": "host",
+                "audience": "ModuleAudience::Host",
                 "hostScheduledSync": {
                     "platformFetch": true,
                     "sourcesQuery": "listSources",
@@ -255,7 +281,9 @@ mod tests {
                 "feeds": ["access-guide", "wifi-guest"],
             })
         );
-        assert!(syn::parse_str::<ModuleAttrs>(r#"audience = "both""#).is_err());
+        assert!(syn::parse_str::<ModuleAttrs>(r#"audience = "host""#).is_err());
+        assert!(syn::parse_str::<ModuleAttrs>(r#"author_url = "http://x.fr""#).is_err());
+        assert!(syn::parse_str::<ModuleAttrs>(r#"feeds = "Access_Guide""#).is_err());
     }
 
     #[test]
