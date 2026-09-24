@@ -35,6 +35,12 @@ impl Parse for ModuleAttrs {
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
+            // The one bare flag: the platform downloads what `scheduled_sync_sources` lists.
+            if key == "scheduled_sync_platform_fetch" {
+                scheduled_sync(&mut attrs.catalog).insert("platformFetch".into(), true.into());
+                input.parse::<Option<Token![,]>>()?;
+                continue;
+            }
             input.parse::<Token![=]>()?;
             if key == "sort_order" {
                 let order: syn::LitInt = input.parse()?;
@@ -65,6 +71,32 @@ impl Parse for ModuleAttrs {
                 "author_url" => {
                     attrs.catalog.insert("authorUrl".into(), text.into());
                 }
+                "audience" if text == "guest" || text == "host" => {
+                    attrs.catalog.insert("audience".into(), text.into());
+                }
+                "audience" => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "audience must be \"guest\" or \"host\"",
+                    ));
+                }
+                // Repeats: each one a module this one supplies from behind the scenes. What it
+                // supplies is read from the i18n key `feeds.<module>`.
+                "feeds" => {
+                    attrs
+                        .catalog
+                        .entry("feeds")
+                        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+                        .as_array_mut()
+                        .expect("list")
+                        .push(text.into());
+                }
+                "scheduled_sync_sources" => {
+                    scheduled_sync(&mut attrs.catalog).insert("sourcesQuery".into(), text.into());
+                }
+                "scheduled_sync_apply" => {
+                    scheduled_sync(&mut attrs.catalog).insert("applyQuery".into(), text.into());
+                }
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -80,6 +112,17 @@ impl Parse for ModuleAttrs {
 
         Ok(attrs)
     }
+}
+
+/// The catalogue's `hostScheduledSync`, created on first use.
+fn scheduled_sync(
+    catalog: &mut serde_json::Map<String, serde_json::Value>,
+) -> &mut serde_json::Map<String, serde_json::Value> {
+    catalog
+        .entry("hostScheduledSync")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
+        .as_object_mut()
+        .expect("object")
 }
 
 /// Expands `portaki_module!(…)` — emission + Wasm shims only.
@@ -190,6 +233,29 @@ mod tests {
             })
         );
         assert!(syn::parse_str::<ModuleAttrs>(r#"sort_order = "90""#).is_err());
+    }
+
+    #[test]
+    fn a_host_module_declares_its_sync_and_what_it_feeds() {
+        let attrs: ModuleAttrs = syn::parse_str(
+            r#"id = "ical-sync", audience = "host", scheduled_sync_platform_fetch,
+               scheduled_sync_sources = "listSources", scheduled_sync_apply = "applyFeeds",
+               feeds = "access-guide", feeds = "wifi-guest""#,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::Value::Object(attrs.catalog),
+            serde_json::json!({
+                "audience": "host",
+                "hostScheduledSync": {
+                    "platformFetch": true,
+                    "sourcesQuery": "listSources",
+                    "applyQuery": "applyFeeds",
+                },
+                "feeds": ["access-guide", "wifi-guest"],
+            })
+        );
+        assert!(syn::parse_str::<ModuleAttrs>(r#"audience = "both""#).is_err());
     }
 
     #[test]

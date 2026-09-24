@@ -61,10 +61,39 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         "description": translated(&data["description"]),
         "author": author,
     });
-    for key in ["icon", "type", "maturity", "sortOrder"] {
+    for key in [
+        "icon",
+        "type",
+        "maturity",
+        "sortOrder",
+        "audience",
+        "hostScheduledSync",
+    ] {
         if let Some(value) = extra.get(key) {
             catalog[key] = value.clone();
         }
+    }
+    // Ce que le module fournit à un autre : le texte vit dans i18n, sous `feeds.<module>`.
+    if let Some(feeds) = extra.get("feeds").and_then(Value::as_array) {
+        catalog["feeds"] = feeds
+            .iter()
+            .map(|module| {
+                let key = format!("feeds.{}", module.as_str().unwrap_or_default());
+                json!({ "module": module, "what": translated(&Value::String(key)) })
+            })
+            .collect();
+    }
+    // Les descriptions d'e-mails, traduites ; le reste de l'entrée vient du manifeste du build.
+    let emails: Vec<Value> = emissions
+        .iter()
+        .filter(|e| e.kind == "email")
+        .filter_map(|e| {
+            let key = e.data.get("descriptionKey")?;
+            Some(json!({ "id": e.data["id"], "description": translated(key) }))
+        })
+        .collect();
+    if !emails.is_empty() {
+        catalog["emails"] = Value::Array(emails);
     }
 
     let (host, guest) = surfaces(
@@ -135,6 +164,21 @@ fn surfaces(
             }
             guest.push(entry);
         }
+    }
+    // Les entrées que le tableau de bord dessine sans surface.
+    for nav in emissions.iter().filter(|e| e.kind == "nav") {
+        let data = &nav.data;
+        let mut entry = json!({ "type": data["placement"], "pathSegment": data["path"] });
+        if let Some(key) = data.get("label_key") {
+            entry["label"] = translated(key);
+        }
+        if let Some(icon) = data.get("icon") {
+            entry["icon"] = icon.clone();
+        }
+        if let Some(design) = data.get("design_id") {
+            entry["hostUi"] = json!({ "designId": design });
+        }
+        host.push(entry);
     }
     host.sort_by_key(|e| (e["pathSegment"].to_string(), e["type"].to_string()));
     guest.sort_by_key(|e| e["surfaceId"].to_string());
@@ -214,9 +258,10 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
 }
 
 /// Les listes fusionnées entrée par entrée, et les champs qui identifient une entrée.
-const IDENTITY: [(&str, &[&str]); 2] = [
+const IDENTITY: [(&str, &[&str]); 3] = [
     ("hostSurfaces", &["type", "pathSegment"]),
     ("guestSurfaces", &["surfaceId"]),
+    ("emails", &["id"]),
 ];
 
 /// Ajoute les entrées du code que le manifeste n'a pas, et comble les champs qu'il tait sur
@@ -412,6 +457,47 @@ mod tests {
         )
         .expect("parse");
         assert_eq!(filled["permissions"], json!(["platform", "email", "repo"]));
+    }
+
+    #[test]
+    fn residual_fields_come_from_the_code_too() {
+        let mut emissions = module();
+        emissions[0].data["catalog"]["audience"] = json!("host");
+        emissions[0].data["catalog"]["feeds"] = json!(["access-guide"]);
+        emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "platformFetch": true });
+        emissions.push(EmissionFile {
+            kind: "nav".into(),
+            data: json!({ "placement": "workspace-timeline-task", "path": "tasks",
+                          "label_key": "nav.tasks", "icon": "sparkles" }),
+        });
+        emissions.push(EmissionFile {
+            kind: "email".into(),
+            data: json!({ "id": "sync-failed", "descriptionKey": "email.syncFailed" }),
+        });
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("fr-FR.json"),
+            r#"{"nav.tasks":"Tâches","feeds.access-guide":"le code","email.syncFailed":"Échec"}"#,
+        )
+        .expect("fr");
+
+        let catalog = catalog_defaults(&emissions, dir.path(), &["fr-FR".to_string()]);
+
+        assert_eq!(catalog["audience"], "host");
+        assert_eq!(catalog["hostScheduledSync"]["platformFetch"], true);
+        assert_eq!(
+            catalog["feeds"],
+            json!([{ "module": "access-guide", "what": { "fr": "le code" } }])
+        );
+        assert_eq!(
+            catalog["hostSurfaces"],
+            json!([{ "type": "workspace-timeline-task", "pathSegment": "tasks",
+                     "label": { "fr": "Tâches" }, "icon": "sparkles" }])
+        );
+        assert_eq!(
+            catalog["emails"],
+            json!([{ "id": "sync-failed", "description": { "fr": "Échec" } }])
+        );
     }
 
     #[test]

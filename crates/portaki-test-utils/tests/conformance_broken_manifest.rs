@@ -27,12 +27,11 @@ fn a_manifest_off_schema_is_reported_where_it_breaks() {
     );
 }
 
+/// No build yet: `portaki build` writes the manifest and `portaki lint` validates it.
 #[test]
-fn a_missing_manifest_is_a_finding_not_a_pass() {
+fn a_module_not_yet_built_has_no_manifest_to_validate() {
     let empty = portaki_test_utils::conformance::Module::at(env!("CARGO_MANIFEST_DIR"));
-    let findings = failing("manifest", empty.check_manifest());
-
-    assert_reports(&findings, &["no manifest", "portaki build"]);
+    empty.check_manifest().unwrap();
 }
 
 #[test]

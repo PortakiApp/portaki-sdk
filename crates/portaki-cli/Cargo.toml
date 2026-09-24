@@ -24,6 +24,9 @@ doc = false
 
 [dependencies]
 portaki-sdk = { workspace = true }
+# `portaki lint` valide le manifeste publié contre le schéma embarqué par la batterie de
+# conformité — le même contrôle, pas une copie de plus du schéma.
+portaki-test-utils = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
@@ -51,6 +54,4 @@ open = "5.4.3"
 
 [dev-dependencies]
 tempfile = "3"
-# Le listing.json scaffoldé est validé contre le schéma embarqué par la batterie de conformité.
-portaki-test-utils = { workspace = true }
 jsonschema = { version = "0.56", default-features = false }

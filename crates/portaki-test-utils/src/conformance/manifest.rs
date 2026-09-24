@@ -15,13 +15,9 @@ pub(super) fn check(module: &Module) -> Result<(), Findings> {
 fn problems(module: &Module) -> Vec<String> {
     let manifest = match module.manifest() {
         Ok(Some(manifest)) => manifest,
-        Ok(None) => {
-            return vec![format!(
-                "no manifest in {} — run `portaki build`, which writes {BUILT_MANIFEST_FILE} \
-                 from the code; the registry has nothing to list the module with until then",
-                module.root().display()
-            )]
-        }
+        // Nothing built yet: the manifest is written from the code by `portaki build`, and
+        // `portaki lint` validates it right after — `cargo test` alone has nothing to read.
+        Ok(None) => return Vec::new(),
         Err(error) => return vec![error],
     };
 
@@ -36,10 +32,10 @@ fn problems(module: &Module) -> Vec<String> {
         }
     };
 
-    let file = if module.root().join(MANIFEST_FILE).exists() {
-        MANIFEST_FILE
-    } else {
+    let file = if module.root().join(BUILT_MANIFEST_FILE).exists() {
         BUILT_MANIFEST_FILE
+    } else {
+        MANIFEST_FILE
     };
     validator
         .iter_errors(&manifest)

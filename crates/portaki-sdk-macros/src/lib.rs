@@ -65,6 +65,7 @@ mod entity;
 mod event_handler;
 mod link;
 mod module;
+mod nav;
 mod params;
 mod query;
 mod surface;
@@ -347,6 +348,27 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn email(attr: TokenStream, item: TokenStream) -> TokenStream {
     email::expand(attr, item)
+}
+
+/// Declares a host dashboard entry that no surface renders.
+///
+/// # Syntax
+///
+/// ```text
+/// #[portaki_sdk::nav(
+///     placement = "workspace-timeline-task", path = "tasks",
+///     label_key = "nav.tasks", icon = "sparkles",
+/// )]
+/// #[portaki_sdk::surface(host, id = "cleaning", …)]
+/// pub fn render_host_cleaning(ctx: HostContext) -> Surface { /* ... */ }
+/// ```
+///
+/// `placement` and `path` are required; `label_key`, `icon`, `design_id` as on `#[surface]`. Goes
+/// on any item, which it leaves untouched. Emits `nav-{path}_{placement}.json` →
+/// `hostSurfaces[]` of the catalogue.
+#[proc_macro_attribute]
+pub fn nav(attr: TokenStream, item: TokenStream) -> TokenStream {
+    nav::expand(attr, item)
 }
 
 /// Describes the arguments of a query or command, so tooling can offer a form for them.
