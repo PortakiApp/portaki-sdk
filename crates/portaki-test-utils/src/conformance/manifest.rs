@@ -104,6 +104,17 @@ fn config_problems(
             ));
         }
 
+        // A secret sub-key the manifest does not name is stored in clear, and a masked value sent
+        // back by the form overwrites it.
+        if let Some(code_secret) = resolved["item"].get("secret") {
+            if &stated["item"]["secret"] != code_secret {
+                problems.push(format!(
+                    "config field `{key}` item.secret must be {code_secret} (the row's \
+                     #[field(secret)] fields) — rebuild with portaki build"
+                ));
+            }
+        }
+
         let Some(row) = field["itemType"].as_str() else {
             continue;
         };
@@ -120,6 +131,7 @@ fn config_problems(
             .as_array()
             .into_iter()
             .flatten()
+            .chain(stated["item"]["secret"].as_array().into_iter().flatten())
             .chain(stated["item"].get("id"))
             .filter_map(Value::as_str);
         for sub_key in named {
@@ -145,6 +157,7 @@ mod tests {
             { "name": "id", "type": "string" },
             { "name": "title", "type": "ref", "ref": "I18nText" },
             { "name": "note", "type": "string" },
+            { "name": "code", "type": "string", "secret": true },
         ] }))
     }
 
@@ -159,22 +172,23 @@ mod tests {
 
         let built = json!({ "config": { "fields": [
             { "key": "welcome", "type": "localized" },
-            { "key": "steps", "type": "structured", "item": { "id": "id", "localized": ["title"] } },
+            { "key": "steps", "type": "structured", "item": { "id": "id", "localized": ["title"], "secret": ["code"] } },
         ] } });
         assert!(config_problems(&built, &code, shape_of).is_empty());
 
         let stale = json!({ "config": { "fields": [
             { "key": "welcome", "type": "text" },
             { "key": "steps", "type": "structured", "item": { "localized": ["titel"] } },
-            { "key": "spots", "type": "structured", "item": { "id": "slug", "localized": ["title"] } },
+            { "key": "spots", "type": "structured", "item": { "id": "slug", "localized": ["title"], "secret": ["code"] } },
         ] } });
         assert_eq!(
             config_problems(&stale, &code, shape_of),
             vec![
                 "config field `welcome` is an I18nText in the code but not `localized` — rebuild with portaki build",
                 "config field `steps` item.localized must be [\"title\"] (the row's I18nText fields) — rebuild with portaki build",
-                "config field `steps` item names `titel`, which is not a field of Step (id, title, note)",
-                "config field `spots` item names `slug`, which is not a field of Step (id, title, note)",
+                "config field `steps` item.secret must be [\"code\"] (the row's #[field(secret)] fields) — rebuild with portaki build",
+                "config field `steps` item names `titel`, which is not a field of Step (id, title, note, code)",
+                "config field `spots` item names `slug`, which is not a field of Step (id, title, note, code)",
             ]
         );
     }

@@ -86,7 +86,7 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 
 | Test | Fails when |
 |------|------------|
-| `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network); an `I18nText` config field is not `localized` there, a row's `I18nText` fields are not its `item.localized`, or `item.localized` / `item.id` name a sub-key the row type (`#[params]`) does not have |
+| `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network); an `I18nText` config field is not `localized` there, a row's `I18nText` fields are not its `item.localized` (its `#[field(secret)]` fields not its `item.secret`), or `item.localized` / `item.id` name a sub-key the row type (`#[params]`) does not have |
 | `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
 | `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell (a guest `Err` the SDK shows as its error state included), sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface; a guest surface panics, fails or renders nothing to read with the module inactive, incomplete, or `host::module::status` failing |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |

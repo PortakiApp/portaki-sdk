@@ -32,7 +32,9 @@
 //! keeps one text per language, and a save from the host form writes the host's language only.
 //! A list whose rows hold `I18nText` fields is `structured` with an `item` saying which sub-keys
 //! are translated (and which one identifies a row): put `#[portaki_sdk::params]` on the row type,
-//! whose fields the config macro cannot see — `portaki build` reads them there.
+//! whose fields the config macro cannot see — `portaki build` reads them there. A row field marked
+//! `#[field(secret)]` is `item.secret`: encrypted at rest, and kept when a save sends it back empty
+//! or masked, like a `secret` config field.
 //!
 //! ```
 //! use portaki_sdk::contracts::i18n::I18nText;
@@ -44,6 +46,8 @@
 //!     pub id: String,          // → item.id, the row survives a reorder or a removal
 //!     pub title: I18nText,     // → item.localized
 //!     pub note: String,
+//!     #[field(secret)]
+//!     pub door_code: String,   // → item.secret
 //! }
 //!
 //! #[portaki_sdk::config]
@@ -52,7 +56,7 @@
 //!     #[field(label = "config.welcome")]
 //!     pub welcome: I18nText, // → "type": "localized"
 //!     #[field(label = "config.steps")]
-//!     pub steps: Vec<Step>,  // → "item": { "id": "id", "localized": ["title"] }
+//!     pub steps: Vec<Step>,  // → "item": { "id": "id", "localized": ["title"], "secret": ["door_code"] }
 //! }
 //!
 //! let ctx = portaki_sdk::context::Context {
@@ -95,7 +99,8 @@ pub fn declarations() -> impl Iterator<Item = &'static ConfigDeclaration> {
 }
 
 /// Replaces each field's `itemType` by `item`: the row's `I18nText` fields become
-/// `item.localized`, and `item.id` is the `#[field(item_id = "…")]` given, else a field named `id`.
+/// `item.localized`, its `#[field(secret)]` fields `item.secret`, and `item.id` is the
+/// `#[field(item_id = "…")]` given, else a field named `id`.
 ///
 /// `shape_of` gives the `#[params]` shape of a type by name (`{ "fields": [{ "name", "type",
 /// "ref" }] }`). A row without one keeps only an explicit `item_id`; a row with neither translated
@@ -112,6 +117,7 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
             .into_iter()
             .flatten();
         let mut localized = Vec::new();
+        let mut secret = Vec::new();
         let mut has_id = false;
         for row_field in row_fields {
             let name = row_field["name"].as_str().unwrap_or_default();
@@ -119,13 +125,16 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
             if row_field["ref"] == "I18nText" {
                 localized.push(Value::from(name));
             }
+            if row_field["secret"] == true {
+                secret.push(Value::from(name));
+            }
         }
         let id = field
             .get("item")
             .and_then(|item| item.get("id"))
             .cloned()
             .or_else(|| has_id.then(|| Value::from("id")));
-        if localized.is_empty() && id.is_none() {
+        if localized.is_empty() && secret.is_empty() && id.is_none() {
             continue;
         }
         let mut item = Map::new();
@@ -133,6 +142,9 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
             item.insert("id".into(), id);
         }
         item.insert("localized".into(), Value::Array(localized));
+        if !secret.is_empty() {
+            item.insert("secret".into(), Value::Array(secret));
+        }
         field.insert("item".into(), Value::Object(item));
     }
 }
@@ -301,6 +313,7 @@ mod tests {
             { "name": "title", "type": "ref", "ref": "I18nText" },
             { "name": "place", "type": "ref", "ref": "I18nText", "required": false },
             { "name": "endsAt", "type": "string" },
+            { "name": "url", "type": "string", "secret": true },
         ] });
         let mut fields = vec![
             json!({ "key": "events", "type": "structured", "itemType": "Event" }),
@@ -314,9 +327,9 @@ mod tests {
             fields,
             vec![
                 json!({ "key": "events", "type": "structured",
-                        "item": { "id": "id", "localized": ["title", "place"] } }),
+                        "item": { "id": "id", "localized": ["title", "place"], "secret": ["url"] } }),
                 json!({ "key": "spots", "type": "structured",
-                        "item": { "id": "slug", "localized": ["title", "place"] } }),
+                        "item": { "id": "slug", "localized": ["title", "place"], "secret": ["url"] } }),
                 json!({ "key": "raw", "type": "structured" }),
                 json!({ "key": "keyed", "type": "structured", "item": { "id": "key", "localized": [] } }),
                 json!({ "key": "welcome", "type": "localized" }),

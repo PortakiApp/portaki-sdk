@@ -107,6 +107,8 @@ A text the guest reads in their language is an `I18nText` (`contracts::i18n`): t
 the host's language only — the other languages stay. In a list, put `#[portaki_sdk::params]` on
 the row type: `portaki build` reads its `I18nText` fields into `item.localized`, and a field named
 `id` (or `#[field(item_id = "…")]`) into `item.id`, so each row keeps what the form did not send.
+A row field marked `#[field(secret)]` (an iCal URL, a door code) goes to `item.secret`: encrypted
+at rest, and kept when the form sends it back empty or masked; `null` clears it.
 
 ```rust,ignore
 #[portaki_sdk::params]
@@ -116,6 +118,8 @@ pub struct Step {
     pub id: String,          // item.id — rows survive a reorder or a removal
     pub title: I18nText,     // item.localized
     pub ends_at: Option<String>,
+    #[field(secret)]
+    pub code: String,        // item.secret
 }
 
 #[portaki_sdk::config]
@@ -124,7 +128,7 @@ pub struct Config {
     #[field(required, label = "config.welcome")]
     pub welcome: I18nText,   // "type": "localized"
     #[field(label = "config.steps")]
-    pub steps: Vec<Step>,    // "item": { "id": "id", "localized": ["title"] }
+    pub steps: Vec<Step>,    // "item": { "id": "id", "localized": ["title"], "secret": ["code"] }
 }
 
 // Host form: the editor's language, else fr, en, any. Guest: the guest's.
