@@ -54,10 +54,14 @@ use portaki_sdk::contracts::{i18n::I18nText, stats};
 
 #[query(name = "statsSummary")]
 fn stats_summary(_ctx: Context, args: stats::StatsSummaryArgs) -> Result<stats::StatsSummary> {
+    let period = args.period(); // 30, 90 or 365 — anything else reads 30
     Ok(stats::summary("5", I18nText::new("signalements", "reports"))
         .attention(stats::AttentionLevel::Action, I18nText::new("2 en cours", "2 open")))
 }
 ```
+
+The detail surface reads the same window with `ctx.stats_period()` (`input.periodDays`);
+`period.since(now)` starts it, `period.window(&ctx.lang())` writes it (« sur 90 jours »).
 
 ### `timelineTasks`, `taskToggle`, `taskComplete` — `contracts/timeline-tasks.v1.json`
 

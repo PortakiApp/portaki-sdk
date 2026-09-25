@@ -347,6 +347,12 @@ impl Context {
         crate::host::time::PropertyTz::parse(&self.timezone)
     }
 
+    /// The window a statistics detail surface shows: `input.periodDays`, bounded to 30, 90 or
+    /// 365 days (30 when absent or anything else).
+    pub fn stats_period(&self) -> crate::contracts::stats::Period {
+        crate::contracts::stats::Period::from_days(self.input_u64("periodDays").unwrap_or(30))
+    }
+
     /// Unsigned integer draft field from [`Self::input`].
     pub fn input_u64(&self, key: &str) -> Option<u64> {
         self.input.get(key).and_then(Value::as_u64)
@@ -418,6 +424,16 @@ mod tests {
             };
             assert_eq!(ctx.lang(), lang, "{locale:?}");
         }
+    }
+
+    #[test]
+    fn the_stats_period_comes_from_the_input() {
+        let mut ctx = Context::default();
+        assert_eq!(ctx.stats_period().days(), 30);
+        ctx.input = serde_json::json!({ "periodDays": 365 });
+        assert_eq!(ctx.stats_period().days(), 365);
+        ctx.input = serde_json::json!({ "periodDays": 12 });
+        assert_eq!(ctx.stats_period().days(), 30);
     }
 
     #[test]
