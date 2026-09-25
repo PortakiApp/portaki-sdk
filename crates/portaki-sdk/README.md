@@ -93,7 +93,8 @@ let config = Config::load(&ctx)?; // context.moduleConfig; KV `config` only when
 
 An old KV blob in another shape (a key renamed, a number now a string, a nested object):
 `#[portaki_sdk::config(legacy = legacy::read)]`, with `fn read(old: Value) -> Value` returning an
-object of the declared keys. The platform imports that result once (`legacyConfig`), and `load`
+object of the declared keys — or `-> Result<Value, E>` when an old blob may not map: the error
+fails the import, which the platform retries, where a panic would kill the call. The platform imports that result once (`legacyConfig`), and `load`
 reads the KV through it until then. Once the import is stored, the platform calls
 `legacyConfigAdopted`, which deletes the KV `config` — and the other old keys named by
 `#[portaki_sdk::config(legacy_keys = ["texts/fr", "texts/en"])]`.

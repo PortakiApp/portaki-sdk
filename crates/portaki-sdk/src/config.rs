@@ -156,15 +156,25 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
 /// missing. A config that does not deserialize is [`PortakiError::Storage`] — never a default,
 /// which the next save would write over what the host had.
 pub fn load<T: DeserializeOwned>(ctx: &Context) -> Result<T> {
-    load_mapped(ctx, std::convert::identity)
+    load_with(ctx, Ok)
+}
+
+/// [`load`], with the KV blob read through an infallible `legacy` first.
+#[deprecated(note = "use load_with, whose mapping may fail")]
+pub fn load_mapped<T: DeserializeOwned>(ctx: &Context, legacy: fn(Value) -> Value) -> Result<T> {
+    load_with(ctx, |raw| Ok(legacy(raw)))
 }
 
 /// [`load`], with the KV blob read through `legacy` first — what `#[config(legacy = …)]`
-/// generates. `moduleConfig` is never mapped: the platform holds the declared keys already.
-pub fn load_mapped<T: DeserializeOwned>(ctx: &Context, legacy: fn(Value) -> Value) -> Result<T> {
+/// generates. `moduleConfig` is never mapped: the platform holds the declared keys already. A
+/// mapping that fails fails the load.
+pub fn load_with<T: DeserializeOwned>(
+    ctx: &Context,
+    legacy: impl FnOnce(Value) -> Result<Value>,
+) -> Result<T> {
     let raw = match &ctx.module_config {
         Some(config) => config.clone(),
-        None => legacy_config_mapped(legacy)?,
+        None => legacy_config_with(legacy)?,
     };
     let mut object = match raw {
         Value::Null => Map::new(),
@@ -191,13 +201,53 @@ pub fn legacy_config() -> Result<Value> {
     Ok(Value::Null)
 }
 
-/// [`legacy_config`] through `legacy`, which maps an old blob onto the declared keys; `null`
-/// (nothing in KV) is not mapped. What `legacyConfig` answers with `#[config(legacy = …)]`.
+/// [`legacy_config`] through an infallible `legacy`.
+#[deprecated(note = "use legacy_config_with, whose mapping may fail")]
 pub fn legacy_config_mapped(legacy: fn(Value) -> Value) -> Result<Value> {
-    Ok(match legacy_config()? {
-        Value::Null => Value::Null,
+    legacy_config_with(|raw| Ok(legacy(raw)))
+}
+
+/// [`legacy_config`] through `legacy`, which maps an old blob onto the declared keys; `null`
+/// (nothing in KV) is not mapped. What `legacyConfig` answers with `#[config(legacy = …)]`; an
+/// error fails `legacyConfig`, and the platform asks again later.
+pub fn legacy_config_with(legacy: impl FnOnce(Value) -> Result<Value>) -> Result<Value> {
+    match legacy_config()? {
+        Value::Null => Ok(Value::Null),
         raw => legacy(raw),
-    })
+    }
+}
+
+/// What a `#[config(legacy = f)]` function may return: the mapped [`Value`], or a
+/// `Result<Value, E>` whose error fails the import instead of panicking.
+///
+/// ```
+/// use portaki_sdk::config::IntoLegacy;
+/// use serde_json::{json, Value};
+///
+/// fn read(old: Value) -> Result<Value, String> {
+///     let ssid = old["wifi"]["ssid"].as_str().ok_or("no wifi.ssid in the old blob")?;
+///     Ok(json!({ "ssid": ssid }))
+/// }
+///
+/// assert_eq!(read(json!({ "wifi": { "ssid": "A" } })).into_legacy().unwrap(), json!({ "ssid": "A" }));
+/// let error = read(json!({})).into_legacy().unwrap_err();
+/// assert!(error.to_string().contains("no wifi.ssid"));
+/// ```
+pub trait IntoLegacy {
+    /// The mapped blob, or why it could not be mapped.
+    fn into_legacy(self) -> Result<Value>;
+}
+
+impl IntoLegacy for Value {
+    fn into_legacy(self) -> Result<Value> {
+        Ok(self)
+    }
+}
+
+impl<E: std::fmt::Display> IntoLegacy for std::result::Result<Value, E> {
+    fn into_legacy(self) -> Result<Value> {
+        self.map_err(|error| unreadable(format!("legacy mapping failed: {error}")))
+    }
 }
 
 /// What `legacyConfigAdopted` does: once the platform has stored the imported config, delete the
@@ -334,6 +384,28 @@ mod tests {
         }
     }
 
+    /// A mapping that fails fails the import and the load — no panic, no default.
+    #[test]
+    fn a_failing_legacy_mapping_is_an_error() {
+        let ctx = Context::default();
+        let kv = || Arc::new(Kv(Some(br#"{"old":true}"#), Default::default()));
+        let failing = |_: Value| Err::<Value, _>("unknown shape").into_legacy();
+        let imported = with_host(kv(), ctx.clone(), || legacy_config_with(failing));
+        assert!(imported.unwrap_err().to_string().contains("unknown shape"));
+        let loaded = with_host(kv(), ctx.clone(), || {
+            super::load_with::<Config>(&ctx, failing)
+        });
+        assert!(loaded
+            .unwrap_err()
+            .to_string()
+            .contains("config_unreadable"));
+
+        let mapped = with_host(kv(), ctx.clone(), || {
+            legacy_config_with(|_| json!({ "ssid": "A" }).into_legacy())
+        });
+        assert_eq!(mapped.unwrap(), json!({ "ssid": "A" }));
+    }
+
     #[test]
     fn items_come_from_the_row_shape() {
         let shape = json!({ "fields": [
@@ -371,7 +443,7 @@ mod tests {
         let raw = with_host(
             Arc::new(Kv(Some(br#"{"old":true}"#), Default::default())),
             ctx.clone(),
-            || legacy_config(),
+            legacy_config,
         );
         assert_eq!(raw.unwrap(), json!({ "old": true }));
         let none = with_host(Arc::new(Kv(None, Default::default())), ctx, legacy_config);
