@@ -88,12 +88,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use portaki_sdk::context::{CapabilityGrant, Context, StayContext};
+use portaki_sdk::context::{CapabilityGrant, Context, PropertyContext, StayContext};
 use portaki_sdk::error::{PortakiError, Result};
 use portaki_sdk::host::email::{EmailError, SendEmailArgs};
 use portaki_sdk::host::module::ModuleStatus;
 use portaki_sdk::host::{with_host, HostBackend};
 use portaki_sdk::limits;
+use portaki_sdk::sdui::common::GeoPoint;
 
 use serde::Serialize;
 
@@ -112,6 +113,7 @@ pub struct MockContextBuilder {
     connector_errors: HashMap<(String, String), String>,
     now: Option<DateTime<Utc>>,
     module_status: Option<ModuleStatus>,
+    module_status_error: Option<String>,
 }
 
 impl MockContextBuilder {
@@ -215,6 +217,21 @@ impl MockContextBuilder {
         self
     }
 
+    /// Moves the property — `None` for one that is not geocoded yet, which a module showing
+    /// weather or nearby places must render as its empty state. Keeps the deprecated
+    /// `lat` / `lng` in step. Call after [`Self::with_property`] / [`Self::with_capabilities`].
+    pub fn with_coordinates(mut self, coordinates: Option<GeoPoint>) -> Self {
+        let property = &self.context.property;
+        self.context.property = PropertyContext::new(
+            property.name.clone(),
+            property.locale.clone(),
+            property.timezone.clone(),
+            coordinates,
+            property.address.clone(),
+        );
+        self
+    }
+
     /// Sets the invocation stay (`Context::stay`) — e.g. `.with_stay(Booking::default())`.
     ///
     /// Its checkout drives the after-stay email rule. Call after [`Self::with_capabilities`],
@@ -264,6 +281,13 @@ impl MockContextBuilder {
         self
     }
 
+    /// Makes `host::module::status` fail with `reason` — a platform that cannot answer. A guest
+    /// surface then renders the SDK's error state (see `portaki_sdk::guest_shell`).
+    pub fn with_module_status_error(mut self, reason: impl Into<String>) -> Self {
+        self.module_status_error = Some(reason.into());
+        self
+    }
+
     /// Freezes the mock clock (`host::time::now`) at `now`.
     ///
     /// Without it the mock answers the real current time, which makes the after-stay email
@@ -295,6 +319,8 @@ impl MockContextBuilder {
             email_send_calls: Mutex::new(0),
             sent_emails: Mutex::new(Vec::new()),
             event_emits: Mutex::new(0),
+            logs: Mutex::new(Vec::new()),
+            module_status_error: self.module_status_error,
             module_status: self.module_status.unwrap_or(ModuleStatus {
                 active: true,
                 workspace_enabled: true,
@@ -336,6 +362,17 @@ pub struct ConnectorCall {
     pub args_json: String,
 }
 
+/// One `host::log` line, as the module wrote it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogLine {
+    /// `debug`, `info`, `warn` or `error`.
+    pub level: String,
+    /// The event name — `wifi_guest_home_card_render_failed`.
+    pub message: String,
+    /// The structured fields, as a JSON object.
+    pub fields: serde_json::Value,
+}
+
 /// Alias for [`MockContextBuilder`] — preferred name in module test code.
 pub type MockContext = MockContextBuilder;
 
@@ -356,7 +393,9 @@ pub struct MockHostFunctions {
     email_send_calls: Mutex<usize>,
     sent_emails: Mutex<Vec<SendEmailArgs>>,
     event_emits: Mutex<usize>,
+    logs: Mutex<Vec<LogLine>>,
     module_status: ModuleStatus,
+    module_status_error: Option<String>,
 }
 
 impl MockHostFunctions {
@@ -377,6 +416,11 @@ impl MockHostFunctions {
             .lock()
             .expect("translated keys lock")
             .clone()
+    }
+
+    /// Every `host::log` line the module wrote, in order.
+    pub fn logs(&self) -> Vec<LogLine> {
+        self.logs.lock().expect("logs lock").clone()
     }
 
     /// Emails the mock accepted, in order — refused ones are not included.
@@ -440,7 +484,12 @@ impl HostBackend for MockHostFunctions {
         Ok(text)
     }
 
-    fn log(&self, _level: &str, _message: &str, _fields_json: &str) -> Result<()> {
+    fn log(&self, level: &str, message: &str, fields_json: &str) -> Result<()> {
+        self.logs.lock().expect("logs lock").push(LogLine {
+            level: level.to_string(),
+            message: message.to_string(),
+            fields: serde_json::from_str(fields_json).unwrap_or_default(),
+        });
         Ok(())
     }
 
@@ -519,7 +568,10 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn module_status(&self) -> Result<portaki_sdk::host::module::ModuleStatus> {
-        Ok(self.module_status.clone())
+        match &self.module_status_error {
+            Some(reason) => Err(PortakiError::Host(reason.clone())),
+            None => Ok(self.module_status.clone()),
+        }
     }
 
     fn module_list_by_capability(

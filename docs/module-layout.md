@@ -40,11 +40,15 @@ There is **no** `sdui::host` / `sdui::guest` type split. Components, tokens, and
 
 ```rust,ignore
 #[surface(guest, id = "home.card")]
-fn render_home(ctx: GuestContext) -> Surface { /* … */ }
+fn render_home(ctx: GuestContext) -> Result<Surface> { /* … */ }
 
 #[surface(host, id = "main")]
 fn render_host_main(ctx: HostContext) -> Surface { /* … */ }
 ```
+
+A guest surface is written for the happy path: the SDK renders the module's inactive,
+incomplete and error states (`portaki_sdk::guest_shell`), so a crate has no `guest/empty.rs`
+and no `match … { Err => … }` around its surfaces.
 
 Do not put host-dashboard-only helpers inside guest booklet modules in a Wasm
 crate (see module layout below). In the SDK, keep SDUI catalog code under

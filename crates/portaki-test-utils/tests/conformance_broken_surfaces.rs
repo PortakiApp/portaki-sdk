@@ -26,6 +26,25 @@ pub fn render_explore_detail(_ctx: GuestContext) -> Surface {
     Surface::new(Text::new().text("i18n:guest.empty.title"))
 }
 
+/// The SDK turns the `Err` into its error state — which a first install should not show.
+#[portaki_sdk::surface(guest, id = "explore.config")]
+pub fn render_explore_config(_ctx: GuestContext) -> Result<Surface> {
+    let raw = host::kv::get("config")?.ok_or(PortakiError::Host("nothing saved".into()))?;
+    Ok(Surface::new(
+        Text::new().text(String::from_utf8_lossy(&raw)),
+    ))
+}
+
+/// Out of the SDK's shell, and nothing to say when the module is not ready.
+#[portaki_sdk::surface(guest, id = "explore.ungated", gate = false)]
+pub fn render_explore_ungated(_ctx: GuestContext) -> Result<Surface> {
+    let status = host::module::status()?;
+    if !status.is_ready() {
+        return Ok(Surface::new(Stack::new()));
+    }
+    Ok(Surface::new(Text::new().text("i18n:guest.empty.title")))
+}
+
 #[portaki_sdk::surface(guest, id = "explore.picker")]
 pub fn render_explore_picker(_ctx: GuestContext) -> Surface {
     Surface::new(
@@ -112,5 +131,56 @@ fn a_manifest_route_to_an_undeclared_surface_is_reported() {
     assert_reports(
         &findings,
         &["guestSurfaces `explore.missing`", "no #[surface(guest"],
+    );
+}
+
+#[test]
+fn an_error_the_sdk_shows_as_its_error_state_is_still_reported() {
+    let findings = failing("surfaces", passing().check_surfaces());
+
+    assert_reports(
+        &findings,
+        &[
+            "guest surface `explore.config` (render_explore_config)",
+            "failed with an empty mock",
+            "nothing saved",
+        ],
+    );
+}
+
+#[test]
+fn an_ungated_surface_is_rendered_in_every_guest_state() {
+    let findings = failing("surfaces", passing().check_surfaces());
+
+    assert_reports(
+        &findings,
+        &[
+            "guest surface `explore.ungated`",
+            "rendered nothing to read with the module inactive",
+        ],
+    );
+    assert_reports(
+        &findings,
+        &[
+            "`explore.ungated`",
+            "nothing to read with the module incomplete",
+        ],
+    );
+    assert_reports(
+        &findings,
+        &[
+            "`explore.ungated`",
+            "failed with the module error",
+            "module_status_unavailable",
+        ],
+    );
+    // Through the SDK's shell, every other guest surface shows a state.
+    assert!(
+        !findings
+            .problems()
+            .iter()
+            .any(|p| p.contains("explore.detail")
+                || p.contains("`home.card` (render_home_card) rendered")),
+        "{findings}"
     );
 }

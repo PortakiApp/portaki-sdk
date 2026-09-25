@@ -40,6 +40,7 @@ use uuid::Uuid;
 
 use crate::capability::CapabilityId;
 use crate::ids::ModuleId;
+use crate::sdui::common::GeoPoint;
 
 /// Single effective capability grant attached to the current invocation.
 ///
@@ -76,6 +77,10 @@ pub struct PlanInfo {
 }
 
 /// Property metadata snapshot for locale, timezone, and map anchoring.
+///
+/// Where the property is: [`Self::coordinates`], `None` while it is not geocoded — a module
+/// with nothing to show without a position (weather, nearby places) renders its empty state
+/// rather than somewhere else's.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PropertyContext {
     /// Display name shown in guest and host shells.
@@ -84,12 +89,41 @@ pub struct PropertyContext {
     pub locale: String,
     /// IANA timezone (`Europe/Paris`).
     pub timezone: String,
-    /// Property latitude (WGS-84).
+    /// Property latitude (WGS-84) — `0.0` when the property is not geocoded.
+    #[deprecated(note = "0.0 when the property is not geocoded — read `coordinates`, None then")]
     pub lat: f64,
-    /// Property longitude (WGS-84).
+    /// Property longitude (WGS-84) — `0.0` when the property is not geocoded.
+    #[deprecated(note = "0.0 when the property is not geocoded — read `coordinates`, None then")]
     pub lng: f64,
     /// Single-line formatted address when geocoded.
     pub address: Option<String>,
+    /// Property position (WGS-84); `None` while the property is not geocoded.
+    #[serde(default)]
+    pub coordinates: Option<GeoPoint>,
+}
+
+impl PropertyContext {
+    /// A property context at `coordinates` (or nowhere), with the deprecated `lat` / `lng`
+    /// kept in step (`0.0` when `None`).
+    pub fn new(
+        name: impl Into<String>,
+        locale: impl Into<String>,
+        timezone: impl Into<String>,
+        coordinates: Option<GeoPoint>,
+        address: Option<String>,
+    ) -> Self {
+        let (lat, lng) = coordinates.map_or((0.0, 0.0), |point| (point.lat, point.lng));
+        #[allow(deprecated)]
+        Self {
+            name: name.into(),
+            locale: locale.into(),
+            timezone: timezone.into(),
+            lat,
+            lng,
+            address,
+            coordinates,
+        }
+    }
 }
 
 /// Guest session identity on guest booklet surfaces.
@@ -232,14 +266,13 @@ impl Context {
                     id: id.as_str().to_string(),
                 })
                 .collect(),
-            property: PropertyContext {
-                name: "Villa Azur".to_string(),
-                locale: "fr-FR".to_string(),
-                timezone: "Europe/Paris".to_string(),
-                lat: 43.5513,
-                lng: 7.0128,
-                address: Some("Cannes, France".to_string()),
-            },
+            property: PropertyContext::new(
+                "Villa Azur",
+                "fr-FR",
+                "Europe/Paris",
+                Some(GeoPoint::new(43.5513, 7.0128)),
+                Some("Cannes, France".to_string()),
+            ),
             ..Context::default()
         }
     }
@@ -300,14 +333,13 @@ impl Default for Context {
             display: DisplayPreferences::default(),
             guest: None,
             stay: None,
-            property: PropertyContext {
-                name: "Test Property".to_string(),
-                locale: "fr-FR".to_string(),
-                timezone: "Europe/Paris".to_string(),
-                lat: 43.55,
-                lng: 7.01,
-                address: None,
-            },
+            property: PropertyContext::new(
+                "Test Property",
+                "fr-FR",
+                "Europe/Paris",
+                Some(GeoPoint::new(43.55, 7.01)),
+                None,
+            ),
             input: Value::Null,
             module_config: None,
         }

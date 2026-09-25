@@ -95,6 +95,31 @@ Labels are i18n keys, translated from `i18n/*.json` by `portaki build`. Keep
 `publishReadiness` for conditional rules the schema cannot say ("a code once the smart lock is
 off"). Tests: `MockContext::host().with_config(&config)`.
 
+## Guest surfaces: the happy path only
+
+A guest surface does not check whether the module is ready, nor catch its own errors:
+
+```rust,ignore
+#[portaki_sdk::surface(guest, id = "home.card")]
+pub fn render_home_card(ctx: GuestContext) -> Result<Surface> {
+    let config = Config::load(&ctx)?;
+    Ok(Surface::new(/* … */))
+}
+```
+
+The SDK renders « inactive » (module off) or « incomplete » (a required field empty) without
+calling it, and an `Err` as a logged error state (`<module>_<surface>_render_failed`), with the
+`portaki_module!` icon. Their texts come with the SDK in en, fr, es, de, it and nl; a key of the
+same name in the module's bundle overrides one (`module.status.inactive.*`,
+`module.status.incomplete.*`, `guest.error.*`). No `guest/empty.rs`. Reading the status takes the
+`platform` feature; `gate = false` opts a surface out. See `portaki_sdk::guest_shell`.
+
+## Where the property is
+
+`ctx.property.coordinates` is `Option<GeoPoint>`: `None` while the property is not geocoded —
+render the empty state, do not guess. `ctx.property.lat` / `lng` are deprecated: `0.0` then (they
+used to read Paris). Tests: `MockContext::guest().with_coordinates(None)`.
+
 ## What you get
 
 | Surface | Role |

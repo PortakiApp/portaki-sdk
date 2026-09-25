@@ -79,4 +79,4 @@ pub mod __private {
 
 pub use assertions::{PrimitiveTag, SurfaceAssertions};
 pub use fixtures::{Booking, GuestIdentityFixture, Property};
-pub use mock_host::{ConnectorCall, MockContext, MockContextBuilder, MockHostFunctions};
+pub use mock_host::{ConnectorCall, LogLine, MockContext, MockContextBuilder, MockHostFunctions};

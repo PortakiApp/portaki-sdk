@@ -7,7 +7,7 @@ use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
 use portaki_sdk::Context;
 use serde_json::Value;
 
-use crate::{MockContextBuilder, MockHostFunctions};
+use crate::{LogLine, MockContextBuilder, MockHostFunctions};
 
 /// How one invocation ended.
 pub(crate) enum Outcome {
@@ -23,6 +23,7 @@ pub(crate) enum Outcome {
 pub(crate) struct Invocation {
     pub outcome: Outcome,
     pub translated_keys: Vec<String>,
+    pub logs: Vec<LogLine>,
 }
 
 /// Runs `declaration` with `params` inside `mock`, the way the Wasm dispatcher calls the shim.
@@ -55,6 +56,7 @@ pub(crate) fn invoke_in(
     Invocation {
         outcome,
         translated_keys: host.translated_keys(),
+        logs: host.logs(),
     }
 }
 

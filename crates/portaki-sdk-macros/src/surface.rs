@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{ItemFn, LitStr, Token};
+use syn::{ItemFn, LitBool, LitStr, Token};
 
 use crate::emit::{sanitize_key, write_emission};
 use crate::wire_lit::WireLit;
@@ -18,6 +18,8 @@ struct SurfaceAttrs {
     catalog: serde_json::Map<String, serde_json::Value>,
     /// Compile-time checks that each typed value names a real variant.
     checks: Vec<TokenStream2>,
+    /// A guest surface goes through `portaki_sdk::guest_shell` unless `gate = false`.
+    gate: bool,
 }
 
 /// Keys that describe where a surface is linked from, per context.
@@ -46,6 +48,7 @@ impl Parse for SurfaceAttrs {
         let mut display_name_key = None;
         let mut catalog = serde_json::Map::new();
         let mut checks = Vec::new();
+        let mut gate = context == "guest";
         let allowed: &[&str] = if context == "host" {
             &HOST_KEYS
         } else {
@@ -59,13 +62,25 @@ impl Parse for SurfaceAttrs {
                 display_name_key = Some(input.parse::<LitStr>()?.value());
                 continue;
             }
+            if name == "gate" {
+                let value: LitBool = input.parse()?;
+                if context != "guest" {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "gate applies to guest surfaces: a host surface is never gated",
+                    ));
+                }
+                gate = value.value;
+                continue;
+            }
             if !allowed.contains(&name.as_str()) {
                 return Err(syn::Error::new(
                     key.span(),
                     format!(
                         "unknown #[surface({context})] attribute: {name} — expected one of \
-                         display_name_key, {}",
-                        allowed.join(", ")
+                         display_name_key, {}{}",
+                        allowed.join(", "),
+                        if context == "guest" { ", gate" } else { "" }
                     ),
                 ));
             }
@@ -95,6 +110,7 @@ impl Parse for SurfaceAttrs {
             display_name_key,
             catalog,
             checks,
+            gate,
         })
     }
 }
@@ -103,6 +119,10 @@ impl Parse for SurfaceAttrs {
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let function_item = syn::parse_macro_input!(item as ItemFn);
     let attrs = syn::parse_macro_input!(attr as SurfaceAttrs);
+    expand_surface(attrs, function_item).into()
+}
+
+fn expand_surface(attrs: SurfaceAttrs, function_item: ItemFn) -> TokenStream2 {
     let fn_name = function_item.sig.ident.to_string();
 
     let display_name_key = attrs.display_name_key.unwrap_or_default();
@@ -135,22 +155,25 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let key = format!("{}_{}", attrs.context, attrs.id);
     let emission = write_emission("surface", &sanitize_key(&key), &json);
-    let wasm_registration =
-        crate::wasm_handler::register_surface(&attrs.context, &attrs.id, &fn_name, &function_item);
+    let wasm_registration = crate::wasm_handler::register_surface(
+        &attrs.context,
+        &attrs.id,
+        attrs.gate,
+        &fn_name,
+        &function_item,
+    );
     let checks = &attrs.checks;
-    let output: TokenStream2 = quote! {
+    quote! {
         #emission
         #(#checks)*
         #function_item
         #wasm_registration
-    };
-
-    output.into()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::SurfaceAttrs;
+    use super::{expand_surface, SurfaceAttrs};
 
     fn parse(attr: &str) -> syn::Result<SurfaceAttrs> {
         syn::parse_str(attr)
@@ -205,5 +228,79 @@ mod tests {
             "a string is refused"
         );
         assert!(parse(r#"host, id = "main""#).unwrap().catalog.is_empty());
+    }
+
+    fn expanded(attr: &str, item: &str) -> String {
+        expand_surface(parse(attr).unwrap(), syn::parse_str(item).unwrap()).to_string()
+    }
+
+    #[test]
+    fn a_guest_surface_renders_through_the_guest_shell() {
+        let infallible = expanded(
+            r#"guest, id = "home.card""#,
+            "pub fn render_home_card(ctx: GuestContext) -> Surface { todo!() }",
+        );
+        assert!(
+            infallible.contains("portaki_sdk :: guest_shell :: render (ctx , \"home.card\""),
+            "{infallible}"
+        );
+        assert!(
+            infallible.contains("Ok (render_home_card (ctx))"),
+            "{infallible}"
+        );
+
+        let fallible = expanded(
+            r#"guest, id = "explore.detail""#,
+            "pub fn render_detail(ctx: GuestContext) -> Result<Surface> { todo!() }",
+        );
+        assert!(
+            fallible.contains("render_detail (ctx) . map_err (:: core :: convert :: Into :: into)"),
+            "{fallible}"
+        );
+        assert!(!fallible.contains("render_detail (ctx) ?"), "{fallible}");
+    }
+
+    #[test]
+    fn route_arguments_are_read_before_the_shell() {
+        let with_args = expanded(
+            r#"guest, id = "explore.item""#,
+            "pub fn render_item(ctx: GuestContext, args: ItemArgs) -> Result<Surface> { todo!() }",
+        );
+        assert!(with_args.contains("let args : ItemArgs"), "{with_args}");
+        assert!(
+            with_args.contains("render_item (ctx , args) . map_err"),
+            "{with_args}"
+        );
+    }
+
+    #[test]
+    fn a_host_surface_or_an_ungated_guest_one_is_called_as_is() {
+        for (attr, fn_name) in [
+            (r#"host, id = "main""#, "render_host_main"),
+            (
+                r#"guest, id = "home.card", gate = false"#,
+                "render_home_card",
+            ),
+        ] {
+            let tokens = expanded(
+                attr,
+                &format!("pub fn {fn_name}(ctx: Context) -> Result<Surface> {{ todo!() }}"),
+            );
+            assert!(!tokens.contains("guest_shell"), "{tokens}");
+            assert!(tokens.contains(&format!("{fn_name} (ctx) ?")), "{tokens}");
+        }
+    }
+
+    #[test]
+    fn gate_is_a_boolean_for_guest_surfaces_only() {
+        assert!(parse(r#"guest, id = "home.card""#).unwrap().gate);
+        assert!(
+            !parse(r#"guest, id = "home.card", gate = false"#)
+                .unwrap()
+                .gate
+        );
+        assert!(!parse(r#"host, id = "main""#).unwrap().gate);
+        assert!(parse(r#"host, id = "main", gate = false"#).is_err());
+        assert!(parse(r#"guest, id = "home.card", gate = "no""#).is_err());
     }
 }

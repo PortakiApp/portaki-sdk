@@ -57,6 +57,7 @@ pub mod deprecation;
 pub mod email;
 pub mod error;
 pub mod files;
+pub mod guest_shell;
 pub mod host;
 pub mod ids;
 pub mod limits;

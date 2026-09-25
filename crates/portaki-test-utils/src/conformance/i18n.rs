@@ -129,7 +129,12 @@ fn used_keys(module: &Module) -> BTreeMap<String, BTreeSet<String>> {
     let mut used: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut note = |key: &str, origin: String| {
         let key = key.trim();
-        if !key.is_empty() {
+        // The guest states' keys: the SDK has a text for each, the module's bundle only
+        // overrides it.
+        let from_sdk = portaki_sdk::guest_shell::TEXTS
+            .iter()
+            .any(|(sdk_key, _)| *sdk_key == key);
+        if !key.is_empty() && !from_sdk {
             used.entry(key.to_string()).or_default().insert(origin);
         }
     };
@@ -172,6 +177,7 @@ fn used_keys(module: &Module) -> BTreeMap<String, BTreeSet<String>> {
         let translated_only = Invocation {
             outcome: super::invoke::Outcome::Failed(String::new()),
             translated_keys: invocation.translated_keys,
+            logs: Vec::new(),
         };
         from_invocation(super::invoke::describe(declaration), &translated_only);
     }
@@ -180,6 +186,7 @@ fn used_keys(module: &Module) -> BTreeMap<String, BTreeSet<String>> {
         let translated_only = Invocation {
             outcome: super::invoke::Outcome::Failed(String::new()),
             translated_keys: invocation.translated_keys,
+            logs: Vec::new(),
         };
         from_invocation(label, &translated_only);
     }
