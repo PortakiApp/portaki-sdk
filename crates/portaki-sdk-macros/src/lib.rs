@@ -551,8 +551,10 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// When the old KV blob does not have the declared keys — a key missing, a number where a
 /// string is declared, a nested object — `#[portaki_sdk::config(legacy = legacy::read)]` names a
 /// `fn(serde_json::Value) -> serde_json::Value` mapping the raw blob onto an object of the
-/// declared keys. `legacyConfig` answers its result (never called on `null`: nothing in KV), and
-/// `load` reads the KV through it while the platform does not hold the config yet.
+/// declared keys — or `fn(Value) -> Result<Value, E>` (`E: Display`) when a blob may not map:
+/// the error fails `legacyConfig`, which the platform retries, instead of a panic.
+/// `legacyConfig` answers its result (never called on `null`: nothing in KV), and `load` reads
+/// the KV through it while the platform does not hold the config yet.
 ///
 /// ```text
 /// fn read(old: Value) -> Value {
