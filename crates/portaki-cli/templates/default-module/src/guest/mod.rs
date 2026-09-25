@@ -3,7 +3,7 @@
 use portaki_sdk::prelude::*;
 use portaki_sdk::sdui::primitives::{Card, Stack, Text};
 
-use crate::config::load_config;
+use crate::config::ModuleConfig;
 use crate::ids::HOME_CARD;
 
 #[portaki_sdk::surface(
@@ -13,8 +13,8 @@ use crate::ids::HOME_CARD;
     label_key = "home.card.title",
     role = GuestRole::Card
 )]
-pub fn render_guest_home_card(_ctx: GuestContext) -> Surface {
-    let config = load_config().unwrap_or_default();
+pub fn render_guest_home_card(ctx: GuestContext) -> Surface {
+    let config = ModuleConfig::load(&ctx).unwrap_or_default();
     // What the host typed, or the bundled wording — a card the host never configured still
     // reads as a finished card rather than an empty one.
     let body = if config.greeting.is_empty() {

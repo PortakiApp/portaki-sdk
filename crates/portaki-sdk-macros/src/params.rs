@@ -61,15 +61,15 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// What serde says about an item or a field — the part of it that changes the wire shape.
 #[derive(Default)]
-struct Serde {
-    rename: Option<String>,
-    rename_all: Option<String>,
-    default: bool,
-    skip: bool,
+pub(crate) struct Serde {
+    pub(crate) rename: Option<String>,
+    pub(crate) rename_all: Option<String>,
+    pub(crate) default: bool,
+    pub(crate) skip: bool,
     flatten: bool,
 }
 
-fn serde_of(attrs: &[Attribute]) -> Serde {
+pub(crate) fn serde_of(attrs: &[Attribute]) -> Serde {
     let mut serde = Serde::default();
     for attr in attrs.iter().filter(|attr| attr.path().is_ident("serde")) {
         // Une erreur ici ne remonte pas : un attribut serde exotique vaut mieux décrit à moitié
@@ -298,7 +298,7 @@ fn scalar(ident: &str) -> Value {
 }
 
 /// A field name as serde writes it — fields are `snake_case` in Rust.
-fn rename_field(ident: &str, rule: Option<&str>) -> String {
+pub(crate) fn rename_field(ident: &str, rule: Option<&str>) -> String {
     let words: Vec<&str> = ident.split('_').filter(|word| !word.is_empty()).collect();
     match rule {
         Some("camelCase") => camel(&words, false),

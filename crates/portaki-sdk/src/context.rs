@@ -205,6 +205,15 @@ pub struct Context {
     /// Surface/query/command input params from the host (route params, overlay args, …).
     #[serde(default)]
     pub input: Value,
+    /// This install's configuration as the platform stores it (`moduleConfig`), secrets
+    /// decrypted; `{}` when there is none. Read it through the `load` that
+    /// `#[portaki_sdk::config]` generates — see [`crate::config`].
+    #[serde(default = "empty_object")]
+    pub module_config: Value,
+}
+
+fn empty_object() -> Value {
+    Value::Object(serde_json::Map::new())
 }
 
 /// Host dashboard invocation context.
@@ -303,6 +312,7 @@ impl Default for Context {
                 address: None,
             },
             input: Value::Null,
+            module_config: empty_object(),
         }
     }
 }

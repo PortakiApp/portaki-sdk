@@ -96,6 +96,10 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["emails"] = Value::Array(emails);
     }
 
+    if let Some(fields) = config_fields(emissions, &translated) {
+        catalog["config"] = json!({ "fields": fields });
+    }
+
     let (host, guest) = surfaces(
         emissions,
         data["id"].as_str().unwrap_or_default(),
@@ -108,6 +112,47 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["guestSurfaces"] = Value::Array(guest);
     }
     catalog
+}
+
+/// Les champs de `#[portaki_sdk::config]`, libellés traduits : la macro ne porte que des clés.
+///
+/// Une option de `select` se libelle par la clé `<label>.<valeur>`.
+fn config_fields(
+    emissions: &[EmissionFile],
+    translated: &dyn Fn(&Value) -> Value,
+) -> Option<Vec<Value>> {
+    let config = emissions.iter().find(|e| e.kind == "config")?;
+    let fields = config.data["fields"].as_array()?;
+    Some(
+        fields
+            .iter()
+            .map(|field| {
+                let mut entry = field.clone();
+                entry["label"] = translated(&field["label"]);
+                if let Some(key) = field.get("description") {
+                    entry["description"] = translated(key);
+                }
+                if let Some(options) = field["options"].as_array() {
+                    entry["options"] = options
+                        .iter()
+                        .map(|value| {
+                            let key = option_label_key(field, value);
+                            json!({ "value": value, "label": translated(&Value::String(key)) })
+                        })
+                        .collect();
+                }
+                entry
+            })
+            .collect(),
+    )
+}
+
+fn option_label_key(field: &Value, value: &Value) -> String {
+    format!(
+        "{}.{}",
+        field["label"].as_str().unwrap_or_default(),
+        value.as_str().unwrap_or_default()
+    )
 }
 
 /// Les entrées de navigation que les `#[surface]` décrivent, triées pour un manifeste stable.
@@ -209,6 +254,19 @@ pub fn check_references(
             "surface" => vec![data["catalog"].get("label_key")],
             "nav" => vec![data.get("label_key")],
             "email" => vec![data.get("descriptionKey")],
+            "config" => {
+                for field in data["fields"].as_array().into_iter().flatten() {
+                    for option in field["options"].as_array().into_iter().flatten() {
+                        keys.push(option_label_key(field, option));
+                    }
+                }
+                data["fields"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|field| [field.get("label"), field.get("description")])
+                    .collect()
+            }
             _ => Vec::new(),
         };
         keys.extend(
@@ -236,6 +294,18 @@ pub fn check_references(
         anyhow::bail!(
             "i18n keys the module declares but does not translate: {}",
             missing.join(", ")
+        );
+    }
+
+    let configs: Vec<&str> = emissions
+        .iter()
+        .filter(|e| e.kind == "config")
+        .filter_map(|e| e.data["name"].as_str())
+        .collect();
+    if configs.len() > 1 {
+        anyhow::bail!(
+            "#[portaki_sdk::config] is on {} — a module has one configuration",
+            configs.join(" and ")
         );
     }
 
@@ -316,6 +386,15 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
                     if !declared.contains(permission) {
                         declared.push(permission.clone());
                     }
+                }
+            }
+            // `config` : ce que le manifeste écrit à la main l'emporte clé par clé — ses `fields`
+            // entiers s'il en a, ceux du code sinon, à côté de son `globalAlert`.
+            (Some(Value::Object(declared)), None) if key == "config" => {
+                for (field, built) in value.as_object().into_iter().flatten() {
+                    declared
+                        .entry(field.clone())
+                        .or_insert_with(|| built.clone());
                 }
             }
             (Some(Value::Array(declared)), Some((_, fields))) => merge_entries(
@@ -605,6 +684,99 @@ mod tests {
         emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "applyQuery": "applyFeed" });
         let typo = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
         assert!(typo.to_string().contains("applyFeed"), "{typo}");
+    }
+
+    fn with_config() -> Vec<EmissionFile> {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "config".into(),
+            data: json!({ "name": "Config", "fields": [
+                { "key": "ssid", "type": "text", "required": true, "recommended": false,
+                  "label": "config.ssid" },
+                { "key": "password", "type": "secret", "required": false, "recommended": true,
+                  "label": "config.password", "description": "config.password.help" },
+                { "key": "security", "type": "select", "required": false, "recommended": false,
+                  "label": "config.security", "options": ["wpa2", "wep"] },
+                { "key": "contacts", "type": "structured", "required": false,
+                  "recommended": false, "label": "config.contacts" },
+            ] }),
+        });
+        emissions
+    }
+
+    const CONFIG_FR: &str = r#"{"config.ssid":"Nom du réseau","config.password":"Mot de passe",
+        "config.password.help":"Au dos de la box","config.security":"Sécurité",
+        "config.security.wpa2":"WPA2","config.security.wep":"WEP","config.contacts":"Contacts"}"#;
+
+    #[test]
+    fn config_labels_are_translated_from_the_bundles() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("fr-FR.json"), CONFIG_FR).expect("fr");
+
+        let catalog = catalog_defaults(&with_config(), dir.path(), &["fr-FR".to_string()]);
+
+        assert_eq!(
+            catalog["config"],
+            json!({ "fields": [
+                { "key": "ssid", "type": "text", "required": true, "recommended": false,
+                  "label": { "fr": "Nom du réseau" } },
+                { "key": "password", "type": "secret", "required": false, "recommended": true,
+                  "label": { "fr": "Mot de passe" }, "description": { "fr": "Au dos de la box" } },
+                { "key": "security", "type": "select", "required": false, "recommended": false,
+                  "label": { "fr": "Sécurité" }, "options": [
+                    { "value": "wpa2", "label": { "fr": "WPA2" } },
+                    { "value": "wep", "label": { "fr": "WEP" } } ] },
+                { "key": "contacts", "type": "structured", "required": false,
+                  "recommended": false, "label": { "fr": "Contacts" } },
+            ] })
+        );
+    }
+
+    #[test]
+    fn a_config_label_missing_from_a_bundle_stops_the_build() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let module_keys = r#""module.displayName":"x","module.description":"y""#;
+        let fr = CONFIG_FR.replacen('{', &format!("{{{module_keys},"), 1);
+        std::fs::write(dir.path().join("fr-FR.json"), &fr).expect("fr");
+        std::fs::write(
+            dir.path().join("en-US.json"),
+            fr.replace(r#""config.security.wep":"WEP","#, ""),
+        )
+        .expect("en");
+        let locales = ["fr-FR".to_string(), "en-US".to_string()];
+
+        let missing = super::check_references(&with_config(), dir.path(), &locales).unwrap_err();
+        assert_eq!(
+            missing.to_string(),
+            "i18n keys the module declares but does not translate: config.security.wep (en-US)"
+        );
+
+        let mut two = with_config();
+        two.push(EmissionFile {
+            kind: "config".into(),
+            data: json!({ "name": "Other", "fields": [] }),
+        });
+        std::fs::write(dir.path().join("en-US.json"), &fr).expect("en");
+        let error = super::check_references(&two, dir.path(), &locales).unwrap_err();
+        assert!(error.to_string().contains("Config and Other"), "{error}");
+    }
+
+    #[test]
+    fn hand_written_config_fields_win_and_the_rest_is_filled() {
+        let built = r#"{"config":{"fields":[{"key":"ssid"}]}}"#;
+        let alert_only = r#"{"config":{"globalAlert":{"type":"info"}}}"#;
+        let filled: serde_json::Value =
+            serde_json::from_str(&fill_catalog(alert_only, built).expect("fill")).expect("parse");
+        assert_eq!(
+            filled["config"],
+            json!({ "globalAlert": { "type": "info" }, "fields": [{ "key": "ssid" }] })
+        );
+
+        let hand_written = r#"{"config":{"fields":[{"key":"legacy"}]}}"#;
+        assert_eq!(
+            fill_catalog(hand_written, built).expect("fill"),
+            hand_written
+        );
     }
 
     #[test]

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "fixture-config",
+  "name": { "fr": "Wi-Fi témoin", "en": "Fixture Wi-Fi" },
+  "description": { "fr": "Déclare sa configuration.", "en": "Declares its configuration." },
+  "version": "0.1.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "wifi",
+  "type": "official",
+  "permissions": ["kv", "platform"],
+  "config": {
+    "fields": [
+      { "key": "ssid", "type": "text", "required": true, "recommended": false,
+        "label": { "fr": "Nom du réseau", "en": "Network name" } },
+      { "key": "password", "type": "secret", "required": false, "recommended": true,
+        "label": { "fr": "Mot de passe", "en": "Password" } },
+      { "key": "contacts", "type": "structured", "required": false, "recommended": false,
+        "label": { "fr": "Contacts utiles", "en": "Useful contacts" } }
+    ]
+  }
+}

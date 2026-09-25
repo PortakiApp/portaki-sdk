@@ -57,6 +57,7 @@ portaki-sdk = "0.1"   # preferred — re-exports these macros
 | `#[query]` / `#[command]` | Gateway operations |
 | `#[event_handler]` | Event subscriptions |
 | `#[capability]` | Declared capability ids |
+| `#[config]` | Host configuration fields (`config.fields`) + the `legacyConfig` query |
 | `#[connector]` / `#[custom_connector]` / `#[connector_op]` | Connector bindings & custom ops |
 
 Attribute keys, JSON shapes, and `compile_error` conditions are documented on each item in [docs.rs](https://docs.rs/portaki-sdk-macros).

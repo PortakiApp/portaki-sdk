@@ -87,7 +87,10 @@ let task = timeline::task(format!("cleaning:{}", stay.id), stay.check_out, args.
 
 ### `publishReadiness` — `contracts/publish-readiness.v1.json`
 
-Optional. Args `{ propertyId }`, in a host context reading the draft KV. Answer
+Optional, and reserved to **conditional** rules. An empty config field needs none: declare it
+`required` or `recommended` with `#[portaki_sdk::config]` and the platform adds its item (id
+`config.<key>`) itself. The query stays for what the schema cannot say — "a code once the smart
+lock is off" — and its items are merged with the platform's. Args `{ propertyId }`, in a host context reading the draft KV. Answer
 `PublishReadiness { items: [PublishCheck { id, level: "required" | "recommended" | "optional",
 ok, label, hint }] }`. A `required` item not `ok` blocks the property publication; the others never
 do. A module without the query adds nothing.

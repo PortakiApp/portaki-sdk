@@ -91,8 +91,11 @@ use chrono::{DateTime, Utc};
 use portaki_sdk::context::{CapabilityGrant, Context, StayContext};
 use portaki_sdk::error::{PortakiError, Result};
 use portaki_sdk::host::email::{EmailError, SendEmailArgs};
+use portaki_sdk::host::module::ModuleStatus;
 use portaki_sdk::host::{with_host, HostBackend};
 use portaki_sdk::limits;
+
+use serde::Serialize;
 
 use crate::fixtures::Property;
 
@@ -108,6 +111,7 @@ pub struct MockContextBuilder {
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
     now: Option<DateTime<Utc>>,
+    module_status: Option<ModuleStatus>,
 }
 
 impl MockContextBuilder {
@@ -237,6 +241,27 @@ impl MockContextBuilder {
         self
     }
 
+    /// Sets the install's configuration (`Context::module_config`), as the platform hands it
+    /// over — what the `load` of `#[portaki_sdk::config]` reads.
+    ///
+    /// Call after [`Self::with_capabilities`], which rebuilds the context.
+    ///
+    /// # Panics
+    ///
+    /// When `config` does not serialize to JSON.
+    pub fn with_config<T: Serialize>(mut self, config: &T) -> Self {
+        self.context.module_config =
+            serde_json::to_value(config).expect("config serializes to JSON");
+        self
+    }
+
+    /// What `host::module::status` answers — e.g. `incomplete: true` with the required keys
+    /// still empty. Without it, a ready install: active, complete, no config required.
+    pub fn with_module_status(mut self, status: ModuleStatus) -> Self {
+        self.module_status = Some(status);
+        self
+    }
+
     /// Freezes the mock clock (`host::time::now`) at `now`.
     ///
     /// Without it the mock answers the real current time, which makes the after-stay email
@@ -268,6 +293,13 @@ impl MockContextBuilder {
             email_send_calls: Mutex::new(0),
             sent_emails: Mutex::new(Vec::new()),
             event_emits: Mutex::new(0),
+            module_status: self.module_status.unwrap_or(ModuleStatus {
+                active: true,
+                workspace_enabled: true,
+                incomplete: false,
+                requires_config: false,
+                missing_required_keys: Vec::new(),
+            }),
         });
         (self.context, host)
     }
@@ -322,6 +354,7 @@ pub struct MockHostFunctions {
     email_send_calls: Mutex<usize>,
     sent_emails: Mutex<Vec<SendEmailArgs>>,
     event_emits: Mutex<usize>,
+    module_status: ModuleStatus,
 }
 
 impl MockHostFunctions {
@@ -484,13 +517,7 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn module_status(&self) -> Result<portaki_sdk::host::module::ModuleStatus> {
-        Ok(portaki_sdk::host::module::ModuleStatus {
-            active: true,
-            workspace_enabled: true,
-            incomplete: false,
-            requires_config: false,
-            missing_required_keys: Vec::new(),
-        })
+        Ok(self.module_status.clone())
     }
 
     fn module_list_by_capability(

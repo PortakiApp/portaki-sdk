@@ -44,6 +44,14 @@ fn problems(module: &Module) -> Vec<String> {
         }
     }
 
+    if let Ok(Some(manifest)) = module.manifest() {
+        let languages: BTreeSet<String> = bundles
+            .iter()
+            .map(|(locale, _)| language_of(locale))
+            .collect();
+        problems.extend(config_label_problems(&manifest, &languages));
+    }
+
     let used = used_keys(module);
     for (key, origins) in &used {
         let missing: Vec<&str> = required
@@ -63,6 +71,54 @@ fn problems(module: &Module) -> Vec<String> {
                 missing.join(" and "),
                 origins.join(", ")
             ));
+        }
+    }
+    problems
+}
+
+/// Every `config.fields[]` label — and description, and option label, when there is one — has
+/// a text in each language the module ships a bundle for: the dashboard shows them all.
+fn config_label_problems(manifest: &Value, languages: &BTreeSet<String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut check = |what: String, text: Option<&Value>| {
+        let given: BTreeSet<String> = text
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .filter(|(_, text)| text.as_str().is_some_and(|text| !text.trim().is_empty()))
+            .map(|(locale, _)| language_of(locale))
+            .collect();
+        let missing: Vec<&str> = languages
+            .iter()
+            .filter(|language| !given.contains(*language))
+            .map(String::as_str)
+            .collect();
+        if !missing.is_empty() {
+            problems.push(format!(
+                "{MANIFEST_FILE} {what} has no {} text — declare its i18n key in every bundle",
+                missing.join(" / ")
+            ));
+        }
+    };
+    for field in manifest["config"]["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let key = field["key"].as_str().unwrap_or("?");
+        check(format!("config field `{key}` label"), field.get("label"));
+        if let Some(description) = field.get("description") {
+            check(
+                format!("config field `{key}` description"),
+                Some(description),
+            );
+        }
+        for option in field["options"].as_array().into_iter().flatten() {
+            let value = option["value"].as_str().unwrap_or("?");
+            check(
+                format!("config field `{key}` option `{value}` label"),
+                option.get("label"),
+            );
         }
     }
     problems
@@ -223,6 +279,30 @@ mod tests {
             keys.into_iter().collect::<Vec<_>>(),
             vec!["host.section.help", "host.title", "nav.x"]
         );
+    }
+
+    #[test]
+    fn config_labels_need_every_bundle_language() {
+        let languages: BTreeSet<String> = ["en", "fr"].map(String::from).into();
+        let manifest = json!({ "config": { "fields": [
+            { "key": "ssid", "label": { "fr": "Réseau", "en-US": "Network" } },
+            { "key": "password", "label": { "fr": "Mot de passe", "en": " " },
+              "description": { "fr": "Au dos" } },
+            { "key": "contacts" },
+            { "key": "security", "label": { "fr": "S", "en": "S" },
+              "options": [{ "value": "wep", "label": { "fr": "WEP" } }] },
+        ] } });
+
+        assert_eq!(
+            config_label_problems(&manifest, &languages),
+            vec![
+                "portaki.module.json config field `password` label has no en text — declare its i18n key in every bundle",
+                "portaki.module.json config field `password` description has no en text — declare its i18n key in every bundle",
+                "portaki.module.json config field `contacts` label has no en / fr text — declare its i18n key in every bundle",
+                "portaki.module.json config field `security` option `wep` label has no en text — declare its i18n key in every bundle",
+            ]
+        );
+        assert!(config_label_problems(&json!({}), &languages).is_empty());
     }
 
     #[test]

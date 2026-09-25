@@ -14,6 +14,7 @@
       {
         "key": "units",
         "type": "select",
+        "label": { "fr": "Unités", "en": "Units" },
         "options": [{ "value": "metric", "label": { "fr": "Métrique", "en": "Metric" } }]
       }
     ],

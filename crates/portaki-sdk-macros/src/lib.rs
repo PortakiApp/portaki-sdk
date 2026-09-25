@@ -35,6 +35,7 @@
 //! | `query` | `query` | `query-{name}.json` |
 //! | `command` | `command` | `command-{name}.json` |
 //! | `params` | `params` | `params-{TypeName}.json` |
+//! | `config` | `config` (+ `query` `legacyConfig`) | `config-{StructName}.json` |
 //! | `event_handler` | `event_handler` | `event_handler-{event_type}.json` |
 //! | `capability` | `capability` | `capability-{id}.json` |
 //! | `connector` | `connector_builtin` | `connector_builtin-{builtin}.json` |
@@ -58,6 +59,7 @@
 
 mod capability;
 mod command;
+mod config;
 mod connector;
 mod email;
 mod emit;
@@ -422,6 +424,64 @@ pub fn nav(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
     params::expand(attr, item)
+}
+
+/// Declares the module's host configuration: the struct is the schema, the platform the store.
+///
+/// # Syntax
+///
+/// ```text
+/// #[portaki_sdk::config]
+/// #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// pub struct Config {
+///     #[field(required, label = "config.ssid")]
+///     pub ssid: String,
+///     #[field(secret, recommended, label = "config.password")]
+///     pub password: String,
+///     #[field(structured, label = "config.contacts")]
+///     pub contacts: Vec<Contact>,
+///     pub hidden: bool,
+/// }
+///
+/// let config = Config::load(&ctx)?;
+/// ```
+///
+/// Goes **above** the derives. The struct needs `Default` and serde's `Serialize` /
+/// `Deserialize`; `#[serde(default)]` is added when missing — the platform stores only the keys
+/// the host filled in.
+///
+/// # `#[field(…)]`
+///
+/// | Key | |
+/// |-----|--|
+/// | `label = "…"` | **required** — i18n key, translated by `portaki build` into every bundle |
+/// | `description = "…"` | i18n key |
+/// | `required` | publication is blocked while it is empty |
+/// | `recommended` | a warning while it is empty, never a block |
+/// | `secret` | encrypted at rest, masked when read back |
+/// | `structured` | a list or object edited by the module's own host surface, never by a generic form |
+/// | `kind = "…"` | `text`, `textarea`, `url`, `number`, `secret`, `toggle`, `select`, `readonly`, `structured` |
+/// | `options = ["…", …]` | the values of a `select`; each label is the i18n key `<label>.<value>` |
+///
+/// Without `kind`, the Rust type decides: `String` → `text`, `bool` → `toggle`, numbers →
+/// `number`, anything else → `structured` (`Option<T>` reads as `T`). The key is the serde name
+/// (`rename`, `rename_all`). A field without `#[field]` is not declared: the host never edits it.
+///
+/// # Generated
+///
+/// - `Config::load(&Context) -> Result<Config>` — reads `context.moduleConfig`; while it is `{}`,
+///   the KV key `config` (a config saved before the platform held it). A config that does not
+///   deserialize is an error, never a silent `Default`.
+/// - the host query `legacyConfig` — the raw JSON of the KV key `config`, or `null`, which the
+///   platform imports once.
+///
+/// # Emission
+///
+/// `config-{StructName}.json` → `config.fields[]` of the catalogue, labels translated; and
+/// `query-legacyConfig.json`.
+#[proc_macro_attribute]
+pub fn config(attr: TokenStream, item: TokenStream) -> TokenStream {
+    config::expand(attr, item)
 }
 
 /// Declares a subscription to a platform event type.
