@@ -35,7 +35,7 @@
 //! | `query` | `query` | `query-{name}.json` |
 //! | `command` | `command` | `command-{name}.json` |
 //! | `params` | `params` | `params-{TypeName}.json` |
-//! | `config` | `config` (+ `query` `legacyConfig`) | `config-{StructName}.json` |
+//! | `config` | `config` (+ `query` `legacyConfig`, `command` `legacyConfigAdopted`) | `config-{StructName}.json` |
 //! | `email_vars` | `email_vars` (+ `query` `emailContext`) | `email_vars-emailContext.json` |
 //! | `event_handler` | `event_handler` | `event_handler-{event_type}.json` |
 //! | `capability` | `capability` | `capability-{id}.json` |
@@ -537,6 +537,14 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   deserialize is an error, never a silent `Default`.
 /// - the host query `legacyConfig` — the raw JSON of the KV key `config`, or `null`, which the
 ///   platform imports once.
+/// - the host command `legacyConfigAdopted` — called by the platform once that import is stored:
+///   deletes the KV key `config` and the keys of `legacy_keys`. Refused while no `moduleConfig`
+///   is sent (the import has not happened).
+///
+/// # `legacy_keys = ["texts/fr", "texts/en"]`
+///
+/// Other KV keys the old code kept its settings under, read by `legacy` or not: they go with
+/// `config` once the platform holds the config.
 ///
 /// # `legacy = path::to::fn`
 ///
@@ -554,8 +562,8 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Emission
 ///
-/// `config-{StructName}.json` → `config.fields[]` of the catalogue, labels translated; and
-/// `query-legacyConfig.json`.
+/// `config-{StructName}.json` → `config.fields[]` of the catalogue, labels translated;
+/// `query-legacyConfig.json` and `command-legacyConfigAdopted.json`.
 #[proc_macro_attribute]
 pub fn config(attr: TokenStream, item: TokenStream) -> TokenStream {
     config::expand(attr, item)

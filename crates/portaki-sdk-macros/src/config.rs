@@ -9,6 +9,8 @@
 //! - `load(&Context)`, reading `moduleConfig` through `portaki_sdk::config::load`;
 //! - the host query `legacyConfig`, the KV `config` blob the platform imports once — raw, or
 //!   through `legacy = path::to::fn` when the old blob does not have the declared keys;
+//! - the host command `legacyConfigAdopted`, which the platform calls once the import is stored:
+//!   it deletes the KV `config` and the keys of `legacy_keys = ["…"]`;
 //! - `#[serde(default)]` on the struct, when it does not carry it: the platform stores only
 //!   what the host filled in, so a key may be missing.
 
@@ -25,6 +27,9 @@ use crate::params::{rename_field, serde_of};
 /// The operation the platform calls to import a config kept in KV before it owned it.
 const LEGACY_QUERY: &str = "legacyConfig";
 
+/// The command the platform calls once that import is stored, to clear the old KV keys.
+const ADOPTED_COMMAND: &str = "legacyConfigAdopted";
+
 /// The `type` values of `configField` in `module.v1.json`.
 const KINDS: [&str; 10] = [
     "text",
@@ -39,24 +44,49 @@ const KINDS: [&str; 10] = [
     "localized",
 ];
 
-/// Expands `#[portaki_sdk::config]` / `#[portaki_sdk::config(legacy = path::to::fn)]` on a struct
-/// with named fields.
+/// What `#[portaki_sdk::config(…)]` takes.
+#[derive(Default)]
+struct ConfigAttrs {
+    /// Maps the old KV blob onto the declared keys.
+    legacy: Option<syn::Path>,
+    /// KV keys besides `config` the old code kept, deleted once the platform holds the config.
+    legacy_keys: Vec<String>,
+}
+
+/// Expands `#[portaki_sdk::config]` / `#[portaki_sdk::config(legacy = path::to::fn,
+/// legacy_keys = ["…"])]` on a struct with named fields.
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut legacy: Option<syn::Path> = None;
-    let parser = syn::meta::parser(|meta| {
-        if meta.path.is_ident("legacy") {
-            legacy = Some(meta.value()?.parse()?);
-            Ok(())
-        } else {
-            Err(meta.error(
-                "#[portaki_sdk::config] takes only legacy = <fn(Value) -> Value> — \
-                 flags go on each field: #[field(required, label = \"…\")]",
-            ))
-        }
-    });
+    let mut attrs = ConfigAttrs::default();
+    let parser =
+        syn::meta::parser(|meta| {
+            if meta.path.is_ident("legacy") {
+                attrs.legacy = Some(meta.value()?.parse()?);
+                Ok(())
+            } else if meta.path.is_ident("legacy_keys") {
+                let list: syn::ExprArray = meta.value()?.parse()?;
+                for element in &list.elems {
+                    match element {
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(key),
+                            ..
+                        }) if !key.value().trim().is_empty() => attrs.legacy_keys.push(key.value()),
+                        other => return Err(syn::Error::new(
+                            other.span(),
+                            "legacy_keys are KV keys: legacy_keys = [\"texts/fr\", \"texts/en\"]",
+                        )),
+                    }
+                }
+                Ok(())
+            } else {
+                Err(meta.error(
+                    "#[portaki_sdk::config] takes legacy = <fn(Value) -> Value> and \
+                 legacy_keys = [\"…\"] — flags go on each field: #[field(required, label = \"…\")]",
+                ))
+            }
+        });
     syn::parse_macro_input!(attr with parser);
     let mut item = syn::parse_macro_input!(item as ItemStruct);
-    match expand_struct(&mut item, legacy.as_ref()) {
+    match expand_struct(&mut item, &attrs) {
         Ok(tokens) => tokens.into(),
         Err(error) => error.to_compile_error().into(),
     }
@@ -64,7 +94,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// `legacy`: maps the raw KV blob onto the declared keys, for `legacyConfig` and for `load`
 /// before the platform holds the config.
-fn expand_struct(item: &mut ItemStruct, legacy: Option<&syn::Path>) -> syn::Result<TokenStream2> {
+fn expand_struct(item: &mut ItemStruct, attrs: &ConfigAttrs) -> syn::Result<TokenStream2> {
+    let legacy = attrs.legacy.as_ref();
     let fields = declared_fields(item)?;
     if !serde_of(&item.attrs).default {
         item.attrs.push(syn::parse_quote!(#[serde(default)]));
@@ -104,11 +135,35 @@ fn expand_struct(item: &mut ItemStruct, legacy: Option<&syn::Path>) -> syn::Resu
     );
     let registration = crate::wasm_handler::register_query(LEGACY_QUERY, &legacy_fn, &legacy);
 
+    let keys = &attrs.legacy_keys;
+    let adopted: ItemFn = syn::parse_quote! {
+        fn portaki_legacy_config_adopted(
+            ctx: ::portaki_sdk::context::Context,
+        ) -> ::portaki_sdk::error::Result<::serde_json::Value> {
+            ::portaki_sdk::config::legacy_config_adopted(&ctx, &[#(#keys),*])
+        }
+    };
+    let adopted_fn = adopted.sig.ident.to_string();
+    let adopted_emission = write_emission(
+        "command",
+        &sanitize_key(ADOPTED_COMMAND),
+        &serde_json::to_string_pretty(&json!({
+            "kind": "command",
+            "name": ADOPTED_COMMAND,
+            "fn": adopted_fn,
+            "guest": false,
+        }))
+        .unwrap(),
+    );
+    let adopted_registration =
+        crate::wasm_handler::register_command(ADOPTED_COMMAND, &adopted_fn, &adopted);
+
     let ident = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
     Ok(quote! {
         #config_emission
         #query_emission
+        #adopted_emission
         #item
 
         impl #impl_generics #ident #ty_generics #where_clause {
@@ -125,6 +180,8 @@ fn expand_struct(item: &mut ItemStruct, legacy: Option<&syn::Path>) -> syn::Resu
 
         #legacy
         #registration
+        #adopted
+        #adopted_registration
 
         #[cfg(not(target_arch = "wasm32"))]
         ::portaki_sdk::inventory::submit! {
@@ -524,14 +581,20 @@ mod tests {
                 pub ssid: String,
             }
         };
-        let expanded = expand_struct(&mut item, None).unwrap().to_string();
+        let expanded = expand_struct(&mut item, &ConfigAttrs::default())
+            .unwrap()
+            .to_string();
 
         assert!(!expanded.contains("field ("), "{expanded}");
         assert!(expanded.contains("# [serde (default)]"), "{expanded}");
         assert!(expanded.contains("pub fn load"), "{expanded}");
         assert!(expanded.contains("\"legacyConfig\""), "{expanded}");
         assert!(expanded.contains("legacy_config_mapped (:: core :: convert :: identity)"));
-        let mapped = expand_struct(&mut item.clone(), Some(&parse_quote!(crate::old::read)))
+        let attrs = ConfigAttrs {
+            legacy: Some(parse_quote!(crate::old::read)),
+            legacy_keys: vec!["texts/fr".into(), "texts/en".into()],
+        };
+        let mapped = expand_struct(&mut item.clone(), &attrs)
             .unwrap()
             .to_string();
         assert!(
@@ -543,6 +606,15 @@ mod tests {
             "{mapped}"
         );
         assert!(expanded.contains("ConfigDeclaration"), "{expanded}");
+        assert!(expanded.contains("\"legacyConfigAdopted\""), "{expanded}");
+        assert!(
+            expanded.contains("legacy_config_adopted (& ctx , & [])"),
+            "{expanded}"
+        );
+        assert!(
+            mapped.contains("legacy_config_adopted (& ctx , & [\"texts/fr\" , \"texts/en\"])"),
+            "{mapped}"
+        );
     }
 
     #[test]
@@ -561,7 +633,9 @@ mod tests {
             #[serde(default)]
             struct Config { #[field(label = "a")] a: String }
         };
-        let expanded = expand_struct(&mut item, None).unwrap().to_string();
+        let expanded = expand_struct(&mut item, &ConfigAttrs::default())
+            .unwrap()
+            .to_string();
         assert_eq!(expanded.matches("serde (default)").count(), 1, "{expanded}");
     }
 }

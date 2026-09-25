@@ -200,6 +200,31 @@ pub fn legacy_config_mapped(legacy: fn(Value) -> Value) -> Result<Value> {
     })
 }
 
+/// What `legacyConfigAdopted` does: once the platform has stored the imported config, delete the
+/// KV key [`LEGACY_KV_KEY`] and the `legacy_keys` of `#[config(legacy_keys = […])]`. Answers the
+/// keys cleared.
+///
+/// Refused (`legacy_config_not_adopted`) while the platform sends no `moduleConfig`: the import
+/// has not happened, and deleting the KV would lose the only copy. Deleting a key that is not
+/// there is not an error — the platform retries until it gets an answer. Nothing to delete
+/// without the `kv` feature.
+pub fn legacy_config_adopted(ctx: &Context, legacy_keys: &[&str]) -> Result<Value> {
+    if ctx.module_config.is_none() {
+        return Err(PortakiError::Storage("legacy_config_not_adopted".into()));
+    }
+    #[cfg(feature = "kv")]
+    let cleared: Vec<&str> = std::iter::once(LEGACY_KV_KEY)
+        .chain(legacy_keys.iter().copied())
+        .map(|key| crate::host::kv::delete(key).map(|()| key))
+        .collect::<Result<_>>()?;
+    #[cfg(not(feature = "kv"))]
+    let cleared: Vec<&str> = {
+        let _ = legacy_keys;
+        Vec::new()
+    };
+    Ok(serde_json::json!({ "cleared": cleared }))
+}
+
 fn unreadable(reason: String) -> PortakiError {
     PortakiError::Storage(format!("config_unreadable: {reason}"))
 }
@@ -219,7 +244,7 @@ mod tests {
         guests: u32,
     }
 
-    struct Kv(Option<&'static [u8]>);
+    struct Kv(Option<&'static [u8]>, std::sync::Mutex<Vec<String>>);
     impl HostBackend for Kv {
         fn context(&self) -> Result<Context> {
             Ok(Context::default())
@@ -231,7 +256,8 @@ mod tests {
         fn kv_set(&self, _: &str, _: &[u8], _: Option<u32>) -> Result<()> {
             Ok(())
         }
-        fn kv_delete(&self, _: &str) -> Result<()> {
+        fn kv_delete(&self, key: &str) -> Result<()> {
+            self.1.lock().unwrap().push(key.into());
             Ok(())
         }
         fn kv_list(&self, _: &str) -> Result<Vec<String>> {
@@ -256,7 +282,9 @@ mod tests {
             module_config,
             ..Context::default()
         };
-        with_host(Arc::new(Kv(kv)), ctx.clone(), || load(&ctx))
+        with_host(Arc::new(Kv(kv, Default::default())), ctx.clone(), || {
+            load(&ctx)
+        })
     }
 
     #[test]
@@ -340,11 +368,41 @@ mod tests {
     #[test]
     fn legacy_config_is_the_raw_kv_blob() {
         let ctx = Context::default();
-        let raw = with_host(Arc::new(Kv(Some(br#"{"old":true}"#))), ctx.clone(), || {
-            legacy_config()
-        });
+        let raw = with_host(
+            Arc::new(Kv(Some(br#"{"old":true}"#), Default::default())),
+            ctx.clone(),
+            || legacy_config(),
+        );
         assert_eq!(raw.unwrap(), json!({ "old": true }));
-        let none = with_host(Arc::new(Kv(None)), ctx, legacy_config);
+        let none = with_host(Arc::new(Kv(None, Default::default())), ctx, legacy_config);
         assert_eq!(none.unwrap(), Value::Null);
+    }
+
+    /// Once the platform holds the config, the old keys go; before, nothing is touched.
+    #[test]
+    fn adopted_clears_the_old_keys_only_once_the_platform_holds_the_config() {
+        let kv = Arc::new(Kv(None, Default::default()));
+        let before = Context::default();
+        let refused = with_host(kv.clone(), before.clone(), || {
+            legacy_config_adopted(&before, &["texts/fr"])
+        });
+        assert!(refused
+            .unwrap_err()
+            .to_string()
+            .contains("legacy_config_not_adopted"));
+        assert!(kv.1.lock().unwrap().is_empty());
+
+        let after = Context {
+            module_config: Some(json!({})),
+            ..Context::default()
+        };
+        let answer = with_host(kv.clone(), after.clone(), || {
+            legacy_config_adopted(&after, &["texts/fr", "texts/en"])
+        });
+        assert_eq!(
+            answer.unwrap(),
+            json!({ "cleared": ["config", "texts/fr", "texts/en"] })
+        );
+        assert_eq!(*kv.1.lock().unwrap(), ["config", "texts/fr", "texts/en"]);
     }
 }
