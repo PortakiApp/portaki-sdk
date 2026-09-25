@@ -29,14 +29,17 @@
 //!
 //! 1. Declare the module with `portaki_module!` and register surfaces/queries/commands
 //!    via proc-macros (`surface!`, `query!`, `command!`, …).
-//! 2. Import [`prelude`] in handler modules.
-//! 3. Return [`Surface`] trees from render functions; call `host::*` for storage,
+//! 2. Declare the host settings on a struct with `#[portaki_sdk::config]` and read them with
+//!    its generated `load(&ctx)` — the platform stores, validates and gates publication on
+//!    them (see [`mod@config`]).
+//! 3. Import [`prelude`] in handler modules.
+//! 4. Return [`Surface`] trees from render functions; call `host::*` for storage,
 //!    connectors, and logging.
-//! 4. Gate premium behaviour with `ctx.has_capability(...)` or
+//! 5. Gate premium behaviour with `ctx.has_capability(...)` or
 //!    [`mod@capability`] constants.
-//! 5. Prefer [`ids`] newtypes and [`contracts`] for cross-boundary names
+//! 6. Prefer [`ids`] newtypes and [`contracts`] for cross-boundary names
 //!    (surfaces, commands, events, peer ops) instead of free string literals.
-//! 6. Keep Wasm crate folders strict: `guest/` / `host/` / `connectors` / `ids`
+//! 7. Keep Wasm crate folders strict: `guest/` / `host/` / `connectors` / `ids`
 //!    (see repo `docs/module-layout.md`).
 //!
 //! ## Wasm target
@@ -47,6 +50,7 @@
 #![deny(missing_docs)]
 
 pub mod capability;
+pub mod config;
 pub mod context;
 pub mod contracts;
 pub mod deprecation;
@@ -99,8 +103,9 @@ pub use email::{EmailContextArgs, EmailContextContribution, EmailTemplateKey};
 pub use error::{PortakiError, Result};
 pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
-    capability, command, connector, connector_op, custom_connector, email, entity, entity_indexes,
-    event_handler, nav, params, portaki_module_decl as portaki_module, query, surface, wire,
+    capability, command, config, connector, connector_op, custom_connector, email, entity,
+    entity_indexes, event_handler, nav, params, portaki_module_decl as portaki_module, query,
+    surface, wire,
 };
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},

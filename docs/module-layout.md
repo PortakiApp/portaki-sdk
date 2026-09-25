@@ -84,7 +84,7 @@ src/
   commands.rs         # #[command] handlers (or commands/)
   queries.rs          # #[query] handlers (or queries/)
   model/ or entities  # domain types / entity! structs (pick one name per crate)
-  config.rs           # persisted module config load/store helpers
+  config.rs           # #[portaki_sdk::config] struct — the platform stores it
   email_context.rs    # optional contribution to Portaki guest templates
   email_send.rs       # module-owned mail via host::email::send (or email/)
   events.rs           # #[event_handler] (optional)

@@ -3,13 +3,15 @@
 use portaki_sdk::prelude::*;
 use portaki_sdk::sdui::primitives::{Card, Field, FieldHint, Form, Page, Stack, TextInput};
 
-use crate::config::load_config;
+use crate::config::ModuleConfig;
 use crate::ids::HOST_MAIN;
 
 /// The settings the host fills in, inside the module sheet.
 ///
-/// No page title and no Save button: the sheet draws both, and posts the fields below to the
-/// `updateConfig` command. A surface that drew its own would show two.
+/// No page title and no Save button: the sheet draws both, and posts the fields below as
+/// `updateConfig`, which the platform handles against `ModuleConfig`. A surface that drew its own
+/// would show two. A config that does not load is an error, not an empty form a Save would
+/// write over what the host had.
 #[portaki_sdk::surface(
     host,
     id = "main",
@@ -17,8 +19,8 @@ use crate::ids::HOST_MAIN;
     label_key = "nav.main",
     icon = IconName::Grid
 )]
-pub fn render_host_main(_ctx: HostContext) -> Surface {
-    let config = load_config().unwrap_or_default();
+pub fn render_host_main(ctx: HostContext) -> Result<Surface> {
+    let config = ModuleConfig::load(&ctx)?;
 
     let children: Vec<Component> = vec![
         Card::new()
@@ -40,6 +42,8 @@ pub fn render_host_main(_ctx: HostContext) -> Surface {
             .into(),
     ];
 
-    Surface::new(Page::new().child(Form::new().child(Stack::new().gap(16.0).children(children))))
-        .with_id(HOST_MAIN)
+    Ok(Surface::new(
+        Page::new().child(Form::new().child(Stack::new().gap(16.0).children(children))),
+    )
+    .with_id(HOST_MAIN))
 }

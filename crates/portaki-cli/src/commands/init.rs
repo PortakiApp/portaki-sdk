@@ -332,15 +332,10 @@ fn describe(template: &InitTemplate) {
         rows.push(("src/host/", "surfaces the host dashboard renders"));
         rows.push(("src/guest/", "surfaces the guest booklet renders"));
         rows.push((
-            "src/commands.rs",
-            "updateConfig — what the sheet's Save posts",
+            "src/config.rs",
+            "the settings the host fills in — the platform stores them",
         ));
-        rows.push((
-            "src/queries.rs",
-            "getConfig — what the dashboard reads back",
-        ));
-        rows.push(("src/config.rs", "the settings blob, in the module's own KV"));
-        rows.push(("tests/", "the mock host, the settings round-tripped"));
+        rows.push(("tests/", "the mock host, the settings read back"));
         rows.push((
             "tests/conformance.rs",
             "the battery every module passes before it publishes",

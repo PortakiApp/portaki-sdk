@@ -82,6 +82,10 @@ pub struct WasmContextEnvelope {
     /// Module / property context JSON blob (orchestrator serializes `propertyContext` here).
     #[serde(rename = "configJson", default)]
     pub config_json: String,
+    /// The install's configuration, decrypted (`property_module.config_json`); `{}` when none.
+    /// Distinct from [`Self::config_json`], the property context.
+    #[serde(rename = "moduleConfig", default)]
+    pub module_config: Value,
     /// Request locale (`fr-FR`).
     #[serde(default)]
     pub locale: Option<String>,
@@ -171,6 +175,11 @@ impl WasmRequestEnvelope {
             stay,
             property,
             input: self.params.clone(),
+            module_config: match &ctx.module_config {
+                // Un runtime antérieur n'envoie rien : `{}`, comme une install sans config.
+                Value::Null => Value::Object(serde_json::Map::new()),
+                config => config.clone(),
+            },
         })
     }
 }
@@ -254,6 +263,27 @@ mod tests {
         assert_eq!(ctx.module_id, "weather");
         assert_eq!(ctx.capabilities.len(), 1);
         assert!((ctx.property.lat - 48.8566).abs() < f64::EPSILON);
+        assert_eq!(ctx.module_config, serde_json::json!({}));
+    }
+
+    /// `moduleConfig` is the install's config, next to `configJson` which stays the property.
+    #[test]
+    fn reads_module_config_apart_from_the_property_context() {
+        let raw = r#"{
+            "query": "getCurrent",
+            "context": {
+                "moduleId": "wifi",
+                "moduleVersion": "1.0.0",
+                "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                "configJson": "{\"name\":\"Vayoux\"}",
+                "moduleConfig": { "ssid": "Vayoux-5G", "password": "s3cret" }
+            }
+        }"#;
+        let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
+        let ctx = envelope.to_context("getCurrent").expect("context");
+        assert_eq!(ctx.property.name, "Vayoux");
+        assert_eq!(ctx.module_config["ssid"], "Vayoux-5G");
+        assert_eq!(ctx.module_config["password"], "s3cret");
     }
 
     #[test]

@@ -26,7 +26,7 @@
 //! | `listing` | `listing.json`, when the module versions one, validates against the `listing.v1.json` schema bundled in this crate and no longer holds the `portaki init` instructions (`À compléter …` / `To be completed …`); no `listing.json` passes — the listing can be written in the dashboard |
 //! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
-//! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` |
+//! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/`; every `config.fields[]` label (description, option labels) has a text in each language of `i18n/` |
 //! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking |
 //! | `contracts` | a `property-stats-card` surface: `statsSummary` answers for its `pathSegment` over 30, 90 and 365 days, on the `stats-summary.v1.json` contract (`fr` and `en`, `value` ≤ 12 characters), within 300 ms; a `property-stats-detail`: a host surface of id `pathSegment` renders with `input.periodDays`; a `workspace-timeline-task`: `timelineTasks` answers on three fixture stays on the `timeline-tasks.v1.json` contract (ISO dates, items never empty), and `taskToggle` refuses a photo-required item ticked without a photo with `photo_required`; an exported `publishReadiness` answers on the `publish-readiness.v1.json` contract |
 //!
@@ -111,7 +111,8 @@ impl Module {
         operations::check(self)
     }
 
-    /// Every i18n key the manifest, the surfaces and the handlers use exists in `fr` and `en`.
+    /// Every i18n key the manifest, the surfaces and the handlers use exists in `fr` and `en`,
+    /// and every config field is labelled in each language of the bundles.
     pub fn check_i18n(&self) -> Result<(), Findings> {
         i18n::check(self)
     }

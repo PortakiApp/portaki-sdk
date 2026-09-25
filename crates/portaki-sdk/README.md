@@ -70,6 +70,31 @@ portaki build --release
 portaki lint
 ```
 
+## Host configuration
+
+Declare the settings on a struct; the platform validates what the host saves, encrypts secrets,
+blocks publication while a `required` field is empty and hands the config back on every call.
+No `updateConfig` command, no KV key, no `publishReadiness` for an empty field.
+
+```rust,ignore
+#[portaki_sdk::config]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Config {
+    #[field(required, label = "config.ssid")]
+    pub ssid: String,
+    #[field(secret, recommended, label = "config.password")]
+    pub password: String,
+    #[field(structured, label = "config.contacts")]
+    pub contacts: Vec<Contact>,
+}
+
+let config = Config::load(&ctx)?; // context.moduleConfig; the KV key `config` until imported
+```
+
+Labels are i18n keys, translated from `i18n/*.json` by `portaki build`. Keep
+`publishReadiness` for conditional rules the schema cannot say ("a code once the smart lock is
+off"). Tests: `MockContext::host().with_config(&config)`.
+
 ## What you get
 
 | Surface | Role |

@@ -129,7 +129,7 @@
     },
     "config": {
       "type": "object",
-      "description": "Host configuration form. The orchestrator reads fields and globalAlert: it renders the form, flags the install requiresConfig / incomplete while a required field is empty, and encrypts secret fields at rest. The dashboard also reads defaults.",
+      "description": "Host configuration, declared by #[portaki_sdk::config] (portaki build writes it). The platform validates and stores what the host saves (updateConfig), encrypts secret fields at rest and passes the result to the module as context.moduleConfig. A required field left empty flags the install requiresConfig / incomplete and blocks publication; a recommended one only warns. Empty = absent, null, blank string, empty list or object; toggle and number are never empty. The dashboard also reads globalAlert and defaults.",
       "properties": {
         "fields": {
           "type": "array",
@@ -185,11 +185,12 @@
       "properties": {
         "key": { "type": "string", "minLength": 1 },
         "type": {
-          "enum": ["text", "textarea", "url", "number", "secret", "toggle", "select", "readonly"],
+          "enum": ["text", "textarea", "url", "number", "secret", "toggle", "select", "readonly", "structured"],
           "default": "text",
-          "description": "secret values are encrypted at rest and masked when read back; readonly fields are never required."
+          "description": "secret values are encrypted at rest and masked when read back; readonly fields are never required. structured is an object or a list (contacts, bins, opening hours…) edited by the module's own host surface, never rendered by a generic form."
         },
-        "required": { "type": "boolean", "default": false },
+        "required": { "type": "boolean", "default": false, "description": "Blocks publication while empty." },
+        "recommended": { "type": "boolean", "default": false, "description": "Warns while empty, never blocks." },
         "label": { "$ref": "#/$defs/i18nStringMap" },
         "description": { "$ref": "#/$defs/i18nStringMap" },
         "helpUrl": { "type": "string" },

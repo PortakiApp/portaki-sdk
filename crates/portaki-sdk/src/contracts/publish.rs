@@ -1,5 +1,8 @@
 //! `publishReadiness` — what a module still needs before its property goes live.
 //!
+//! Reserved to conditional rules: an empty config field declared `required` or `recommended`
+//! with `#[portaki_sdk::config]` is checked by the platform itself, without this query.
+//!
 //! The platform asks every active module before publishing a property, with args
 //! `{ "propertyId" }` in a host context reading the draft KV. `required` items that are not `ok`
 //! block the publication; `recommended` and `optional` never do. A module without this query

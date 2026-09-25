@@ -7,9 +7,3 @@ define_surface_ids! {
     HOST_MAIN = "main",
 }
 
-// Declaration sites — `#[query]`, `#[command]` — need the literal at expand time; use sites
-// take these constants, so a renamed operation breaks at compile time rather than at runtime.
-define_operation_names! {
-    GET_CONFIG = "getConfig",
-    UPDATE_CONFIG = "updateConfig",
-}
