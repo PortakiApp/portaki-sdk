@@ -149,14 +149,15 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
             .cloned()
             .unwrap_or_else(|| "fr-FR".to_string());
 
-        let manifest = generate_manifest(&emissions, &default_locale, &supported)?;
+        let sdk_features = pack::sdk_features(module_root)?;
+        let mut manifest = generate_manifest(&emissions, &default_locale, &supported)?;
+        crate::manifest::imply_storage(&mut manifest, &emissions, &sdk_features);
         let manifest_path = out_dir.join("manifest.json");
         write_manifest(&manifest, &manifest_path)?;
         crate::manifest::catalog::check_references(&emissions, &i18n_dir, &supported)?;
         let mut catalog =
             crate::manifest::catalog::catalog_defaults(&emissions, &i18n_dir, &supported);
-        let permissions =
-            crate::manifest::catalog::permissions(&emissions, &pack::sdk_features(module_root)?);
+        let permissions = crate::manifest::catalog::permissions(&emissions, &sdk_features);
         if !permissions.is_empty() {
             catalog["permissions"] = permissions.into();
         }

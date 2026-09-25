@@ -374,6 +374,24 @@ pub fn generate_manifest(
     })
 }
 
+/// Adds `core.storage` to the required capabilities when the code stores anything — a KV or
+/// repository feature of `portaki-sdk`, an `#[entity]`, a `#[portaki_sdk::config]` (whose
+/// `legacyConfigAdopted` clears KV keys) — and the module did not declare it.
+pub fn imply_storage(
+    manifest: &mut ModuleManifest,
+    emissions: &[EmissionFile],
+    sdk_features: &[String],
+) {
+    let stores = sdk_features.iter().any(|f| f == "kv" || f == "repo")
+        || emissions
+            .iter()
+            .any(|e| e.kind == "config" || e.kind == "entity");
+    let required = &mut manifest.capabilities.required;
+    if stores && !required.contains(&CapabilityId::Storage) {
+        required.push(CapabilityId::Storage);
+    }
+}
+
 /// Writes `manifest.json` to `dest`.
 /// Les formes d'arguments émises par `#[params]`, par nom de type.
 fn param_shapes(emissions: &[EmissionFile]) -> BTreeMap<String, ParamShape> {
@@ -884,5 +902,37 @@ mod vocabulary_tests {
 
         let mut unknown = json!({ "icon": "IconName::Nope" });
         assert!(resolve_vocabulary(&mut unknown).is_err());
+    }
+}
+
+#[cfg(test)]
+mod imply_storage_tests {
+    use super::*;
+
+    fn emission(kind: &str) -> EmissionFile {
+        EmissionFile {
+            kind: kind.into(),
+            data: serde_json::json!({ "id": "demo", "name": "Config" }),
+        }
+    }
+
+    #[test]
+    fn storage_follows_what_the_code_stores() {
+        let manifest =
+            || generate_manifest(&[emission("module")], "fr-FR", &["fr-FR".to_string()]).unwrap();
+        let required = |emissions: &[EmissionFile], features: &[&str]| {
+            let mut built = manifest();
+            let features: Vec<String> = features.iter().map(|f| f.to_string()).collect();
+            imply_storage(&mut built, emissions, &features);
+            imply_storage(&mut built, emissions, &features); // never twice
+            built.capabilities.required
+        };
+        assert_eq!(required(&[], &["platform"]), vec![]);
+        assert_eq!(required(&[], &["kv"]), vec![CapabilityId::Storage]);
+        assert_eq!(required(&[], &["repo"]), vec![CapabilityId::Storage]);
+        assert_eq!(
+            required(&[emission("config")], &[]),
+            vec![CapabilityId::Storage]
+        );
     }
 }

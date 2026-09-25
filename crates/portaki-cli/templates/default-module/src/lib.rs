@@ -22,9 +22,8 @@ portaki_sdk::portaki_module!(
     maturity = Maturity::Beta,
 );
 
-#[portaki_sdk::capability(required, id = "core.storage")]
-pub const STORAGE: CapabilityId = capability::core::STORAGE;
-
+// `core.storage` needs no declaration: `portaki build` adds it for an entity, a config or the
+// `kv` / `repo` features.
 #[portaki_sdk::entity(schema_version = 1)]
 pub struct SampleItem {
     pub id: uuid::Uuid,

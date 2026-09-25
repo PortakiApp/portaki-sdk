@@ -1,7 +1,8 @@
 //! Proc-macros that declare Portaki Wasm module metadata at compile time.
 //!
 //! Each macro prepends an invisible `const` block (via `emit::write_emission`) that writes a
-//! JSON fragment when `OUT_DIR` is set during `cargo build`. Fragments land under:
+//! JSON fragment during `cargo build` — under `OUT_DIR`, or without a build script the directory
+//! Cargo would have given one (see `emit`). Fragments land under:
 //!
 //! ```text
 //! {OUT_DIR}/portaki-emissions/{kind}-{sanitized_key}.json
