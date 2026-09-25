@@ -120,7 +120,7 @@
     "changelog": {
       "type": "array",
       "maxItems": 5,
-      "description": "What is new in this version, shown to hosts who have an older one installed: two or three short lines. Filled by portaki publish from --notes, or else from this version's section of the module's CHANGELOG.md; omitted when neither says anything.",
+      "description": "What is new in this version, shown to hosts who have an older one installed: two or three short lines, one entry per line with every language side by side ({ \"fr\": \"…\", \"en\": \"…\" }). Filled by portaki publish from --notes (fr:… per language), or else from this version's section of CHANGELOG.<lang>.md (CHANGELOG.md for the default language); omitted when nothing says anything. A stable version stays pending at the registry until it has a line in every language of the module's listing.",
       "items": {
         "$ref": "#/$defs/i18nStringMap",
         "minProperties": 1,
