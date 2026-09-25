@@ -72,6 +72,9 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
     if args.manifest_only {
         ui::skipped("cargo build skipped (--manifest-only)");
     } else {
+        if let Some(written) = ensure_build_script(&module_root)? {
+            ui::wrote("build.rs", written);
+        }
         let mut cmd = Command::new("cargo");
         cmd.arg("build")
             .arg("--target")
@@ -116,6 +119,27 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
     }
     Ok(())
 }
+
+/// Écrit un `build.rs` minimal quand le module n'en a pas : sans lui Cargo ne donne pas d'`OUT_DIR`,
+/// les macros n'écrivent rien, et le build wasm32 s'arrête sur l'erreur de `portaki_module!`.
+/// Un `[package] build = …` explicite est laissé tel quel.
+fn ensure_build_script(module_root: &std::path::Path) -> Result<Option<&'static str>> {
+    let path = module_root.join("build.rs");
+    let cargo = std::fs::read_to_string(module_root.join("Cargo.toml")).unwrap_or_default();
+    let declared = cargo.lines().any(|line| {
+        line.trim_start().starts_with("build ") || line.trim_start().starts_with("build=")
+    });
+    if path.exists() || declared {
+        return Ok(None);
+    }
+    std::fs::write(&path, BUILD_SCRIPT).context("write build.rs")?;
+    Ok(Some("build.rs"))
+}
+
+/// Ce que `portaki build` écrit : rien à faire, seulement exister.
+const BUILD_SCRIPT: &str =
+    "// Cargo gives the Portaki macros an OUT_DIR only when the crate has a build script.\n\
+fn main() {}\n";
 
 /// Refuse un wasm qui attend `wasm-bindgen`.
 ///
@@ -292,6 +316,32 @@ fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<Option<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_build_script_is_written_once_and_a_declared_one_kept() {
+        let module = tempfile::tempdir().unwrap();
+        std::fs::write(
+            module.path().join("Cargo.toml"),
+            "[package]\nname = \"m\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            ensure_build_script(module.path()).unwrap(),
+            Some("build.rs")
+        );
+        let written = std::fs::read_to_string(module.path().join("build.rs")).unwrap();
+        assert!(written.contains("fn main() {}"), "{written}");
+        assert_eq!(ensure_build_script(module.path()).unwrap(), None);
+
+        let custom = tempfile::tempdir().unwrap();
+        std::fs::write(
+            custom.path().join("Cargo.toml"),
+            "[package]\nname = \"m\"\nbuild = \"tools/build.rs\"\n",
+        )
+        .unwrap();
+        assert_eq!(ensure_build_script(custom.path()).unwrap(), None);
+        assert!(!custom.path().join("build.rs").exists());
+    }
 
     /// Le contrôle qui vivait dans un script bash : un wasm qui attend `wasm-bindgen` se charge
     /// puis échoue à l'exécution, loin du build, avec un message qui ne désigne pas la cause.
