@@ -65,6 +65,7 @@
 //! - [`mod@scenarios`] — the seven pathological cases of the sandbox, for `tests/scenarios.rs`
 //! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, listing,
 //!   surfaces, operations, i18n, emails, contracts
+//! - [`mod@previews`] — the catalogue previews (`previews.json`), rendered from the guest surfaces
 
 #![deny(missing_docs)]
 
@@ -72,7 +73,19 @@ mod assertions;
 pub mod conformance;
 mod fixtures;
 mod mock_host;
+pub mod previews;
 pub mod scenarios;
+
+/// Links the module's library into this integration test, so its `#[surface]`s are declared —
+/// for a test that names nothing of it, like [`previews::check_all`].
+///
+/// `link_module!()` reads the package's library name; `link_module!(my_module)` names it.
+#[macro_export]
+macro_rules! link_module {
+    ($($lib:ident)?) => {
+        $crate::__private::portaki_sdk::__link_module_crate!($($lib)?);
+    };
+}
 
 #[doc(hidden)]
 pub mod __private {

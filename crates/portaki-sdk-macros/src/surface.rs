@@ -155,9 +155,11 @@ fn expand_surface(attrs: SurfaceAttrs, function_item: ItemFn) -> TokenStream2 {
 
     let key = format!("{}_{}", attrs.context, attrs.id);
     let emission = write_emission("surface", &sanitize_key(&key), &json);
+    let catalog = serde_json::Value::Object(attrs.catalog.clone()).to_string();
     let wasm_registration = crate::wasm_handler::register_surface(
         &attrs.context,
         &attrs.id,
+        &catalog,
         attrs.gate,
         &fn_name,
         &function_item,

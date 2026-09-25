@@ -72,6 +72,9 @@ pub struct HandlerDeclaration {
     pub fn_name: &'static str,
     /// The same shim the Wasm entry points call: typed args from JSON, result to JSON.
     pub dispatch: WasmHandlerFn,
+    /// A surface's placement attributes as JSON — `{ "path": "wifi", "label_key": "nav.wifi" }`,
+    /// what `portaki build` writes to the catalogue; `{}` without any, `""` for an operation.
+    pub catalog: &'static str,
 }
 
 inventory::collect!(HandlerDeclaration);
