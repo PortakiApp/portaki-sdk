@@ -1648,7 +1648,7 @@ checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "portaki-cli"
-version = "8.1.0"
+version = "8.3.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1682,7 +1682,7 @@ dependencies = [
 
 [[package]]
 name = "portaki-connectors"
-version = "8.1.0"
+version = "8.3.0"
 dependencies = [
  "portaki-sdk",
  "serde",
@@ -1692,7 +1692,7 @@ dependencies = [
 
 [[package]]
 name = "portaki-sdk"
-version = "8.1.0"
+version = "8.3.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -1712,7 +1712,7 @@ dependencies = [
 
 [[package]]
 name = "portaki-sdk-macros"
-version = "8.1.0"
+version = "8.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "portaki-test-utils"
-version = "8.1.0"
+version = "8.3.0"
 dependencies = [
  "chrono",
  "jsonschema",
