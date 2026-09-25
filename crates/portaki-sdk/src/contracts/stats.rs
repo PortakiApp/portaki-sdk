@@ -19,6 +19,7 @@
 //! assert_eq!(wire["trend"]["direction"], "up");
 //! ```
 
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -39,6 +40,79 @@ pub struct StatsSummaryArgs {
     /// Which tile: the `pathSegment` of the `property-stats-card` surface.
     pub key: String,
 }
+
+impl StatsSummaryArgs {
+    /// The window asked for, bounded to 30, 90 or 365 days (30 for anything else).
+    pub fn period(&self) -> Period {
+        Period::from_days(u64::from(self.period))
+    }
+}
+
+/// The window of a statistic: the tile's `period`, the detail surface's `input.periodDays` —
+/// [`StatsSummaryArgs::period`], [`Context::stats_period`](crate::context::Context::stats_period).
+///
+/// ```
+/// use portaki_sdk::contracts::stats::Period;
+///
+/// assert_eq!(Period::from_days(90).days(), 90);
+/// assert_eq!(Period::from_days(7), Period::Days30); // anything else is the default
+/// assert_eq!(Period::Days365.window("fr"), "sur 12 mois");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Period {
+    /// 30 days — the default.
+    #[default]
+    Days30,
+    /// 90 days.
+    Days90,
+    /// 365 days, « 12 months ».
+    Days365,
+}
+
+impl Period {
+    /// 90 and 365 are themselves; anything else is 30.
+    pub fn from_days(days: u64) -> Self {
+        match days {
+            90 => Self::Days90,
+            365 => Self::Days365,
+            _ => Self::Days30,
+        }
+    }
+
+    /// 30, 90 or 365 — also the suffix of per-period i18n keys (`stats.tile.90`).
+    pub const fn days(self) -> u32 {
+        match self {
+            Self::Days30 => 30,
+            Self::Days90 => 90,
+            Self::Days365 => 365,
+        }
+    }
+
+    /// The start of the window ending at `now`.
+    pub fn since(self, now: DateTime<Utc>) -> DateTime<Utc> {
+        now - Duration::days(i64::from(self.days()))
+    }
+
+    /// The window as a note under a figure: `sur 90 jours`, `over 12 months` — in `lang`
+    /// (`en`, `fr`, `es`, `de`, `it`, `nl`; English otherwise).
+    pub fn window(self, lang: &str) -> String {
+        let [days, months] = WINDOW[crate::host::time::column(lang)];
+        match self {
+            Self::Days365 => months.replace("{}", "12"),
+            other => days.replace("{}", &other.days().to_string()),
+        }
+    }
+}
+
+/// `over {} days`, `over {} months`, per language of [`crate::host::time::LANGUAGES`].
+const WINDOW: [[&str; 2]; 6] = [
+    ["over {} days", "over {} months"],
+    ["sur {} jours", "sur {} mois"],
+    ["en {} días", "en {} meses"],
+    ["in {} Tagen", "in {} Monaten"],
+    ["in {} giorni", "in {} mesi"],
+    ["in {} dagen", "in {} maanden"],
+];
 
 /// Answer of [`STATS_SUMMARY`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,5 +202,32 @@ impl StatsSummary {
             good,
         });
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_period_is_bounded_and_written() {
+        let args = |period| StatsSummaryArgs {
+            property_id: Uuid::nil(),
+            period,
+            key: "stock".into(),
+        };
+        let days: Vec<u32> = [0, 30, 90, 365, 400]
+            .map(|period| args(period).period().days())
+            .to_vec();
+        assert_eq!(days, [30, 30, 90, 365, 30]);
+        assert_eq!(Period::Days90.window("en"), "over 90 days");
+        assert_eq!(Period::Days365.window("de-DE"), "in 12 Monaten");
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-25T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(
+            Period::Days30.since(now).to_rfc3339(),
+            "2026-08-26T00:00:00+00:00"
+        );
     }
 }
