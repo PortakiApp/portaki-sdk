@@ -333,6 +333,20 @@ impl Context {
             .filter(|lang| !lang.is_empty())
     }
 
+    /// The property's timezone ([`Self::timezone`]) with its daylight-saving rule, for calendar
+    /// math and dates shown in local time; `None` when the SDK does not know that zone — never
+    /// a silent Paris or UTC. See [`crate::host::time::PropertyTz`].
+    ///
+    /// ```
+    /// use portaki_sdk::context::Context;
+    ///
+    /// let ctx = Context { timezone: "America/New_York".into(), ..Context::default() };
+    /// assert!(ctx.property_tz().is_some());
+    /// ```
+    pub fn property_tz(&self) -> Option<crate::host::time::PropertyTz> {
+        crate::host::time::PropertyTz::parse(&self.timezone)
+    }
+
     /// Unsigned integer draft field from [`Self::input`].
     pub fn input_u64(&self, key: &str) -> Option<u64> {
         self.input.get(key).and_then(Value::as_u64)
