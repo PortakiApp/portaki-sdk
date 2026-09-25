@@ -55,11 +55,15 @@ rustup target add wasm32-unknown-unknown
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
 | `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
 | `portaki connectors` | Show each declared egress, its permission and its credential |
+| `portaki dev --watch` | Rebuild and redeploy on every save, follow the sandbox logs, replay the 7 scenarios after each deploy |
 | `portaki dev --forget` | Remove this module from the sandbox — a tried-once module leaves a row otherwise |
-| `portaki lint` | Validate capabilities, connectors, i18n keys |
+| `portaki logs [module] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
+| `portaki lint [--channel preview\|stable]` | Validate capabilities, connectors, i18n keys; `sdkVersion` required, `>= 8.0.0` for stable |
+| `portaki i18n check [--all]` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
+| `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
 | `portaki test` | Forward to `cargo test` in the module crate |
-| `portaki publish` | Push the OCI artifact, then announce it to the registry |
-| `portaki link` | Open the dashboard page that links this module — and its monorepo siblings — to a repository |
+| `portaki publish [--channel preview\|stable] [--notes …]` | Push the OCI artifact, then announce it to the registry — locally with `portaki login`, or from CI with OIDC |
+| `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect` | Inspect a published OCI artifact |
 | `portaki docs` / `dev` | Docs helper / local mock gateway (evolves with the SDK) |
@@ -96,7 +100,8 @@ fill `listing.json` in, or delete it to write the listing in the dashboard.
 | `hostSurfaces`, `guestSurfaces` | `#[surface(host, id, placement = HostPlacement::…, design_id = DesignId::…, label_key, icon = IconName::…, path)]` / `#[surface(guest, id, path, label_key, role = GuestRole::…, embeds = HostFragmentId::…)]` |
 | `emails` | `#[email(id, audience, …)]` above the `#[command]` that sends it |
 | `permissions` | the features enabled on `portaki-sdk` (`kv`, `repo`, `email`, `events`, `platform`, `guest-files`, `stay-guest-contact`) and each `#[connector]` id |
-| `requiresModuleSdk` | the `portaki-sdk` version cargo resolved |
+| `sdkVersion`, `requiresModuleSdk` | the `portaki-sdk` version cargo resolved |
+| `dispatchExamples` | `example(label = "…", input = r#"{…}"#)` on a `#[query]` / `#[command]` |
 
 Every closed list is a Rust enum in `portaki_sdk::vocab` (all in the prelude): the macros take
 `Enum::Variant` and refuse a string, so a typo does not compile. i18n keys and query names stay
