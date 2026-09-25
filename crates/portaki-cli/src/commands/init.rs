@@ -323,7 +323,7 @@ pub fn run(args: InitArgs) -> Result<()> {
 ///
 /// Un squelette qu'on découvre fichier par fichier se lit mal : chaque morceau dit à quoi il sert.
 fn describe(template: &InitTemplate) {
-    let mut rows = vec![("src/lib.rs", "the module — entity, capability, manifest")];
+    let mut rows = vec![("src/lib.rs", "the module — entity, manifest")];
     if matches!(template, InitTemplate::Default) {
         rows.push(("src/host/", "surfaces the host dashboard renders"));
         rows.push(("src/guest/", "surfaces the guest booklet renders"));
@@ -342,10 +342,6 @@ fn describe(template: &InitTemplate) {
         "one file per locale — the i18n: keys the surfaces point at",
     ));
     rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
-    rows.push((
-        "build.rs",
-        "no build step — it exists so cargo gives the macros an OUT_DIR",
-    ));
     rows.push((
         "src/lib.rs",
         "portaki_module! — author, icon, maturity; build writes the catalogue from the code",
@@ -566,8 +562,8 @@ mod tests {
                 })
                 .collect();
 
-            // `portaki build` reads emissions from OUT_DIR, which only a build script creates.
-            assert!(names.iter().any(|name| name == "build.rs"), "{names:?}");
+            // The macros find their output directory without a build script.
+            assert!(!names.iter().any(|name| name == "build.rs"), "{names:?}");
             // Nothing hand-written for the catalogue: the code declares it.
             assert!(
                 !names
