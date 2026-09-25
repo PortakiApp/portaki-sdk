@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.5.0...v8.6.0) (2026-09-25)
+
+
+### Features
+
+* **cli:** i18n check compares every bundle ([8d52d63](https://github.com/PortakiApp/portaki-sdk/commit/8d52d637608cb99f81958b7d79b618bf747f0cca))
+* **cli:** link --all links every monorepo module ([7d36383](https://github.com/PortakiApp/portaki-sdk/commit/7d363833195c01d79db4201bc912d5129658bff5))
+* **cli:** lint requires sdkVersion, &gt;= 8.0.0 stable ([da94397](https://github.com/PortakiApp/portaki-sdk/commit/da943978fcd8a5ec7fe5bd687059fbb055788ca0))
+* **cli:** logs command, dev --watch runs scenarios ([da34b1b](https://github.com/PortakiApp/portaki-sdk/commit/da34b1ba9e51d3db7b1f8562747260cb57e98114))
+* **cli:** permissions add turns on the sdk feature ([4f86773](https://github.com/PortakiApp/portaki-sdk/commit/4f86773af969845530c3798b246a5cb958bb8796))
+* **sdk:** sdkVersion and dispatchExamples in manifest ([f84e2a6](https://github.com/PortakiApp/portaki-sdk/commit/f84e2a6d9f7b678c63050a7733a277fb651a2bc1))
+* **test-utils:** pathological scenario fixtures ([3b7de3c](https://github.com/PortakiApp/portaki-sdk/commit/3b7de3ceb6c432c2c68d1dbfbc88c109930102a4))
+
 ## [8.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.4.0...v8.5.0) (2026-09-25)
 
 
