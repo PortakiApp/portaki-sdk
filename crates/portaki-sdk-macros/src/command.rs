@@ -19,6 +19,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Some(args) = crate::params::args_type_name(&function_item) {
         declaration["args"] = serde_json::Value::String(args);
     }
+    if !attrs.examples.is_empty() {
+        declaration["examples"] = attrs.examples.clone().into();
+    }
     let json = serde_json::to_string_pretty(&declaration).unwrap();
 
     let emission =

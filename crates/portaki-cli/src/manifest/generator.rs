@@ -15,10 +15,10 @@ pub const SDUI_SCHEMA_VERSION: &str = "1";
 use anyhow::{Context, Result};
 use portaki_sdk::capability::CapabilityId;
 use portaki_sdk::manifest::{
-    ManifestAuthor, ManifestCapabilities, ManifestCommand, ManifestConnectors, ManifestEntity,
-    ManifestEventSubscription, ManifestEvents, ManifestI18n, ManifestOptionalCapability,
-    ManifestQuery, ManifestSurface, ManifestSurfaces, ModuleManifest, OperationParams, ParamShape,
-    ParamType, UiSchemaVersions,
+    DispatchExample, ManifestAuthor, ManifestCapabilities, ManifestCommand, ManifestConnectors,
+    ManifestEntity, ManifestEventSubscription, ManifestEvents, ManifestI18n,
+    ManifestOptionalCapability, ManifestQuery, ManifestSurface, ManifestSurfaces, ModuleManifest,
+    OperationParams, ParamShape, ParamType, UiSchemaVersions,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -239,6 +239,22 @@ pub fn generate_manifest(
     }
 
     let shapes = param_shapes(emissions);
+    let dispatch_examples = emissions
+        .iter()
+        .filter(|e| e.kind == "query" || e.kind == "command")
+        .flat_map(|e| {
+            e.data["examples"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(move |example| DispatchExample {
+                    kind: e.kind.clone(),
+                    name: e.data["name"].as_str().unwrap_or_default().to_string(),
+                    label: example["label"].as_str().unwrap_or_default().to_string(),
+                    input: example["input"].clone(),
+                })
+        })
+        .collect();
     let mut queries = Vec::new();
     let mut commands = Vec::new();
     let mut subscribes = Vec::new();
@@ -346,6 +362,7 @@ pub fn generate_manifest(
         queries,
         commands,
         emails,
+        dispatch_examples,
         events: ManifestEvents {
             emits: Vec::new(),
             subscribes,
@@ -808,6 +825,39 @@ mod params_tests {
 
         assert_eq!(wire["queries"][0]["guest"], json!(true));
         assert_eq!(wire["commands"][0]["guest"], json!(false));
+    }
+
+    /// `example(…)` on an operation becomes a `dispatchExamples` entry naming it.
+    #[test]
+    fn operation_examples_become_dispatch_examples() {
+        let manifest = generate_manifest(
+            &[
+                emission(json!({ "kind": "module", "id": "weather" })),
+                emission(
+                    json!({ "kind": "query", "name": "getCurrent", "fn": "current", "guest": true,
+                    "examples": [{ "label": "Paris", "input": { "city": "Paris" } }] }),
+                ),
+                emission(
+                    json!({ "kind": "command", "name": "refresh", "fn": "refresh", "guest": false,
+                    "examples": [{ "label": "Now", "input": {} }] }),
+                ),
+                emission(
+                    json!({ "kind": "query", "name": "silent", "fn": "silent", "guest": false }),
+                ),
+            ],
+            "fr-FR",
+            &["fr-FR".to_string()],
+        )
+        .unwrap();
+        let wire = serde_json::to_value(&manifest).unwrap();
+
+        assert_eq!(
+            wire["dispatchExamples"],
+            json!([
+                { "kind": "query", "name": "getCurrent", "label": "Paris", "input": { "city": "Paris" } },
+                { "kind": "command", "name": "refresh", "label": "Now", "input": {} }
+            ])
+        );
     }
 }
 

@@ -59,10 +59,32 @@ pub struct ModuleManifest {
     /// Emails the commands send, from `#[email]` — the catalog's `emails[]` shape.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub emails: Vec<Value>,
+    /// Ready-made calls the sandbox offers, from `example(…)` on `#[query]` / `#[command]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dispatch_examples: Vec<DispatchExample>,
     /// Emitted and subscribed domain events.
     pub events: ManifestEvents,
     /// i18n bundle configuration.
     pub i18n: ManifestI18n,
+}
+
+/// The oldest SDK a module may be published on in the `stable` channel.
+///
+/// `portaki lint` refuses a manifest whose `sdkVersion` is older; the platform reads the same
+/// threshold from its own configuration (`portaki.sdk.min-stable`) to flag outdated modules.
+pub const MIN_STABLE_SDK: &str = "8.0.0";
+
+/// A call the sandbox's Exécuter tab offers — declared by `example(…)` on the operation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DispatchExample {
+    /// `query` or `command`.
+    pub kind: String,
+    /// The operation name.
+    pub name: String,
+    /// What the button says.
+    pub label: String,
+    /// The params sent — a JSON object.
+    pub input: Value,
 }
 
 /// Author metadata shown in the module marketplace.

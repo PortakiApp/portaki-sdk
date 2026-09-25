@@ -50,6 +50,26 @@
       "description": "Minimum version of the Portaki module SDK this module compiles against — the Rust crate portaki-sdk, published on crates.io. Renamed from requiresHostSdk, which did not say which SDK it meant: an npm @portaki/sdk also describes itself as the module SDK and carries an unrelated version line (3.2.1 against the crate 2.1.1).",
       "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
     },
+    "sdkVersion": {
+      "type": "string",
+      "description": "Version of the portaki-sdk crate the module was built against, as cargo resolved it. Written by portaki build, never by hand; portaki lint fails without it and refuses one older than the stable minimum (8.0.0) on the stable channel.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
+    },
+    "dispatchExamples": {
+      "type": "array",
+      "description": "Ready-made calls the sandbox's Run tab offers, declared by example(label = …, input = …) on #[query] / #[command]. Written by portaki build.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "label", "input"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["query", "command"] },
+          "name": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "input": { "type": "object" }
+        }
+      }
+    },
     "permissions": {
       "type": "array",
       "uniqueItems": true,
