@@ -144,9 +144,15 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
 /// missing. A config that does not deserialize is [`PortakiError::Storage`] — never a default,
 /// which the next save would write over what the host had.
 pub fn load<T: DeserializeOwned>(ctx: &Context) -> Result<T> {
+    load_mapped(ctx, std::convert::identity)
+}
+
+/// [`load`], with the KV blob read through `legacy` first — what `#[config(legacy = …)]`
+/// generates. `moduleConfig` is never mapped: the platform holds the declared keys already.
+pub fn load_mapped<T: DeserializeOwned>(ctx: &Context, legacy: fn(Value) -> Value) -> Result<T> {
     let raw = match &ctx.module_config {
         Some(config) => config.clone(),
-        None => legacy_config()?,
+        None => legacy_config_mapped(legacy)?,
     };
     let mut object = match raw {
         Value::Null => Map::new(),
@@ -171,6 +177,15 @@ pub fn legacy_config() -> Result<Value> {
     }
     #[cfg(not(feature = "kv"))]
     Ok(Value::Null)
+}
+
+/// [`legacy_config`] through `legacy`, which maps an old blob onto the declared keys; `null`
+/// (nothing in KV) is not mapped. What `legacyConfig` answers with `#[config(legacy = …)]`.
+pub fn legacy_config_mapped(legacy: fn(Value) -> Value) -> Result<Value> {
+    Ok(match legacy_config()? {
+        Value::Null => Value::Null,
+        raw => legacy(raw),
+    })
 }
 
 fn unreadable(reason: String) -> PortakiError {

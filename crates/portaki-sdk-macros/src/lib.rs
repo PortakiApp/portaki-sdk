@@ -536,6 +536,20 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - the host query `legacyConfig` — the raw JSON of the KV key `config`, or `null`, which the
 ///   platform imports once.
 ///
+/// # `legacy = path::to::fn`
+///
+/// When the old KV blob does not have the declared keys — a key missing, a number where a
+/// string is declared, a nested object — `#[portaki_sdk::config(legacy = legacy::read)]` names a
+/// `fn(serde_json::Value) -> serde_json::Value` mapping the raw blob onto an object of the
+/// declared keys. `legacyConfig` answers its result (never called on `null`: nothing in KV), and
+/// `load` reads the KV through it while the platform does not hold the config yet.
+///
+/// ```text
+/// fn read(old: Value) -> Value {
+///     json!({ "radius_km": old["radius_km"].as_f64().map(|km| km.to_string()), "welcome": old["texts"]["welcome"] })
+/// }
+/// ```
+///
 /// # Emission
 ///
 /// `config-{StructName}.json` → `config.fields[]` of the catalogue, labels translated; and
