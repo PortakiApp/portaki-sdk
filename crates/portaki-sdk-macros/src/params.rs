@@ -33,7 +33,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         .to_compile_error()
         .into();
     }
-    let parsed = syn::parse_macro_input!(item as Item);
+    let mut parsed = syn::parse_macro_input!(item as Item);
+    if let Item::Struct(item) = &mut parsed {
+        if let Err(error) = strip_field_flags(item) {
+            return error.to_compile_error().into();
+        }
+    }
     let (name, shape) = match &parsed {
         Item::Struct(item) => (item.ident.to_string(), struct_shape(item)),
         Item::Enum(item) => (item.ident.to_string(), enum_shape(item)),
@@ -66,6 +71,40 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
     output.into()
+}
+
+/// `#[field(secret)]` on a field of a config row type: the platform encrypts that sub-key at rest
+/// (`item.secret`), as it does a `secret` config field. The one flag a `#[params]` field takes.
+fn field_flags(attrs: &[Attribute]) -> syn::Result<bool> {
+    let mut secret = false;
+    for attr in attrs.iter().filter(|attr| attr.path().is_ident("field")) {
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("secret") {
+                secret = true;
+                Ok(())
+            } else {
+                Err(meta.error(
+                    "a #[params] field takes only #[field(secret)] — the other flags go on \
+                     the #[portaki_sdk::config] field holding the rows",
+                ))
+            }
+        })?;
+    }
+    Ok(secret)
+}
+
+/// Checks and removes the `#[field(…)]` attributes, which are not real attributes.
+fn strip_field_flags(item: &mut ItemStruct) -> syn::Result<()> {
+    for field in item.fields.iter_mut() {
+        if field_flags(&field.attrs)? && type_shape(&field.ty).0["ref"] == "I18nText" {
+            return Err(syn::Error::new_spanned(
+                &field.ty,
+                "a secret is one string, never a translated text",
+            ));
+        }
+        field.attrs.retain(|attr| !attr.path().is_ident("field"));
+    }
+    Ok(())
 }
 
 /// What serde says about an item or a field — the part of it that changes the wire shape.
@@ -190,6 +229,9 @@ fn struct_shape(item: &ItemStruct) -> Value {
                 );
                 if serde.flatten {
                     entry.insert("flatten".into(), json!(true));
+                }
+                if field_flags(&field.attrs).unwrap_or(false) {
+                    entry.insert("secret".into(), json!(true));
                 }
                 if let Some(doc) = doc_of(&field.attrs) {
                     entry.insert("doc".into(), json!(doc));
@@ -501,6 +543,32 @@ mod tests {
         );
         assert_eq!(args_type_name(&by_reference).as_deref(), Some("Args"));
         assert_eq!(args_type_name(&without), None);
+    }
+
+    /// A row's secret sub-key: flagged in the shape, and the attribute gone from the struct.
+    #[test]
+    fn a_secret_row_field_is_flagged_and_stripped() {
+        let mut item: ItemStruct = parse_quote! {
+            struct Calendar {
+                id: String,
+                #[field(secret)]
+                url: String,
+            }
+        };
+        assert_eq!(
+            struct_shape(&item)["fields"][1],
+            json!({ "name": "url", "type": "string", "required": true, "secret": true })
+        );
+        strip_field_flags(&mut item).unwrap();
+        assert!(quote!(#item).to_string().find("field").is_none());
+
+        for mut wrong in [
+            parse_quote! { struct R { #[field(required)] url: String } },
+            parse_quote! { struct R { #[field(secret)] title: I18nText } },
+        ] {
+            let wrong: &mut ItemStruct = &mut wrong;
+            assert!(strip_field_flags(wrong).is_err());
+        }
     }
 
     #[test]

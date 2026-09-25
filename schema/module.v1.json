@@ -253,6 +253,12 @@
               "description": "Sub-keys holding a text per language (i18nStringMap).",
               "uniqueItems": true,
               "items": { "type": "string", "minLength": 1 }
+            },
+            "secret": {
+              "type": "array",
+              "description": "Sub-keys encrypted at rest, like a secret field: a save that leaves one out, empty or masked keeps the stored value (row matched by id, else position); null clears it.",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
             }
           }
         }
