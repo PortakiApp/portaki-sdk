@@ -19,6 +19,7 @@
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `publish` | Push OCI layers to a container registry |
 //! | `link` | Open the dashboard page that links modules to their repository |
+//! | `logs` | Follow a module's sandbox logs, optionally one error code |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
 //! | `inspect` | Fetch and summarize a published OCI artifact |
 //! | `docs` / `dev` | Docs helper / local mock gateway (evolve with the SDK) |
@@ -99,6 +100,8 @@ enum Command {
     Connectors(commands::connectors::ConnectorsArgs),
     /// Validate manifest, i18n keys, and capability ids.
     Lint(commands::lint::LintArgs),
+    /// Follow what a module logs in the sandbox, live.
+    Logs(commands::logs::LogsArgs),
     /// Run `cargo test` in the module crate.
     Test(commands::test::TestArgs),
     /// Move the module to another SDK version, and prove nothing broke.
@@ -350,6 +353,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Check(args) => commands::check::run(args).await,
         Command::Connectors(args) => commands::connectors::run(args),
         Command::Lint(args) => commands::lint::run(args),
+        Command::Logs(args) => commands::logs::run(args).await,
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Publish(args) => commands::publish::run(args).await,

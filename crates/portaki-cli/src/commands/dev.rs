@@ -27,7 +27,8 @@ const MIGRATIONS: &str = "db/migrations";
 #[derive(Debug, Parser)]
 /// Arguments for `portaki dev`.
 pub struct DevArgs {
-    /// Rebuild and redeploy on every save.
+    /// Rebuild and redeploy on every save; follow the sandbox logs and replay the 7 scenarios
+    /// after each deploy.
     #[arg(long)]
     pub watch: bool,
 
@@ -111,6 +112,17 @@ pub async fn run(args: DevArgs) -> Result<()> {
                 std::process::exit(130);
             }
         });
+    }
+
+    // Ouvert avant le premier déploiement : ce que le module journalise en démarrant compte aussi.
+    // Le flux suit la session jusqu'à ctrl-c ; c'est aussi ce qui dit « connecté » au dock.
+    if args.watch {
+        tokio::spawn(crate::commands::logs::follow_forever(
+            base_url.clone(),
+            auth_url.clone(),
+            module_id.clone(),
+            token.clone(),
+        ));
     }
 
     let mut last_digest = String::new();
@@ -393,6 +405,10 @@ async fn cycle(
     }
     *last_digest = fingerprint;
 
+    if args.watch {
+        run_scenarios(args, base_url, module_id, token).await;
+    }
+
     if let Some(operation) = &args.dispatch {
         let running = ui::step(format!("dispatching {} {operation}", args.kind));
         let first = dispatch(args, base_url, module_id, token, operation).await;
@@ -414,6 +430,118 @@ async fn cycle(
         print_trace(&trace);
     }
     Ok(())
+}
+
+/// Une case de la grille Scénarios : une surface sur un cas pathologique.
+#[derive(Debug, serde::Deserialize)]
+struct ScenarioCell {
+    surface: String,
+    case: String,
+    /// `ok`, `watch` ou `fail`.
+    status: String,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+/// Rejoue les sept cas sur ce qui vient d'être déployé, et affiche la grille.
+///
+/// Jamais fatal : un cas en échec est ce qu'on vient chercher, pas une raison d'arrêter la
+/// boucle — et une plateforme qui ne sait pas les jouer n'empêche pas de développer.
+async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &mut String) {
+    let running = ui::step("replaying the 7 scenarios");
+    let mut outcome = post_scenarios(base_url, module_id, token).await;
+    if outcome
+        .as_ref()
+        .is_err_and(|failure| failure.is::<Unauthorized>())
+    {
+        if let Ok(renewed) = reauthenticate(args, token).await {
+            *token = renewed;
+            outcome = post_scenarios(base_url, module_id, token).await;
+        }
+    }
+    let cells = match outcome {
+        Ok(cells) => cells,
+        Err(failure) => {
+            running.abandon();
+            ui::warn(format!("scenarios not replayed — {failure:#}"));
+            return;
+        }
+    };
+    let failing = cells.iter().filter(|cell| cell.status != "ok").count();
+    running.done(format!(
+        "scenarios — {} of {} ok",
+        cells.len() - failing,
+        cells.len()
+    ));
+    for row in matrix(&cells) {
+        ui::detail(row);
+    }
+    for cell in cells.iter().filter(|cell| cell.status != "ok") {
+        let why = [cell.code.as_deref(), cell.message.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" — ");
+        let line = format!("{} · {}  {why}", cell.surface, cell.case);
+        if cell.status == "fail" {
+            ui::failure(line);
+        } else {
+            ui::warn(line);
+        }
+    }
+}
+
+async fn post_scenarios(base_url: &str, module_id: &str, token: &str) -> Result<Vec<ScenarioCell>> {
+    // Patient : la plateforme rend chaque surface sur chaque cas avant de répondre.
+    let response = crate::http::patient_client()
+        .post(format!(
+            "{base_url}/dev/v1/modules/{module_id}/scenarios/run"
+        ))
+        .bearer_auth(token)
+        .send()
+        .await
+        .context("replay the scenarios")?;
+    read_json(response).await
+}
+
+/// La grille, une ligne par surface et une colonne par cas, dans l'ordre du dock.
+fn matrix(cells: &[ScenarioCell]) -> Vec<String> {
+    let cases = portaki_test_utils::scenarios::CASES;
+    // Dans l'ordre d'arrivée, quel que soit celui de la réponse.
+    let mut surfaces: Vec<&str> = Vec::new();
+    for cell in cells {
+        if !surfaces.contains(&cell.surface.as_str()) {
+            surfaces.push(&cell.surface);
+        }
+    }
+    let width = surfaces
+        .iter()
+        .map(|s| s.chars().count())
+        .max()
+        .unwrap_or(0);
+    let mut rows = vec![format!("{:width$}  {}", "", cases.join("  "))];
+    for surface in surfaces {
+        let marks: Vec<String> = cases
+            .iter()
+            .map(|case| {
+                let mark = match cells
+                    .iter()
+                    .find(|cell| cell.surface == surface && cell.case == *case)
+                    .map(|cell| cell.status.as_str())
+                {
+                    Some("ok") => "✓",
+                    Some("watch") => "!",
+                    Some("fail") => "✗",
+                    _ => "·",
+                };
+                format!("{mark:^w$}", w = case.len())
+            })
+            .collect();
+        rows.push(format!("{surface:width$}  {}", marks.join("  ")));
+    }
+    rows
 }
 
 /// Un jeton d'accès vit quinze minutes ; une session `--watch` bien plus longtemps.
@@ -837,6 +965,37 @@ pub(crate) fn short(digest: &str) -> String {
 mod tests {
     use super::DevArgs;
     use clap::Parser;
+
+    #[test]
+    fn the_scenario_matrix_reads_like_the_dock() {
+        let cell = |surface: &str, case: &str, status: &str| ScenarioCell {
+            surface: surface.into(),
+            case: case.into(),
+            status: status.into(),
+            code: None,
+            message: None,
+        };
+        let cells = [
+            cell("home.card", "normal", "ok"),
+            cell("home.card", "no_email", "watch"),
+            cell("home.card", "no_photo", "fail"),
+        ];
+
+        let rows = matrix(&cells);
+
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows[0].trim_start().starts_with("normal  no_email"),
+            "{}",
+            rows[0]
+        );
+        assert!(
+            rows[1].starts_with("home.card    ✓        !    "),
+            "{}",
+            rows[1]
+        );
+        assert!(rows[1].trim_end().ends_with('✗'), "{}", rows[1]);
+    }
 
     /// Oublier n'est pas déployer : les deux drapeaux qui poussent sont refusés avec lui.
     #[test]
