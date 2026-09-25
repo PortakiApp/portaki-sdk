@@ -1,7 +1,5 @@
 //! Production Wasm host backend — calls Java `portaki_host_dispatch` via Extism.
 
-use std::sync::Arc;
-
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use extism_pdk::*;
 use serde_json::{json, Value};
