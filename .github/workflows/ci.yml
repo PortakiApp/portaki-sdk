@@ -7,12 +7,6 @@ on:
       - "**.md"
       - "docs/**"
       - ".github/CI.md"
-  pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/CI.md"
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
