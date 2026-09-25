@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.2.0...v8.3.0) (2026-09-25)
+
+
+### Features
+
+* **sdk:** declare email vars with #[email_vars] ([8199297](https://github.com/PortakiApp/portaki-sdk/commit/8199297b63702d33aa221e263c3aa4360c15bf49))
+
 ## [8.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.1.0...v8.2.0) (2026-09-25)
 
 
