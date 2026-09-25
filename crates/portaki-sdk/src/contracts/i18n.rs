@@ -94,13 +94,37 @@ impl I18nText {
     /// The text for `locale` (`fr-FR` and `fr` alike), else French, else English, else the first
     /// other language that has one; `""` when every language is blank.
     pub fn get(&self, locale: &str) -> &str {
-        let language = locale
-            .split(['-', '_'])
-            .next()
-            .unwrap_or(locale)
-            .to_ascii_lowercase();
-        [self.text(&language), self.text("fr"), self.text("en")]
-            .into_iter()
+        let language = crate::context::short_lang(locale).unwrap_or_default();
+        self.first_of(&[&language])
+    }
+
+    /// What the reader of this invocation sees: the text in their language ([`Context::lang`]),
+    /// else in the property's default language ([`Context::property_lang`] — what the host most
+    /// likely wrote in), else French, English, the first language that has one.
+    ///
+    /// ```
+    /// use portaki_sdk::context::Context;
+    /// use portaki_sdk::contracts::i18n::I18nText;
+    ///
+    /// let note = I18nText::default().with("es", "Llave en el buzón").with("it", "Chiave");
+    /// let ctx = Context {
+    ///     locale: "de-DE".into(),
+    ///     property_lang: Some("es".into()),
+    ///     ..Context::default()
+    /// };
+    /// assert_eq!(note.for_ctx(&ctx), "Llave en el buzón"); // no German: the property's Spanish
+    /// ```
+    pub fn for_ctx(&self, ctx: &Context) -> &str {
+        let lang = ctx.lang();
+        self.first_of(&[&lang, ctx.property_lang().unwrap_or_default()])
+    }
+
+    /// The first of `languages` with a text, then French, English, any other language.
+    fn first_of(&self, languages: &[&str]) -> &str {
+        languages
+            .iter()
+            .map(|language| self.text(&language.to_ascii_lowercase()))
+            .chain([self.text("fr"), self.text("en")])
             .flatten()
             .chain(
                 self.others
@@ -169,6 +193,22 @@ mod tests {
         assert_eq!(I18nText::new(" ", "Hi").get("es"), "Hi");
         assert_eq!(I18nText::default().with("it", "Ciao").get("fr"), "Ciao");
         assert_eq!(I18nText::default().get("fr"), "");
+    }
+
+    #[test]
+    fn for_ctx_tries_the_reader_then_the_property_language() {
+        let text = I18nText::new("", "Hi")
+            .with("es", "Hola")
+            .with("de", "Hallo");
+        let ctx = |locale: &str, property: Option<&str>| Context {
+            locale: locale.into(),
+            property_lang: property.map(Into::into),
+            ..Context::default()
+        };
+        assert_eq!(text.for_ctx(&ctx("de-DE", Some("es"))), "Hallo");
+        assert_eq!(text.for_ctx(&ctx("it-IT", Some("es"))), "Hola");
+        assert_eq!(text.for_ctx(&ctx("it-IT", None)), "Hi", "fr blank → en");
+        assert_eq!(text.for_ctx(&ctx("it-IT", Some("pt"))), "Hi");
     }
 
     #[test]
