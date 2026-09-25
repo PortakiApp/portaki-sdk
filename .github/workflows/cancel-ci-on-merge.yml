@@ -1,0 +1,32 @@
+name: Cancel CI on merge
+
+# Une PR mergée (y compris par contournement des protections, CI encore en cours) n'a plus
+# besoin de ses exécutions : elles occupent des runners et peuvent publier un statut sur un
+# commit déjà remplacé. On annule tout ce qui tourne ou attend encore pour sa tête, sauf nous.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Cancel the PR's remaining runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SELF: ${{ github.run_id }}
+        run: |
+          gh run list -R "$REPO" --commit "$SHA" --limit 100 \
+            --json databaseId,status \
+            -q ".[] | select(.databaseId != ($SELF | tonumber)) | select([.status] | inside([\"queued\", \"in_progress\", \"waiting\", \"requested\", \"pending\"])) | .databaseId" \
+          | while read -r id; do
+              echo "cancel run $id"
+              gh run cancel "$id" -R "$REPO" || true
+            done
