@@ -96,6 +96,28 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 
 The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#[command]` and `#[surface]` register on native targets: nothing to list by hand. It needs `portaki-sdk-macros` from the same release. Not checked: the sandbox clock (`Utc::now()` runs natively — use clippy's `disallowed-methods`), `portaki_module!` display keys, and `#[event_handler]`s.
 
+## Catalogue previews
+
+`previews.json` — every guest surface the booklet serves (`#[surface(guest, path = …)]`), rendered
+on sample data for the module's public page — is written and checked by `previews`:
+
+```rust,ignore
+// tests/previews.rs
+use portaki_test_utils::previews;
+
+portaki_test_utils::link_module!();
+
+#[test]
+fn previews_match_the_rendered_surfaces() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    previews::check_all(root, previews::guest(root).with_config(&sample_config()));
+}
+```
+
+`previews::guest` is a French guest, a stay from 1 to 8 June 2026, the clock the day before;
+`PORTAKI_UPDATE_PREVIEWS=1 cargo test --test previews` rewrites the file. `previews::check` takes
+surfaces rendered by hand instead.
+
 ## What you get
 
 | Type | Role |

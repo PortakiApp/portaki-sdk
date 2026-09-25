@@ -66,6 +66,7 @@ pub fn register_query(operation_name: &str, fn_name: &str, function_item: &ItemF
         Declared {
             name: operation_name,
             context: "",
+            catalog: "",
         },
         function_item,
     )
@@ -83,6 +84,7 @@ pub fn register_command(
         Declared {
             name: operation_name,
             context: "",
+            catalog: "",
         },
         function_item,
     )
@@ -95,6 +97,7 @@ pub fn register_command(
 pub fn register_surface(
     context: &str,
     surface_id: &str,
+    catalog: &str,
     gated: bool,
     render_fn: &str,
     function_item: &ItemFn,
@@ -105,6 +108,7 @@ pub fn register_surface(
         Declared {
             name: surface_id,
             context,
+            catalog,
         },
         function_item,
     )
@@ -116,6 +120,8 @@ struct Declared<'a> {
     name: &'a str,
     /// `guest` / `host` for a surface, empty otherwise.
     context: &'a str,
+    /// A surface's catalog attributes as JSON, empty otherwise.
+    catalog: &'a str,
 }
 
 enum HandlerKind {
@@ -134,6 +140,7 @@ fn register_handler(
     let fn_name = fn_ident.to_string();
     let declared_name = declared.name;
     let declared_context = declared.context;
+    let declared_catalog = declared.catalog;
     let kind_tokens = match kind {
         HandlerKind::Query => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Query },
         HandlerKind::Command => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Command },
@@ -229,6 +236,7 @@ fn register_handler(
                 context: #declared_context,
                 fn_name: #fn_name,
                 dispatch: #shim_ident,
+                catalog: #declared_catalog,
             }
         }
     }

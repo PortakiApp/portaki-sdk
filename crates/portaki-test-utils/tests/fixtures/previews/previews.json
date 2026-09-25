@@ -1,0 +1,23 @@
+{
+  "locale": "fr-FR",
+  "surfaces": [
+    {
+      "i18n": {
+        "guest.detail.title": "Le réseau du logement",
+        "nav.wifi": "Wi-Fi"
+      },
+      "surfaceId": "explore.detail",
+      "title": "Wi-Fi",
+      "tree": {
+        "children": [
+          {
+            "text": "Maison-Invites · 00000000-0000-0000-0000-000000000001",
+            "type": "Text"
+          }
+        ],
+        "title": "i18n:guest.detail.title",
+        "type": "Card"
+      }
+    }
+  ]
+}
