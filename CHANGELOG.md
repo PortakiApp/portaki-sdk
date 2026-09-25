@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.1.0...v8.2.0) (2026-09-25)
+
+
+### Features
+
+* **sdk:** declare module config with #[config] ([87d93be](https://github.com/PortakiApp/portaki-sdk/commit/87d93beb1df9378c14c2b31b201ea90f2aabd9ea))
+* **sdk:** render guest states in #[surface] ([715297d](https://github.com/PortakiApp/portaki-sdk/commit/715297dcb7fbc552aede0fbd7a87e4e2d632420e))
+
+
+### Bug Fixes
+
+* **sdk:** read KV config only when moduleConfig absent ([0e6689e](https://github.com/PortakiApp/portaki-sdk/commit/0e6689edc2527f6d514d5b9db3d926495dd94565))
+
 ## [8.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.0.2...v8.1.0) (2026-09-25)
 
 
