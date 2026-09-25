@@ -142,6 +142,7 @@ mod tests {
             queries: vec![],
             commands: vec![],
             emails: vec![],
+            dispatch_examples: vec![],
             events: ManifestEvents::default(),
             i18n: ManifestI18n {
                 default: "fr-FR".into(),

@@ -322,6 +322,7 @@ pub fn surface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// |-----|----------|
 /// | `name = "…"` | yes — gateway-visible operation name (camelCase convention) |
 /// | `guest` | no — bare flag: a guest may call it through the guest gateway. Absent, the platform refuses a guest with `operation_not_guest_callable` |
+/// | `example(label = "…", input = r#"{…}"#)` | no, repeatable — a ready-made call the sandbox's Exécuter tab offers (`dispatchExamples` of the manifest). `input` is a JSON object, checked at compile time; omitted, `{}` |
 ///
 /// Wrong key → **compile error** (`expected name = "…"`).
 ///
@@ -337,7 +338,8 @@ pub fn surface(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Emission
 ///
-/// `query-{name}.json` → `manifest.queries[]` with `{ name, fn, guest }`.
+/// `query-{name}.json` → `manifest.queries[]` with `{ name, fn, guest }`, and each `example` →
+/// `manifest.dispatchExamples[]` with `{ kind, name, label, input }`.
 ///
 /// # Wasm registration
 ///

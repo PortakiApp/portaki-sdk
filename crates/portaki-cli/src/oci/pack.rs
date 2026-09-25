@@ -244,7 +244,16 @@ fn merge_emails(
 /// `entities` aussi : `repo.find` verifie que l'entite est declaree dans le manifeste, et le
 /// runtime de la sandbox n'a que celui-ci. Sans elles, tout module a stockage type echouait en
 /// sandbox alors que son image publiee, qui porte le manifeste du build, marchait.
-const BUILT_DECLARATIONS: [&str; 4] = ["surfaces", "queries", "commands", "entities"];
+///
+/// `dispatchExamples` pour la même raison : `example(…)` n'existe que dans ce que le build émet, et
+/// l'onglet Exécuter de la sandbox les lit dans ce manifeste-ci.
+const BUILT_DECLARATIONS: [&str; 5] = [
+    "surfaces",
+    "queries",
+    "commands",
+    "entities",
+    "dispatchExamples",
+];
 
 /// Inscrit `requiresModuleSdk` dans le manifeste, ou refuse si l'auteur en annonce un autre.
 ///
@@ -272,10 +281,10 @@ pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> 
         _ => {}
     }
     if let Some(object) = manifest.as_object_mut() {
-        object.insert(
-            "requiresModuleSdk".to_string(),
-            serde_json::Value::String(resolved),
-        );
+        // `sdkVersion` est ce que devapi et le registre lisent pour dire « SDK trop ancien » ;
+        // `requiresModuleSdk` reste pour les lecteurs qui l'ont toujours lu. Même valeur.
+        object.insert("sdkVersion".to_string(), resolved.clone().into());
+        object.insert("requiresModuleSdk".to_string(), resolved.into());
     }
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
 }
@@ -495,6 +504,7 @@ mod tests {
 
         let parsed: serde_json::Value = serde_json::from_str(&stamped).unwrap();
         assert_eq!(parsed["requiresModuleSdk"], "2.1.1");
+        assert_eq!(parsed["sdkVersion"], "2.1.1");
         assert_eq!(parsed["id"], "weather");
     }
 
