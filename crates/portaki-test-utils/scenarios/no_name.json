@@ -1,0 +1,16 @@
+{
+  "case": "no_name",
+  "pathology": "voyageur sans nom — import iCal, rien pour saluer",
+  "property": {
+    "name": "Le Petit Balcon",
+    "city": "Lyon",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": null,
+    "guestEmail": "inconnu@example.test",
+    "checkInOffset": 1,
+    "checkOutOffset": 2,
+    "source": "ical"
+  }
+}

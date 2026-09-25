@@ -1,0 +1,16 @@
+{
+  "case": "three_months",
+  "pathology": "séjour de trois mois — l'autre borne",
+  "property": {
+    "name": "La Longue Escale",
+    "city": "Bordeaux",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": "Noa Petit",
+    "guestEmail": "noa@example.test",
+    "checkInOffset": 2,
+    "checkOutOffset": 92,
+    "source": "direct"
+  }
+}

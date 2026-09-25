@@ -1,0 +1,16 @@
+{
+  "case": "no_email",
+  "pathology": "séjour sans e-mail voyageur — aucun e-mail ne doit partir",
+  "property": {
+    "name": "Le Petit Balcon",
+    "city": "Lyon",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": "Sasha Morel",
+    "guestEmail": null,
+    "checkInOffset": 3,
+    "checkOutOffset": 5,
+    "source": "direct"
+  }
+}
