@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.7.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.6.0...v8.7.0) (2026-09-25)
+
+
+### Features
+
+* **build:** no build.rs, core.storage implied ([13a7735](https://github.com/PortakiApp/portaki-sdk/commit/13a77353a4eeb1bf4223693857841553c66bb327))
+* **config:** legacy mapping may return a Result ([4535188](https://github.com/PortakiApp/portaki-sdk/commit/4535188a35d6d319c0b5a2826bdb11a7bd7de95b))
+* **config:** legacyConfigAdopted clears old keys ([a2172c7](https://github.com/PortakiApp/portaki-sdk/commit/a2172c774c944355f2c64b25cc01f714be2b699e))
+* **config:** secret sub-keys in list rows ([727633a](https://github.com/PortakiApp/portaki-sdk/commit/727633a82f94919cbab2efc523c834a831596ab2))
+* **context:** property language and for_ctx ([8d8b353](https://github.com/PortakiApp/portaki-sdk/commit/8d8b353bc0605f068c41e2551950010a79f6fb28))
+* **i18n:** bundle_text! finds the module bundles ([606c287](https://github.com/PortakiApp/portaki-sdk/commit/606c287927f78b15fa905354821102d539ae0b7c))
+* **macros:** declare id consts and stamp surfaces ([9aab1ef](https://github.com/PortakiApp/portaki-sdk/commit/9aab1ef2a752fed4ce19a3501c413084d424e793))
+* **reveal:** timed secret reveal policy ([3b7fb9b](https://github.com/PortakiApp/portaki-sdk/commit/3b7fb9b256d2eb3241ad50dbd6649a31461c6e81))
+* **sdui:** add image icon ([4871063](https://github.com/PortakiApp/portaki-sdk/commit/4871063191d4f54354c3840ffb292ab4592bdbee))
+* **stats:** bounded Period for stats windows ([e5000e9](https://github.com/PortakiApp/portaki-sdk/commit/e5000e9a15024c9a7f40fc527c0d6c79fe02bd34))
+* **test-utils:** catalogue previews harness ([cc5b7dd](https://github.com/PortakiApp/portaki-sdk/commit/cc5b7dde8849dd4094dd0eec3e4a16afe319d568))
+* **time:** localized dates and property timezone ([8d316a6](https://github.com/PortakiApp/portaki-sdk/commit/8d316a619621d80deb5e1db95b7ca71a7b566019))
+
+
+### Bug Fixes
+
+* **build:** require build.rs, fail clearly without ([b076e3d](https://github.com/PortakiApp/portaki-sdk/commit/b076e3d002956ff3dab8d78a85a524344974b1f4))
+* **cli:** drop unused prelude import in templates ([54cb74f](https://github.com/PortakiApp/portaki-sdk/commit/54cb74fb6cab083e54e2d9b8361170583026c060))
+* **sdk:** drop unused Arc import on wasm32 ([d71c7c7](https://github.com/PortakiApp/portaki-sdk/commit/d71c7c7cae5626f231704a0a7cc64bc81c16211e))
+
 ## [8.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.5.0...v8.6.0) (2026-09-25)
 
 
