@@ -8,6 +8,9 @@
 //! The shape is read the way serde reads the struct: `rename_all`, `rename`, `default`, `skip`
 //! and `flatten` are honoured, `Option<T>` is optional. An attribute this parser does not know
 //! is ignored — describing arguments must never fail a module's build.
+//!
+//! On a config row type, the same shape tells `portaki build` which sub-keys are translated
+//! (`I18nText`) and which one identifies a row (`id`) — see `#[portaki_sdk::config]`.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -55,6 +58,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let output: TokenStream2 = quote! {
         #emission
         #parsed
+
+        // Read by the conformance battery (config rows); nothing in the Wasm binary.
+        #[cfg(not(target_arch = "wasm32"))]
+        ::portaki_sdk::inventory::submit! {
+            ::portaki_sdk::wasm::registry::ParamsDeclaration { name: #name, shape: #json }
+        }
     };
     output.into()
 }

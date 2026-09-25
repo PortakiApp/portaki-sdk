@@ -86,7 +86,7 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 
 | Test | Fails when |
 |------|------------|
-| `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network) |
+| `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network); an `I18nText` config field is not `localized` there, a row's `I18nText` fields are not its `item.localized`, or `item.localized` / `item.id` name a sub-key the row type (`#[params]`) does not have |
 | `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
 | `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell (a guest `Err` the SDK shows as its error state included), sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface; a guest surface panics, fails or renders nothing to read with the module inactive, incomplete, or `host::module::status` failing |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
@@ -100,7 +100,7 @@ The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#
 
 | Type | Role |
 |------|------|
-| `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install; `with_config(&cfg)` sets the install's config (`#[portaki_sdk::config]`), `with_module_status(…)` what `host::module::status` answers (`incomplete: true`…), `with_module_status_error(…)` a status that fails, `with_coordinates(None)` a property not geocoded; `run_with` hands over the backend, whose `logs()` lists what the module logged |
+| `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install; `with_config(&cfg)` sets the install's config (`#[portaki_sdk::config]`; `I18nText` values included, as the platform stores them), `with_module_status(…)` what `host::module::status` answers (`incomplete: true`…), `with_module_status_error(…)` a status that fails, `with_coordinates(None)` a property not geocoded; `run_with` hands over the backend, whose `logs()` lists what the module logged |
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |

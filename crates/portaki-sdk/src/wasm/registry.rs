@@ -83,3 +83,24 @@ inventory::collect!(HandlerDeclaration);
 pub fn declarations() -> impl Iterator<Item = &'static HandlerDeclaration> {
     inventory::iter::<HandlerDeclaration>.into_iter()
 }
+
+/// One `#[params]` shape, as JSON — native targets only, like [`HandlerDeclaration`].
+///
+/// The conformance battery reads a config row's fields here (see
+/// [`crate::config::resolve_items`]).
+pub struct ParamsDeclaration {
+    /// The type name (`Step`).
+    pub name: &'static str,
+    /// The emitted shape (`{ "fields": [{ "name", "type", … }] }`), JSON.
+    pub shape: &'static str,
+}
+
+inventory::collect!(ParamsDeclaration);
+
+/// The `#[params]` shape of the linked type called `name`; `None` on `wasm32`.
+pub fn params_shape(name: &str) -> Option<Value> {
+    inventory::iter::<ParamsDeclaration>
+        .into_iter()
+        .find(|declaration| declaration.name == name)
+        .and_then(|declaration| serde_json::from_str(declaration.shape).ok())
+}

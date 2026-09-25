@@ -201,9 +201,9 @@
       "properties": {
         "key": { "type": "string", "minLength": 1 },
         "type": {
-          "enum": ["text", "textarea", "url", "number", "secret", "toggle", "select", "readonly", "structured"],
+          "enum": ["text", "textarea", "url", "number", "secret", "toggle", "select", "readonly", "structured", "localized"],
           "default": "text",
-          "description": "secret values are encrypted at rest and masked when read back; readonly fields are never required. structured is an object or a list (contacts, bins, opening hours…) edited by the module's own host surface, never rendered by a generic form."
+          "description": "secret values are encrypted at rest and masked when read back; readonly fields are never required. structured is an object or a list (contacts, bins, opening hours…) edited by the module's own host surface, never rendered by a generic form. localized is a text per language, stored as an i18nStringMap ({\"fr\": \"…\", \"en\": \"…\"}, short codes): a string saved from the host form is written into the host's language, the other languages are kept; empty when no language has a non-blank text."
         },
         "required": { "type": "boolean", "default": false, "description": "Blocks publication while empty." },
         "recommended": { "type": "boolean", "default": false, "description": "Warns while empty, never blocks." },
@@ -219,6 +219,20 @@
             "properties": {
               "value": { "type": "string" },
               "label": { "$ref": "#/$defs/i18nStringMap" }
+            }
+          }
+        },
+        "item": {
+          "type": "object",
+          "description": "The rows of a structured list (or the keys of a structured object). A save merges each received row into the stored one — same id, else same position: sub-keys it does not carry are kept, localized sub-keys follow the localized rule.",
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "description": "Sub-key identifying a row. Absent: rows are matched by position." },
+            "localized": {
+              "type": "array",
+              "description": "Sub-keys holding a text per language (i18nStringMap).",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
             }
           }
         }

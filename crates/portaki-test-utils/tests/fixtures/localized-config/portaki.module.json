@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "fixture-localized-config",
+  "name": { "fr": "Guide témoin", "en": "Fixture guide" },
+  "description": { "fr": "Déclare des textes traduits.", "en": "Declares translated text." },
+  "version": "0.1.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "map",
+  "type": "official",
+  "permissions": ["kv"],
+  "config": {
+    "fields": [
+      { "key": "welcome", "type": "localized", "required": true, "recommended": false,
+        "label": { "fr": "Mot d'accueil", "en": "Welcome note" } },
+      { "key": "steps", "type": "structured", "required": false, "recommended": false,
+        "label": { "fr": "Étapes", "en": "Steps" },
+        "item": { "id": "id", "localized": ["title", "detail"] } },
+      { "key": "spots", "type": "structured", "required": false, "recommended": false,
+        "label": { "fr": "Adresses", "en": "Places" },
+        "item": { "id": "slug", "localized": ["name"] } }
+    ]
+  }
+}

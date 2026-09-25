@@ -447,7 +447,10 @@ pub fn nav(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Emits `params-{TypeName}.json`. `portaki build` joins it with the operations whose handler
 /// takes that type (`args` in `query-*.json` / `command-*.json`) → `manifest.commands[].params`.
-/// No runtime code is generated; unknown serde attributes are ignored rather than rejected.
+/// On a config row type (`Vec<Step>` in `#[portaki_sdk::config]`), the same shape tells
+/// `portaki build` which sub-keys are translated and which identifies a row.
+/// Only a native-only registration for the conformance battery is generated — nothing in the Wasm
+/// binary; unknown serde attributes are ignored rather than rejected.
 #[proc_macro_attribute]
 pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
     params::expand(attr, item)
@@ -487,12 +490,42 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | `recommended` | a warning while it is empty, never a block |
 /// | `secret` | encrypted at rest, masked when read back |
 /// | `structured` | a list or object edited by the module's own host surface, never by a generic form |
-/// | `kind = "…"` | `text`, `textarea`, `url`, `number`, `secret`, `toggle`, `select`, `readonly`, `structured` |
+/// | `kind = "…"` | `text`, `textarea`, `url`, `number`, `secret`, `toggle`, `select`, `readonly`, `structured`, `localized` |
 /// | `options = ["…", …]` | the values of a `select`; each label is the i18n key `<label>.<value>` |
+/// | `item_id = "…"` | on a `structured` list: the row sub-key that identifies a row (default: a row field named `id`) |
 ///
-/// Without `kind`, the Rust type decides: `String` → `text`, `bool` → `toggle`, numbers →
-/// `number`, anything else → `structured` (`Option<T>` reads as `T`). The key is the serde name
-/// (`rename`, `rename_all`). A field without `#[field]` is not declared: the host never edits it.
+/// Without `kind`, the Rust type decides: `I18nText` → `localized`, `String` → `text`, `bool` →
+/// `toggle`, numbers → `number`, anything else → `structured` (`Option<T>` reads as `T`). The key
+/// is the serde name (`rename`, `rename_all`). A field without `#[field]` is not declared: the
+/// host never edits it.
+///
+/// # Translated text
+///
+/// A `localized` field (`I18nText`) holds one text per language; the platform writes a host
+/// save into the host's language and keeps the others. Show it in the host form with
+/// `I18nText::host_value(&ctx)`.
+///
+/// A `structured` list whose rows hold `I18nText` fields gets
+/// `"item": { "id": "id", "localized": ["title", …] }`, so a save keeps the languages and the
+/// sub-keys the form did not send, row by row. The macro cannot see the row type's fields: put
+/// `#[portaki_sdk::params]` on it (`Vec<Step>` → `#[params] struct Step`), and `portaki build`
+/// fills `item` from it. Without it, the list has no `item` and a save replaces the rows whole.
+///
+/// ```text
+/// #[portaki_sdk::params]
+/// #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// #[serde(default)]
+/// pub struct Step { pub id: String, pub title: I18nText, pub note: String }
+///
+/// #[portaki_sdk::config]
+/// #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// pub struct Config {
+///     #[field(label = "config.welcome")]
+///     pub welcome: I18nText,        // "type": "localized"
+///     #[field(label = "config.steps")]
+///     pub steps: Vec<Step>,         // "item": { "id": "id", "localized": ["title"] }
+/// }
+/// ```
 ///
 /// # Generated
 ///
