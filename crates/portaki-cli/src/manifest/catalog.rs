@@ -360,7 +360,7 @@ pub fn check_references(
 }
 
 /// Chaque feature de `portaki-sdk` et la permission qu'elle déclare.
-const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
+pub(crate) const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
     ("kv", permission::KV),
     ("repo", permission::REPO),
     ("email", permission::EMAIL),
