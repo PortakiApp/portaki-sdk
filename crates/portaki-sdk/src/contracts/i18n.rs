@@ -143,6 +143,42 @@ impl I18nText {
         self.get(&ctx.locale)
     }
 
+    /// The text of `key` in each bundle that has it, `{name}` placeholders filled from `vars` —
+    /// what [`bundle_text!`](crate::bundle_text) calls with the module's embedded bundles.
+    ///
+    /// `bundles` are `(language, JSON)` pairs, flat `{ "key": "text" }` objects; the first bundle
+    /// of a language that has the key wins. A bundle that does not parse is skipped.
+    ///
+    /// ```
+    /// use portaki_sdk::contracts::i18n::I18nText;
+    ///
+    /// let bundles = [("fr", r#"{"nights":"{n} nuits"}"#), ("en", r#"{"nights":"{n} nights"}"#)];
+    /// let text = I18nText::from_bundles(&bundles, "nights", &[("n", "3")]);
+    /// assert_eq!(text, I18nText::new("3 nuits", "3 nights"));
+    /// ```
+    pub fn from_bundles(bundles: &[(&str, &str)], key: &str, vars: &[(&str, &str)]) -> Self {
+        let mut text = Self::default();
+        for (language, json) in bundles {
+            let Ok(serde_json::Value::Object(bundle)) = serde_json::from_str(json) else {
+                continue;
+            };
+            let Some(raw) = bundle.get(key).and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let slot = match *language {
+                "fr" => &mut text.fr,
+                "en" => &mut text.en,
+                other => text.others.entry(other.to_string()).or_default(),
+            };
+            if slot.is_empty() {
+                *slot = vars.iter().fold(raw.to_string(), |text, (name, value)| {
+                    text.replace(&format!("{{{name}}}"), value)
+                });
+            }
+        }
+        text
+    }
+
     /// No language has a non-blank text — what the platform calls an empty `localized` field.
     pub fn is_blank(&self) -> bool {
         self.fr.trim().is_empty()
@@ -158,6 +194,18 @@ impl I18nText {
             other => self.others.get(other).map(String::as_str),
         }
         .filter(|text| !text.trim().is_empty())
+    }
+}
+
+impl From<I18nText> for crate::host::email::LocalizedEmailText {
+    /// The same texts, other languages under `translations` — for an email built from
+    /// [`bundle_text!`](crate::bundle_text).
+    fn from(text: I18nText) -> Self {
+        Self {
+            fr: text.fr,
+            en: text.en,
+            translations: text.others,
+        }
     }
 }
 
@@ -219,6 +267,25 @@ mod tests {
             ..Context::default()
         };
         assert_eq!(text.host_value(&ctx), "Hi");
+    }
+
+    #[test]
+    fn from_bundles_takes_the_first_text_per_language() {
+        let bundles = [
+            ("fr", r#"{"k":"Salut {who}"}"#),
+            ("en", "not json"),
+            ("en", r#"{"k":"Hi {who}"}"#),
+            ("de", r#"{"other":"x"}"#),
+            ("fr", r#"{"k":"ignored"}"#),
+            ("it", r#"{"k":"Ciao {who}"}"#),
+        ];
+        let text = I18nText::from_bundles(&bundles, "k", &[("who", "Ada")]);
+        assert_eq!(
+            text,
+            I18nText::new("Salut Ada", "Hi Ada").with("it", "Ciao Ada")
+        );
+        let email: crate::host::email::LocalizedEmailText = text.into();
+        assert_eq!(email.translations["it"], "Ciao Ada");
     }
 
     #[test]

@@ -106,9 +106,9 @@ pub use email::{EmailContextArgs, EmailTemplateKey, EmailVar, EmailVars};
 pub use error::{PortakiError, Result};
 pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
-    capability, command, config, connector, connector_op, custom_connector, email, email_vars,
-    entity, entity_indexes, event_handler, nav, params, portaki_module_decl as portaki_module,
-    query, surface, wire,
+    bundle_text, capability, command, config, connector, connector_op, custom_connector, email,
+    email_vars, entity, entity_indexes, event_handler, nav, params,
+    portaki_module_decl as portaki_module, query, surface, wire,
 };
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
@@ -160,8 +160,8 @@ pub mod prelude {
         ModuleAudience, ModuleType, SkipWhen, Vocabulary,
     };
     pub use crate::{
-        command, connector, connector_op, custom_connector, define_event_types, email_vars, entity,
-        entity_indexes, event_handler, portaki_module, query, surface, wire,
+        bundle_text, command, connector, connector_op, custom_connector, define_event_types,
+        email_vars, entity, entity_indexes, event_handler, portaki_module, query, surface, wire,
     };
     #[allow(deprecated)]
     pub use crate::{define_operation_names, define_surface_ids};

@@ -58,6 +58,7 @@
 
 #![deny(missing_docs)]
 
+mod bundle;
 mod capability;
 mod command;
 mod config;
@@ -79,6 +80,27 @@ mod wire;
 mod wire_lit;
 
 use proc_macro::TokenStream;
+
+/// A text of the module's own bundles, in every language they have — an `I18nText`.
+///
+/// Re-exported as `portaki_sdk::bundle_text!`. The bundles are found at compile time: every
+/// `i18n/*.json`, then every `email_i18n/*.json`, under the crate root (the language is the file
+/// name's first part: `fr-FR.json`, `fr.json` → `fr`). No hand-kept `include_str!` list. A key in
+/// both folders takes the `i18n/` text.
+///
+/// ```ignore
+/// let title = bundle_text!("stats.tile.title");                       // I18nText
+/// let body = bundle_text!("email.syncFailed.body", &[("source", name)]); // {source} filled in
+/// let subject: LocalizedEmailText = bundle_text!("email.subject").into();
+/// let shown = title.for_ctx(&ctx);                                     // the reader's language
+/// ```
+///
+/// A key written as a literal must exist in at least one bundle — a typo is a compile error,
+/// not a key shown to the guest. A key computed at run time is looked up then.
+#[proc_macro]
+pub fn bundle_text(input: TokenStream) -> TokenStream {
+    bundle::expand(input)
+}
 
 /// Declares module identity and bootstraps Wasm exports.
 ///
