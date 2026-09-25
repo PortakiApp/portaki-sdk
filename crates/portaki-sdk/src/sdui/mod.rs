@@ -62,3 +62,35 @@ pub use common::{
 };
 pub use component::Component;
 pub use surface::Surface;
+
+/// The hidden field carrying a list row's id in a host form: `<list>.<index>.id`.
+///
+/// A form sends rows by position; with this field, each row also sends its id, and the platform
+/// merges a save into the stored row with the same id (`item.id` of a `structured` config field)
+/// — a removal or a reorder no longer shifts the other rows' translations and kept sub-keys. The
+/// dashboard renders a `TextInput` named `….id` hidden and sends it back untouched.
+///
+/// `id` is the stored row's; a new row (`None` or blank) gets a fresh UUID. Put it in every row
+/// of a `StepList` (or any repeated group), next to the row's other fields.
+///
+/// ```
+/// use portaki_sdk::sdui::{primitives::TextInput, row_id, primitives::SduiPrimitive};
+///
+/// let kept = row_id("steps", 0, Some("gate"));
+/// let input = TextInput::from_component(&kept).unwrap();
+/// assert_eq!(input.name.as_deref(), Some("steps.0.id"));
+/// assert_eq!(input.value.as_deref(), Some("gate"));
+///
+/// let added = row_id("steps", 1, None);
+/// assert_eq!(TextInput::from_component(&added).unwrap().value.as_ref().unwrap().len(), 36);
+/// ```
+pub fn row_id(list: &str, index: usize, id: Option<&str>) -> Component {
+    let id = match id.map(str::trim) {
+        Some(id) if !id.is_empty() => id.to_string(),
+        _ => uuid::Uuid::new_v4().to_string(),
+    };
+    primitives::TextInput::new()
+        .name(format!("{list}.{index}.id"))
+        .value(id)
+        .into()
+}

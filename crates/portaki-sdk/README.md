@@ -132,6 +132,10 @@ TextInput::new().name("welcome").value(config.welcome.host_value(&ctx));
 let shown = config.welcome.get(&ctx.locale);
 ```
 
+In the host form, each row of the list sends its id back with
+`sdui::row_id("steps", index, Some(&step.id))` — a hidden `steps.<index>.id`, a fresh UUID for a
+new row — so a removal or a reorder does not shift the other rows' languages.
+
 `I18nText` also reads a plain string (a config saved before it was translated) as the same
 text in every language; `is_blank()` is the platform's notion of empty.
 
