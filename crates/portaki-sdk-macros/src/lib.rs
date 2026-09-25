@@ -244,6 +244,7 @@ pub fn entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | 1st | `host` or `guest` (identifier) or `"host"` / `"guest"` (string) | yes — surface context |
 /// | 2nd | `id = "…"` or `id = SurfaceId::new("…")` | yes — stable surface id in the manifest |
 /// | 3rd | `display_name_key = "…"` | no — i18n key; omitted from JSON when absent |
+/// | any | `gate = false` | no — guest only: skip the SDK's guest states (see below) |
 ///
 /// Where the surface is linked from — its catalogue entry — follows, in any order. Closed lists
 /// take their enum (in the prelude), and a string there does not compile:
@@ -267,6 +268,30 @@ pub fn entity_indexes(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A function. Its Rust symbol is recorded as `renderFn`. Return type may be `Surface` or
 /// `Result<Surface, _>`; the Wasm shim serializes the return value with `serde_json::to_value`.
+/// The function itself is left as written: a unit test calls it directly.
+///
+/// # Guest states
+///
+/// A guest surface is rendered through `portaki_sdk::guest_shell`: the shim asks the platform
+/// whether the module is ready and renders the SDK's « inactive » or « incomplete » state without
+/// calling the function when it is not; an `Err` from the function is logged
+/// (`<module>_<surface>_render_failed`) and rendered as the SDK's error state. So a guest
+/// surface is written for the happy path:
+///
+/// ```text
+/// #[portaki_sdk::surface(guest, id = "home.card")]
+/// pub fn render_home_card(ctx: GuestContext) -> Result<Surface> {
+///     let config = Config::load(&ctx)?;
+///     Ok(Surface::new(/* … */))
+/// }
+/// ```
+///
+/// `gate = false` opts a guest surface out: the function is called whatever the status, and an
+/// `Err` reaches the platform as before. Only for a surface that has something to say while the
+/// module is not ready — a card that must stay visible with an incomplete config, or one that
+/// already renders its own states (a module that keeps its `guest/empty.rs`, whose texts keep
+/// the same keys, needs nothing: its function is simply not called when the SDK's state shows).
+/// A host surface is never gated: the dashboard shows the host what to fix.
 ///
 /// # Emission
 ///

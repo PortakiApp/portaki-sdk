@@ -47,6 +47,8 @@ pub(crate) struct Typed {
     /// `Vocabulary::Variant`, resolved to the wire string by `portaki build`.
     pub emitted: String,
     pub check: TokenStream2,
+    /// `::portaki_sdk::<module>::Vocabulary::Variant`, for code that uses the value.
+    pub path: TokenStream2,
 }
 
 /// Parses `Vocabulary::Variant` (or the bare `Variant`) for argument `key`.
@@ -85,12 +87,14 @@ pub(crate) fn parse(input: ParseStream<'_>, key: &str, vocab: Vocab) -> syn::Res
             quote::quote!(::#ident)
         })
         .collect();
+    let path = quote_spanned! {variant.span()=> ::portaki_sdk #module :: #ty :: #variant };
     let check = quote_spanned! {variant.span()=>
-        const _: ::portaki_sdk #module :: #ty = ::portaki_sdk #module :: #ty :: #variant;
+        const _: ::portaki_sdk #module :: #ty = #path;
     };
     Ok(Typed {
         emitted: format!("{}::{}", vocab.name, variant),
         check,
+        path,
     })
 }
 

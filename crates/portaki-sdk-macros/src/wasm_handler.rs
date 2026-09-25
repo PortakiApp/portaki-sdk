@@ -51,15 +51,19 @@ pub fn register_command(
 }
 
 /// Registers a surface renderer (`render_fn` symbol only).
+///
+/// `gated`: the shim renders through `portaki_sdk::guest_shell::render` — readiness states before
+/// the call, the error state on `Err`.
 pub fn register_surface(
     context: &str,
     surface_id: &str,
+    gated: bool,
     render_fn: &str,
     function_item: &ItemFn,
 ) -> TokenStream2 {
     register_handler(
         &[render_fn],
-        HandlerKind::Surface,
+        HandlerKind::Surface { gated },
         Declared {
             name: surface_id,
             context,
@@ -79,7 +83,7 @@ struct Declared<'a> {
 enum HandlerKind {
     Query,
     Command,
-    Surface,
+    Surface { gated: bool },
 }
 
 fn register_handler(
@@ -95,41 +99,50 @@ fn register_handler(
     let kind_tokens = match kind {
         HandlerKind::Query => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Query },
         HandlerKind::Command => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Command },
-        HandlerKind::Surface => quote! { ::portaki_sdk::wasm::registry::HandlerKind::Surface },
+        HandlerKind::Surface { .. } => {
+            quote! { ::portaki_sdk::wasm::registry::HandlerKind::Surface }
+        }
     };
     let shim_ident = format_ident!("__portaki_shim_{}", fn_ident);
     let name_literals: Vec<_> = names.iter().map(|n| quote! { #n }).collect();
 
     let invoke = match kind {
-        HandlerKind::Surface => {
+        HandlerKind::Surface { gated } => {
             let (ctx_ty, args_ty) = parse_query_command_sig(function_item);
-            match args_ty {
-                Some(args_ty) => {
-                    let surface_call = if returns_result(function_item) {
-                        quote! { #fn_ident(ctx, args)? }
-                    } else {
-                        quote! { #fn_ident(ctx, args) }
-                    };
+            let read_args = args_ty.as_ref().map(|args_ty| {
+                quote! {
+                    let args: #args_ty = ::serde_json::from_value(params)
+                        .map_err(|e| ::portaki_sdk::error::PortakiError::Host(format!("wasm_params_invalid: {e}")))?;
+                }
+            });
+            let call = if args_ty.is_some() {
+                quote! { #fn_ident(ctx, args) }
+            } else {
+                quote! { #fn_ident(ctx) }
+            };
+            let surface = match (gated, returns_result(function_item)) {
+                (true, true) => {
+                    let surface_id = declared.name;
                     quote! {
-                        let ctx: #ctx_ty = ctx;
-                        let args: #args_ty = ::serde_json::from_value(params)
-                            .map_err(|e| ::portaki_sdk::error::PortakiError::Host(format!("wasm_params_invalid: {e}")))?;
-                        let surface = #surface_call;
-                        ::serde_json::to_value(surface)
+                        ::portaki_sdk::guest_shell::render(ctx, #surface_id, |ctx: #ctx_ty| {
+                            #call.map_err(::core::convert::Into::into)
+                        })
                     }
                 }
-                None => {
-                    let surface_call = if returns_result(function_item) {
-                        quote! { #fn_ident(ctx)? }
-                    } else {
-                        quote! { #fn_ident(ctx) }
-                    };
+                (true, false) => {
+                    let surface_id = declared.name;
                     quote! {
-                        let ctx: #ctx_ty = ctx;
-                        let surface = #surface_call;
-                        ::serde_json::to_value(surface)
+                        ::portaki_sdk::guest_shell::render(ctx, #surface_id, |ctx: #ctx_ty| Ok(#call))
                     }
                 }
+                (false, true) => quote! { #call? },
+                (false, false) => call,
+            };
+            quote! {
+                let ctx: #ctx_ty = ctx;
+                #read_args
+                let surface = #surface;
+                ::serde_json::to_value(surface)
             }
         }
         HandlerKind::Query | HandlerKind::Command => {

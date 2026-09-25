@@ -22,6 +22,8 @@ struct ModuleAttrs {
     catalog: serde_json::Map<String, serde_json::Value>,
     /// Compile-time checks that each typed value names a real variant.
     checks: Vec<TokenStream2>,
+    /// `IconName::…` path, registered for the guest states of `portaki_sdk::guest_shell`.
+    icon: Option<TokenStream2>,
 }
 
 /// Typed keys of `portaki_module!`, their catalogue name and vocabulary.
@@ -42,6 +44,7 @@ impl Parse for ModuleAttrs {
             version: None,
             catalog: serde_json::Map::new(),
             checks: Vec::new(),
+            icon: None,
         };
 
         while !input.is_empty() {
@@ -63,6 +66,9 @@ impl Parse for ModuleAttrs {
             }
             if let Some((name, wire, vocab)) = TYPED.iter().find(|(name, _, _)| key == name) {
                 let typed = crate::typed::parse(input, name, *vocab)?;
+                if *name == "icon" {
+                    attrs.icon = Some(typed.path.clone());
+                }
                 attrs.checks.push(typed.check);
                 attrs.catalog.insert((*wire).into(), typed.emitted.into());
                 input.parse::<Option<Token![,]>>()?;
@@ -193,10 +199,18 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
 
     let emission = write_emission("module", &sanitize_key(&id), &json);
     let checks = &attrs.checks;
+    let icon = attrs.icon.map(|icon| {
+        quote! {
+            ::portaki_sdk::inventory::submit! {
+                ::portaki_sdk::guest_shell::ModuleIcon(#icon)
+            }
+        }
+    });
 
     quote! {
         #emission
         #(#checks)*
+        #icon
         #[cfg(target_arch = "wasm32")]
         mod __portaki_wasm_getrandom {
             #[no_mangle]

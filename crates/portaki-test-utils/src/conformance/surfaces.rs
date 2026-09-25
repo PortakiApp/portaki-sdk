@@ -1,5 +1,7 @@
-//! Every declared surface renders in its shell with an empty mock, into contract primitives.
+//! Every declared surface renders in its shell with an empty mock, into contract primitives —
+//! and every guest surface still shows something when the module is off, incomplete or failing.
 
+use portaki_sdk::host::module::ModuleStatus;
 use portaki_sdk::sdui::component::Component;
 use portaki_sdk::sdui::primitives::Select;
 use portaki_sdk::sdui::surface::Surface;
@@ -8,7 +10,7 @@ use serde_json::Value;
 
 use super::invoke::{describe, empty_params, invoke, surface_mock, Invocation, Outcome};
 use super::{Findings, Module, MANIFEST_FILE, NO_DECLARATIONS};
-use crate::SurfaceAssertions;
+use crate::{MockContextBuilder, SurfaceAssertions};
 
 pub(super) fn check(module: &Module) -> Result<(), Findings> {
     Findings::of("surfaces", problems(module))
@@ -54,16 +56,118 @@ fn problems(module: &Module) -> Vec<String> {
                 "{what} failed with an empty mock — a first install has no data either, render an \
                  empty state: {error}"
             )),
-            Outcome::Answered(tree) => problems.extend(
-                contract_problems(&tree)
-                    .into_iter()
-                    .map(|problem| format!("{what} {problem}")),
-            ),
+            Outcome::Answered(tree) => {
+                // The SDK turned an `Err` into the guest error state: the guest would see
+                // « temporarily unavailable » on a first install.
+                if let Some(error) = render_failure(declaration, &invocation.logs) {
+                    problems.push(format!(
+                        "{what} failed with an empty mock — a first install has no data either, \
+                         render an empty state: {error}"
+                    ));
+                }
+                problems.extend(
+                    contract_problems(&tree)
+                        .into_iter()
+                        .map(|problem| format!("{what} {problem}")),
+                )
+            }
         }
     }
 
+    problems.extend(guest_state_problems(module));
     problems.extend(undeclared_guest_routes(module, &declarations));
     problems
+}
+
+/// The error a guest surface logged through `portaki_sdk::guest_shell`, if it did.
+fn render_failure(declaration: &HandlerDeclaration, logs: &[crate::LogLine]) -> Option<String> {
+    logs.iter()
+        .find(|line| {
+            line.level == "error"
+                && line.message.ends_with("_render_failed")
+                && line.fields["surfaceId"] == declaration.name
+        })
+        .map(|line| line.fields["error"].as_str().unwrap_or("?").to_string())
+}
+
+/// `mock` in each platform state a guest surface meets: module off, config incomplete, host
+/// failing.
+fn guest_states(mock: MockContextBuilder) -> [(&'static str, MockContextBuilder); 3] {
+    fn status(active: bool, incomplete: bool) -> ModuleStatus {
+        ModuleStatus {
+            active,
+            workspace_enabled: true,
+            incomplete,
+            requires_config: incomplete,
+            missing_required_keys: if incomplete {
+                vec!["required".to_string()]
+            } else {
+                Vec::new()
+            },
+        }
+    }
+    [
+        (
+            "inactive",
+            mock.clone().with_module_status(status(false, false)),
+        ),
+        (
+            "incomplete",
+            mock.clone().with_module_status(status(true, true)),
+        ),
+        (
+            "error",
+            mock.with_module_status_error("module_status_unavailable"),
+        ),
+    ]
+}
+
+/// Every guest surface, in each of [`guest_states`]: it answers, with something to read.
+///
+/// Through the SDK's guest shell this holds by construction; a surface with `gate = false`
+/// answers for itself.
+fn guest_state_problems(module: &Module) -> Vec<String> {
+    let module_id = module_id(module);
+    let mut problems = Vec::new();
+    for declaration in module.declarations() {
+        if declaration.kind != HandlerKind::Surface || declaration.context != "guest" {
+            continue;
+        }
+        let what = describe(declaration);
+        for (state, mock) in guest_states(surface_mock(declaration, module_id.as_deref())) {
+            match invoke(declaration, mock, empty_params()).outcome {
+                Outcome::Panicked(message) => problems.push(format!(
+                    "{what} panicked with the module {state}: {message}"
+                )),
+                Outcome::Failed(error) => problems.push(format!(
+                    "{what} failed with the module {state} — the guest sees nothing, render a \
+                     state: {error}"
+                )),
+                Outcome::Answered(tree) if is_blank(&tree) => problems.push(format!(
+                    "{what} rendered nothing to read with the module {state}"
+                )),
+                Outcome::Answered(tree) => problems.extend(
+                    contract_problems(&tree)
+                        .into_iter()
+                        .map(|problem| format!("{what} with the module {state} {problem}")),
+                ),
+            }
+        }
+    }
+    problems
+}
+
+/// No text anywhere in the tree — the node types, ids and icons aside.
+fn is_blank(tree: &Value) -> bool {
+    match tree {
+        Value::String(text) => text.trim().is_empty(),
+        Value::Array(items) => items.iter().all(is_blank),
+        Value::Object(map) => map
+            .iter()
+            .filter(|(key, _)| !matches!(key.as_str(), "type" | "id" | "icon"))
+            .all(|(_, value)| is_blank(value)),
+        _ => true,
+    }
 }
 
 /// What the shell would refuse in the JSON a surface sends.

@@ -88,9 +88,9 @@ It generates one test per check under `portaki_conformance::`. `portaki publish`
 |------|------------|
 | `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network) |
 | `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
-| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell, sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface |
+| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell (a guest `Err` the SDK shows as its error state included), sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface; a guest surface panics, fails or renders nothing to read with the module inactive, incomplete, or `host::module::status` failing |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
-| `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/`; a `config.fields[]` label, description or option label has no text in one of the languages of `i18n/` |
+| `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/` (the guest-state keys the SDK ships a text for aside); a `config.fields[]` label, description or option label has no text in one of the languages of `i18n/` |
 | `emails` | an `emails[]` command is not declared or panics around a mock stay, or `emailContext` panics for a template key |
 | `contracts` | a `property-stats-card` has no `statsSummary`, or it answers off `stats-summary.v1.json` (`fr`/`en`, `value` ≤ 12 chars) or slower than 300 ms; a `property-stats-detail` has no host surface of id `pathSegment`, or it fails with `input.periodDays`; a `workspace-timeline-task` has no `timelineTasks`, or it answers off `timeline-tasks.v1.json` on three fixture stays (ISO dates, non-empty items), or `taskToggle` ticks a `photoRequired` item without a photo instead of refusing it with `photo_required`; an exported `publishReadiness` answers off `publish-readiness.v1.json` |
 
@@ -100,7 +100,7 @@ The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#
 
 | Type | Role |
 |------|------|
-| `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install; `with_config(&cfg)` sets the install's config (`#[portaki_sdk::config]`), `with_module_status(…)` what `host::module::status` answers (`incomplete: true`…) |
+| `MockContext` / `MockContextBuilder` | Fluent guest/host context + backend install; `with_config(&cfg)` sets the install's config (`#[portaki_sdk::config]`), `with_module_status(…)` what `host::module::status` answers (`incomplete: true`…), `with_module_status_error(…)` a status that fails, `with_coordinates(None)` a property not geocoded; `run_with` hands over the backend, whose `logs()` lists what the module logged |
 | `MockHostFunctions` | In-memory KV, i18n, connectors, repo stubs; enforces the platform's per-invocation email / event caps and the after-stay email rule (`with_stay`, `with_now`, `sent_emails`) |
 | `Property`, `Booking`, … | Default fixtures |
 | `SurfaceAssertions` | Depth-first SDUI queries over every primitive: `contains_type("Card")`, `count_type`, `find::<Card>()`, `count::<Card>()`, … |

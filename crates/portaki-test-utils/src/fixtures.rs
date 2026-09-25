@@ -7,6 +7,7 @@
 
 use chrono::{DateTime, Utc};
 use portaki_sdk::context::{Context, GuestIdentity, PropertyContext, StayContext};
+use portaki_sdk::sdui::common::GeoPoint;
 use uuid::Uuid;
 
 /// Sample rental property for tests.
@@ -110,14 +111,13 @@ impl Property {
     /// Sets a fixed address `"Cannes, France"` on `PropertyContext::address`.
     pub fn apply(&self, ctx: &mut Context) {
         ctx.property_id = self.id;
-        ctx.property = PropertyContext {
-            name: self.name.clone(),
-            locale: self.locale.clone(),
-            timezone: self.timezone.clone(),
-            lat: self.lat,
-            lng: self.lng,
-            address: Some("Cannes, France".to_string()),
-        };
+        ctx.property = PropertyContext::new(
+            self.name.clone(),
+            self.locale.clone(),
+            self.timezone.clone(),
+            Some(GeoPoint::new(self.lat, self.lng)),
+            Some("Cannes, France".to_string()),
+        );
         ctx.locale = self.locale.clone();
         ctx.timezone = self.timezone.clone();
     }

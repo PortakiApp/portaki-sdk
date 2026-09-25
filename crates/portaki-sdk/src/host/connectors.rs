@@ -40,12 +40,17 @@
 //! #[derive(Deserialize)]
 //! struct WeatherResponse { temperature_c: f64 }
 //!
-//! fn load_weather(ctx: &Context) -> Result<WeatherResponse> {
+//! /// `None` for a property not geocoded yet: the surface shows its empty state.
+//! fn load_weather(ctx: &Context) -> Result<Option<WeatherResponse>> {
+//!     let Some(point) = ctx.property.coordinates else {
+//!         return Ok(None);
+//!     };
 //!     host::connectors::call(
 //!         "open-weather",
 //!         "current",
-//!         &WeatherArgs { lat: ctx.property.lat, lng: ctx.property.lng },
+//!         &WeatherArgs { lat: point.lat, lng: point.lng },
 //!     )
+//!     .map(Some)
 //! }
 //! ```
 

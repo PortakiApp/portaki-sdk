@@ -12,6 +12,7 @@ use crate::context::{
 };
 use crate::error::{PortakiError, Result};
 use crate::ids::ModuleId;
+use crate::sdui::common::GeoPoint;
 
 /// Host → module request body (matches the Portaki Wasm invocation payload on the host).
 #[derive(Debug, Deserialize)]
@@ -234,21 +235,24 @@ fn property_from_config_json(
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    let lat = parsed.get("lat").and_then(Value::as_f64).unwrap_or(48.8566);
-    let lng = parsed.get("lng").and_then(Value::as_f64).unwrap_or(2.3522);
-    PropertyContext {
-        name,
-        locale,
-        timezone,
-        lat,
-        lng,
-        address,
-    }
+    // Le runtime omet lat / lng tant que le logement n'est pas géocodé : pas de position alors,
+    // plutôt qu'une position inventée (Paris, avant) où la météo s'affichait.
+    let coordinate = |key: &str| parsed.get(key).and_then(Value::as_f64);
+    let coordinates = match (coordinate("lat"), coordinate("lng")) {
+        (Some(lat), Some(lng))
+            if (-90.0..=90.0).contains(&lat) && (-180.0..=180.0).contains(&lng) =>
+        {
+            Some(GeoPoint::new(lat, lng))
+        }
+        _ => None,
+    };
+    PropertyContext::new(name, locale, timezone, coordinates, address)
 }
 
 #[cfg(test)]
 mod tests {
     use super::WasmRequestEnvelope;
+    use crate::sdui::common::GeoPoint;
 
     #[test]
     fn parses_java_camel_case_envelope() {
@@ -267,8 +271,45 @@ mod tests {
         let ctx = envelope.to_context("getCurrent").expect("context");
         assert_eq!(ctx.module_id, "weather");
         assert_eq!(ctx.capabilities.len(), 1);
-        assert!((ctx.property.lat - 48.8566).abs() < f64::EPSILON);
+        assert_eq!(ctx.property.coordinates, None, "no lat / lng, no position");
         assert_eq!(ctx.module_config, None, "no moduleConfig key");
+    }
+
+    /// Le runtime omet lat / lng d'un logement non géocodé ; une moitié ou un nombre hors plage
+    /// ne vaut pas mieux.
+    #[test]
+    fn coordinates_are_there_only_when_the_property_is_geocoded() {
+        let coordinates = |config_json: &str| {
+            let raw = serde_json::json!({
+                "query": "getCurrent",
+                "context": {
+                    "moduleId": "weather",
+                    "moduleVersion": "1.0.0",
+                    "propertyId": "790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2",
+                    "configJson": config_json,
+                }
+            });
+            let envelope: WasmRequestEnvelope = serde_json::from_value(raw).expect("parse");
+            envelope.to_context("getCurrent").expect("context").property
+        };
+
+        let cannes = coordinates(r#"{"lat":43.5513,"lng":7.0128}"#);
+        assert_eq!(cannes.coordinates, Some(GeoPoint::new(43.5513, 7.0128)));
+        #[allow(deprecated)]
+        let (lat, lng) = (cannes.lat, cannes.lng);
+        assert_eq!(
+            (lat, lng),
+            (43.5513, 7.0128),
+            "the deprecated fields follow"
+        );
+
+        for nowhere in ["", "{}", r#"{"lat":43.55}"#, r#"{"lat":143.0,"lng":7.0}"#] {
+            let property = coordinates(nowhere);
+            assert_eq!(property.coordinates, None, "{nowhere}");
+            #[allow(deprecated)]
+            let (lat, lng) = (property.lat, property.lng);
+            assert_eq!((lat, lng), (0.0, 0.0), "no Paris any more: {nowhere}");
+        }
     }
 
     /// `moduleConfig` is the install's config, next to `configJson` which stays the property.
@@ -326,8 +367,10 @@ mod tests {
         let ctx = envelope.to_context("getCurrent").expect("context");
         assert_eq!(ctx.property.name, "Vayoux");
         assert_eq!(ctx.property.address.as_deref(), Some("Lyon"));
-        assert!((ctx.property.lat - 45.764).abs() < f64::EPSILON);
-        assert!((ctx.property.lng - 4.8357).abs() < f64::EPSILON);
+        assert_eq!(
+            ctx.property.coordinates,
+            Some(GeoPoint::new(45.764, 4.8357))
+        );
     }
 
     #[test]

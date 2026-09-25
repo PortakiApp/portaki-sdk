@@ -1,7 +1,8 @@
 //! Module install readiness and peer discovery by capability.
 //!
-//! Surfaces that require owner setup (API keys, required config fields) should call
-//! [`status`] and render an empty state when [`ModuleStatus::is_ready`] is `false`.
+//! A guest surface does not call [`status`] itself: `#[surface(guest, …)]` does, and renders the
+//! SDK's inactive or incomplete state when [`ModuleStatus::is_ready`] is `false` (see
+//! [`crate::guest_shell`]). A host surface that needs owner setup may still read it.
 //! The orchestrator — not Wasm — owns enablement and config persistence.
 //!
 //! ## Contract
