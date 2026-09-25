@@ -5,7 +5,6 @@ use portaki_sdk::prelude::*;
 mod config;
 mod guest;
 mod host;
-mod ids;
 
 // Re-exported so `tests/` can reach them: an integration test links the crate from outside.
 pub use config::ModuleConfig;

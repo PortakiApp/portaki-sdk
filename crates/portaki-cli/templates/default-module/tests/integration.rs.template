@@ -21,7 +21,6 @@ fn the_settings_sheet_shows_what_was_saved() {
             let surface = render_host_main(ctx).expect("render");
             let json = serde_json::to_string(&surface).expect("serialize");
 
-            assert!(json.contains("\"main\""));
             assert!(json.contains("Welcome home"));
         });
 }

@@ -122,8 +122,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let emission = write_emission("query", &sanitize_key(&attrs.name), &json);
     let wasm_registration =
         crate::wasm_handler::register_query(&attrs.name, &fn_name, &function_item);
+    let name_const =
+        crate::wasm_handler::declared_const("OperationName", &attrs.name, &function_item.sig.ident);
     let output: TokenStream2 = quote! {
         #emission
+        #name_const
         #function_item
         #wasm_registration
     };

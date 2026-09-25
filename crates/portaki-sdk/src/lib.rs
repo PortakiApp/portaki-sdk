@@ -160,10 +160,11 @@ pub mod prelude {
         ModuleAudience, ModuleType, SkipWhen, Vocabulary,
     };
     pub use crate::{
-        command, connector, connector_op, custom_connector, define_event_types,
-        define_operation_names, define_surface_ids, email_vars, entity, entity_indexes,
-        event_handler, portaki_module, query, surface, wire,
+        command, connector, connector_op, custom_connector, define_event_types, email_vars, entity,
+        entity_indexes, event_handler, portaki_module, query, surface, wire,
     };
+    #[allow(deprecated)]
+    pub use crate::{define_operation_names, define_surface_ids};
     pub use crate::{log_info, t};
     pub use chrono::{DateTime, Utc};
     pub use serde::{Deserialize, Serialize};

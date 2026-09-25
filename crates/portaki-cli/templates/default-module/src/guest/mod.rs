@@ -4,7 +4,6 @@ use portaki_sdk::prelude::*;
 use portaki_sdk::sdui::primitives::{Card, Stack, Text};
 
 use crate::config::ModuleConfig;
-use crate::ids::HOME_CARD;
 
 #[portaki_sdk::surface(
     guest,
@@ -29,6 +28,5 @@ pub fn render_guest_home_card(ctx: GuestContext) -> Result<Surface> {
         Card::new()
             .title("i18n:home.card.title")
             .child(Stack::new().child(Text::new().text(body))),
-    )
-    .with_id(HOME_CARD))
+    ))
 }

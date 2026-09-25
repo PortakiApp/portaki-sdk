@@ -28,8 +28,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         crate::emit::write_emission("command", &crate::emit::sanitize_key(&attrs.name), &json);
     let wasm_registration =
         crate::wasm_handler::register_command(&attrs.name, &fn_name, &function_item);
+    let name_const =
+        crate::wasm_handler::declared_const("OperationName", &attrs.name, &function_item.sig.ident);
     let output = quote::quote! {
         #emission
+        #name_const
         #function_item
         #wasm_registration
     };

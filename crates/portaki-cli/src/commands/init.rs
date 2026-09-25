@@ -321,13 +321,9 @@ pub fn run(args: InitArgs) -> Result<()> {
 
 /// Ce qui vient d'être écrit, et à quoi chaque morceau sert.
 ///
-/// Un squelette qu'on découvre fichier par fichier se lit mal : `ids.rs` et `i18n/` n'ont de
-/// sens que l'un par rapport à l'autre, et rien dans leur nom ne le dit.
+/// Un squelette qu'on découvre fichier par fichier se lit mal : chaque morceau dit à quoi il sert.
 fn describe(template: &InitTemplate) {
-    let mut rows = vec![
-        ("src/lib.rs", "the module — entity, capability, manifest"),
-        ("src/ids.rs", "typed surface and operation ids"),
-    ];
+    let mut rows = vec![("src/lib.rs", "the module — entity, capability, manifest")];
     if matches!(template, InitTemplate::Default) {
         rows.push(("src/host/", "surfaces the host dashboard renders"));
         rows.push(("src/guest/", "surfaces the guest booklet renders"));
@@ -343,7 +339,7 @@ fn describe(template: &InitTemplate) {
     }
     rows.push((
         "i18n/*.json",
-        "one file per locale — the keys ids.rs points at",
+        "one file per locale — the i18n: keys the surfaces point at",
     ));
     rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
     rows.push((

@@ -4,7 +4,6 @@ use portaki_sdk::prelude::*;
 use portaki_sdk::sdui::primitives::{Card, Field, FieldHint, Form, Page, Stack, TextInput};
 
 use crate::config::ModuleConfig;
-use crate::ids::HOST_MAIN;
 
 /// The settings the host fills in, inside the module sheet.
 ///
@@ -42,8 +41,8 @@ pub fn render_host_main(ctx: HostContext) -> Result<Surface> {
             .into(),
     ];
 
+    // The dispatcher stamps the declared id (`main`, the const `MAIN`) on the surface.
     Ok(Surface::new(
         Page::new().child(Form::new().child(Stack::new().gap(16.0).children(children))),
-    )
-    .with_id(HOST_MAIN))
+    ))
 }
