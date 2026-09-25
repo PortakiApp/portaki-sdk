@@ -131,9 +131,10 @@ pub struct Config {
     pub steps: Vec<Step>,    // "item": { "id": "id", "localized": ["title"], "secret": ["code"] }
 }
 
-// Host form: the editor's language, else fr, en, any. Guest: the guest's.
+// Host form: the editor's language, else fr, en, any. Guest: the guest's, else the property's
+// default language (`context.propertyLang`), else fr, en, any.
 TextInput::new().name("welcome").value(config.welcome.host_value(&ctx));
-let shown = config.welcome.get(&ctx.locale);
+let shown = config.welcome.for_ctx(&ctx);
 ```
 
 In the host form, each row of the list sends its id back with

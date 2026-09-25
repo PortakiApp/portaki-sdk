@@ -148,6 +148,12 @@ impl MockContextBuilder {
         self
     }
 
+    /// Sets the property's default language (`context.propertyLang`, a short code such as `en`).
+    pub fn with_property_lang(mut self, lang: impl Into<String>) -> Self {
+        self.context.property_lang = Some(lang.into());
+        self
+    }
+
     /// Replaces the context with one built from `capability_ids` via [`Context::with_capabilities`].
     ///
     /// Preserves surface and guest set by [`Self::guest`] / [`Self::host`] only when

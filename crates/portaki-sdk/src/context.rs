@@ -245,6 +245,10 @@ pub struct Context {
     /// that `#[portaki_sdk::config]` generates — see [`crate::config`].
     #[serde(default)]
     pub module_config: Option<Value>,
+    /// Short code of the property's default language (`fr`, `en`…), `context.propertyLang`;
+    /// `None` when the platform does not know it. Read it through [`Context::property_lang`].
+    #[serde(default)]
+    pub property_lang: Option<String>,
 }
 
 /// Host dashboard invocation context.
@@ -307,6 +311,28 @@ impl Context {
         }
     }
 
+    /// Short code of the request language: `fr` for `fr-FR`, `en` for `en_US`; `fr` when the
+    /// locale is blank. What a module compares languages with, and what bundles are keyed by.
+    ///
+    /// ```
+    /// use portaki_sdk::context::Context;
+    ///
+    /// let ctx = Context { locale: "en-US".into(), ..Context::default() };
+    /// assert_eq!(ctx.lang(), "en");
+    /// ```
+    pub fn lang(&self) -> String {
+        short_lang(&self.locale).unwrap_or_else(|| "fr".to_string())
+    }
+
+    /// Short code of the property's default language (`fr`, `en`…), `None` when unknown — the
+    /// language a text written by the host most likely has, after the guest's own.
+    pub fn property_lang(&self) -> Option<&str> {
+        self.property_lang
+            .as_deref()
+            .map(str::trim)
+            .filter(|lang| !lang.is_empty())
+    }
+
     /// Unsigned integer draft field from [`Self::input`].
     pub fn input_u64(&self, key: &str) -> Option<u64> {
         self.input.get(key).and_then(Value::as_u64)
@@ -342,8 +368,20 @@ impl Default for Context {
             ),
             input: Value::Null,
             module_config: None,
+            property_lang: None,
         }
     }
+}
+
+/// `fr` for `fr-FR`, `en` for ` EN_us `; `None` when blank.
+pub(crate) fn short_lang(locale: &str) -> Option<String> {
+    let base = locale
+        .trim()
+        .split(['-', '_'])
+        .next()
+        .unwrap_or_default()
+        .trim();
+    (!base.is_empty()).then(|| base.to_ascii_lowercase())
 }
 
 /// Fixed UTC timestamp for deterministic tests (`2026-01-15T12:00:00Z`).
@@ -351,4 +389,30 @@ pub fn fixed_now() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")
         .expect("valid fixture timestamp")
         .with_timezone(&Utc)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lang_is_the_short_code_of_the_locale() {
+        for (locale, lang) in [("fr-FR", "fr"), (" EN_us ", "en"), ("de", "de"), ("", "fr")] {
+            let ctx = Context {
+                locale: locale.into(),
+                ..Context::default()
+            };
+            assert_eq!(ctx.lang(), lang, "{locale:?}");
+        }
+    }
+
+    #[test]
+    fn a_blank_property_lang_is_unknown() {
+        let mut ctx = Context::default();
+        assert_eq!(ctx.property_lang(), None);
+        ctx.property_lang = Some(" ".into());
+        assert_eq!(ctx.property_lang(), None);
+        ctx.property_lang = Some("en".into());
+        assert_eq!(ctx.property_lang(), Some("en"));
+    }
 }

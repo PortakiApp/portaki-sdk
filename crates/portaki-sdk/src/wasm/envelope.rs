@@ -91,6 +91,9 @@ pub struct WasmContextEnvelope {
     /// Request locale (`fr-FR`).
     #[serde(default)]
     pub locale: Option<String>,
+    /// Short code of the property's default language (`fr`); absent when unknown.
+    #[serde(rename = "propertyLang", default)]
+    pub property_lang: Option<String>,
     /// Property timezone (`Europe/Paris`) — legacy alias; prefer `propertyTimezone`.
     #[serde(default)]
     pub timezone: Option<String>,
@@ -178,6 +181,10 @@ impl WasmRequestEnvelope {
             property,
             input: self.params.clone(),
             module_config: ctx.module_config.clone(),
+            property_lang: ctx
+                .property_lang
+                .as_deref()
+                .and_then(crate::context::short_lang),
         })
     }
 }
@@ -331,6 +338,22 @@ mod tests {
         let config = ctx.module_config.expect("moduleConfig present");
         assert_eq!(config["ssid"], "Vayoux-5G");
         assert_eq!(config["password"], "s3cret");
+    }
+
+    #[test]
+    fn reads_the_property_language_as_a_short_code() {
+        let lang = |extra: &str| {
+            let envelope: WasmRequestEnvelope = serde_json::from_str(&format!(
+                r#"{{"query":"q","context":{{"moduleId":"wifi","moduleVersion":"1.0.0",
+                    "propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2"{extra}}}}}"#
+            ))
+            .expect("parse");
+            envelope.to_context("q").expect("context").property_lang
+        };
+        assert_eq!(lang(r#","propertyLang":"en""#).as_deref(), Some("en"));
+        assert_eq!(lang(r#","propertyLang":"de-DE""#).as_deref(), Some("de"));
+        assert_eq!(lang(r#","propertyLang":" ""#), None);
+        assert_eq!(lang(""), None);
     }
 
     /// Présente, même vide ou nulle, la clé dit que la plateforme tient la config.
