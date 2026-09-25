@@ -469,8 +469,9 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Generated
 ///
-/// - `Config::load(&Context) -> Result<Config>` — reads `context.moduleConfig`; while it is `{}`,
-///   the KV key `config` (a config saved before the platform held it). A config that does not
+/// - `Config::load(&Context) -> Result<Config>` — reads `context.moduleConfig`; when the runtime
+///   sends none at all, the KV key `config` (a config saved before the platform held it). An
+///   empty `moduleConfig` is an empty config, never the KV. A config that does not
 ///   deserialize is an error, never a silent `Default`.
 /// - the host query `legacyConfig` — the raw JSON of the KV key `config`, or `null`, which the
 ///   platform imports once.

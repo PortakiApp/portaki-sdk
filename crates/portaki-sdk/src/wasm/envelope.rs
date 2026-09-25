@@ -82,10 +82,11 @@ pub struct WasmContextEnvelope {
     /// Module / property context JSON blob (orchestrator serializes `propertyContext` here).
     #[serde(rename = "configJson", default)]
     pub config_json: String,
-    /// The install's configuration, decrypted (`property_module.config_json`); `{}` when none.
-    /// Distinct from [`Self::config_json`], the property context.
-    #[serde(rename = "moduleConfig", default)]
-    pub module_config: Value,
+    /// The install's configuration, decrypted (`property_module.config_json`). `None` only when
+    /// the key is absent; an explicit `null` or `{}` is `Some`. Distinct from
+    /// [`Self::config_json`], the property context.
+    #[serde(rename = "moduleConfig", default, deserialize_with = "present")]
+    pub module_config: Option<Value>,
     /// Request locale (`fr-FR`).
     #[serde(default)]
     pub locale: Option<String>,
@@ -175,13 +176,17 @@ impl WasmRequestEnvelope {
             stay,
             property,
             input: self.params.clone(),
-            module_config: match &ctx.module_config {
-                // Un runtime antérieur n'envoie rien : `{}`, comme une install sans config.
-                Value::Null => Value::Object(serde_json::Map::new()),
-                config => config.clone(),
-            },
+            module_config: ctx.module_config.clone(),
         })
     }
+}
+
+/// Une clé présente vaut `Some`, même à `null` : seule son absence dit que la plateforme ne
+/// tient pas encore la config (`Option<Value>` seul confondrait les deux).
+fn present<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 /// `HH:mm` comme le runtime l'envoie, `HH:mm:ss` par tolérance ; illisible vaut absent.
@@ -263,7 +268,7 @@ mod tests {
         assert_eq!(ctx.module_id, "weather");
         assert_eq!(ctx.capabilities.len(), 1);
         assert!((ctx.property.lat - 48.8566).abs() < f64::EPSILON);
-        assert_eq!(ctx.module_config, serde_json::json!({}));
+        assert_eq!(ctx.module_config, None, "no moduleConfig key");
     }
 
     /// `moduleConfig` is the install's config, next to `configJson` which stays the property.
@@ -282,8 +287,26 @@ mod tests {
         let envelope: WasmRequestEnvelope = serde_json::from_str(raw).expect("parse");
         let ctx = envelope.to_context("getCurrent").expect("context");
         assert_eq!(ctx.property.name, "Vayoux");
-        assert_eq!(ctx.module_config["ssid"], "Vayoux-5G");
-        assert_eq!(ctx.module_config["password"], "s3cret");
+        let config = ctx.module_config.expect("moduleConfig present");
+        assert_eq!(config["ssid"], "Vayoux-5G");
+        assert_eq!(config["password"], "s3cret");
+    }
+
+    /// Présente, même vide ou nulle, la clé dit que la plateforme tient la config.
+    #[test]
+    fn an_empty_or_null_module_config_is_still_present() {
+        for (raw, expected) in [
+            ("{}", serde_json::json!({})),
+            ("null", serde_json::Value::Null),
+        ] {
+            let envelope: WasmRequestEnvelope = serde_json::from_str(&format!(
+                r#"{{"query":"q","context":{{"moduleId":"wifi","moduleVersion":"1.0.0",
+                    "propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2","moduleConfig":{raw}}}}}"#
+            ))
+            .expect("parse");
+            let ctx = envelope.to_context("q").expect("context");
+            assert_eq!(ctx.module_config, Some(expected), "{raw}");
+        }
     }
 
     #[test]

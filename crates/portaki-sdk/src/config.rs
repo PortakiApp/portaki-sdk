@@ -5,8 +5,9 @@
 //! ([`Context::module_config`]). The module writes no `updateConfig`, no readiness check.
 //!
 //! Before the platform held it, a module kept its config in its own KV under [`LEGACY_KV_KEY`].
-//! The platform imports that blob once, through the generated `legacyConfig` query; until it has,
-//! `moduleConfig` is `{}` and [`load`] reads the KV key instead.
+//! The platform imports that blob once, through the generated `legacyConfig` query. A runtime
+//! that does not hold the config yet sends no `moduleConfig` at all (`None`): only then does
+//! [`load`] read the KV key. `moduleConfig: {}` is a real, empty config — the KV is not read.
 //!
 //! ```
 //! use portaki_sdk::context::Context;
@@ -19,7 +20,7 @@
 //! }
 //!
 //! let ctx = Context {
-//!     module_config: serde_json::json!({ "ssid": "Villa-Azur" }),
+//!     module_config: Some(serde_json::json!({ "ssid": "Villa-Azur" })),
 //!     ..Context::default()
 //! };
 //! assert_eq!(Config::load(&ctx).unwrap().ssid, "Villa-Azur");
@@ -36,15 +37,14 @@ pub const LEGACY_KV_KEY: &str = "config";
 
 /// The configuration of this install, deserialized.
 ///
-/// Reads [`Context::module_config`]; while it is empty, the KV key [`LEGACY_KV_KEY`]. A missing
-/// key takes its `Default` (with `#[serde(default)]`, which `#[config]` adds) and `null` reads as
+/// Reads [`Context::module_config`]; when it is `None` (no `moduleConfig` sent), the KV key
+/// [`LEGACY_KV_KEY`]. `Some({})` is an empty config, never the KV. A missing key takes its `Default` (with `#[serde(default)]`, which `#[config]` adds) and `null` reads as
 /// missing. A config that does not deserialize is [`PortakiError::Storage`] — never a default,
 /// which the next save would write over what the host had.
 pub fn load<T: DeserializeOwned>(ctx: &Context) -> Result<T> {
     let raw = match &ctx.module_config {
-        Value::Null => legacy_config()?,
-        Value::Object(object) if object.is_empty() => legacy_config()?,
-        other => other.clone(),
+        Some(config) => config.clone(),
+        None => legacy_config()?,
     };
     let mut object = match raw {
         Value::Null => Map::new(),
@@ -122,7 +122,7 @@ mod tests {
         }
     }
 
-    fn load_with(module_config: Value, kv: Option<&'static [u8]>) -> Result<Config> {
+    fn load_with(module_config: Option<Value>, kv: Option<&'static [u8]>) -> Result<Config> {
         let ctx = Context {
             module_config,
             ..Context::default()
@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn module_config_wins_over_kv() {
         let config = load_with(
-            json!({ "ssid": "A", "guests": null }),
+            Some(json!({ "ssid": "A", "guests": null })),
             Some(br#"{"ssid":"B"}"#),
         );
         assert_eq!(
@@ -146,26 +146,33 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_module_config_falls_back_to_kv_then_to_defaults() {
-        let from_kv = load_with(json!({}), Some(br#"{"ssid":"B","guests":4}"#)).unwrap();
+    fn without_module_config_the_kv_is_read_then_defaults() {
+        let from_kv = load_with(None, Some(br#"{"ssid":"B","guests":4}"#)).unwrap();
         assert_eq!(from_kv.ssid, "B");
         assert_eq!(from_kv.guests, 4);
-        assert_eq!(load_with(json!({}), None).unwrap(), Config::default());
-        assert_eq!(load_with(Value::Null, None).unwrap(), Config::default());
+        assert_eq!(load_with(None, None).unwrap(), Config::default());
+    }
+
+    /// Une config vidée par l'hôte reste vide : l'ancien KV ne revient pas.
+    #[test]
+    fn an_empty_module_config_is_an_empty_config_and_ignores_kv() {
+        let kv = Some(&br#"{"ssid":"old","guests":4}"#[..]);
+        assert_eq!(load_with(Some(json!({})), kv).unwrap(), Config::default());
+        assert_eq!(load_with(Some(Value::Null), kv).unwrap(), Config::default());
     }
 
     #[test]
     fn an_unreadable_config_is_an_error_not_a_default() {
         for (module_config, kv) in [
-            (json!({ "guests": "four" }), None),
-            (json!("ssid"), None),
-            (json!({}), Some(&b"not json"[..])),
-            (json!({}), Some(&br#"{"guests":-1}"#[..])),
+            (Some(json!({ "guests": "four" })), None),
+            (Some(json!("ssid")), None),
+            (None, Some(&b"not json"[..])),
+            (None, Some(&br#"{"guests":-1}"#[..])),
         ] {
             let error = load_with(module_config.clone(), kv).unwrap_err();
             assert!(
                 error.to_string().contains("config_unreadable"),
-                "{module_config}: {error}"
+                "{module_config:?}: {error}"
             );
         }
     }

@@ -242,7 +242,9 @@ impl MockContextBuilder {
     }
 
     /// Sets the install's configuration (`Context::module_config`), as the platform hands it
-    /// over — what the `load` of `#[portaki_sdk::config]` reads.
+    /// over — what the `load` of `#[portaki_sdk::config]` reads. Once set, even to an empty
+    /// object, the KV key `config` is no longer read. Without it, the platform has not taken
+    /// the config over and `load` reads the KV key.
     ///
     /// Call after [`Self::with_capabilities`], which rebuilds the context.
     ///
@@ -251,7 +253,7 @@ impl MockContextBuilder {
     /// When `config` does not serialize to JSON.
     pub fn with_config<T: Serialize>(mut self, config: &T) -> Self {
         self.context.module_config =
-            serde_json::to_value(config).expect("config serializes to JSON");
+            Some(serde_json::to_value(config).expect("config serializes to JSON"));
         self
     }
 
