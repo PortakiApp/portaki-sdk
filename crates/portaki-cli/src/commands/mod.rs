@@ -12,6 +12,7 @@ pub mod inspect;
 pub mod link;
 pub mod lint;
 pub mod login;
+pub mod logs;
 pub mod publish;
 pub mod sdk;
 pub mod test;
