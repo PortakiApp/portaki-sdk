@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.4.0...v8.5.0) (2026-09-25)
+
+
+### Features
+
+* **sdk:** map legacy KV config with a fn ([965292d](https://github.com/PortakiApp/portaki-sdk/commit/965292ddd6fcfbb5f774765ed0201921d382a467))
+* **sdk:** translated text in declared config ([20d3aa9](https://github.com/PortakiApp/portaki-sdk/commit/20d3aa9dc2fe6ed213a5717754840bdd42cb876c))
+* **sdui:** hidden row id field for list forms ([3e04bcb](https://github.com/PortakiApp/portaki-sdk/commit/3e04bcb44369545b12025858429765a754d492f3))
+
 ## [8.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.3.0...v8.4.0) (2026-09-25)
 
 
