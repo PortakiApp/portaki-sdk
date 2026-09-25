@@ -94,7 +94,9 @@ let config = Config::load(&ctx)?; // context.moduleConfig; KV `config` only when
 An old KV blob in another shape (a key renamed, a number now a string, a nested object):
 `#[portaki_sdk::config(legacy = legacy::read)]`, with `fn read(old: Value) -> Value` returning an
 object of the declared keys. The platform imports that result once (`legacyConfig`), and `load`
-reads the KV through it until then.
+reads the KV through it until then. Once the import is stored, the platform calls
+`legacyConfigAdopted`, which deletes the KV `config` — and the other old keys named by
+`#[portaki_sdk::config(legacy_keys = ["texts/fr", "texts/en"])]`.
 
 Labels are i18n keys, translated from `i18n/*.json` by `portaki build`. Keep
 `publishReadiness` for conditional rules the schema cannot say ("a code once the smart lock is
