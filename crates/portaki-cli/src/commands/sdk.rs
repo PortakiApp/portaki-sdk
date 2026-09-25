@@ -221,7 +221,7 @@ fn yes() -> bool {
     true
 }
 
-fn parse_version(version: &str) -> Option<(u64, u64, u64)> {
+pub(crate) fn parse_version(version: &str) -> Option<(u64, u64, u64)> {
     let core = version.trim().split(['-', '+']).next()?;
     let mut parts = core.split('.').map(|part| part.parse::<u64>().ok());
     Some((
@@ -1006,6 +1006,7 @@ async fn upgrade_and_verify(
         workspace::enter(member)?;
         crate::commands::lint::run(crate::commands::lint::LintArgs {
             manifest: None,
+            channel: "stable".to_string(),
             nested: members.len() > 1,
         })?;
     }

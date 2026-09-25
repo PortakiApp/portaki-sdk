@@ -49,8 +49,8 @@ pub struct PublishArgs {
     /// Skip the implicit `portaki build --release` (not recommended). The tests still run.
     #[arg(long)]
     pub skip_build: bool,
-    /// Release channel at the Portaki registry.
-    #[arg(long, default_value = "stable")]
+    /// Release channel at the Portaki registry — `stable` needs SDK 8.0.0 or later.
+    #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
     pub channel: String,
     /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
     #[arg(long)]
@@ -493,6 +493,11 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     }
 
     stamp_changelog(&module_root, &artifact_dir, args)?;
+    // Avant la poussée : le registre refuserait l'annonce, mais l'artefact serait déjà sur GHCR.
+    crate::commands::lint::assert_sdk_version(
+        &oci::pack::publish_manifest_path(&artifact_dir),
+        &args.channel,
+    )?;
 
     let packing = ui::step("packing the OCI artifact");
     // The layer list the push would send, assembled here rather than at push time: it is what

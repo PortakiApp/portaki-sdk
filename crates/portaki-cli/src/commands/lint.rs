@@ -18,6 +18,10 @@ pub struct LintArgs {
     #[arg(long)]
     pub manifest: Option<PathBuf>,
 
+    /// The channel the module is headed for: `stable` refuses an SDK older than 8.0.0.
+    #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
+    pub channel: String,
+
     /// `check` enchaîne sur `lint` : un second en-tête ferait croire à deux commandes.
     #[arg(skip)]
     pub nested: bool,
@@ -78,6 +82,14 @@ pub fn run(args: LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
+    assert_sdk_version(
+        &manifest_path.with_file_name(crate::oci::pack::PUBLISH_MANIFEST),
+        &args.channel,
+    )
+    .map_err(|failure| {
+        checking.abandon();
+        failure
+    })?;
     assert_feeds_valid(&module_root).map_err(|failure| {
         checking.abandon();
         failure
@@ -120,6 +132,43 @@ fn report_changelog(module_root: &std::path::Path, version: &str) -> Result<()> 
         ));
     }
     Ok(())
+}
+
+/// The manifest `publish` sends must say which SDK built it — and, for `stable`, a recent one.
+///
+/// Read from the publish manifest `portaki build` writes: that is where `sdkVersion` is stamped,
+/// from the crate cargo resolved.
+pub(crate) fn assert_sdk_version(publish_manifest: &std::path::Path, channel: &str) -> Result<()> {
+    let manifest = std::fs::read_to_string(publish_manifest)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .unwrap_or_default();
+    match sdk_version_problem(&manifest, channel) {
+        Some(problem) => anyhow::bail!("{problem}"),
+        None => Ok(()),
+    }
+}
+
+fn sdk_version_problem(manifest: &serde_json::Value, channel: &str) -> Option<String> {
+    use portaki_sdk::manifest::MIN_STABLE_SDK;
+    let Some(version) = manifest.get("sdkVersion").and_then(|v| v.as_str()) else {
+        return Some(
+            "the manifest carries no sdkVersion — run portaki build, which stamps it from the \
+             portaki-sdk crate cargo resolved"
+                .to_string(),
+        );
+    };
+    let parse = crate::commands::sdk::parse_version;
+    let Some(parsed) = parse(version) else {
+        return Some(format!("sdkVersion {version} is not a version"));
+    };
+    if channel == "stable" && parse(MIN_STABLE_SDK).is_some_and(|min| parsed < min) {
+        return Some(format!(
+            "SDK too old for stable: built on portaki-sdk {version}, stable needs {MIN_STABLE_SDK} \
+             or later — run portaki sdk upgrade, or publish with --channel preview"
+        ));
+    }
+    None
 }
 
 /// A permission the manifest schema does not know.
@@ -402,6 +451,23 @@ serde = { version = "1", features = ["derive"] }
                 "[2].what.en is missing".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn the_sdk_version_is_required_and_recent_for_stable() {
+        let missing = sdk_version_problem(&serde_json::json!({ "id": "x" }), "preview");
+        assert!(missing.unwrap().contains("no sdkVersion"));
+
+        let old = serde_json::json!({ "sdkVersion": "7.9.3" });
+        assert!(sdk_version_problem(&old, "stable")
+            .unwrap()
+            .contains("too old for stable"));
+        assert!(sdk_version_problem(&old, "preview").is_none());
+
+        for fine in ["8.0.0", "8.4.0", "10.0.0"] {
+            let manifest = serde_json::json!({ "sdkVersion": fine });
+            assert!(sdk_version_problem(&manifest, "stable").is_none(), "{fine}");
+        }
     }
 
     #[test]
