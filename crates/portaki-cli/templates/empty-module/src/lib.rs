@@ -1,7 +1,5 @@
 //! Empty Portaki module template.
 
-use portaki_sdk::prelude::*;
-
 portaki_sdk::portaki_module!(
     id = "{{MODULE_NAME}}",
     display_name_key = "module.displayName",
