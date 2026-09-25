@@ -52,6 +52,7 @@ pub async fn run(args: CheckArgs) -> Result<()> {
     .await?;
     lint::run(LintArgs {
         manifest: None,
+        channel: "stable".to_string(),
         nested: true,
     })?;
 
