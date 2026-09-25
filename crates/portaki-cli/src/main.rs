@@ -18,7 +18,7 @@
 //! | `lint` | Validate capability ids, connector bindings, i18n keys |
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `publish` | Push OCI layers to a container registry |
-//! | `link` | Open the dashboard page that links modules to their repository |
+//! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
 //! | `inspect` | Fetch and summarize a published OCI artifact |
@@ -108,7 +108,7 @@ enum Command {
     Sdk(commands::sdk::SdkArgs),
     /// Push OCI artifact to Scaleway Container Registry.
     Publish(commands::publish::PublishArgs),
-    /// Open the page that links this module (and its monorepo siblings) to a repository.
+    /// Link this module to its repository — with --all, every module of the monorepo.
     Link(commands::link::LinkArgs),
     /// Print how to open local SDK documentation (no docs server).
     Docs(commands::docs::DocsArgs),
