@@ -263,6 +263,9 @@ impl MockContextBuilder {
     /// object, the KV key `config` is no longer read. Without it, the platform has not taken
     /// the config over and `load` reads the KV key.
     ///
+    /// An `I18nText` serializes as the platform stores a `localized` value
+    /// (`{ "fr": "…", "en": "…" }`); pass a `serde_json::json!` value to give a legacy plain string.
+    ///
     /// Call after [`Self::with_capabilities`], which rebuilds the context.
     ///
     /// # Panics

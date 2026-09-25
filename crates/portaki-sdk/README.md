@@ -95,6 +95,41 @@ Labels are i18n keys, translated from `i18n/*.json` by `portaki build`. Keep
 `publishReadiness` for conditional rules the schema cannot say ("a code once the smart lock is
 off"). Tests: `MockContext::host().with_config(&config)`.
 
+### Translated text
+
+A text the guest reads in their language is an `I18nText` (`contracts::i18n`): the field is
+`localized`, the platform keeps one text per language, and a save from the host form writes
+the host's language only — the other languages stay. In a list, put `#[portaki_sdk::params]` on
+the row type: `portaki build` reads its `I18nText` fields into `item.localized`, and a field named
+`id` (or `#[field(item_id = "…")]`) into `item.id`, so each row keeps what the form did not send.
+
+```rust,ignore
+#[portaki_sdk::params]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Step {
+    pub id: String,          // item.id — rows survive a reorder or a removal
+    pub title: I18nText,     // item.localized
+    pub ends_at: Option<String>,
+}
+
+#[portaki_sdk::config]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Config {
+    #[field(required, label = "config.welcome")]
+    pub welcome: I18nText,   // "type": "localized"
+    #[field(label = "config.steps")]
+    pub steps: Vec<Step>,    // "item": { "id": "id", "localized": ["title"] }
+}
+
+// Host form: the editor's language, else fr, en, any. Guest: the guest's.
+TextInput::new().name("welcome").value(config.welcome.host_value(&ctx));
+let shown = config.welcome.get(&ctx.locale);
+```
+
+`I18nText` also reads a plain string (a config saved before it was translated) as the same
+text in every language; `is_blank()` is the platform's notion of empty.
+
 ## Guest surfaces: the happy path only
 
 A guest surface does not check whether the module is ready, nor catch its own errors:

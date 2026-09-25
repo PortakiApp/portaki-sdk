@@ -25,7 +25,7 @@ use crate::params::{rename_field, serde_of};
 const LEGACY_QUERY: &str = "legacyConfig";
 
 /// The `type` values of `configField` in `module.v1.json`.
-const KINDS: [&str; 9] = [
+const KINDS: [&str; 10] = [
     "text",
     "textarea",
     "url",
@@ -35,6 +35,7 @@ const KINDS: [&str; 9] = [
     "select",
     "readonly",
     "structured",
+    "localized",
 ];
 
 /// Expands `#[portaki_sdk::config]` on a struct with named fields.
@@ -61,6 +62,7 @@ fn expand_struct(item: &mut ItemStruct) -> syn::Result<TokenStream2> {
     }
 
     let name = item.ident.to_string();
+    let fields_json = serde_json::to_string(&fields).unwrap();
     let schema = json!({ "kind": "config", "name": name, "fields": fields });
     let config_emission = write_emission(
         "config",
@@ -110,6 +112,11 @@ fn expand_struct(item: &mut ItemStruct) -> syn::Result<TokenStream2> {
 
         #legacy
         #registration
+
+        #[cfg(not(target_arch = "wasm32"))]
+        ::portaki_sdk::inventory::submit! {
+            ::portaki_sdk::config::ConfigDeclaration { fields: #fields_json }
+        }
     })
 }
 
@@ -160,6 +167,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
     let mut label: Option<String> = None;
     let mut description: Option<String> = None;
     let mut options: Option<Vec<String>> = None;
+    let mut item_id: Option<String> = None;
 
     let mut set_kind = |value: String, span| -> syn::Result<()> {
         if let Some(previous) = &kind {
@@ -195,6 +203,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             }
             "label" => label = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "description" => description = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "item_id" => item_id = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "options" => {
                 let list: syn::ExprArray = meta.value()?.parse()?;
                 let mut values = Vec::new();
@@ -217,7 +226,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             _ => {
                 return Err(meta.error(
                     "unknown #[field] attribute — required, recommended, secret, structured, \
-                     label, description, kind, options",
+                     label, description, kind, options, item_id",
                 ))
             }
         }
@@ -236,7 +245,25 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             "required already blocks publication — drop recommended",
         ));
     }
-    let kind = kind.unwrap_or_else(|| inferred_kind(ty).to_string());
+    let inferred = inferred_kind(ty);
+    // The platform merges a `localized` value language by language: any other kind would have it
+    // replace the whole text with the host's language, and a String cannot read the stored object.
+    match kind.as_deref() {
+        Some(forced) if (forced == "localized") != (inferred == "localized") => {
+            return Err(syn::Error::new(
+                attr.span(),
+                "an I18nText field is `localized`, and only an I18nText field is",
+            ))
+        }
+        _ => {}
+    }
+    let kind = kind.unwrap_or_else(|| inferred.to_string());
+    if item_id.is_some() && kind != "structured" {
+        return Err(syn::Error::new(
+            attr.span(),
+            "item_id names the sub-key identifying a row — only on a structured field",
+        ));
+    }
     if kind == "readonly" && (required || recommended) {
         return Err(syn::Error::new(
             attr.span(),
@@ -272,11 +299,44 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
     if let Some(options) = options {
         schema["options"] = json!(options);
     }
+    if let Some(id) = item_id {
+        schema["item"] = json!({ "id": id });
+    }
+    // The macro cannot see the row type's fields; `portaki build` reads them from its `#[params]`
+    // emission and fills `item` (see `portaki_sdk::config::resolve_items`).
+    if kind == "structured" {
+        if let Some(row) = row_type(ty) {
+            schema["itemType"] = json!(row);
+        }
+    }
     Ok(schema)
 }
 
-/// `String` → text, `bool` → toggle, numbers → number, anything else (lists, maps, the module's
-/// own types) → structured. `Option<T>` and `Box<T>` read as `T`.
+/// The module's own type a structured field holds — `Vec<Step>`, `Option<Step>`, `Step` → `Step`;
+/// `None` for maps, JSON values and the SDK's types.
+fn row_type(ty: &Type) -> Option<String> {
+    let Type::Path(path) = ty else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    match &last.arguments {
+        PathArguments::AngleBracketed(args)
+            if ["Option", "Box", "Vec"].contains(&last.ident.to_string().as_str()) =>
+        {
+            match args.args.first()? {
+                GenericArgument::Type(inner) => row_type(inner),
+                _ => None,
+            }
+        }
+        PathArguments::None if inferred_kind(ty) == "structured" && last.ident != "Value" => {
+            Some(last.ident.to_string())
+        }
+        _ => None,
+    }
+}
+
+/// `I18nText` → localized, `String` → text, `bool` → toggle, numbers → number, anything else
+/// (lists, maps, the module's own types) → structured. `Option<T>` and `Box<T>` read as `T`.
 fn inferred_kind(ty: &Type) -> &'static str {
     match ty {
         Type::Reference(reference) => inferred_kind(&reference.elem),
@@ -294,6 +354,7 @@ fn inferred_kind(ty: &Type) -> &'static str {
                 }
             }
             match last.ident.to_string().as_str() {
+                "I18nText" => "localized",
                 "String" | "str" | "char" => "text",
                 "bool" => "toggle",
                 "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64"
@@ -342,7 +403,8 @@ mod tests {
                 json!({ "key": "ssid", "type": "text", "required": true, "recommended": false, "label": "config.ssid" }),
                 json!({ "key": "password", "type": "secret", "required": false, "recommended": true,
                         "label": "config.password", "description": "config.password.help" }),
-                json!({ "key": "contacts", "type": "structured", "required": false, "recommended": false, "label": "config.contacts" }),
+                json!({ "key": "contacts", "type": "structured", "required": false, "recommended": false,
+                        "label": "config.contacts", "itemType": "Contact" }),
                 json!({ "key": "security", "type": "select", "required": false, "recommended": false,
                         "label": "config.security", "options": ["wpa2", "wep"] }),
                 json!({ "key": "max_guests", "type": "number", "required": false, "recommended": false, "label": "config.guests" }),
@@ -384,6 +446,40 @@ mod tests {
     }
 
     #[test]
+    fn translated_text_is_localized_and_rows_name_their_type() {
+        let fields = schema_of(parse_quote! {
+            struct Config {
+                #[field(label = "a")] welcome: I18nText,
+                #[field(label = "b")] note: Option<portaki_sdk::contracts::i18n::I18nText>,
+                #[field(label = "c")] steps: Vec<Step>,
+                #[field(label = "d", item_id = "slug")] spots: Option<Vec<Spot>>,
+                #[field(label = "e")] hours: Hours,
+                #[field(label = "f")] tags: Vec<String>,
+                #[field(label = "g")] raw: serde_json::Value,
+                #[field(label = "h")] by_day: std::collections::BTreeMap<String, Hours>,
+            }
+        })
+        .unwrap();
+        let shown: Vec<Value> = fields
+            .iter()
+            .map(|f| json!([f["type"], f.get("itemType"), f.get("item")]))
+            .collect();
+        assert_eq!(
+            shown,
+            vec![
+                json!(["localized", null, null]),
+                json!(["localized", null, null]),
+                json!(["structured", "Step", null]),
+                json!(["structured", "Spot", { "id": "slug" }]),
+                json!(["structured", "Hours", null]),
+                json!(["structured", null, null]),
+                json!(["structured", null, null]),
+                json!(["structured", null, null]),
+            ]
+        );
+    }
+
+    #[test]
     fn wrong_declarations_do_not_compile() {
         for item in [
             parse_quote! { struct C { #[field(required)] a: String } },
@@ -396,6 +492,9 @@ mod tests {
             parse_quote! { struct C { #[field(label = "a", colour = "red")] a: String } },
             parse_quote! { struct C { #[field(label = "a")] #[serde(skip)] a: String } },
             parse_quote! { struct C(String); },
+            parse_quote! { struct C { #[field(kind = "localized", label = "a")] a: String } },
+            parse_quote! { struct C { #[field(kind = "textarea", label = "a")] a: I18nText } },
+            parse_quote! { struct C { #[field(item_id = "id", label = "a")] a: String } },
         ] {
             let item: ItemStruct = item;
             let shown = quote!(#item).to_string();
@@ -419,6 +518,7 @@ mod tests {
         assert!(expanded.contains("pub fn load"), "{expanded}");
         assert!(expanded.contains("\"legacyConfig\""), "{expanded}");
         assert!(expanded.contains("portaki_sdk :: config :: legacy_config"));
+        assert!(expanded.contains("ConfigDeclaration"), "{expanded}");
     }
 
     #[test]

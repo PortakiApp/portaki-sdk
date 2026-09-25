@@ -25,6 +25,49 @@
 //! };
 //! assert_eq!(Config::load(&ctx).unwrap().ssid, "Villa-Azur");
 //! ```
+//!
+//! # Translated text
+//!
+//! A field typed [`I18nText`](crate::contracts::i18n::I18nText) is `localized`: the platform
+//! keeps one text per language, and a save from the host form writes the host's language only.
+//! A list whose rows hold `I18nText` fields is `structured` with an `item` saying which sub-keys
+//! are translated (and which one identifies a row): put `#[portaki_sdk::params]` on the row type,
+//! whose fields the config macro cannot see — `portaki build` reads them there.
+//!
+//! ```
+//! use portaki_sdk::contracts::i18n::I18nText;
+//!
+//! #[portaki_sdk::params]
+//! #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+//! #[serde(default)] // a row the host saved half-filled still reads
+//! pub struct Step {
+//!     pub id: String,          // → item.id, the row survives a reorder or a removal
+//!     pub title: I18nText,     // → item.localized
+//!     pub note: String,
+//! }
+//!
+//! #[portaki_sdk::config]
+//! #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+//! pub struct Config {
+//!     #[field(label = "config.welcome")]
+//!     pub welcome: I18nText, // → "type": "localized"
+//!     #[field(label = "config.steps")]
+//!     pub steps: Vec<Step>,  // → "item": { "id": "id", "localized": ["title"] }
+//! }
+//!
+//! let ctx = portaki_sdk::context::Context {
+//!     locale: "en-US".into(),
+//!     module_config: Some(serde_json::json!({
+//!         "welcome": { "fr": "Bienvenue", "en": "Welcome" },
+//!         "steps": [{ "id": "a", "title": "Portail" }],
+//!     })),
+//!     ..Default::default()
+//! };
+//! let config = Config::load(&ctx).unwrap();
+//! // In the host form: the editor's language, or the fallback.
+//! assert_eq!(config.welcome.host_value(&ctx), "Welcome");
+//! assert_eq!(config.steps[0].title.host_value(&ctx), "Portail");
+//! ```
 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
@@ -34,6 +77,65 @@ use crate::error::{PortakiError, Result};
 
 /// The KV key a module kept its config under before the platform held it.
 pub const LEGACY_KV_KEY: &str = "config";
+
+/// The `config.fields` one `#[portaki_sdk::config]` emitted, as JSON — native targets only.
+///
+/// Rows still carry `itemType`, the row type [`resolve_items`] replaces by `item`. The
+/// conformance battery of `portaki-test-utils` reads it to hold the manifest to the code.
+pub struct ConfigDeclaration {
+    /// The `configField` array, JSON.
+    pub fields: &'static str,
+}
+
+inventory::collect!(ConfigDeclaration);
+
+/// Every `#[portaki_sdk::config]` of the linked crates; empty on `wasm32`.
+pub fn declarations() -> impl Iterator<Item = &'static ConfigDeclaration> {
+    inventory::iter::<ConfigDeclaration>.into_iter()
+}
+
+/// Replaces each field's `itemType` by `item`: the row's `I18nText` fields become
+/// `item.localized`, and `item.id` is the `#[field(item_id = "…")]` given, else a field named `id`.
+///
+/// `shape_of` gives the `#[params]` shape of a type by name (`{ "fields": [{ "name", "type",
+/// "ref" }] }`). A row without one keeps only an explicit `item_id`; a row with neither translated
+/// fields nor an id gets no `item`. Shared by `portaki build` and the conformance battery.
+pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Value>) {
+    for field in fields.iter_mut().filter_map(Value::as_object_mut) {
+        let Some(row) = field.remove("itemType") else {
+            continue;
+        };
+        let shape = row.as_str().and_then(&shape_of);
+        let row_fields = shape
+            .as_ref()
+            .and_then(|shape| shape["fields"].as_array())
+            .into_iter()
+            .flatten();
+        let mut localized = Vec::new();
+        let mut has_id = false;
+        for row_field in row_fields {
+            let name = row_field["name"].as_str().unwrap_or_default();
+            has_id |= name == "id";
+            if row_field["ref"] == "I18nText" {
+                localized.push(Value::from(name));
+            }
+        }
+        let id = field
+            .get("item")
+            .and_then(|item| item.get("id"))
+            .cloned()
+            .or_else(|| has_id.then(|| Value::from("id")));
+        if localized.is_empty() && id.is_none() {
+            continue;
+        }
+        let mut item = Map::new();
+        if let Some(id) = id {
+            item.insert("id".into(), id);
+        }
+        item.insert("localized".into(), Value::Array(localized));
+        field.insert("item".into(), Value::Object(item));
+    }
+}
 
 /// The configuration of this install, deserialized.
 ///
@@ -175,6 +277,36 @@ mod tests {
                 "{module_config:?}: {error}"
             );
         }
+    }
+
+    #[test]
+    fn items_come_from_the_row_shape() {
+        let shape = json!({ "fields": [
+            { "name": "id", "type": "string" },
+            { "name": "title", "type": "ref", "ref": "I18nText" },
+            { "name": "place", "type": "ref", "ref": "I18nText", "required": false },
+            { "name": "endsAt", "type": "string" },
+        ] });
+        let mut fields = vec![
+            json!({ "key": "events", "type": "structured", "itemType": "Event" }),
+            json!({ "key": "spots", "type": "structured", "itemType": "Event", "item": { "id": "slug" } }),
+            json!({ "key": "raw", "type": "structured", "itemType": "Unknown" }),
+            json!({ "key": "keyed", "type": "structured", "itemType": "Unknown", "item": { "id": "key" } }),
+            json!({ "key": "welcome", "type": "localized" }),
+        ];
+        resolve_items(&mut fields, |name| (name == "Event").then(|| shape.clone()));
+        assert_eq!(
+            fields,
+            vec![
+                json!({ "key": "events", "type": "structured",
+                        "item": { "id": "id", "localized": ["title", "place"] } }),
+                json!({ "key": "spots", "type": "structured",
+                        "item": { "id": "slug", "localized": ["title", "place"] } }),
+                json!({ "key": "raw", "type": "structured" }),
+                json!({ "key": "keyed", "type": "structured", "item": { "id": "key", "localized": [] } }),
+                json!({ "key": "welcome", "type": "localized" }),
+            ]
+        );
     }
 
     #[test]

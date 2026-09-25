@@ -134,13 +134,20 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
 
 /// Les champs de `#[portaki_sdk::config]`, libellés traduits : la macro ne porte que des clés.
 ///
-/// Une option de `select` se libelle par la clé `<label>.<valeur>`.
+/// Une option de `select` se libelle par la clé `<label>.<valeur>`. Une liste de lignes reçoit son
+/// `item` (sous-clés traduites, identifiant) de la forme `#[params]` du type de ligne.
 fn config_fields(
     emissions: &[EmissionFile],
     translated: &dyn Fn(&Value) -> Value,
 ) -> Option<Vec<Value>> {
     let config = emissions.iter().find(|e| e.kind == "config")?;
-    let fields = config.data["fields"].as_array()?;
+    let mut fields = config.data["fields"].as_array()?.clone();
+    portaki_sdk::config::resolve_items(&mut fields, |name| {
+        emissions
+            .iter()
+            .find(|e| e.kind == "params" && e.data["name"] == name)
+            .map(|e| e.data.clone())
+    });
     Some(
         fields
             .iter()
@@ -745,10 +752,31 @@ mod tests {
                 { "key": "security", "type": "select", "required": false, "recommended": false,
                   "label": "config.security", "options": ["wpa2", "wep"] },
                 { "key": "contacts", "type": "structured", "required": false,
-                  "recommended": false, "label": "config.contacts" },
+                  "recommended": false, "label": "config.contacts", "itemType": "Contact" },
             ] }),
         });
         emissions
+    }
+
+    #[test]
+    fn translated_row_fields_come_from_the_row_params() {
+        let mut emissions = with_config();
+        emissions.push(EmissionFile {
+            kind: "params".into(),
+            data: json!({ "kind": "params", "name": "Contact", "fields": [
+                { "name": "id", "type": "string", "required": true },
+                { "name": "role", "type": "ref", "ref": "I18nText", "required": true },
+                { "name": "phone", "type": "string", "required": true },
+            ] }),
+        });
+        let dir = tempfile::tempdir().expect("tempdir");
+        let catalog = catalog_defaults(&emissions, dir.path(), &[]);
+        assert_eq!(
+            catalog["config"]["fields"][3],
+            json!({ "key": "contacts", "type": "structured", "required": false,
+                    "recommended": false, "label": {},
+                    "item": { "id": "id", "localized": ["role"] } })
+        );
     }
 
     const CONFIG_FR: &str = r#"{"config.ssid":"Nom du réseau","config.password":"Mot de passe",
