@@ -20,6 +20,7 @@
 //! | `publish` | Push OCI layers to a container registry |
 //! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
+//! | `permissions add` | Turn on the `portaki-sdk` feature that declares a permission |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
 //! | `inspect` | Fetch and summarize a published OCI artifact |
 //! | `docs` / `dev` | Docs helper / local mock gateway (evolve with the SDK) |
@@ -106,6 +107,8 @@ enum Command {
     Test(commands::test::TestArgs),
     /// Move the module to another SDK version, and prove nothing broke.
     Sdk(commands::sdk::SdkArgs),
+    /// Declare a permission (`portaki permissions add email`).
+    Permissions(commands::permissions::PermissionsArgs),
     /// Push OCI artifact to Scaleway Container Registry.
     Publish(commands::publish::PublishArgs),
     /// Link this module to its repository — with --all, every module of the monorepo.
@@ -356,6 +359,7 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Logs(args) => commands::logs::run(args).await,
         Command::Test(args) => commands::test::run(args),
         Command::Sdk(args) => commands::sdk::run(args).await,
+        Command::Permissions(args) => commands::permissions::run(args),
         Command::Publish(args) => commands::publish::run(args).await,
         Command::Link(args) => commands::link::run(args).await,
         Command::Docs(args) => commands::docs::run(args),
