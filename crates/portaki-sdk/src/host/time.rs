@@ -296,7 +296,7 @@ fn between(at: DateTime<Utc>, start: Option<NaiveDateTime>, end: Option<NaiveDat
 /// The languages dates are written in; any other reads English.
 pub const LANGUAGES: [&str; 6] = ["en", "fr", "es", "de", "it", "nl"];
 
-fn column(lang: &str) -> usize {
+pub(crate) fn column(lang: &str) -> usize {
     let lang = lang.trim().to_ascii_lowercase();
     let lang = lang.split(['-', '_']).next().unwrap_or_default();
     LANGUAGES

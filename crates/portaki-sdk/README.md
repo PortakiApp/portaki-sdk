@@ -181,6 +181,22 @@ time::elapsed(last_sync, now, &lang);               // "3 h" — a tile value
 time::weekday_name(local.weekday(), &lang);         // "samedi"
 ```
 
+## Secrets revealed in time
+
+A code or a password the guest sees only from a moment of the stay: `portaki_sdk::reveal`.
+
+```rust,ignore
+use portaki_sdk::reveal::RevealPolicy;
+
+// Settings: #[field(kind = "select", options = ["always", "hours_before_24", "day_before_16h",
+// "at_checkin"], label = "…")] pub reveal_policy: RevealPolicy,
+RevealPolicy::choice_list("reveal_policy", config.reveal_policy, &ctx.lang()); // host form
+
+let decision = config.reveal_policy.evaluate_for(&ctx, time::now()?); // check-in, property tz
+Text::new().text(decision.show(&config.door_code));                   // or "••••••"
+if let Some(why) = decision.locked_message(&ctx) { /* "Disponible à partir du 19 juil. · 16:00" */ }
+```
+
 ## Guest surfaces: the happy path only
 
 A guest surface does not check whether the module is ready, nor catch its own errors:

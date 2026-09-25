@@ -63,6 +63,7 @@ pub mod ids;
 pub mod limits;
 pub mod manifest;
 pub mod permission;
+pub mod reveal;
 pub mod sdui;
 pub mod vocab;
 
