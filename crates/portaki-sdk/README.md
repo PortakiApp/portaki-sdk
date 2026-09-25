@@ -166,6 +166,21 @@ ctx.property_lang(); // Some("en"): the property's default language
 
 `t!("key", n = 3)` still asks the host to translate into the request language.
 
+Dates and durations come written, in the property's time (`host::time`):
+
+```rust,ignore
+use portaki_sdk::host::time;
+
+let lang = ctx.lang();
+let tz = ctx.property_tz();                         // None for a zone the SDK does not know
+let local = tz.map_or(checkout.fixed_offset(), |tz| tz.to_local(checkout));
+time::short_date(local, &lang);                     // "12 sept." / "Sep 12"
+time::date_time(local, &lang);                      // "12 sept. 2026 · 10:00"
+time::ago(last_sync, time::now()?, &lang);          // "il y a 3 h" / "3 h ago"
+time::elapsed(last_sync, now, &lang);               // "3 h" — a tile value
+time::weekday_name(local.weekday(), &lang);         // "samedi"
+```
+
 ## Guest surfaces: the happy path only
 
 A guest surface does not check whether the module is ready, nor catch its own errors:
