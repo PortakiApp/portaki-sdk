@@ -1,7 +1,5 @@
 //! Default Portaki module template.
 
-use portaki_sdk::prelude::*;
-
 mod config;
 mod guest;
 mod host;
