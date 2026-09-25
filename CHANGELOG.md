@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.0.2...v8.1.0) (2026-09-25)
+
+
+### Features
+
+* **cli:** publish multilingual release notes ([6d7b8f0](https://github.com/PortakiApp/portaki-sdk/commit/6d7b8f02467e7df60191d474dcb6d4527dcf2d27))
+
+
+### Bug Fixes
+
+* an ignored listing (managed in the console) is now a visible ([6d7b8f0](https://github.com/PortakiApp/portaki-sdk/commit/6d7b8f02467e7df60191d474dcb6d4527dcf2d27))
+
 ## [8.0.2](https://github.com/PortakiApp/portaki-sdk/compare/v8.0.1...v8.0.2) (2026-09-25)
 
 
