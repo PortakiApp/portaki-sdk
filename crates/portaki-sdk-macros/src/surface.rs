@@ -163,9 +163,12 @@ fn expand_surface(attrs: SurfaceAttrs, function_item: ItemFn) -> TokenStream2 {
         &function_item,
     );
     let checks = &attrs.checks;
+    let id_const =
+        crate::wasm_handler::declared_const("SurfaceId", &attrs.id, &function_item.sig.ident);
     quote! {
         #emission
         #(#checks)*
+        #id_const
         #function_item
         #wasm_registration
     }
@@ -258,6 +261,23 @@ mod tests {
             "{fallible}"
         );
         assert!(!fallible.contains("render_detail (ctx) ?"), "{fallible}");
+    }
+
+    /// The id is a const next to the renderer, and stamped on what it renders.
+    #[test]
+    fn the_declared_id_is_a_const_and_stamped() {
+        let tokens = expanded(
+            r#"guest, id = "explore.detail""#,
+            "pub fn render_detail(ctx: GuestContext) -> Surface { todo!() }",
+        );
+        assert!(
+            tokens.contains("pub const EXPLORE_DETAIL : :: portaki_sdk :: ids :: SurfaceId = :: portaki_sdk :: ids :: SurfaceId :: new (\"explore.detail\")"),
+            "{tokens}"
+        );
+        assert!(
+            tokens.contains("stamp_declared_id (value , \"explore.detail\")"),
+            "{tokens}"
+        );
     }
 
     #[test]

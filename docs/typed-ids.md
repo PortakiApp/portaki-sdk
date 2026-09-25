@@ -5,20 +5,18 @@ boundary. Wire format stays a JSON string (`AsRef<str>` / serde transparent).
 
 ## Rule
 
-1. **Declare once** — string literal only in `define_*!`, `#[surface(id = …)]` /
-   `#[command(name = …)]` / `#[query(name = …)]` / `#[event_handler(event_type = …)]`,
-   or `Type::new("…")` / `ModuleId::from_static` in tests and define macros.
+1. **Declare once** — the attribute is the declaration: `#[surface(…, id = "explore.detail")]`
+   defines `EXPLORE_DETAIL: SurfaceId` next to the renderer, `#[query(name = "listSources")]` /
+   `#[command(name = …)]` define `LIST_SOURCES: OperationName` next to the handler
+   (`SCREAMING_SNAKE_CASE` of the wire string). The dispatcher stamps the declared id on the
+   surface a renderer returns — no `.with_id(…)`. Events: `define_event_types!`. Anything else:
+   `Type::new("…")` / `ModuleId::from_static`.
    Proc-macros need the wire string at expand time (OUT_DIR emissions) — they
-   **cannot** take a bare `ids::CONST` path. Prefer `SurfaceId::new("…")` /
-   `OperationName::new("…")` / `EventType::new("…")` when you want the typed
-   constructor at the declaration site; keep the same wire string as `ids`.
-2. **Use typed consts** everywhere else — `ids::HOME_CARD`, `UPDATE_CONFIG`,
+   **cannot** take a bare `ids::CONST` path.
+2. **Use typed consts** everywhere else — `guest::EXPLORE_DETAIL`, `LIST_SOURCES`,
    `contracts::shell::SURFACE_INPUT`, never inline `"home.card"` at call sites.
-3. **Catalog completeness** — every module `ids.rs` lists all surfaces
-   (`define_surface_ids!`), commands **and** queries (`define_operation_names!`),
-   and emitted / subscribed events (`define_event_types!`). Peer / platform
-   protocols also live in [`contracts`](../crates/portaki-sdk/src/contracts);
-   module ids may mirror them with an equality test.
+3. **No `ids.rs`** — `define_surface_ids!` / `define_operation_names!` are deprecated (still
+   compile). Peer / platform protocols live in [`contracts`](../crates/portaki-sdk/src/contracts).
 
 ## Catalogs
 
@@ -34,32 +32,28 @@ boundary. Wire format stays a JSON string (`AsRef<str>` / serde transparent).
 | [`BookingChannel`](../crates/portaki-sdk/src/contracts/booking_channel.rs) | Who sold an imported stay — host platform selectors, `StayImportRow` | Yes |
 | [`ChannelSignal`](../crates/portaki-sdk/src/contracts/booking_channel.rs) | How a `BookingChannel` was established | Yes |
 
-## Module-local catalogs
+## Module-local ids
 
 ```rust,ignore
 use portaki_sdk::prelude::*;
 
-define_surface_ids! {
-    HOME_CARD = "home.card",
-    EXPLORE_FORECAST = "explore.forecast",
-    HOST_MAIN = "main",
-}
-
-define_operation_names! {
-    UPDATE_CONFIG = "updateConfig",
-    REFRESH = "refreshForecast",
-}
-
-#[surface(guest, id = "home.card")] // declaration site — literal OK once
+// guest/mod.rs — declares `HOME_CARD` and `EXPLORE_FORECAST`
+#[surface(guest, id = "home.card")]
 fn render_home(ctx: GuestContext) -> Surface {
-    Surface::new(/* … */)
-        .with_id(HOME_CARD)
+    Surface::new(/* … */) // the dispatcher stamps "home.card"
 }
+
+#[surface(guest, id = "explore.forecast")]
+fn render_forecast(ctx: GuestContext) -> Surface { /* … */ }
+
+// commands.rs — declares `REFRESH_FORECAST`
+#[command(name = "refreshForecast")]
+fn refresh(ctx: Context) -> Result<()> { /* … */ }
 
 // Runtime actions — typed consts only:
-Action::open_overlay(OverlayPresentation::BottomSheet, EXPLORE_FORECAST, None);
-Action::command(&ctx.module_id, UPDATE_CONFIG, EmptyArgs {});
-Action::navigate(HOME_CARD, None);
+Action::open_overlay(OverlayPresentation::BottomSheet, guest::EXPLORE_FORECAST, None);
+Action::command(&ctx.module_id, commands::REFRESH_FORECAST, EmptyArgs {});
+Action::navigate(guest::HOME_CARD, None);
 Action::navigate(NavigateTarget::path(format!("appliances/{id}")), None);
 ```
 

@@ -20,6 +20,44 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{FnArg, ItemFn, ReturnType, Type};
 
+/// The const naming a declared id next to its handler — `home.card` → `HOME_CARD`,
+/// `statsSummary` → `STATS_SUMMARY` — so a module keeps no hand-written `ids.rs`.
+///
+/// `kind` is `SurfaceId` or `OperationName`.
+pub fn declared_const(kind: &str, wire: &str, fn_ident: &syn::Ident) -> TokenStream2 {
+    let name = format_ident!("{}", const_name(wire));
+    let ty = format_ident!("{}", kind);
+    let doc = format!("`{wire}`, declared by [`{fn_ident}`].");
+    quote! {
+        #[doc = #doc]
+        #[allow(dead_code)]
+        pub const #name: ::portaki_sdk::ids::#ty = ::portaki_sdk::ids::#ty::new(#wire);
+    }
+}
+
+/// `SCREAMING_SNAKE_CASE` of a wire id: camelCase humps and any non-alphanumeric run become `_`.
+pub(crate) fn const_name(wire: &str) -> String {
+    let mut out = String::new();
+    let mut previous: Option<char> = None;
+    for ch in wire.chars() {
+        let hump = ch.is_ascii_uppercase()
+            && previous.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit());
+        if (!ch.is_ascii_alphanumeric() || hump) && !out.is_empty() && !out.ends_with('_') {
+            out.push('_');
+        }
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_uppercase());
+        }
+        previous = Some(ch);
+    }
+    let out = out.trim_end_matches('_').to_string();
+    if out.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{out}")
+    } else {
+        out
+    }
+}
+
 /// Registers a query handler (manifest `name` + Rust `fn` symbol).
 pub fn register_query(operation_name: &str, fn_name: &str, function_item: &ItemFn) -> TokenStream2 {
     register_handler(
@@ -138,11 +176,13 @@ fn register_handler(
                 (false, true) => quote! { #call? },
                 (false, false) => call,
             };
+            let surface_id = declared.name;
             quote! {
                 let ctx: #ctx_ty = ctx;
                 #read_args
                 let surface = #surface;
                 ::serde_json::to_value(surface)
+                    .map(|value| ::portaki_sdk::sdui::surface::stamp_declared_id(value, #surface_id))
             }
         }
         HandlerKind::Query | HandlerKind::Command => {
@@ -218,5 +258,26 @@ fn returns_result(function_item: &ItemFn) -> bool {
         ReturnType::Type(_, ty) => matches!(ty.as_ref(), Type::Path(path) if {
             path.path.segments.last().map(|s| s.ident == "Result").unwrap_or(false)
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::const_name;
+
+    #[test]
+    fn wire_ids_become_screaming_snake_case() {
+        for (wire, name) in [
+            ("home.card", "HOME_CARD"),
+            ("post-stay.card", "POST_STAY_CARD"),
+            ("main", "MAIN"),
+            ("statsSummary", "STATS_SUMMARY"),
+            ("legacyConfigAdopted", "LEGACY_CONFIG_ADOPTED"),
+            ("getV2Items", "GET_V2_ITEMS"),
+            ("calendar-sync", "CALENDAR_SYNC"),
+            ("3d.view", "_3D_VIEW"),
+        ] {
+            assert_eq!(const_name(wire), name, "{wire}");
+        }
     }
 }

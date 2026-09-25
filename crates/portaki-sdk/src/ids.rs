@@ -33,9 +33,11 @@
 //! assert!(matches!(home, Action::Navigate { .. }));
 //! ```
 //!
-//! Builders reject bare `&str` / `String` — declare wire literals once via
-//! [`define_surface_ids!`] / [`define_operation_names!`] / [`define_event_types!`]
-//! (or `::new` / `::from_static` in tests) and pass typed consts at every use site.
+//! Builders reject bare `&str` / `String` — pass typed consts at every use site. A module's own
+//! surface ids and operation names are declared by their attribute: `#[surface(…, id =
+//! "explore.detail")]` defines `EXPLORE_DETAIL` next to the renderer, `#[query(name =
+//! "listSources")]` / `#[command]` define `LIST_SOURCES`. Event types go through
+//! [`define_event_types!`]; anything else through `::new` / `::from_static`.
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -370,9 +372,13 @@ pub mod convention {
 
 /// Declares a module-local [`SurfaceId`] catalog.
 ///
+/// Deprecated: `#[surface(…, id = "home.card")]` declares `HOME_CARD` next to the renderer, and
+/// the dispatcher stamps the id on what it renders. Kept so an existing `ids.rs` still builds.
+///
 /// # Examples
 ///
 /// ```
+/// # #![allow(deprecated)]
 /// portaki_sdk::define_surface_ids! {
 ///     HOME_CARD = "home.card",
 ///     EXPLORE_FORECAST = "explore.forecast",
@@ -380,6 +386,10 @@ pub mod convention {
 ///
 /// assert_eq!(HOME_CARD.as_str(), "home.card");
 /// ```
+#[deprecated(
+    since = "8.7.0",
+    note = "#[surface(id = \"…\")] declares the const — delete ids.rs"
+)]
 #[macro_export]
 macro_rules! define_surface_ids {
     ($($name:ident = $value:literal),+ $(,)?) => {
@@ -391,9 +401,14 @@ macro_rules! define_surface_ids {
 
 /// Declares a module-local [`OperationName`] catalog (commands / queries).
 ///
+/// Deprecated: `#[query(name = "getConfig")]` / `#[command(…)]` declare `GET_CONFIG` next to the
+/// handler. Kept so an existing `ids.rs` still builds; a peer module's operation still takes
+/// [`OperationName::new`].
+///
 /// # Examples
 ///
 /// ```
+/// # #![allow(deprecated)]
 /// portaki_sdk::define_operation_names! {
 ///     UPDATE_CONFIG = "updateConfig",
 ///     GET_CONFIG = "getConfig",
@@ -401,6 +416,10 @@ macro_rules! define_surface_ids {
 ///
 /// assert_eq!(UPDATE_CONFIG.as_str(), "updateConfig");
 /// ```
+#[deprecated(
+    since = "8.7.0",
+    note = "#[query(name = \"…\")] / #[command] declare the const — delete ids.rs"
+)]
 #[macro_export]
 macro_rules! define_operation_names {
     ($($name:ident = $value:literal),+ $(,)?) => {

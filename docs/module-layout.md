@@ -14,7 +14,7 @@ Top-level modules map 1:1 to authoring concerns:
 | Module | Responsibility |
 |--------|----------------|
 | [`capability`](../crates/portaki-sdk/src/capability.rs) | Closed `CapabilityId` catalog + plan grants |
-| [`ids`](../crates/portaki-sdk/src/ids.rs) | Boundary newtypes (`SurfaceId`, `OperationName`, …) + `define_*!` |
+| [`ids`](../crates/portaki-sdk/src/ids.rs) | Boundary newtypes (`SurfaceId`, `OperationName`, …) + `define_event_types!` |
 | [`contracts`](../crates/portaki-sdk/src/contracts/) | Cross-module / platform / shell catalogs |
 | [`context`](../crates/portaki-sdk/src/context.rs) | Invocation `Context` / `GuestContext` / `HostContext` |
 | [`email`](../crates/portaki-sdk/src/email.rs) | Template keys, the `EmailVar` catalogue, `EmailVars` for `#[email_vars]` |
@@ -81,7 +81,7 @@ Canonical layout (omit folders you do not need — do not invent empty layers):
 ```
 src/
   lib.rs              # portaki_module! + capability consts (+ thin pub use)
-  ids.rs              # define_surface_ids! / define_operation_names! / define_event_types!
+                      # no ids.rs: #[surface] / #[query] / #[command] declare the id consts
   guest/              # guest SDUI surfaces only (#[surface(guest, …)])
   host/               # host SDUI surfaces only (#[surface(host, …)])
   connectors/         # connector! / connector_op! (or connectors.rs if tiny)
@@ -188,30 +188,12 @@ portaki_sdk::portaki_module!(
 pub const STORAGE: portaki_sdk::CapabilityId = portaki_sdk::capability::core::STORAGE;
 ```
 
-### Example `ids.rs`
-
-```rust,ignore
-use portaki_sdk::prelude::*;
-
-define_surface_ids! {
-    HOME_CARD = "home.card",
-    EXPLORE_FORECAST = "explore.forecast",
-    HOST_MAIN = "main",
-}
-
-define_operation_names! {
-    UPDATE_CONFIG = "updateConfig",
-    GET_FORECAST = "getForecast",
-    REFRESH_FORECAST = "refreshForecast",
-}
-```
-
 ---
 
 ## Checklist (PR)
 
 - [ ] No new host surface landed in `guest/`
 - [ ] No connector / command / entity types jammed into a surface file
-- [ ] `ids.rs` catalogs cover surfaces and ops touched by the change
+- [ ] Call sites use the consts `#[surface]` / `#[query]` / `#[command]` declare, not bare strings
 - [ ] Prelude imports stay intentional — no wildcard re-exports of private helpers
 - [ ] Wire strings / serde renames unchanged

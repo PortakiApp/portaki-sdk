@@ -2,8 +2,6 @@
 
 use portaki_sdk::prelude::*;
 
-mod ids;
-
 portaki_sdk::portaki_module!(
     id = "{{MODULE_NAME}}",
     display_name_key = "module.displayName",
@@ -15,5 +13,5 @@ portaki_sdk::portaki_module!(
     maturity = Maturity::Beta,
 );
 
-// Add `guest/` and `host/` surface modules when the module gains UI.
-// Boundary ids live in `ids.rs` (SDK 2.1.0+ typed catalogs).
+// Add `guest/` and `host/` surface modules when the module gains UI. Each `#[surface(…, id =
+// "home.card")]` also declares the const `HOME_CARD`, and `#[query]` / `#[command]` theirs.

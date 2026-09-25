@@ -40,6 +40,16 @@ pub struct Surface {
     pub root: Component,
 }
 
+/// Sets `id` on a rendered surface that has none — what the `#[surface]` shim does with the
+/// declared id, so a renderer need not call [`Surface::with_id`]. An id already set is kept.
+#[doc(hidden)]
+pub fn stamp_declared_id(mut surface: serde_json::Value, id: &str) -> serde_json::Value {
+    if let serde_json::Value::Object(fields) = &mut surface {
+        fields.entry("id").or_insert_with(|| id.into());
+    }
+    surface
+}
+
 impl Surface {
     /// Wraps a single root component (anything implementing `Into<Component>`).
     pub fn new(root: impl Into<Component>) -> Self {
@@ -49,11 +59,30 @@ impl Surface {
         }
     }
 
-    /// Sets the surface id — primarily for tests and navigation debugging.
+    /// Sets the surface id. Rarely needed: the `#[surface]` dispatcher stamps the declared id on
+    /// a surface that has none.
     ///
     /// Requires a [`SurfaceId`] (module catalog or [`crate::ids::convention`]).
     pub fn with_id(mut self, id: SurfaceId) -> Self {
         self.id = Some(id.as_str().to_string());
         self
+    }
+}
+
+#[cfg(test)]
+mod stamp_tests {
+    use super::stamp_declared_id;
+    use serde_json::json;
+
+    #[test]
+    fn the_declared_id_fills_a_missing_one_only() {
+        assert_eq!(
+            stamp_declared_id(json!({ "root": {} }), "main"),
+            json!({ "id": "main", "root": {} })
+        );
+        assert_eq!(
+            stamp_declared_id(json!({ "id": "other", "root": {} }), "main")["id"],
+            "other"
+        );
     }
 }
