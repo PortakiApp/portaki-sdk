@@ -62,23 +62,30 @@ pub async fn run(args: SdkArgs) -> Result<()> {
 
 // ─── Où la version est déclarée ──────────────────────────────────────────────
 
-/// Le fichier qui porte l'exigence de version, et ce qu'y changer touche.
+/// Les fichiers qui portent l'exigence de version, et ce qu'y changer touche.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declaration {
-    pub file: PathBuf,
-    /// L'exigence vient de `[workspace.dependencies]` : la changer fait monter tous les membres.
-    pub inherited: bool,
+    pub files: Vec<PathBuf>,
+    /// Le workspace fixe la version pour tous : hérité (`workspace = true`), ou épinglé à la
+    /// racine et recopié dans chaque module. Monter l'un sans les autres casserait le dépôt.
+    pub workspace_wide: bool,
 }
 
 /// Where `portaki-sdk` is required from, read in the module's own `Cargo.toml`.
 ///
-/// `portaki-sdk = { workspace = true }` sends the question to the workspace root: that is
-/// where the number lives, and changing it moves every member — which the command must say
-/// before doing it, not after.
+/// Three layouts. `portaki-sdk = { workspace = true }` sends the question to the workspace root.
+/// A root that pins the family in `[workspace.dependencies]` while each module writes its own
+/// number (portaki-modules: release-please attributes a bump per module path) moves as one —
+/// the root and every member that declares a number. A lone module moves alone.
+///
+/// @param workspace_toml the root `Cargo.toml`, when the module sits in a workspace
+/// @param members each member's root and `Cargo.toml`
 pub fn locate_declaration(
     module_toml: &str,
     module_root: &Path,
     workspace_root: &Path,
+    workspace_toml: Option<&str>,
+    members: &[(PathBuf, String)],
 ) -> Result<Declaration> {
     let doc: DocumentMut = module_toml.parse().context("parse Cargo.toml")?;
     let sdk = doc
@@ -90,14 +97,39 @@ pub fn locate_declaration(
         .and_then(|table| table.get("workspace"))
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
+    let root_pins = workspace_toml.is_some_and(pins_the_family);
+    if !inherited && !root_pins {
+        return Ok(Declaration {
+            files: vec![module_root.join("Cargo.toml")],
+            workspace_wide: false,
+        });
+    }
+    let mut files = vec![workspace_root.join("Cargo.toml")];
+    for (root, toml) in members {
+        if declares_a_number(toml) {
+            files.push(root.join("Cargo.toml"));
+        }
+    }
     Ok(Declaration {
-        file: if inherited {
-            workspace_root.join("Cargo.toml")
-        } else {
-            module_root.join("Cargo.toml")
-        },
-        inherited,
+        files,
+        workspace_wide: true,
     })
+}
+
+/// La racine épingle-t-elle un membre de la famille dans `[workspace.dependencies]` ?
+fn pins_the_family(workspace_toml: &str) -> bool {
+    let Ok(doc) = workspace_toml.parse::<DocumentMut>() else {
+        return false;
+    };
+    doc.get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(Item::as_table_like)
+        .is_some_and(|deps| SDK_FAMILY.iter().any(|name| deps.contains_key(name)))
+}
+
+/// Un membre qui écrit lui-même un numéro pour la famille — pas `workspace = true`.
+fn declares_a_number(member_toml: &str) -> bool {
+    bump_requirements(member_toml, "0.0.0").is_ok_and(|(_, changed)| !changed.is_empty())
 }
 
 /// Rewrites every SDK-family requirement to `target`, keeping the file as it was otherwise.
@@ -105,26 +137,20 @@ pub fn locate_declaration(
 /// Comments, ordering and other keys survive: this is the author's `Cargo.toml`, not a file the
 /// CLI owns. An inline table keeps its other keys (`features`, `default-features`…); only its
 /// `version` moves. An entry inherited from the workspace is left alone — it has no number here.
+/// A root reads `[workspace.dependencies]`, a module its own dependency tables: one pass covers both.
 ///
 /// @returns the new file and the crates it changed, in family order
-pub fn bump_requirements(
-    toml: &str,
-    inherited: bool,
-    target: &str,
-) -> Result<(String, Vec<String>)> {
+pub fn bump_requirements(toml: &str, target: &str) -> Result<(String, Vec<String>)> {
     let mut doc: DocumentMut = toml.parse().context("parse Cargo.toml")?;
-    let sections: Vec<Vec<&str>> = if inherited {
-        vec![vec!["workspace", "dependencies"]]
-    } else {
-        vec![
-            vec!["dependencies"],
-            vec!["dev-dependencies"],
-            vec!["build-dependencies"],
-        ]
-    };
+    let sections: [&[&str]; 4] = [
+        &["workspace", "dependencies"],
+        &["dependencies"],
+        &["dev-dependencies"],
+        &["build-dependencies"],
+    ];
     let mut changed = Vec::new();
     for path in sections {
-        let Some(table) = walk_mut(doc.as_item_mut(), &path) else {
+        let Some(table) = walk_mut(doc.as_item_mut(), path) else {
             continue;
         };
         for name in SDK_FAMILY {
@@ -602,11 +628,31 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
 
     let module_toml =
         std::fs::read_to_string(module_root.join("Cargo.toml")).context("read Cargo.toml")?;
-    let declaration = locate_declaration(&module_toml, &module_root, &metadata.workspace_root)?;
-    ui::field("declared in", declaration.file.display());
-    if declaration.inherited {
+    let workspace_toml = std::fs::read_to_string(metadata.workspace_root.join("Cargo.toml")).ok();
+    let member_tomls: Vec<(PathBuf, String)> = workspace::members(&metadata.workspace_root)
+        .into_iter()
+        .filter_map(|member| {
+            let toml = std::fs::read_to_string(member.root.join("Cargo.toml")).ok()?;
+            Some((member.root, toml))
+        })
+        .collect();
+    let declaration = locate_declaration(
+        &module_toml,
+        &module_root,
+        &metadata.workspace_root,
+        workspace_toml.as_deref(),
+        &member_tomls,
+    )?;
+    ui::field(
+        "declared in",
+        match declaration.files.as_slice() {
+            [only] => only.display().to_string(),
+            many => format!("{} Cargo.toml (workspace root and modules)", many.len()),
+        },
+    );
+    if declaration.workspace_wide {
         ui::warn(format!(
-            "{module_id} inherits the SDK from the workspace: the {} members move together, and all of them are built and tested",
+            "the workspace fixes the SDK for every module: the {} members move together, and all of them are built and tested",
             metadata.workspace_members.len()
         ));
     }
@@ -665,8 +711,11 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
     let lock = metadata.workspace_root.join("Cargo.lock");
     let manifests = module_manifests(&metadata, &declaration, &module_root);
     let backup = Backup::take(
-        &[declaration.file.clone(), lock]
-            .into_iter()
+        &declaration
+            .files
+            .iter()
+            .cloned()
+            .chain([lock])
             .chain(manifests.iter().cloned())
             .collect::<Vec<_>>(),
     );
@@ -713,7 +762,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             ui::success(format!("{subject} {verb} on portaki-sdk {resolved}"));
             // Hérité, le changement est à la racine : un `git diff` lancé depuis le module ne
             // montrerait que son propre manifeste, pas ceux des autres membres.
-            let review = if declaration.inherited {
+            let review = if declaration.workspace_wide {
                 format!("git -C {} diff", metadata.workspace_root.display())
             } else {
                 "git diff Cargo.toml Cargo.lock portaki.module.json".to_string()
@@ -766,7 +815,7 @@ fn verified_members(
     module_root: &Path,
     module_id: &str,
 ) -> Vec<workspace::Member> {
-    let all = if declaration.inherited {
+    let all = if declaration.workspace_wide {
         workspace::members(workspace_root)
     } else {
         Vec::new()
@@ -797,7 +846,7 @@ fn module_manifests(
     declaration: &Declaration,
     module_root: &Path,
 ) -> Vec<PathBuf> {
-    let roots: Vec<PathBuf> = if declaration.inherited {
+    let roots: Vec<PathBuf> = if declaration.workspace_wide {
         metadata
             .packages
             .iter()
@@ -856,18 +905,30 @@ async fn upgrade_and_verify(
     sandbox: Option<&mut Sandbox>,
     baseline: Option<&Baseline>,
 ) -> Result<String> {
-    let original = std::fs::read_to_string(&declaration.file)
-        .with_context(|| format!("read {}", declaration.file.display()))?;
-    let (bumped, changed) = bump_requirements(&original, declaration.inherited, target)?;
-    if changed.is_empty() {
-        bail!(
-            "no SDK requirement with a version number in {}",
-            declaration.file.display()
-        );
+    let mut changed: Vec<String> = Vec::new();
+    let mut touched = 0;
+    for file in &declaration.files {
+        let original =
+            std::fs::read_to_string(file).with_context(|| format!("read {}", file.display()))?;
+        let (bumped, in_file) = bump_requirements(&original, target)?;
+        if in_file.is_empty() {
+            continue;
+        }
+        std::fs::write(file, bumped).with_context(|| format!("write {}", file.display()))?;
+        touched += 1;
+        for name in in_file {
+            if !changed.contains(&name) {
+                changed.push(name);
+            }
+        }
     }
-    std::fs::write(&declaration.file, bumped)
-        .with_context(|| format!("write {}", declaration.file.display()))?;
-    ui::wrote("requirement", format!("{} → {target}", changed.join(", ")));
+    if changed.is_empty() {
+        bail!("no SDK requirement with a version number to move");
+    }
+    ui::wrote(
+        "requirement",
+        format!("{} → {target} in {touched} Cargo.toml", changed.join(", ")),
+    );
 
     // Seulement les crates que le graphe résout : `cargo update -p` refuse un nom inconnu.
     let resolved: Vec<&str> = SDK_FAMILY
@@ -917,7 +978,7 @@ async fn upgrade_and_verify(
         );
     }
 
-    let scope: &[&str] = if declaration.inherited {
+    let scope: &[&str] = if declaration.workspace_wide {
         &["--workspace"]
     } else {
         &[]
@@ -1045,12 +1106,12 @@ mod tests {
         let repo = monorepo(&["weather", "nuki", "wifi-guest"]);
         let weather = repo.path().join("modules/weather");
         let inherited = Declaration {
-            file: repo.path().join("Cargo.toml"),
-            inherited: true,
+            files: vec![repo.path().join("Cargo.toml")],
+            workspace_wide: true,
         };
         let own = Declaration {
-            file: weather.join("Cargo.toml"),
-            inherited: false,
+            files: vec![weather.join("Cargo.toml")],
+            workspace_wide: false,
         };
 
         let ids = |members: Vec<workspace::Member>| {
@@ -1092,13 +1153,13 @@ mod tests {
     fn a_workspace_inherited_sdk_points_at_the_workspace_root() {
         let module = "[package]\nname = \"ical-sync\"\n\n[dependencies]\nportaki-sdk = { workspace = true }\n";
         let declaration =
-            locate_declaration(module, Path::new("/m/ical"), Path::new("/m")).unwrap();
+            locate_declaration(module, Path::new("/m/ical"), Path::new("/m"), None, &[]).unwrap();
 
         assert_eq!(
             declaration,
             Declaration {
-                file: PathBuf::from("/m/Cargo.toml"),
-                inherited: true
+                files: vec![PathBuf::from("/m/Cargo.toml")],
+                workspace_wide: true
             }
         );
     }
@@ -1107,10 +1168,77 @@ mod tests {
     fn an_own_requirement_points_at_the_module() {
         let module = "[dependencies]\nportaki-sdk = \"2.4.0\"\n";
         let declaration =
-            locate_declaration(module, Path::new("/m/ical"), Path::new("/m")).unwrap();
+            locate_declaration(module, Path::new("/m/ical"), Path::new("/m"), None, &[]).unwrap();
 
-        assert!(!declaration.inherited);
-        assert_eq!(declaration.file, PathBuf::from("/m/ical/Cargo.toml"));
+        assert!(!declaration.workspace_wide);
+        assert_eq!(declaration.files, vec![PathBuf::from("/m/ical/Cargo.toml")]);
+    }
+
+    /// portaki-modules: the root pins the family and each module writes the same number (so that
+    /// release-please sees a bump in every module path). `portaki sdk upgrade` once moved the
+    /// anchor module alone, and `check-sdk-pin.sh` failed on main: they move as one.
+    #[test]
+    fn a_root_pin_copied_into_each_module_moves_everywhere() {
+        let root = "[workspace]\nmembers = [\"modules/*\"]\n\n[workspace.dependencies]\nportaki-sdk = \"8.0.0\"\nportaki-sdk-macros = \"8.0.0\"\n";
+        let own = |features: &str| {
+            format!("[dependencies]\nportaki-sdk = {{ version = \"8.0.0\", features = [{features}] }}\nportaki-sdk-macros = {{ workspace = true }}\n")
+        };
+        let members = vec![
+            (PathBuf::from("/m/modules/access-guide"), own("\"kv\"")),
+            (PathBuf::from("/m/modules/nuki"), own("")),
+            (
+                PathBuf::from("/m/modules/weather"),
+                "[dependencies]\nportaki-sdk = { workspace = true }\n".to_string(),
+            ),
+        ];
+
+        let declaration = locate_declaration(
+            &members[0].1,
+            &members[0].0,
+            Path::new("/m"),
+            Some(root),
+            &members,
+        )
+        .unwrap();
+
+        assert!(declaration.workspace_wide);
+        assert_eq!(
+            declaration.files,
+            vec![
+                PathBuf::from("/m/Cargo.toml"),
+                PathBuf::from("/m/modules/access-guide/Cargo.toml"),
+                PathBuf::from("/m/modules/nuki/Cargo.toml"),
+            ]
+        );
+        let (root_after, _) = bump_requirements(root, "8.0.1").unwrap();
+        assert!(root_after.contains("portaki-sdk = \"8.0.1\""));
+        let (member_after, changed) = bump_requirements(&members[0].1, "8.0.1").unwrap();
+        assert!(member_after.contains("portaki-sdk = { version = \"8.0.1\", features = [\"kv\"] }"));
+        assert!(member_after.contains("portaki-sdk-macros = { workspace = true }"));
+        assert_eq!(changed, vec!["portaki-sdk"]);
+    }
+
+    /// Hors workspace, ou sans épinglage à la racine, un module ne fait monter que lui-même.
+    #[test]
+    fn a_root_without_the_family_leaves_the_module_alone() {
+        let root =
+            "[workspace]\nmembers = [\"modules/*\"]\n\n[workspace.dependencies]\nserde = \"1\"\n";
+        let module = "[dependencies]\nportaki-sdk = \"8.0.0\"\n";
+
+        let declaration = locate_declaration(
+            module,
+            Path::new("/m/modules/nuki"),
+            Path::new("/m"),
+            Some(root),
+            &[(PathBuf::from("/m/modules/nuki"), module.to_string())],
+        )
+        .unwrap();
+
+        assert!(!declaration.workspace_wide);
+        assert_eq!(
+            declaration.files,
+            vec![PathBuf::from("/m/modules/nuki/Cargo.toml")]
+        );
     }
 
     /// The workspace root of portaki-modules, as it is.
@@ -1118,7 +1246,7 @@ mod tests {
     fn the_whole_family_moves_and_the_rest_of_the_file_stays() {
         let root = "[workspace]\nmembers = [\"modules/*\"]\n\n[workspace.dependencies]\n# the SDK family moves together\nportaki-sdk = \"2.2.0\"\nportaki-sdk-macros = \"2.2.0\"\nportaki-connectors = \"2.2.0\"\nportaki-test-utils = \"2.2.0\"\nserde = { version = \"1\", features = [\"derive\"] }\n";
 
-        let (bumped, changed) = bump_requirements(root, true, "3.0.1").unwrap();
+        let (bumped, changed) = bump_requirements(root, "3.0.1").unwrap();
 
         assert_eq!(
             changed,
@@ -1138,7 +1266,7 @@ mod tests {
     fn an_inline_table_keeps_its_other_keys() {
         let module = "[dependencies]\nportaki-sdk = { version = \"2.4.0\", default-features = false }\n\n[dev-dependencies]\nportaki-test-utils = \"2.4.0\"\n";
 
-        let (bumped, changed) = bump_requirements(module, false, "3.0.1").unwrap();
+        let (bumped, changed) = bump_requirements(module, "3.0.1").unwrap();
 
         assert!(bumped.contains("portaki-sdk = { version = \"3.0.1\", default-features = false }"));
         assert!(bumped.contains("portaki-test-utils = \"3.0.1\""));
@@ -1150,7 +1278,7 @@ mod tests {
     fn an_inherited_entry_is_left_alone_in_the_module() {
         let module = "[dependencies]\nportaki-sdk = { workspace = true }\n";
 
-        let (bumped, changed) = bump_requirements(module, false, "3.0.1").unwrap();
+        let (bumped, changed) = bump_requirements(module, "3.0.1").unwrap();
 
         assert!(changed.is_empty());
         assert_eq!(bumped, module);
@@ -1160,7 +1288,7 @@ mod tests {
     fn a_pinned_requirement_stays_pinned() {
         let module = "[dependencies]\nportaki-sdk = \"=2.4.0\"\nportaki-sdk-macros = { version = \"~2.4\" }\n";
 
-        let (bumped, _) = bump_requirements(module, false, "3.0.1").unwrap();
+        let (bumped, _) = bump_requirements(module, "3.0.1").unwrap();
 
         assert!(bumped.contains("portaki-sdk = \"=3.0.1\""));
         assert!(bumped.contains("portaki-sdk-macros = { version = \"~3.0.1\" }"));
