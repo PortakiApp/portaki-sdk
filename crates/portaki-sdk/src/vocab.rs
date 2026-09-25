@@ -232,6 +232,7 @@ vocabulary! {
         Handshake = "handshake",
         HeartHandshake = "heart-handshake",
         Home = "home",
+        Image = "image",
         Info = "info",
         InfoCircle = "info-circle",
         Key = "key",
