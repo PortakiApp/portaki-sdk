@@ -17,7 +17,7 @@ Top-level modules map 1:1 to authoring concerns:
 | [`ids`](../crates/portaki-sdk/src/ids.rs) | Boundary newtypes (`SurfaceId`, `OperationName`, …) + `define_*!` |
 | [`contracts`](../crates/portaki-sdk/src/contracts/) | Cross-module / platform / shell catalogs |
 | [`context`](../crates/portaki-sdk/src/context.rs) | Invocation `Context` / `GuestContext` / `HostContext` |
-| [`email`](../crates/portaki-sdk/src/email.rs) | Email context contribution types + template keys |
+| [`email`](../crates/portaki-sdk/src/email.rs) | Template keys, the `EmailVar` catalogue, `EmailVars` for `#[email_vars]` |
 | [`error`](../crates/portaki-sdk/src/error.rs) | `PortakiError` / `Result` |
 | [`manifest`](../crates/portaki-sdk/src/manifest.rs) | Manifest fragment types for CLI / codegen |
 | [`sdui`](../crates/portaki-sdk/src/sdui/) | **Shared** SDUI primitives, actions, surfaces |
@@ -89,11 +89,29 @@ src/
   queries.rs          # #[query] handlers (or queries/)
   model/ or entities  # domain types / entity! structs (pick one name per crate)
   config.rs           # #[portaki_sdk::config] struct — the platform stores it
-  email_context.rs    # optional contribution to Portaki guest templates
+  email_context.rs    # optional #[email_vars] fn: variables for Portaki guest templates
   email_send.rs       # module-owned mail via host::email::send (or email/)
   events.rs           # #[event_handler] (optional)
   i18n/               # locale bundles (repo convention: crate-root i18n/, not src/)
 ```
+
+### Guest email variables (`email_context.rs`)
+
+Portaki's own guest emails (`arrival`, `arrival-day`, …) show what modules give them. Declare
+which variables, for which templates, on the function that computes them:
+
+```rust
+#[portaki_sdk::email_vars(StayLink | Arrival | ArrivalDay => [WifiName])]
+pub fn email_vars(ctx: Context, _args: EmailContextArgs) -> Result<EmailVars> {
+    let config = Config::load(&ctx)?;
+    Ok(EmailVars::new().with(EmailVar::WifiName, config.ssid))
+}
+```
+
+The catalogue is `EmailVar`: a variable its template does not render does not compile. The
+`emailContext` query and the manifest's `emailVars` are generated; each template gets only the
+variables declared for it, blank values are dropped. Conformance asks every declared variable
+of a fixture: `conformance!(email_fixture = my_fixture)`.
 
 ### Sending email (`email_send.rs`)
 

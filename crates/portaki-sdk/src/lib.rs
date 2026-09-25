@@ -100,13 +100,15 @@ pub use context::{
     Context, DisplayPreferences, GuestContext, GuestIdentity, HostContext, PlanInfo,
     PropertyContext, Quota, StayContext,
 };
-pub use email::{EmailContextArgs, EmailContextContribution, EmailTemplateKey};
+#[allow(deprecated)]
+pub use email::EmailContextContribution;
+pub use email::{EmailContextArgs, EmailTemplateKey, EmailVar, EmailVars};
 pub use error::{PortakiError, Result};
 pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
-    capability, command, config, connector, connector_op, custom_connector, email, entity,
-    entity_indexes, event_handler, nav, params, portaki_module_decl as portaki_module, query,
-    surface, wire,
+    capability, command, config, connector, connector_op, custom_connector, email, email_vars,
+    entity, entity_indexes, event_handler, nav, params, portaki_module_decl as portaki_module,
+    query, surface, wire,
 };
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
@@ -138,7 +140,7 @@ pub mod prelude {
     pub use crate::capability::{self, CapabilityId};
     pub use crate::context::{Context, GuestContext, HostContext, StayContext};
     pub use crate::contracts;
-    pub use crate::email::{EmailContextArgs, EmailTemplateKey};
+    pub use crate::email::{EmailContextArgs, EmailTemplateKey, EmailVar, EmailVars};
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
     pub use crate::host::email::EmailAudience;
@@ -159,8 +161,8 @@ pub mod prelude {
     };
     pub use crate::{
         command, connector, connector_op, custom_connector, define_event_types,
-        define_operation_names, define_surface_ids, entity, entity_indexes, event_handler,
-        portaki_module, query, surface, wire,
+        define_operation_names, define_surface_ids, email_vars, entity, entity_indexes,
+        event_handler, portaki_module, query, surface, wire,
     };
     pub use crate::{log_info, t};
     pub use chrono::{DateTime, Utc};

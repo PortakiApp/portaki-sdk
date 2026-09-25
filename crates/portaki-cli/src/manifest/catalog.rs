@@ -96,6 +96,24 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["emails"] = Value::Array(emails);
     }
 
+    // `#[email_vars]` : par modèle, les variables que le module fournit.
+    if let Some(declared) = emissions
+        .iter()
+        .find(|e| e.kind == "email_vars")
+        .and_then(|e| e.data["declared"].as_array())
+    {
+        catalog["emailVars"] = declared
+            .iter()
+            .filter_map(|entry| {
+                Some((
+                    entry["template"].as_str()?.to_string(),
+                    entry["vars"].clone(),
+                ))
+            })
+            .collect::<Map<String, Value>>()
+            .into();
+    }
+
     if let Some(fields) = config_fields(emissions, &translated) {
         catalog["config"] = json!({ "fields": fields });
     }
@@ -307,6 +325,10 @@ pub fn check_references(
             "#[portaki_sdk::config] is on {} — a module has one configuration",
             configs.join(" and ")
         );
+    }
+
+    if emissions.iter().filter(|e| e.kind == "email_vars").count() > 1 {
+        anyhow::bail!("#[email_vars] is on more than one function — a module has one emailContext");
     }
 
     let queries: Vec<&str> = emissions
@@ -652,6 +674,31 @@ mod tests {
             catalog["emails"],
             json!([{ "id": "sync-failed", "description": { "fr": "Échec" } }])
         );
+    }
+
+    #[test]
+    fn email_vars_become_a_map_by_template() {
+        let mut emission = json!({ "kind": "email_vars", "declared": [
+            { "template": "EmailTemplateKey::Arrival", "vars": ["EmailVar::WifiName", "EmailVar::HostPhone"] },
+            { "template": "EmailTemplateKey::StayLink", "vars": ["EmailVar::WifiName"] },
+        ]});
+        super::super::generator::resolve_vocabulary(&mut emission).expect("resolve");
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "email_vars".into(),
+            data: emission,
+        });
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let catalog = catalog_defaults(&emissions, dir.path(), &[]);
+
+        assert_eq!(
+            catalog["emailVars"],
+            json!({ "arrival": ["wifiName", "hostPhone"], "stay-link": ["wifiName"] })
+        );
+        emissions.push(emissions.last().unwrap().clone());
+        let twice = super::check_references(&emissions, dir.path(), &[]).unwrap_err();
+        assert!(twice.to_string().contains("#[email_vars]"), "{twice}");
     }
 
     #[test]

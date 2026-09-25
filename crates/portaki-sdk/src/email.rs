@@ -13,6 +13,10 @@
 //! assert!(EmailTemplateKey::Arrival.is_guest_stay());
 //! assert!(!EmailTemplateKey::Welcome.is_guest_stay());
 //! ```
+//!
+//! [`EmailVar`] is the catalogue of variables a module may give a guest email, with the
+//! templates that render each; a module declares its own with
+//! [`#[email_vars]`](crate::email_vars).
 
 use std::fmt;
 use std::str::FromStr;
@@ -439,10 +443,9 @@ impl fmt::Display for ParseEmailTemplateKeyError {
 
 impl std::error::Error for ParseEmailTemplateKeyError {}
 
-/// Arguments passed to module `emailContext` handlers by the gateway.
+/// Arguments the platform passes to a module's `emailContext` — every field it sends.
 ///
-/// Prefer this type over redefining `template_key` / `locale` / `stay_id` in each
-/// module. Modules that need extra wire fields keep a local struct.
+/// Prefer this type over redefining `template_key` / `locale` in each module.
 #[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct EmailContextArgs {
@@ -455,6 +458,12 @@ pub struct EmailContextArgs {
     /// Optional locale override (BCP-47). Falls back to [`crate::Context::locale`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locale: Option<String>,
+    /// Check-in clock time, formatted in the property's timezone (`16:00`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkin_time_formatted: Option<String>,
+    /// The property's address, when it has one — a place name for copy (`Antibes`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address_hint: Option<String>,
 }
 
 impl EmailContextArgs {
@@ -480,31 +489,222 @@ impl EmailContextArgs {
     }
 }
 
-/// Documented contribution fields modules may return into guest-stay emails.
+/// Before [`EmailVar`]: fields a module was told to return into guest-stay emails.
 ///
-/// Modules typically serialize a subset as `serde_json::Value` / a dedicated
-/// response struct. Field names match gateway merge keys (camelCase).
+/// Four of these keys were never read by the platform (`houseRulesSummary`, `checklistSummary`,
+/// `wasteTip`, `applianceTip`). The keys it reads are [`EmailVar`]; declare them with
+/// [`#[email_vars]`](crate::email_vars).
+#[deprecated(
+    since = "8.3.0",
+    note = "the platform reads none of houseRulesSummary, checklistSummary, wasteTip, applianceTip — use EmailVar / #[email_vars]"
+)]
 #[portaki_sdk_macros::wire]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct EmailContextContribution {
-    /// Weather one-liner for arrival / arrival-day templates.
+    /// Same key as [`EmailVar::WeatherSummary`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weather_summary: Option<String>,
-    /// Access-guide callout block for arrival emails.
+    /// Same key as [`EmailVar::ArrivalCallout`] — a string, not an object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arrival_callout: Option<serde_json::Value>,
-    /// Rules / house notes snippet.
+    /// Never read: the platform reads [`EmailVar::HouseRulesTeaser`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub house_rules_summary: Option<String>,
-    /// Checklist reminder snippet.
+    /// Never read: the platform reads [`EmailVar::CheckoutTips`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checklist_summary: Option<String>,
-    /// Waste / recycling tip.
+    /// Never read: no template renders it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waste_tip: Option<String>,
-    /// Appliance quick tip.
+    /// Never read: no template renders it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appliance_tip: Option<String>,
+}
+
+/// Declares [`EmailVar`] and its catalogue from one table: wire key, templates that render it.
+macro_rules! email_var_catalog {
+    ($($(#[$doc:meta])* $variant:ident = $wire:literal in [$($template:ident),+],)+) => {
+        /// A variable a module may give a Portaki guest email — the whole catalogue.
+        ///
+        /// Mirrors the module-provided keys of `EmailTemplates` on the platform: each variable is
+        /// rendered by the templates listed on it, and only there. Declare the ones a module
+        /// provides with [`#[email_vars]`](crate::email_vars); declaring one for a template that
+        /// does not render it does not compile.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        pub enum EmailVar {
+            $($(#[$doc])* #[doc = concat!("\n\nKey `", $wire, "`, rendered by ", $("`", stringify!($template), "` ",)+ ".")] #[serde(rename = $wire)] $variant,)+
+        }
+
+        impl EmailVar {
+            /// The whole catalogue, in declaration order.
+            pub const ALL: &'static [EmailVar] = &[$(Self::$variant,)+];
+
+            /// The key of the template variable (`wifiName`).
+            pub const fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $wire,)+ }
+            }
+
+            /// The templates that render this variable.
+            pub const fn templates(self) -> &'static [EmailTemplateKey] {
+                match self { $(Self::$variant => &[$(EmailTemplateKey::$template,)+],)+ }
+            }
+        }
+
+        impl crate::vocab::Vocabulary for EmailVar {
+            const ALL: &'static [Self] = EmailVar::ALL;
+            fn wire(self) -> &'static str {
+                self.as_str()
+            }
+            fn variant(self) -> &'static str {
+                match self { $(Self::$variant => stringify!($variant),)+ }
+            }
+        }
+    };
+}
+
+email_var_catalog! {
+    /// How to get in: self check-in callout (access-guide).
+    ArrivalCallout = "arrivalCallout" in [Arrival, NewCode],
+    /// The door or key-box code, once the reveal policy allows it (access-guide).
+    EntryAccessCode = "entryAccessCode" in [Arrival, NewCode, ArrivalDay],
+    /// What the code opens — "Key box code" (access-guide).
+    AccessCodeLabel = "accessCodeLabel" in [Arrival, NewCode, ArrivalDay],
+    /// Today's weather in one line (weather).
+    WeatherSummary = "weatherSummary" in [ArrivalDay],
+    /// A few house rules, one per line (rules).
+    HouseRulesTeaser = "houseRulesTeaser" in [StayLink, Arrival, PostArrival],
+    /// The phone to call during the stay (emergency-contacts).
+    HostPhone = "hostPhone" in [Arrival, ArrivalDay, PostArrival, LostFound],
+    /// One local recommendation (local-guide, events).
+    LocalTip = "localTip" in [ArrivalDay, PostArrival],
+    /// Before-leaving reminders, one per line (checklist).
+    CheckoutTips = "checkoutTips" in [PostArrival, LostFound],
+    /// Where to charge the car (ev-parking).
+    EvParkingSpot = "evParkingSpot" in [Arrival, ArrivalDay],
+    /// What the guest declared lost (lost-found).
+    LostItemDescription = "lostItemDescription" in [LostFound],
+    /// The Wi-Fi network name (wifi-guest); wins over the property's own when given.
+    WifiName = "wifiName" in [StayLink, Arrival, ArrivalDay],
+}
+
+impl EmailVar {
+    /// `true` when `template` renders this variable — usable in `const` context, which is how
+    /// `#[email_vars]` refuses a declaration at compile time.
+    pub const fn renders_in(self, template: EmailTemplateKey) -> bool {
+        let templates = self.templates();
+        let mut i = 0;
+        while i < templates.len() {
+            if templates[i] as usize == template as usize {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+}
+
+impl fmt::Display for EmailVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The values a module gives one email — what an `#[email_vars]` function returns.
+///
+/// A blank value is the same as none: the template hides the section.
+///
+/// ```
+/// use portaki_sdk::email::{EmailVar, EmailVars};
+///
+/// let vars = EmailVars::new().with(EmailVar::WifiName, "Belledonne_Guest");
+/// assert_eq!(vars.get(EmailVar::WifiName), Some("Belledonne_Guest"));
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EmailVars(Vec<(EmailVar, String)>);
+
+impl EmailVars {
+    /// No value.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets `var`, replacing an earlier value.
+    pub fn insert(&mut self, var: EmailVar, value: impl Into<String>) {
+        let value = value.into();
+        match self.0.iter_mut().find(|(set, _)| *set == var) {
+            Some(entry) => entry.1 = value,
+            None => self.0.push((var, value)),
+        }
+    }
+
+    /// [`insert`](Self::insert), chained.
+    pub fn with(mut self, var: EmailVar, value: impl Into<String>) -> Self {
+        self.insert(var, value);
+        self
+    }
+
+    /// The value set for `var`.
+    pub fn get(&self, var: EmailVar) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(set, _)| *set == var)
+            .map(|(_, value)| value.as_str())
+    }
+}
+
+/// What a module declared with `#[email_vars]`: per template, the variables it provides.
+pub type DeclaredEmailVars = &'static [(EmailTemplateKey, &'static [EmailVar])];
+
+/// The `#[email_vars]` of a linked module crate — native targets only, for the conformance battery.
+#[doc(hidden)]
+pub struct EmailVarsDeclaration {
+    /// The declaration, as written.
+    pub declared: DeclaredEmailVars,
+    /// The shim behind the generated `emailContext` query.
+    pub dispatch: crate::wasm::registry::WasmHandlerFn,
+}
+
+inventory::collect!(EmailVarsDeclaration);
+
+/// The `#[email_vars]` declarations linked into this binary (empty on `wasm32`).
+pub fn declarations() -> impl Iterator<Item = &'static EmailVarsDeclaration> {
+    inventory::iter::<EmailVarsDeclaration>.into_iter()
+}
+
+/// The body of the `emailContext` query `#[email_vars]` generates.
+///
+/// Nothing is asked of the module for a template it did not declare (nor without a template).
+/// Of what it answers, only the variables declared for this template are sent, blank ones left
+/// out; a variable declared for no template at all is an error — a missing declaration. The
+/// answer is the flat object the platform merges: `{ "wifiName": "…" }`.
+pub fn serve(
+    declared: DeclaredEmailVars,
+    ctx: crate::Context,
+    args: EmailContextArgs,
+    provide: impl FnOnce(crate::Context, EmailContextArgs) -> crate::Result<EmailVars>,
+) -> crate::Result<serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    let Some(template) = args.template_key else {
+        return Ok(out.into());
+    };
+    let Some((_, allowed)) = declared.iter().find(|(key, _)| *key == template) else {
+        return Ok(out.into());
+    };
+    for (var, value) in provide(ctx, args)?.0 {
+        if !declared.iter().any(|(_, vars)| vars.contains(&var)) {
+            return Err(crate::PortakiError::Host(format!(
+                "email_var_undeclared: `{var}` is returned but not declared in #[email_vars]"
+            )));
+        }
+        let value = value.trim();
+        if !allowed.contains(&var) {
+            continue;
+        }
+        if !value.is_empty() {
+            out.insert(var.as_str().to_string(), value.into());
+        }
+    }
+    Ok(out.into())
 }
 
 #[cfg(test)]
@@ -526,6 +726,34 @@ mod tests {
     }
 
     #[test]
+    fn the_schema_lists_the_catalogue() {
+        use super::EmailVar;
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../../schema/module.v1.json")).unwrap();
+        let email_vars = &schema["properties"]["emailVars"];
+        let vars: Vec<&str> = EmailVar::ALL.iter().map(|v| v.as_str()).collect();
+        assert_eq!(
+            email_vars["additionalProperties"]["items"]["enum"],
+            serde_json::json!(vars)
+        );
+        let mut templates: Vec<&str> = Vec::new();
+        for key in EmailTemplateKey::ALL {
+            if EmailVar::ALL.iter().any(|v| v.renders_in(*key)) {
+                templates.push(key.as_str());
+            }
+        }
+        let mut listed: Vec<&str> = email_vars["propertyNames"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.as_str().unwrap())
+            .collect();
+        listed.sort_unstable();
+        templates.sort_unstable();
+        assert_eq!(listed, templates);
+    }
+
+    #[test]
     fn email_context_args_allows_template_and_locale() {
         use super::EmailContextArgs;
 
@@ -535,8 +763,8 @@ mod tests {
 
         let filtered = EmailContextArgs {
             template_key: Some(EmailTemplateKey::StayLink),
-            stay_id: None,
             locale: Some("  en-GB  ".into()),
+            ..Default::default()
         };
         assert!(!filtered.allows_template(&[EmailTemplateKey::Arrival]));
         assert!(filtered.allows_template(&[EmailTemplateKey::StayLink]));

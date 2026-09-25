@@ -3,7 +3,7 @@
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 
-use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
+use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind, WasmHandlerFn};
 use portaki_sdk::Context;
 use serde_json::Value;
 
@@ -36,6 +36,16 @@ pub(crate) fn invoke(
     invoke_in(declaration, ctx, host, params)
 }
 
+/// Runs a bare dispatch shim with `params` inside `mock`.
+pub(crate) fn invoke_dispatch(
+    dispatch: WasmHandlerFn,
+    mock: MockContextBuilder,
+    params: Value,
+) -> Invocation {
+    let (ctx, host) = mock.build();
+    run(dispatch, ctx, host, params)
+}
+
 /// Same, on a host already built — so a second call sees what the first one stored.
 pub(crate) fn invoke_in(
     declaration: &HandlerDeclaration,
@@ -43,9 +53,18 @@ pub(crate) fn invoke_in(
     host: Arc<MockHostFunctions>,
     params: Value,
 ) -> Invocation {
+    run(declaration.dispatch, ctx, host, params)
+}
+
+fn run(
+    dispatch: WasmHandlerFn,
+    ctx: Context,
+    host: Arc<MockHostFunctions>,
+    params: Value,
+) -> Invocation {
     let backend = Arc::clone(&host);
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        portaki_sdk::host::with_host(backend, ctx.clone(), || (declaration.dispatch)(ctx, params))
+        portaki_sdk::host::with_host(backend, ctx.clone(), || dispatch(ctx, params))
     }));
 
     let outcome = match result {

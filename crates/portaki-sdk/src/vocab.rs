@@ -321,6 +321,11 @@ pub fn wire_of(vocabulary: &str, variant: &str) -> Option<&'static str> {
         "DesignId" => find::<DesignId>(variant),
         "IconName" => find::<IconName>(variant),
         "EmailAudience" => find::<crate::host::email::EmailAudience>(variant),
+        "EmailVar" => find::<crate::email::EmailVar>(variant),
+        "EmailTemplateKey" => crate::email::EmailTemplateKey::ALL
+            .iter()
+            .find(|key| format!("{key:?}") == variant)
+            .map(|key| key.as_str()),
         _ => None,
     }
 }
@@ -395,6 +400,11 @@ mod tests {
         assert_eq!(
             wire_of("SkipWhen", "GuestEmailMissing"),
             Some("guest.email.missing")
+        );
+        assert_eq!(wire_of("EmailVar", "WifiName"), Some("wifiName"));
+        assert_eq!(
+            wire_of("EmailTemplateKey", "ArrivalDay"),
+            Some("arrival-day")
         );
         assert_eq!(wire_of("HostPlacement", "Nope"), None);
         assert_eq!(wire_of("Nope", "StayAction"), None);

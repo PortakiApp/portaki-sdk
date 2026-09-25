@@ -90,6 +90,22 @@
       "description": "Module-owned timed / transactional emails. When command is set, the platform may dispatch that Wasm command (module owns gate + host::email::send). catchUpOnPropertyPublish redispatches after draft publish; catchUpOnConfigUpdate after host updateConfig (promotes module KV then redispatches); dispatchOnStayCreated on stay create. Delivery dedup uses id per stay.",
       "items": { "$ref": "#/$defs/moduleEmail" }
     },
+    "emailVars": {
+      "type": "object",
+      "description": "Variables the module gives Portaki guest emails, per template, declared by #[portaki_sdk::email_vars] (portaki build writes it). The platform calls the module's emailContext query for a declared template and merges the declared keys into that email; nothing else the module answers is read. Each variable is rendered only by some templates (portaki_sdk::email::EmailVar::templates).",
+      "propertyNames": {
+        "enum": ["stay-link", "arrival", "new-code", "arrival-day", "post-arrival", "lost-found"]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "enum": ["arrivalCallout", "entryAccessCode", "accessCodeLabel", "weatherSummary", "houseRulesTeaser", "hostPhone", "localTip", "checkoutTips", "evParkingSpot", "lostItemDescription", "wifiName"]
+        }
+      }
+    },
     "audience": {
       "type": "string",
       "enum": ["guest", "host"],
