@@ -68,12 +68,24 @@ pub struct PublishArgs {
     #[arg(long)]
     pub all: bool,
     /// A line of what is new in this version, shown to hosts on an older one (repeatable, at
-    /// most 5). Without it, the version's section of the module's CHANGELOG.md.
-    #[arg(long = "notes", value_name = "LINE")]
+    /// most 5 per language). `fr:Code clavier` tags its language; untagged, --notes-lang.
+    /// Without it for a language, the version's section of CHANGELOG.<lang>.md (CHANGELOG.md
+    /// for --notes-lang).
+    #[arg(long = "notes", value_name = "[LANG:]LINE")]
     pub notes: Vec<String>,
-    /// Language of the changelog lines.
+    /// Language of untagged notes and texts, and of CHANGELOG.md.
     #[arg(long, default_value = "en")]
     pub notes_lang: String,
+    /// Why this version adds a permission, shown to hosts under the platform's sentence
+    /// (repeatable: one per permission and language), e.g. `email=fr:Pour envoyer le code`.
+    #[arg(long = "permission-reason", value_name = "PERMISSION=[LANG:]TEXT")]
+    pub permission_reasons: Vec<String>,
+    /// The host has something to do after updating (reconnect, reconfigure…).
+    #[arg(long)]
+    pub host_action_required: bool,
+    /// What the host has to do, one per language (implies --host-action-required).
+    #[arg(long = "host-action", value_name = "[LANG:]TEXT")]
+    pub host_action: Vec<String>,
 }
 
 /// A layer's size on disk, or zero when it cannot be read — the list is a report, not a gate.
@@ -371,6 +383,12 @@ async fn send_listing(
             }
         }
     };
+    // Pas un échec : la publication tient, mais la fiche du dépôt n'a rien changé (elle est gérée
+    // dans la console) — le dire en clair plutôt qu'un « sent » qui ferait croire l'inverse.
+    if let Outcome::Ignored(message) = &outcome {
+        ui::warn(format!("listing not applied — {message}"));
+        return Ok(());
+    }
     let verdict = listing_verdict(module_id, outcome);
     match &verdict {
         Ok(()) => ui::field("listing", "sent"),
@@ -405,7 +423,7 @@ async fn put_listing(
 /// Une fiche refusée n'annule pas la publication : elle fait échouer le run, avec le motif.
 fn listing_verdict(module_id: &str, outcome: Outcome) -> Result<()> {
     match outcome {
-        Outcome::Published => Ok(()),
+        Outcome::Published | Outcome::Draft { .. } | Outcome::Ignored(_) => Ok(()),
         Outcome::Refused {
             status,
             code,
@@ -429,6 +447,14 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         .clone()
         .unwrap_or_else(|| module_root.join("target/portaki"));
     let registry = resolve_registry(args.registry.as_deref(), &module_root)?;
+    // Lus avant tout build : un drapeau mal formé découvert à l'annonce laisserait un artefact
+    // poussé et une version non annoncée.
+    let notes = crate::changelog::release_notes(
+        &args.permission_reasons,
+        args.host_action_required,
+        &args.host_action,
+        &args.notes_lang,
+    )?;
 
     // Reprise d'un catalogue déjà sur GHCR : on lit le digest de la version publiée et on
     // l'annonce. Rien n'est recompilé ni renvoyé, donc aucun droit d'écriture nécessaire — et
@@ -440,7 +466,7 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         looking.done("found the artifact on the registry");
         ui::field("image", &pushed.image_ref);
         ui::field("digest", &pushed.digest);
-        announce(args, &coords, &pushed).await?;
+        announce(args, &coords, &pushed, &notes).await?;
         return Ok(Landed::InRegistry(coords.id));
     }
 
@@ -523,23 +549,36 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         return Ok(Landed::Unannounced);
     }
 
-    announce(args, &coords, &pushed).await?;
+    announce(args, &coords, &pushed, &notes).await?;
     Ok(Landed::InRegistry(coords.id))
 }
 
-/// Inscrit `changelog` dans `publish-manifest.json` : `--notes`, sinon la section de la version
-/// dans `CHANGELOG.md`. Fait ici et non au build, pour couvrir aussi `--skip-build`.
+/// Inscrit `changelog` dans `publish-manifest.json` : `--notes` par langue, sinon la section de
+/// la version dans `CHANGELOG[.<lang>].md`. Fait ici et non au build, pour couvrir aussi
+/// `--skip-build`.
 fn stamp_changelog(module_root: &Path, artifact_dir: &Path, args: &PublishArgs) -> Result<()> {
     let coords = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
-    let lines = crate::changelog::lines(&args.notes, module_root, &coords.version)?;
+    let lines =
+        crate::changelog::lines(&args.notes, &args.notes_lang, module_root, &coords.version)?;
     if lines.is_empty() {
         return Ok(());
     }
     let path = oci::pack::publish_manifest_path(artifact_dir);
     let raw = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let stamped = crate::changelog::stamp(&raw, &lines, &args.notes_lang)?;
+    let stamped = crate::changelog::stamp(&raw, &lines)?;
     std::fs::write(&path, stamped).with_context(|| format!("write {}", path.display()))?;
-    ui::field("changelog", plural(lines.len(), "line"));
+    let langs: std::collections::BTreeSet<&str> = lines
+        .iter()
+        .flat_map(|line| line.keys().map(String::as_str))
+        .collect();
+    ui::field(
+        "changelog",
+        format!(
+            "{} ({})",
+            plural(lines.len(), "line"),
+            langs.into_iter().collect::<Vec<_>>().join(", ")
+        ),
+    );
     Ok(())
 }
 
@@ -613,6 +652,7 @@ async fn announce(
     args: &PublishArgs,
     coords: &oci::pack::ModuleCoordinates,
     pushed: &oci::PushedArtifact,
+    notes: &serde_json::Value,
 ) -> Result<()> {
     let base = auth::api_base_url(args.url.as_deref());
     let announcing = ui::step(format!("announcing {} to the registry", args.channel));
@@ -622,6 +662,7 @@ async fn announce(
         "artifactRef": pushed.artifact_ref(),
         "digest": pushed.digest,
         "channel": args.channel,
+        "releaseNotes": notes,
     });
 
     let outcome = match credential(&base, &coords.id, &args.channel).await? {
@@ -639,11 +680,22 @@ async fn announce(
     };
 
     match outcome {
-        Outcome::Published => {
+        Outcome::Published | Outcome::Draft { .. } => {
             announcing.done(format!("announced to the registry on {}", args.channel));
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
             ui::field("digest", &pushed.digest);
+            match &outcome {
+                Outcome::Draft { missing, url } => {
+                    // Pas un échec : la version est au registre, elle attend ses notes. La CI
+                    // reste verte, l'auteur sait quoi compléter et où.
+                    ui::warn(format!("en attente : il manque {}", missing.join(", ")));
+                    if let Some(url) = url {
+                        ui::detail(format!("→ {url}"));
+                    }
+                }
+                _ => ui::field("release", "publiée"),
+            }
             ui::advice(
                 "publications are immutable — shipping a change means a new version, never a \
                  re-push of this one",
@@ -662,7 +714,7 @@ async fn announce(
             ui::blank();
             Ok(())
         }
-        Outcome::Unauthorized => {
+        Outcome::Unauthorized | Outcome::Ignored(_) => {
             announcing.abandon();
             anyhow::bail!(
                 "the registry refused the token — run portaki login, or replay the job if the \
@@ -723,6 +775,14 @@ async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Creden
 #[derive(Debug, PartialEq, Eq)]
 enum Outcome {
     Published,
+    /// Au registre mais invisible des hôtes tant que ses notes de version sont incomplètes :
+    /// ce qui manque, lisible, et la page de la console où le compléter.
+    Draft {
+        missing: Vec<String>,
+        url: Option<String>,
+    },
+    /// Accepté sans effet : la fiche est gérée dans la console, le registre a gardé la sienne.
+    Ignored(String),
     /// Cette version est déjà au catalogue — les publications sont immuables (ADR-0005).
     AlreadyPublished,
     Unauthorized,
@@ -755,13 +815,13 @@ async fn post_publication(base: &str, body: &serde_json::Value, token: &str) -> 
 /// d'un vrai échec, et il vaut mieux que deviner à partir du seul statut : un 409 recouvre aussi
 /// bien une version rejouée qu'un digest déjà ingéré sous un autre nom.
 fn classify(status: u16, body: &str) -> Outcome {
+    let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
     if (200..300).contains(&status) {
-        return Outcome::Published;
+        return accepted(&parsed);
     }
     if status == 401 {
         return Outcome::Unauthorized;
     }
-    let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
     let code = parsed
         .get("code")
         .and_then(serde_json::Value::as_str)
@@ -782,6 +842,38 @@ fn classify(status: u16, body: &str) -> Outcome {
         } else {
             code
         },
+    }
+}
+
+/// Un 2xx n'est pas toujours « fait » : une fiche peut être ignorée, une version rester en
+/// attente de ses notes.
+fn accepted(body: &serde_json::Value) -> Outcome {
+    let text = |key: &str| body.get(key).and_then(serde_json::Value::as_str);
+    if body.get("ignored").and_then(serde_json::Value::as_bool) == Some(true) {
+        return Outcome::Ignored(text("message").unwrap_or("ignored").to_string());
+    }
+    if text("releaseState") != Some("draft") {
+        return Outcome::Published;
+    }
+    let missing = body
+        .get("missing")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|item| {
+            let field = |key: &str| item.get(key).and_then(serde_json::Value::as_str);
+            let lang = field("lang").unwrap_or("?");
+            match (field("kind"), field("permission")) {
+                (Some("permissionReason"), Some(permission)) => {
+                    format!("justification de la permission {permission} ({lang})")
+                }
+                _ => format!("changelog ({lang})"),
+            }
+        })
+        .collect();
+    Outcome::Draft {
+        missing,
+        url: text("completeUrl").map(str::to_string),
     }
 }
 
@@ -1104,6 +1196,57 @@ mod tests {
         );
         assert!(digest_of(&published, "0.4.0").is_none());
         assert!(digest_of(&[], "0.3.2").is_none());
+    }
+
+    #[test]
+    fn an_ignored_listing_is_not_sent() {
+        assert_eq!(
+            classify(
+                200,
+                r#"{"ignored":true,"message":"listing.json ignoré : la fiche est gérée dans la console"}"#
+            ),
+            Outcome::Ignored("listing.json ignoré : la fiche est gérée dans la console".into())
+        );
+        assert_eq!(classify(200, "{}"), Outcome::Published);
+        assert_eq!(classify(204, ""), Outcome::Published);
+    }
+
+    #[test]
+    fn a_draft_says_what_is_missing_and_where() {
+        let body = r#"{"releaseState":"draft","completeUrl":"https://developer.portaki.app/nuki/release",
+            "missing":[{"kind":"changelog","lang":"fr"},
+                       {"kind":"permissionReason","permission":"email","lang":"en"}]}"#;
+
+        assert_eq!(
+            classify(201, body),
+            Outcome::Draft {
+                missing: vec![
+                    "changelog (fr)".into(),
+                    "justification de la permission email (en)".into()
+                ],
+                url: Some("https://developer.portaki.app/nuki/release".into()),
+            }
+        );
+        assert_eq!(
+            classify(201, r#"{"releaseState":"available"}"#),
+            Outcome::Published
+        );
+    }
+
+    #[test]
+    fn release_flags_are_parsed() {
+        let args = publish_args(&[
+            "--notes",
+            "fr:Code clavier",
+            "--permission-reason",
+            "email=Pour le code",
+            "--host-action",
+            "fr:Reconnecter",
+        ]);
+
+        assert_eq!(args.permission_reasons, vec!["email=Pour le code"]);
+        assert_eq!(args.host_action, vec!["fr:Reconnecter"]);
+        assert!(!args.host_action_required);
     }
 
     #[test]

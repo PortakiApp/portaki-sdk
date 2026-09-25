@@ -89,8 +89,36 @@ pub fn run(args: LintArgs) -> Result<()> {
              drop `guest` unless a guest really calls it"
         ));
     }
+    report_changelog(&module_root, &manifest.version)?;
     ui::detail("capability ids, connector bindings and i18n keys all resolve");
     ui::blank();
+    Ok(())
+}
+
+/// What `portaki publish` would stamp as this version's changelog, by language.
+///
+/// A warning, not a failure: preview channels never wait. But a stable version without a line in
+/// every language of its listing stays pending at the registry — better read here than after the
+/// release job.
+fn report_changelog(module_root: &std::path::Path, version: &str) -> Result<()> {
+    let lines = crate::changelog::lines(&[], "en", module_root, version)?;
+    let langs: std::collections::BTreeSet<&str> = lines
+        .iter()
+        .flat_map(|line| line.keys().map(String::as_str))
+        .collect();
+    if langs.is_empty() {
+        ui::warn(format!(
+            "no changelog for {version} — a stable publication stays pending until it has a line \
+             in every language of the listing: write CHANGELOG.<lang>.md, or pass \
+             portaki publish --notes <lang>:…"
+        ));
+    } else {
+        ui::detail(format!(
+            "changelog {version}: {} line(s) in {}",
+            lines.len(),
+            langs.into_iter().collect::<Vec<_>>().join(", ")
+        ));
+    }
     Ok(())
 }
 

@@ -297,11 +297,22 @@ a version already on GHCR without pushing anything, which is how an existing cat
 ### What is new
 
 `publish` writes `changelog` into the published manifest: two or three lines a host with an older
-version sees before updating. `--notes "<line>"` (repeatable, at most 5 lines of 160 characters,
-`--notes-lang` sets their language, `en` by default) wins; otherwise the lines come from this
-version's section of the module's `CHANGELOG.md` (`## [x.y.z]` or `## x.y.z`, then bullets — the
-release-please format, scope and commit link dropped), the first five kept. Neither: the field is
-left as the manifest declares it, absent usually.
+version sees before updating, one entry per line with every language side by side. For each
+language, `--notes` wins (`--notes fr:"Code clavier la veille"`, repeatable, at most 5 lines of 160
+characters per language; untagged lines are in `--notes-lang`, `en` by default); otherwise the
+lines come from this version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` for
+`--notes-lang` (`## [x.y.z]` or `## x.y.z`, then bullets — the release-please format, scope and
+commit link dropped), the first five kept.
+
+Beside the manifest, the announcement carries what only the author can say: why a permission is
+added (`--permission-reason email=fr:"Pour envoyer le code"`, one per permission and language) and
+whether the host has to act after updating (`--host-action-required`, `--host-action fr:"…"`).
+
+A **stable** version stays pending at the registry — kept, but invisible to hosts — until its
+changelog has a line in every language of the module's listing and each permission added since the
+previous stable is justified in each. `publish` says which, with the console link where the version
+is completed and published; a CI that passes everything publishes straight away. Preview channels
+never wait.
 
 ### Public listing
 
