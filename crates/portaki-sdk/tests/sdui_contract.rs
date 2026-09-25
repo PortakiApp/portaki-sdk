@@ -7,14 +7,16 @@
 //! Eighteen of those fields are now here. These tests pin them, because the only thing that made
 //! them invisible was that nobody compared the two.
 
+use portaki_sdk::prelude::IconName;
 use portaki_sdk::sdui::primitives::{
-    Accordion, ActionRow, Anchor, BackButton, BottomTabBar, BulletList, ColorDotItem, Component,
-    DateColumn, Dot, FilterBar, Form, IconButton, Map, Skeleton, Split, Tabs, Text, TextArea,
-    TimeColumn,
+    Accordion, ActionRow, Anchor, BackButton, BottomTabBar, BulletList, Chart, ColorDotItem,
+    Component, DateColumn, Dot, FilterBar, Form, IconButton, Map, Skeleton, Split, Stat, Tabs,
+    Text, TextArea, TimeColumn,
 };
 use portaki_sdk::sdui::Action;
 use portaki_sdk::sdui::{
-    AccordionItem, ActionRowItem, FilterBarChip, MapClustering, TabBarItem, TabItem,
+    AccordionItem, ActionRowItem, ChartEmpty, DeltaTone, FilterBarChip, MapClustering, TabBarItem,
+    TabItem,
 };
 
 fn wire(component: Component) -> serde_json::Value {
@@ -219,4 +221,63 @@ fn the_contract_grew_no_synonyms() {
              pas le contrat"
         );
     }
+}
+
+/// A stat says whether its delta is good news and what to show before any value exists; a chart
+/// says what to show before any point exists. All optional: an older node reads unchanged.
+#[test]
+fn a_stat_and_a_chart_carry_their_tone_icon_and_empty_state() {
+    let stat = wire(
+        Stat::new()
+            .label("Délai de réponse")
+            .delta("−40 min")
+            .deltaTone(DeltaTone::Good)
+            .icon(IconName::Clock)
+            .empty("Pas encore de réponse")
+            .into(),
+    );
+    assert_eq!(stat["deltaTone"], "good");
+    assert_eq!(stat["icon"], "clock");
+    assert_eq!(stat["empty"], "Pas encore de réponse");
+
+    let chart = wire(
+        Chart::new()
+            .empty(ChartEmpty::new(
+                "Aucune donnée",
+                "Revenez après le premier séjour.",
+            ))
+            .into(),
+    );
+    assert_eq!(
+        chart["empty"],
+        serde_json::json!({ "title": "Aucune donnée", "text": "Revenez après le premier séjour." })
+    );
+
+    let bare = wire(Stat::new().label("Séjours").value("3").into());
+    for field in ["deltaTone", "icon", "empty"] {
+        assert!(
+            bare.get(field).is_none(),
+            "Stat.{field} absent mais sérialisé"
+        );
+    }
+    assert!(wire(Chart::new().into()).get("empty").is_none());
+
+    let read: Component = serde_json::from_value(serde_json::json!({
+        "type": "Stat", "label": "Note", "deltaTone": "bad", "empty": "—"
+    }))
+    .expect("désérialise");
+    let Component::Stat(read) = read else {
+        panic!("pas un Stat")
+    };
+    assert_eq!(read.deltaTone, Some(DeltaTone::Bad));
+    assert_eq!(read.empty.as_deref(), Some("—"));
+    assert_eq!(read.icon, None);
+
+    let old: Component =
+        serde_json::from_value(serde_json::json!({ "type": "Chart", "kind": "bars" }))
+            .expect("un ancien Chart se relit");
+    let Component::Chart(old) = old else {
+        panic!("pas un Chart")
+    };
+    assert_eq!(old.empty, None);
 }

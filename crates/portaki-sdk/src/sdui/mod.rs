@@ -54,11 +54,11 @@ pub mod surface;
 
 pub use action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation};
 pub use common::{
-    AccordionItem, ActionRowItem, Animation, AnimationKind, ButtonVariant, ChartKind, ChartPoint,
-    ChoiceListLayout, ChoiceOption, EditableListItem, Emphasis, FeedStatus, FilterBarChip,
-    GeoPoint, ImageSize, MapClustering, MapInteractionMode, MapMarker, MapMarkerKind, MapViewport,
-    RichTextDoc, StackDirection, SurfaceLevel, Swatch, TabBarItem, TabItem, TempVariant,
-    TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
+    AccordionItem, ActionRowItem, Animation, AnimationKind, ButtonVariant, ChartEmpty, ChartKind,
+    ChartPoint, ChoiceListLayout, ChoiceOption, DeltaTone, EditableListItem, Emphasis, FeedStatus,
+    FilterBarChip, GeoPoint, ImageSize, MapClustering, MapInteractionMode, MapMarker,
+    MapMarkerKind, MapViewport, RichTextDoc, StackDirection, SurfaceLevel, Swatch, TabBarItem,
+    TabItem, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
 };
 pub use component::Component;
 pub use surface::Surface;

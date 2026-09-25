@@ -711,6 +711,41 @@ impl ChartPoint {
     }
 }
 
+/// Empty state of a [`Chart`](super::primitives::Chart) with nothing to draw yet.
+///
+/// Written by the module, drawn compact inside the panel by the shell.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ChartEmpty {
+    /// Short headline (often an `i18n:` key).
+    pub title: String,
+    /// One sentence saying when data will appear.
+    pub text: String,
+}
+
+impl ChartEmpty {
+    /// An empty state reading `title`, then `text`.
+    pub fn new(title: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            text: text.into(),
+        }
+    }
+}
+
+/// Whether a [`Stat`](super::primitives::Stat)'s `delta` is good news.
+///
+/// The sign alone lies: « −40 min » of response time is an improvement.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeltaTone {
+    /// Good news.
+    Good,
+    /// Bad news.
+    Bad,
+    /// Neither.
+    Neutral,
+}
+
 /// One tab of a [`Tabs`](super::primitives::Tabs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct TabItem {

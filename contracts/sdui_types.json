@@ -199,6 +199,17 @@
       }
     ]
   },
+  "ChartEmpty": {
+    "fields": {
+      "text": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      }
+    },
+    "kind": "struct"
+  },
   "ChartKind": {
     "kind": "enum",
     "variants": [
@@ -266,6 +277,20 @@
       }
     },
     "kind": "struct"
+  },
+  "DeltaTone": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "good"
+      },
+      {
+        "name": "bad"
+      },
+      {
+        "name": "neutral"
+      }
+    ]
   },
   "EditableListItem": {
     "fields": {
