@@ -81,6 +81,15 @@ fn before_the_import_the_kv_config_is_read() {
     MockContext::host().run(|ctx| assert_eq!(wifi(ctx).unwrap(), Config::default()));
 }
 
+/// Once the platform holds the config, an empty one stays empty: the old KV blob is not read.
+#[test]
+fn an_empty_platform_config_ignores_the_kv() {
+    MockContext::host()
+        .with_config(&serde_json::json!({}))
+        .with_kv("config", br#"{"ssid":"Mas-Provence"}"#.to_vec())
+        .run(|ctx| assert_eq!(wifi(ctx).unwrap(), Config::default()));
+}
+
 #[test]
 fn an_unreadable_config_fails_instead_of_resetting() {
     MockContext::host()

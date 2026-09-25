@@ -99,8 +99,9 @@ fn expand_struct(item: &mut ItemStruct) -> syn::Result<TokenStream2> {
         impl #impl_generics #ident #ty_generics #where_clause {
             /// The configuration the platform stores for this install (`context.moduleConfig`).
             ///
-            /// While the platform has not imported a config kept in KV, `moduleConfig` is `{}` and
-            /// the KV key `config` is read instead. A missing key takes its `Default` value; a
+            /// When the runtime sends no `moduleConfig` at all (the platform does not hold the
+            /// config yet), the KV key `config` is read instead; an empty `moduleConfig` is an
+            /// empty config, never the KV. A missing key takes its `Default` value; a
             /// config that does not deserialize is an error, never a silent default.
             pub fn load(ctx: &::portaki_sdk::context::Context) -> ::portaki_sdk::error::Result<Self> {
                 ::portaki_sdk::config::load(ctx)

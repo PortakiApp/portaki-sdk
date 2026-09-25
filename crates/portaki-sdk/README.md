@@ -88,7 +88,7 @@ pub struct Config {
     pub contacts: Vec<Contact>,
 }
 
-let config = Config::load(&ctx)?; // context.moduleConfig; the KV key `config` until imported
+let config = Config::load(&ctx)?; // context.moduleConfig; KV `config` only when none is sent
 ```
 
 Labels are i18n keys, translated from `i18n/*.json` by `portaki build`. Keep
