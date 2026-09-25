@@ -343,6 +343,10 @@ fn describe(template: &InitTemplate) {
     ));
     rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
     rows.push((
+        "build.rs",
+        "no build step — it exists so cargo gives the macros an OUT_DIR",
+    ));
+    rows.push((
         "src/lib.rs",
         "portaki_module! — author, icon, maturity; build writes the catalogue from the code",
     ));
@@ -562,8 +566,8 @@ mod tests {
                 })
                 .collect();
 
-            // The macros find their output directory without a build script.
-            assert!(!names.iter().any(|name| name == "build.rs"), "{names:?}");
+            // `portaki build` reads emissions from OUT_DIR, which only a build script creates.
+            assert!(names.iter().any(|name| name == "build.rs"), "{names:?}");
             // Nothing hand-written for the catalogue: the code declares it.
             assert!(
                 !names

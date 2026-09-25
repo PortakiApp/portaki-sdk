@@ -173,6 +173,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// The error of a wasm32 build without `OUT_DIR`.
+const MISSING_OUT_DIR: &str =
+    "add a build.rs to this crate: `fn main() {}` — portaki needs OUT_DIR \
+     to emit the manifest (`portaki build` writes one when it is missing)";
+
 fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     let id = attrs.id.unwrap_or_else(|| "unknown".to_string());
     let display_name_key = attrs
@@ -199,6 +204,15 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
 
     let emission = write_emission("module", &sanitize_key(&id), &json);
     let checks = &attrs.checks;
+    // Without a build script Cargo sets no OUT_DIR, and the emissions go nowhere: a wasm32 build
+    // would ship a module whose manifest silently lacks what the code declares. Native builds
+    // (tests, rust-analyzer) are left alone — they produce no manifest.
+    let missing_out_dir = std::env::var_os("OUT_DIR").is_none().then(|| {
+        quote! {
+            #[cfg(target_arch = "wasm32")]
+            ::core::compile_error!(#MISSING_OUT_DIR);
+        }
+    });
     let icon = attrs.icon.map(|icon| {
         quote! {
             ::portaki_sdk::inventory::submit! {
@@ -209,6 +223,7 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
 
     quote! {
         #emission
+        #missing_out_dir
         #(#checks)*
         #icon
         #[cfg(target_arch = "wasm32")]
@@ -253,7 +268,21 @@ fn default_crate_version() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_crate_version, ModuleAttrs};
+    use super::{default_crate_version, emission_tokens, ModuleAttrs};
+
+    /// Cargo runs these unit tests without OUT_DIR (the macros crate has no build script).
+    #[test]
+    fn without_out_dir_a_wasm32_build_is_told_to_add_a_build_script() {
+        assert!(std::env::var_os("OUT_DIR").is_none());
+        let attrs: ModuleAttrs = syn::parse_str(r#"id = "demo""#).unwrap();
+        let tokens = emission_tokens(attrs).to_string();
+        assert!(
+            tokens.contains(
+                "# [cfg (target_arch = \"wasm32\")] :: core :: compile_error ! (\"add a build.rs"
+            ),
+            "{tokens}"
+        );
+    }
 
     #[test]
     fn catalog_metadata_is_collected_under_its_manifest_names() {
