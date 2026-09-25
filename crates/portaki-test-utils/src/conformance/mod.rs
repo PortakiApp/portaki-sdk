@@ -27,7 +27,7 @@
 //! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface; a guest surface whose `Err` the SDK turned into its error state (`portaki_sdk::guest_shell`) counts as failed; every guest surface, rendered again with the module inactive, incomplete and with `host::module::status` failing, answers a non-blank tree without panicking or failing |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
 //! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` (the guest-state keys of `portaki_sdk::guest_shell::TEXTS` aside: the SDK has a text for each); every `config.fields[]` label (description, option labels) has a text in each language of `i18n/` |
-//! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking |
+//! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking; with `#[email_vars]`, every declared variable comes back non-blank for its template on the module's fixture (`conformance!(email_fixture = …)`), and no hand-written `emailContext` sits next to the generated one |
 //! | `contracts` | a `property-stats-card` surface: `statsSummary` answers for its `pathSegment` over 30, 90 and 365 days, on the `stats-summary.v1.json` contract (`fr` and `en`, `value` ≤ 12 characters), within 300 ms; a `property-stats-detail`: a host surface of id `pathSegment` renders with `input.periodDays`; a `workspace-timeline-task`: `timelineTasks` answers on three fixture stays on the `timeline-tasks.v1.json` contract (ISO dates, items never empty), and `taskToggle` refuses a photo-required item ticked without a photo with `photo_required`; an exported `publishReadiness` answers on the `publish-readiness.v1.json` contract |
 //!
 //! "Empty mock" is [`MockContext::guest`](crate::MockContext::guest) or
@@ -64,8 +64,11 @@ mod surfaces;
 
 use std::path::{Path, PathBuf};
 
+use portaki_sdk::email::EmailTemplateKey;
 use portaki_sdk::wasm::registry::{self, HandlerDeclaration};
 use serde_json::Value;
+
+use crate::MockContextBuilder;
 
 pub use contracts::{
     PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1, TIMELINE_TASKS_SCHEMA_V1,
@@ -74,16 +77,35 @@ pub use findings::Findings;
 pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
 pub use manifest::MODULE_SCHEMA_V1;
 
+/// The data `#[email_vars]` is asked on: seed the mock (config, KV, connector stubs) so every
+/// declared variable of `template` has a value. The mock comes set to the template's moment
+/// (the day before check-in for `arrival`, two days after check-out for `lost-found`…).
+pub type EmailFixture = fn(EmailTemplateKey, MockContextBuilder) -> MockContextBuilder;
+
 /// The module under test: its crate directory, and the handlers linked into this test binary.
 #[derive(Debug, Clone)]
 pub struct Module {
     root: PathBuf,
+    email_fixture: Option<EmailFixture>,
 }
 
 impl Module {
     /// The module whose `Cargo.toml` lives in `root` — `env!("CARGO_MANIFEST_DIR")` in a test.
     pub fn at(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            email_fixture: None,
+        }
+    }
+
+    /// The fixture `#[email_vars]` is checked on.
+    pub fn with_email_fixture(mut self, fixture: EmailFixture) -> Self {
+        self.email_fixture = Some(fixture);
+        self
+    }
+
+    pub(crate) fn email_fixture(&self) -> Option<EmailFixture> {
+        self.email_fixture
     }
 
     /// The crate directory.
@@ -207,28 +229,51 @@ pub(crate) const NO_DECLARATIONS: &str =
 /// - `conformance!()` — the package's library, read from `[lib] name` or the package name.
 /// - `conformance!(crate = my_module)` — the library named explicitly.
 /// - `conformance!(dir = "…")` — another crate directory than `CARGO_MANIFEST_DIR`, for fixtures.
+/// - `, email_fixture = my_fixture` after any of them (or alone) — the [`EmailFixture`] that
+///   `#[email_vars]` is checked on.
 ///
 /// Call it from an integration test (`tests/*.rs`), not from the library itself: it links the
 /// library with `extern crate`, which a crate cannot do to itself.
 #[macro_export]
 macro_rules! conformance {
     () => {
-        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"));
+        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"), ::core::option::Option::None);
+        $crate::__private::portaki_sdk::__link_module_crate!();
+    };
+    (email_fixture = $fixture:path $(,)?) => {
+        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"), ::core::option::Option::Some($fixture));
         $crate::__private::portaki_sdk::__link_module_crate!();
     };
     (crate = $lib:ident $(,)?) => {
-        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"));
+        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"), ::core::option::Option::None);
+        $crate::__private::portaki_sdk::__link_module_crate!($lib);
+    };
+    (crate = $lib:ident, email_fixture = $fixture:path $(,)?) => {
+        $crate::conformance!(@tests ::core::env!("CARGO_MANIFEST_DIR"), ::core::option::Option::Some($fixture));
         $crate::__private::portaki_sdk::__link_module_crate!($lib);
     };
     (dir = $dir:expr $(,)?) => {
-        $crate::conformance!(@tests $dir);
+        $crate::conformance!(@tests $dir, ::core::option::Option::None);
     };
-    (@tests $dir:expr) => {
+    (dir = $dir:expr, email_fixture = $fixture:path $(,)?) => {
+        $crate::conformance!(@tests $dir, ::core::option::Option::Some($fixture));
+    };
+    (@tests $dir:expr, $fixture:expr) => {
+        /// The `#[email_vars]` fixture, named where the caller wrote it.
+        #[cfg(test)]
+        fn __portaki_email_fixture() -> ::core::option::Option<$crate::conformance::EmailFixture> {
+            $fixture
+        }
+
         /// The Portaki conformance battery — see `portaki_test_utils::conformance`.
         #[cfg(test)]
         mod portaki_conformance {
             fn module() -> $crate::conformance::Module {
-                $crate::conformance::Module::at($dir)
+                let module = $crate::conformance::Module::at($dir);
+                match super::__portaki_email_fixture() {
+                    ::core::option::Option::Some(fixture) => module.with_email_fixture(fixture),
+                    ::core::option::Option::None => module,
+                }
             }
 
             #[test]

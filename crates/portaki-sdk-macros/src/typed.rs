@@ -28,6 +28,14 @@ pub(crate) const SKIP_WHEN: Vocab = Vocab::of("SkipWhen");
 pub(crate) const HOST_FRAGMENT: Vocab = Vocab::of("HostFragmentId");
 pub(crate) const DESIGN_ID: Vocab = Vocab::of("DesignId");
 pub(crate) const ICON_NAME: Vocab = Vocab::of("IconName");
+pub(crate) const EMAIL_TEMPLATE_KEY: Vocab = Vocab {
+    name: "EmailTemplateKey",
+    module: "email",
+};
+pub(crate) const EMAIL_VAR: Vocab = Vocab {
+    name: "EmailVar",
+    module: "email",
+};
 pub(crate) const EMAIL_AUDIENCE: Vocab = Vocab {
     name: "EmailAudience",
     module: "host::email",

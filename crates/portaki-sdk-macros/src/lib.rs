@@ -36,6 +36,7 @@
 //! | `command` | `command` | `command-{name}.json` |
 //! | `params` | `params` | `params-{TypeName}.json` |
 //! | `config` | `config` (+ `query` `legacyConfig`) | `config-{StructName}.json` |
+//! | `email_vars` | `email_vars` (+ `query` `emailContext`) | `email_vars-emailContext.json` |
 //! | `event_handler` | `event_handler` | `event_handler-{event_type}.json` |
 //! | `capability` | `capability` | `capability-{id}.json` |
 //! | `connector` | `connector_builtin` | `connector_builtin-{builtin}.json` |
@@ -62,6 +63,7 @@ mod command;
 mod config;
 mod connector;
 mod email;
+mod email_vars;
 mod emit;
 mod entity;
 mod event_handler;
@@ -652,6 +654,41 @@ pub fn connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn custom_connector(attr: TokenStream, item: TokenStream) -> TokenStream {
     connector::expand_custom(attr, item)
+}
+
+/// Declares the variables a module gives Portaki guest emails, per template, on the function
+/// that computes them.
+///
+/// # Syntax
+///
+/// ```ignore
+/// use portaki_sdk::prelude::*;
+///
+/// #[portaki_sdk::email_vars(StayLink | Arrival | ArrivalDay => [WifiName])]
+/// pub fn email_vars(ctx: Context, _args: EmailContextArgs) -> Result<EmailVars> {
+///     let config = Config::load(&ctx)?;
+///     Ok(EmailVars::new().with(EmailVar::WifiName, config.ssid))
+/// }
+/// ```
+///
+/// Templates are `EmailTemplateKey` variants, variables `EmailVar` variants (bare or by path);
+/// `A | B => [..]` shares one list. A variable its template does not render (`EmailVar::templates`)
+/// is a **compile error**, as are a template declared twice and a string instead of a variant.
+///
+/// # Generated
+///
+/// - the host query `emailContext` the platform calls: the function runs only for a declared
+///   template; a variable it returns but did not declare for that template is an error; blank
+///   values are left out. Do not write an `emailContext` query next to it.
+/// - `emailVars` in the manifest: `{ "arrival": ["wifiName"], … }` — the platform merges the
+///   module's values into those templates, nothing else.
+///
+/// # Emission
+///
+/// `email_vars-emailContext.json` → `emailVars`; and `query-emailContext.json`.
+#[proc_macro_attribute]
+pub fn email_vars(attr: TokenStream, item: TokenStream) -> TokenStream {
+    email_vars::expand(attr, item)
 }
 
 /// Marks a struct or enum as a Portaki **wire** JSON DTO (gateway / SDUI / events / email).

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/module.v1.json",
+  "id": "fixture-email-vars",
+  "name": { "fr": "Variables d'e-mail témoin", "en": "Fixture email variables" },
+  "description": { "fr": "Déclare ses variables d'e-mail.", "en": "Declares its email variables." },
+  "version": "0.1.0",
+  "author": { "name": "Portaki", "type": "official" },
+  "icon": "wifi",
+  "type": "official",
+  "permissions": ["kv"],
+  "emailVars": {
+    "stay-link": ["wifiName"],
+    "arrival-day": ["wifiName"],
+    "arrival": ["wifiName", "hostPhone"]
+  }
+}
