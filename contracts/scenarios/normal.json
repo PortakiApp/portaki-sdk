@@ -1,0 +1,16 @@
+{
+  "case": "normal",
+  "pathology": "nominal — le cas qui doit marcher",
+  "property": {
+    "name": "Le Petit Balcon",
+    "city": "Lyon",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": "Camille Roux",
+    "guestEmail": "camille@example.test",
+    "checkInOffset": 7,
+    "checkOutOffset": 14,
+    "source": "direct"
+  }
+}

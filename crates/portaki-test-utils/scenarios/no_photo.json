@@ -1,0 +1,16 @@
+{
+  "case": "no_photo",
+  "pathology": "logement sans photo — une carte qui attend une image doit tenir sans",
+  "property": {
+    "name": "Studio Sans Photo",
+    "city": "Marseille",
+    "hasPhoto": false
+  },
+  "stay": {
+    "guestName": "Yann Le Goff",
+    "guestEmail": "yann@example.test",
+    "checkInOffset": 4,
+    "checkOutOffset": 6,
+    "source": "booking"
+  }
+}

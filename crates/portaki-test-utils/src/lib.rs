@@ -62,6 +62,7 @@
 //! - [`MockContextBuilder`] / [`MockHostFunctions`] — mock host installation
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
 //! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
+//! - [`mod@scenarios`] — the seven pathological cases of the sandbox, for `tests/scenarios.rs`
 //! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, listing,
 //!   surfaces, operations, i18n, emails, contracts
 
@@ -71,6 +72,7 @@ mod assertions;
 pub mod conformance;
 mod fixtures;
 mod mock_host;
+pub mod scenarios;
 
 #[doc(hidden)]
 pub mod __private {

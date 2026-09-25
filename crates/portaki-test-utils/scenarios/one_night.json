@@ -1,0 +1,16 @@
+{
+  "case": "one_night",
+  "pathology": "séjour d'une nuit — bornes de calcul de durée",
+  "property": {
+    "name": "Le Petit Balcon",
+    "city": "Lyon",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": "Alex Ferrand",
+    "guestEmail": "alex@example.test",
+    "checkInOffset": 20,
+    "checkOutOffset": 21,
+    "source": "direct"
+  }
+}

@@ -43,3 +43,14 @@ fn the_bundled_contract_schemas_are_the_repository_ones() {
     assert_same("contracts/stats-summary.v1.json", STATS_SUMMARY_SCHEMA_V1);
     assert_same("contracts/timeline-tasks.v1.json", TIMELINE_TASKS_SCHEMA_V1);
 }
+
+/// The scenario fixtures are the SDK's `contracts/scenarios/`, the ones the sandbox replays.
+#[test]
+fn the_bundled_scenarios_are_the_repository_ones() {
+    let bundled = format!("{}/scenarios", env!("CARGO_MANIFEST_DIR"));
+    for case in portaki_test_utils::scenarios::CASES {
+        let file = format!("{case}.json");
+        let copy = std::fs::read_to_string(format!("{bundled}/{file}")).expect("bundled fixture");
+        assert_same(&format!("contracts/scenarios/{file}"), &copy);
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "case": "past_arrival",
+  "pathology": "arrivée déjà passée — les déclencheurs pré-arrivée ne doivent plus tirer",
+  "property": {
+    "name": "Le Petit Balcon",
+    "city": "Lyon",
+    "hasPhoto": true
+  },
+  "stay": {
+    "guestName": "Dominique Blanc",
+    "guestEmail": "dominique@example.test",
+    "checkInOffset": -10,
+    "checkOutOffset": -3,
+    "source": "direct"
+  }
+}
