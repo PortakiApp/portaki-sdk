@@ -102,7 +102,7 @@
   {"name": "BottomTabBar", "serde_name": "BottomTabBar", "has_children": false, "fields": {"tabs": "Vec<TabBarItem>", "activeTab": "String"}},
   {"name": "Chevron", "serde_name": "Chevron", "has_children": false, "fields": {"direction": "String"}},
   {"name": "DataTable", "serde_name": "DataTable", "has_children": false, "fields": {"columns": "Value", "rows": "Value", "source": "String"}},
-  {"name": "Stat", "serde_name": "Stat", "has_children": false, "fields": {"label": "String", "value": "String", "delta": "String"}},
+  {"name": "Stat", "serde_name": "Stat", "has_children": false, "fields": {"label": "String", "value": "String", "delta": "String", "icon": "IconName", "deltaTone": "DeltaTone", "empty": "String"}},
   {"name": "FeedItem", "serde_name": "FeedItem", "has_children": false, "fields": {"title": "String", "tag": "String", "meta": "String", "date": "String", "dotTone": "Tone", "status": "FeedStatus", "action": "Action"}},
   {"name": "Timeline", "serde_name": "Timeline", "has_children": false, "fields": {"events": "Value"}},
   {"name": "RichTextEditor", "serde_name": "RichTextEditor", "has_children": false, "fields": {"name": "String", "value": "String"}},
@@ -114,5 +114,5 @@
   {"name": "CapabilityNotice", "serde_name": "CapabilityNotice", "has_children": false, "fields": {"capabilityId": "String", "messageKey": "String"}},
   {"name": "QuotaIndicator", "serde_name": "QuotaIndicator", "has_children": false, "fields": {"capabilityId": "String", "used": "f64", "limit": "f64"}},
   {"name": "HostFragment", "serde_name": "HostFragment", "has_children": false, "fields": {"fragmentId": "String", "mode": "String"}},
-  {"name": "Chart", "serde_name": "Chart", "has_children": false, "fields": {"kind": "ChartKind", "points": "Vec<ChartPoint>", "swatch": "Swatch", "highlight": "u32", "center": "String", "columns": "u32", "max": "f64"}}
+  {"name": "Chart", "serde_name": "Chart", "has_children": false, "fields": {"kind": "ChartKind", "points": "Vec<ChartPoint>", "swatch": "Swatch", "highlight": "u32", "center": "String", "columns": "u32", "max": "f64", "empty": "ChartEmpty"}}
 ]
