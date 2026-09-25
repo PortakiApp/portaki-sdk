@@ -147,6 +147,25 @@ new row — so a removal or a reorder does not shift the other rows' languages.
 `I18nText` also reads a plain string (a config saved before it was translated) as the same
 text in every language; `is_blank()` is the platform's notion of empty.
 
+## Texts from the bundles
+
+An SDUI text is an `i18n:` key the shell translates. A text that needs variables — or that
+leaves the booklet (a stats tile, a task, an email) — is resolved in the module:
+
+```rust,ignore
+// Every i18n/*.json and email_i18n/*.json of the crate, found at compile time; a literal key
+// missing from all of them does not compile.
+let tile = bundle_text!("stats.tile.title");                        // I18nText, every language
+let body = bundle_text!("guest.nights", &[("n", &nights.to_string())]);
+Text::new().text(body.for_ctx(&ctx));                                // the reader's language
+let subject: LocalizedEmailText = bundle_text!("email.subject").into();
+
+ctx.lang();          // "fr" for fr-FR — no lang_code() of your own
+ctx.property_lang(); // Some("en"): the property's default language
+```
+
+`t!("key", n = 3)` still asks the host to translate into the request language.
+
 ## Guest surfaces: the happy path only
 
 A guest surface does not check whether the module is ready, nor catch its own errors:
