@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.8.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.7.0...v8.8.0) (2026-09-26)
+
+
+### Features
+
+* **kv:** add stay_key, purged with the stay ([9e748ce](https://github.com/PortakiApp/portaki-sdk/commit/9e748ce805de52ed47e45c09b0f13bae0c9e66d3))
+* **schema:** pin surface paths to url segments ([307aaea](https://github.com/PortakiApp/portaki-sdk/commit/307aaeaac0a736a1e6316e147c12d804991ceedb))
+
+
+### Bug Fixes
+
+* **cli:** bind tokens to origin, refuse symlinks ([f5a588d](https://github.com/PortakiApp/portaki-sdk/commit/f5a588db52df8b1c617083baaa79cce09a71a285))
+
 ## [8.7.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.6.0...v8.7.0) (2026-09-25)
 
 
