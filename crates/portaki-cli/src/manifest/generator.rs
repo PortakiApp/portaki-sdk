@@ -872,10 +872,13 @@ mod params_tests {
         assert_eq!(
             wire["dispatchExamples"],
             json!([
-                { "kind": "query", "name": "getCurrent", "label": "Paris", "input": { "city": "Paris" } },
-                { "kind": "command", "name": "refresh", "label": "Now", "input": {} }
+                { "kind": "query", "name": "getCurrent", "title": "Paris", "input": { "city": "Paris" } },
+                { "kind": "command", "name": "refresh", "title": "Now", "input": {} }
             ])
         );
+        // The registry refuses a manifest with any `label` that is not a translation map
+        // (platform contracts/manifest-translations.json, anyDepthKey).
+        assert!(!serde_json::to_string(&wire).unwrap().contains("\"label\""));
     }
 }
 

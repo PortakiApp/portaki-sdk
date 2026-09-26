@@ -81,7 +81,10 @@ pub struct DispatchExample {
     pub kind: String,
     /// The operation name.
     pub name: String,
-    /// What the button says.
+    /// What the button says. On the wire `title`, not `label`: the registry requires every
+    /// `label` of a manifest to be a fr/en translation map, and this one is single-language
+    /// developer text for the sandbox.
+    #[serde(rename = "title", alias = "label")]
     pub label: String,
     /// The params sent — a JSON object.
     pub input: Value,
