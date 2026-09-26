@@ -2,15 +2,16 @@
 //!
 //! One entry per line, every language side by side: `[{ "fr": "…", "en": "…" }, …]`. For each
 //! language, `portaki publish --notes` wins (`--notes fr:"…"`, or unprefixed in `--notes-lang`);
-//! otherwise the version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` for the
-//! default language (Keep a Changelog or release-please: `## [x.y.z]` or `## x.y.z`, then
-//! bullets). Nothing said in any language: the field stays as `portaki.module.json` has it.
+//! otherwise the version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` in English
+//! (Keep a Changelog or release-please: `## [x.y.z]` or `## x.y.z`, then bullets). Nothing said
+//! in any language: the field stays as `portaki.module.json` has it.
 //!
-//! The default language is the listing's first (`publishedLangs[0]` of `listing.json`), else
-//! `fr` — the registry's fallback language, the one a stable version always needs a line in.
+//! Untagged `--notes` are in the listing's first language (`publishedLangs[0]` of
+//! `listing.json`), else `fr` — the registry's fallback language.
 //!
-//! A line that reads like a commit message (`chore: bump deps`) is refused before anything is
-//! pushed: the registry would keep the stable version pending until it is rewritten for hosts.
+//! A line that reads like a commit message (`chore: bump deps`) is refused in `--notes`, written
+//! by hand. In a `CHANGELOG*.md` — often generated — it is dropped with a warning: a language left
+//! without a line then counts as absent, and the registry keeps a stable version as a draft.
 //!
 //! A stable version stays pending at the registry until its changelog covers every language of
 //! the module's listing — writing each `CHANGELOG.<lang>.md` is what keeps a CI green and live.
@@ -30,7 +31,19 @@ pub type Line = BTreeMap<String, String>;
 /// The registry's fallback language (`ModuleListing.FALLBACK_LANGUAGE`).
 pub const FALLBACK_LANG: &str = "fr";
 
-/// The language of untagged notes and of `CHANGELOG.md`: the listing's first, else `fr`.
+/// The language of `CHANGELOG.md`, unsuffixed — release-please writes it in English.
+pub const UNSUFFIXED_LANG: &str = "en";
+
+/// The changelog file that holds `lang`.
+pub fn file_for(lang: &str) -> String {
+    if lang == UNSUFFIXED_LANG {
+        "CHANGELOG.md".to_string()
+    } else {
+        format!("CHANGELOG.{lang}.md")
+    }
+}
+
+/// The language of untagged `--notes`: the listing's first, else `fr`.
 pub fn default_lang(module_root: &Path) -> String {
     std::fs::read_to_string(module_root.join("listing.json"))
         .ok()
@@ -58,11 +71,11 @@ pub fn looks_like_commit(line: &str) -> bool {
         .any(|prefix| start.starts_with(prefix))
 }
 
-/// Refuses a commit-like line, naming where it came from.
-fn refuse_commit(source: &str, text: &str) -> Result<()> {
+/// Refuses a commit-like `--notes` line: it was written by hand, for this purpose.
+fn refuse_commit(text: &str) -> Result<()> {
     if looks_like_commit(text) {
         anyhow::bail!(
-            "{source}: « {text} » reads like a commit message, not a line for hosts — say what \
+            "--notes: « {text} » reads like a commit message, not a line for hosts — say what \
              changes for them (e.g. « Le code clavier arrive la veille »); the registry keeps a \
              stable version with such a line invisible to hosts"
         );
@@ -110,7 +123,7 @@ pub fn lines(
     for note in notes {
         let (lang, text) = tagged(note, default_lang);
         check_text("--notes", &text)?;
-        refuse_commit("--notes", &text)?;
+        refuse_commit(&text)?;
         by_lang.entry(lang).or_default().push(text);
     }
     if let Some((lang, many)) = by_lang.iter().find(|(_, lines)| lines.len() > MAX_LINES) {
@@ -119,21 +132,29 @@ pub fn lines(
             many.len()
         );
     }
-    for (lang, path) in changelog_files(module_root, default_lang)? {
+    for (lang, path) in changelog_files(module_root)? {
         if by_lang.contains_key(&lang) {
             continue;
         }
         let markdown =
             std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        let found: Vec<String> = section(&markdown, version)
+        // Généré le plus souvent : une ligne de commit y est retirée, jamais bloquante.
+        let (commits, kept): (Vec<String>, Vec<String>) = section(&markdown, version)
+            .into_iter()
+            .partition(|line| looks_like_commit(line));
+        if !commits.is_empty() {
+            let source = path.file_name().unwrap_or_default().to_string_lossy();
+            crate::ui::warn(format!(
+                "{source} {version}: dropped {} line(s) that read like commit messages — {}",
+                commits.len(),
+                commits.join(" · ")
+            ));
+        }
+        let found: Vec<String> = kept
             .into_iter()
             .take(MAX_LINES)
             .map(|line| shorten(&line))
             .collect();
-        let source = path.file_name().unwrap_or_default().to_string_lossy();
-        for line in &found {
-            refuse_commit(&format!("{source} {version}"), line)?;
-        }
         if !found.is_empty() {
             by_lang.insert(lang, found);
         }
@@ -149,11 +170,8 @@ pub fn lines(
         .collect())
 }
 
-/// `CHANGELOG.md` in the default language, `CHANGELOG.<lang>.md` in its own.
-fn changelog_files(
-    module_root: &Path,
-    default_lang: &str,
-) -> Result<Vec<(String, std::path::PathBuf)>> {
+/// `CHANGELOG.md` in English, `CHANGELOG.<lang>.md` in its own.
+fn changelog_files(module_root: &Path) -> Result<Vec<(String, std::path::PathBuf)>> {
     let entries = match std::fs::read_dir(module_root) {
         Ok(entries) => entries,
         Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -171,7 +189,7 @@ fn changelog_files(
             .strip_prefix("CHANGELOG")
             .and_then(|rest| rest.strip_suffix(".md"))
         {
-            Some("") => default_lang.to_string(),
+            Some("") => UNSUFFIXED_LANG.to_string(),
             Some(rest) => match rest.strip_prefix('.') {
                 Some(lang) if lang.len() == 2 && lang.chars().all(|c| c.is_ascii_lowercase()) => {
                     lang.to_string()
@@ -403,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn a_commit_message_is_refused_from_notes_and_files() {
+    fn a_commit_message_is_refused_in_notes_and_dropped_from_files() {
         for commit in [
             "chore: bump deps",
             "  Bump portaki-sdk",
@@ -412,14 +430,13 @@ mod tests {
             "Fix: typo",
             "FEAT: new",
             "refactor the view",
-            "deps update",
+            "deps: bump portaki-sdk to 8.8.1",
         ] {
             assert!(looks_like_commit(commit), "{commit}");
             let dir = module(None);
             assert!(lines(&[commit.to_string()], "en", dir.path(), "1.0.0").is_err());
-            let dir = module(Some(&format!("## 1.0.0\n- {commit}\n")));
-            let error = lines(&[], "en", dir.path(), "1.0.0").unwrap_err();
-            assert!(error.to_string().contains("CHANGELOG.md 1.0.0"), "{error}");
+            let dir = module(Some(&format!("## 1.0.0\n- {commit}\n- keypad code\n")));
+            assert_eq!(en(&[], dir.path(), "1.0.0").unwrap(), vec!["keypad code"]);
         }
         for fine in [
             "Fixes the keypad code",
@@ -428,6 +445,30 @@ mod tests {
         ] {
             assert!(!looks_like_commit(fine), "{fine}");
         }
+    }
+
+    /// A release-please deps bump leaves the language without a line: absent, not an error.
+    #[test]
+    fn a_file_left_with_commits_only_counts_as_absent() {
+        let dir = module(Some(
+            "## [0.8.2](https://x) (2026-09-26)\n\n### Bug Fixes\n\n* **deps:** bump portaki-sdk to 8.8.1 ([474417d](https://x))\n",
+        ));
+
+        assert!(lines(&[], "fr", dir.path(), "0.8.2").unwrap().is_empty());
+    }
+
+    /// `CHANGELOG.md` stays English whatever the notes language: no English text tagged `fr`.
+    #[test]
+    fn the_unsuffixed_changelog_is_english() {
+        let dir = module(Some("## 1.0.0\n- keypad code\n"));
+
+        let found = lines(&[], "fr", dir.path(), "1.0.0").unwrap();
+        assert_eq!(
+            found,
+            vec![Line::from([("en".into(), "keypad code".into())])]
+        );
+        assert_eq!(file_for("en"), "CHANGELOG.md");
+        assert_eq!(file_for("fr"), "CHANGELOG.fr.md");
     }
 
     #[test]
