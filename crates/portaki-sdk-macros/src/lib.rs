@@ -363,7 +363,7 @@ pub fn surface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Emission
 ///
 /// `query-{name}.json` → `manifest.queries[]` with `{ name, fn, guest }`, and each `example` →
-/// `manifest.dispatchExamples[]` with `{ kind, name, label, input }`.
+/// `manifest.dispatchExamples[]` with `{ kind, name, title, input }` — `title` carries `label`.
 ///
 /// # Wasm registration
 ///
