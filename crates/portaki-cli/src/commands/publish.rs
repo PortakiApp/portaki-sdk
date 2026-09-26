@@ -82,12 +82,12 @@ pub struct PublishArgs {
     /// A line of what is new in this version, shown to hosts on an older one (repeatable, at
     /// most 5 per language). `fr:Code clavier` tags its language; untagged, --notes-lang.
     /// Without it for a language, the version's section of CHANGELOG.<lang>.md (CHANGELOG.md
-    /// for --notes-lang). A line that reads like a commit message (`chore:`, `fix:`, `bump`…)
-    /// is refused.
+    /// in English). A note that reads like a commit message (`chore:`, `fix:`, `bump`…) is
+    /// refused; in a file, such a line is dropped with a warning.
     #[arg(long = "notes", value_name = "[LANG:]LINE")]
     pub notes: Vec<String>,
-    /// Language of untagged notes and texts, and of CHANGELOG.md. Defaults to the first
-    /// language of listing.json (`publishedLangs`), else `fr` — the one the registry requires.
+    /// Language of untagged notes and texts. Defaults to the first language of listing.json
+    /// (`publishedLangs`), else `fr` — the one the registry requires. CHANGELOG.md stays English.
     #[arg(long)]
     pub notes_lang: Option<String>,
     /// Fail when a stable version lands as a draft, invisible to hosts until its notes are
@@ -632,7 +632,7 @@ fn unsigned_warning(signed: bool, ci: bool) -> bool {
 const UNSIGNED: &str = "non signée — cette version ne s'exécutera jamais en production (signature \
      exigée) ; elle reste utilisable en sandbox. Signez avec --sign ou publiez depuis la CI.";
 
-/// Le langage de `--notes` non étiquetées et de `CHANGELOG.md`.
+/// La langue des `--notes` et textes non étiquetés.
 fn notes_lang(args: &PublishArgs, module_root: &Path) -> String {
     args.notes_lang
         .clone()
@@ -1005,11 +1005,16 @@ fn accepted(body: &serde_json::Value) -> Outcome {
         .map(|item| {
             let field = |key: &str| item.get(key).and_then(serde_json::Value::as_str);
             let lang = field("lang").unwrap_or("?");
+            let file = crate::changelog::file_for(lang);
             match (field("kind"), field("permission")) {
                 (Some("permissionReason"), Some(permission)) => {
                     format!("justification de la permission {permission} ({lang})")
                 }
-                _ => format!("changelog ({lang})"),
+                (Some("changelogRewrite"), _) => format!(
+                    "changelog ({lang}) à réécrire pour les hôtes, pas en message de commit — \
+                     dans {file} ou --notes {lang}:…"
+                ),
+                _ => format!("changelog ({lang}) — ajoutez {file} ou --notes {lang}:…"),
             }
         })
         .collect();
@@ -1499,7 +1504,7 @@ mod tests {
             classify(201, body),
             Outcome::Draft {
                 missing: vec![
-                    "changelog (fr)".into(),
+                    "changelog (fr) — ajoutez CHANGELOG.fr.md ou --notes fr:…".into(),
                     "justification de la permission email (en)".into()
                 ],
                 url: Some("https://developer.portaki.app/nuki/release".into()),
