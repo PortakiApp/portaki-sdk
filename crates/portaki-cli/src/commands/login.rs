@@ -62,12 +62,9 @@ pub struct LoginArgs {
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki logout`.
-pub struct LogoutArgs {
-    /// Ignored, kept for scripts that pass it: the session is revoked on the platform that
-    /// issued it, and its refresh token is sent nowhere else.
-    #[arg(long, hide = true)]
-    pub url: Option<String>,
-}
+/// No `--url`: the session is revoked on the platform that issued it, and its refresh token is
+/// sent nowhere else.
+pub struct LogoutArgs {}
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,6 +1,6 @@
 [package]
 name = "portaki-cli"
-description = "Portaki module CLI (portaki) — init, build, lint, test, and OCI publish"
+description = "Portaki module CLI (portaki) — init, build, test, hosted sandbox, OCI publish and registry announcement"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

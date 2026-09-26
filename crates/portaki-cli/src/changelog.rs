@@ -6,6 +6,12 @@
 //! default language (Keep a Changelog or release-please: `## [x.y.z]` or `## x.y.z`, then
 //! bullets). Nothing said in any language: the field stays as `portaki.module.json` has it.
 //!
+//! The default language is the listing's first (`publishedLangs[0]` of `listing.json`), else
+//! `fr` — the registry's fallback language, the one a stable version always needs a line in.
+//!
+//! A line that reads like a commit message (`chore: bump deps`) is refused before anything is
+//! pushed: the registry would keep the stable version pending until it is rewritten for hosts.
+//!
 //! A stable version stays pending at the registry until its changelog covers every language of
 //! the module's listing — writing each `CHANGELOG.<lang>.md` is what keeps a CI green and live.
 
@@ -20,6 +26,49 @@ pub const MAX_CHARS: usize = 160;
 
 /// One changelog line, by language.
 pub type Line = BTreeMap<String, String>;
+
+/// The registry's fallback language (`ModuleListing.FALLBACK_LANGUAGE`).
+pub const FALLBACK_LANG: &str = "fr";
+
+/// The language of untagged notes and of `CHANGELOG.md`: the listing's first, else `fr`.
+pub fn default_lang(module_root: &Path) -> String {
+    std::fs::read_to_string(module_root.join("listing.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|listing| {
+            listing
+                .pointer("/publishedLangs/0")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .filter(|lang| lang.len() == 2 && lang.chars().all(|c| c.is_ascii_lowercase()))
+        .unwrap_or_else(|| FALLBACK_LANG.to_string())
+}
+
+/// Same list as the registry's `ReleaseNotes.looksLikeCommit`, plus `fix:` and `feat:`.
+const COMMIT_PREFIXES: [&str; 8] = [
+    "bump", "chore", "fix(", "feat(", "refactor", "deps", "fix:", "feat:",
+];
+
+/// A commit message, not a line a host reads.
+pub fn looks_like_commit(line: &str) -> bool {
+    let start = line.trim().to_lowercase();
+    COMMIT_PREFIXES
+        .iter()
+        .any(|prefix| start.starts_with(prefix))
+}
+
+/// Refuses a commit-like line, naming where it came from.
+fn refuse_commit(source: &str, text: &str) -> Result<()> {
+    if looks_like_commit(text) {
+        anyhow::bail!(
+            "{source}: « {text} » reads like a commit message, not a line for hosts — say what \
+             changes for them (e.g. « Le code clavier arrive la veille »); the registry keeps a \
+             stable version with such a line invisible to hosts"
+        );
+    }
+    Ok(())
+}
 
 /// `fr:Nouveau` → `("fr", "Nouveau")`. Two lowercase letters, a colon, then text right after:
 /// `ui: fix` stays a line of its own, not a line in « ui ».
@@ -61,6 +110,7 @@ pub fn lines(
     for note in notes {
         let (lang, text) = tagged(note, default_lang);
         check_text("--notes", &text)?;
+        refuse_commit("--notes", &text)?;
         by_lang.entry(lang).or_default().push(text);
     }
     if let Some((lang, many)) = by_lang.iter().find(|(_, lines)| lines.len() > MAX_LINES) {
@@ -80,6 +130,10 @@ pub fn lines(
             .take(MAX_LINES)
             .map(|line| shorten(&line))
             .collect();
+        let source = path.file_name().unwrap_or_default().to_string_lossy();
+        for line in &found {
+            refuse_commit(&format!("{source} {version}"), line)?;
+        }
         if !found.is_empty() {
             by_lang.insert(lang, found);
         }
@@ -346,6 +400,48 @@ mod tests {
         assert!(lines(&six, "en", dir.path(), "1.0.0").is_err());
         assert!(lines(&["x".repeat(MAX_CHARS + 1)], "en", dir.path(), "1.0.0").is_err());
         assert!(lines(&[" ".to_string()], "en", dir.path(), "1.0.0").is_err());
+    }
+
+    #[test]
+    fn a_commit_message_is_refused_from_notes_and_files() {
+        for commit in [
+            "chore: bump deps",
+            "  Bump portaki-sdk",
+            "fix(ui): wrap",
+            "feat(x): y",
+            "Fix: typo",
+            "FEAT: new",
+            "refactor the view",
+            "deps update",
+        ] {
+            assert!(looks_like_commit(commit), "{commit}");
+            let dir = module(None);
+            assert!(lines(&[commit.to_string()], "en", dir.path(), "1.0.0").is_err());
+            let dir = module(Some(&format!("## 1.0.0\n- {commit}\n")));
+            let error = lines(&[], "en", dir.path(), "1.0.0").unwrap_err();
+            assert!(error.to_string().contains("CHANGELOG.md 1.0.0"), "{error}");
+        }
+        for fine in [
+            "Fixes the keypad code",
+            "Featured on arrival",
+            "Code clavier",
+        ] {
+            assert!(!looks_like_commit(fine), "{fine}");
+        }
+    }
+
+    #[test]
+    fn the_default_language_is_the_listings_first_else_french() {
+        let dir = module(None);
+        assert_eq!(default_lang(dir.path()), "fr");
+        fs::write(
+            dir.path().join("listing.json"),
+            r#"{"publishedLangs":["en","fr"]}"#,
+        )
+        .unwrap();
+        assert_eq!(default_lang(dir.path()), "en");
+        fs::write(dir.path().join("listing.json"), r#"{"publishedLangs":[]}"#).unwrap();
+        assert_eq!(default_lang(dir.path()), "fr");
     }
 
     #[test]

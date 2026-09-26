@@ -64,8 +64,8 @@ pub struct PublishArgs {
     /// Attest the pushed digest as its author, with your GitHub identity, before announcing it: a
     /// Portaki author attestation (cosign attest, keyless: Fulcio and Rekor) naming the module and
     /// version — not provenance. Needs cosign v3.1.3+ and a browser; refused in CI, where the
-    /// release action attests provenance. Without it, a stable version is refused at install in
-    /// production.
+    /// release action attests provenance. Without it, the version never runs in production (any
+    /// channel): it stays usable in the sandbox.
     #[arg(long)]
     pub sign: bool,
     /// Push what an earlier job built and tested, running nothing of the module — neither its
@@ -82,12 +82,18 @@ pub struct PublishArgs {
     /// A line of what is new in this version, shown to hosts on an older one (repeatable, at
     /// most 5 per language). `fr:Code clavier` tags its language; untagged, --notes-lang.
     /// Without it for a language, the version's section of CHANGELOG.<lang>.md (CHANGELOG.md
-    /// for --notes-lang).
+    /// for --notes-lang). A line that reads like a commit message (`chore:`, `fix:`, `bump`…)
+    /// is refused.
     #[arg(long = "notes", value_name = "[LANG:]LINE")]
     pub notes: Vec<String>,
-    /// Language of untagged notes and texts, and of CHANGELOG.md.
-    #[arg(long, default_value = "en")]
-    pub notes_lang: String,
+    /// Language of untagged notes and texts, and of CHANGELOG.md. Defaults to the first
+    /// language of listing.json (`publishedLangs`), else `fr` — the one the registry requires.
+    #[arg(long)]
+    pub notes_lang: Option<String>,
+    /// Fail when a stable version lands as a draft, invisible to hosts until its notes are
+    /// completed. Off by default: the version is in the registry either way.
+    #[arg(long)]
+    pub require_available: bool,
     /// Why this version adds a permission, shown to hosts under the platform's sentence
     /// (repeatable: one per permission and language), e.g. `email=fr:Pour envoyer le code`.
     #[arg(long = "permission-reason", value_name = "PERMISSION=[LANG:]TEXT")]
@@ -306,6 +312,26 @@ impl std::fmt::Display for AlreadyInRegistry {
 
 impl std::error::Error for AlreadyInRegistry {}
 
+/// Au registre, mais en brouillon, et `--require-available` demandait une version visible.
+#[derive(Debug)]
+struct DraftRefused {
+    id: String,
+    version: String,
+}
+
+impl std::fmt::Display for DraftRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} is in the registry as a draft, invisible to hosts (--require-available) — \
+             complete it at the link above",
+            self.id, self.version
+        )
+    }
+}
+
+impl std::error::Error for DraftRefused {}
+
 /// Ce qu'on fait de la fiche, selon où la publication s'est arrêtée.
 #[derive(Debug, PartialEq, Eq)]
 enum ListingPlan<'a> {
@@ -321,10 +347,15 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
         Ok(Landed::InRegistry(id)) => ListingPlan::Send(id),
         Ok(Landed::DryRun) => ListingPlan::WouldSend,
         Ok(Landed::Unannounced) => ListingPlan::Skip,
-        Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
-            Some(already) => ListingPlan::Send(&already.id),
-            None => ListingPlan::Skip,
-        },
+        Err(failure) => {
+            if let Some(already) = failure.downcast_ref::<AlreadyInRegistry>() {
+                return ListingPlan::Send(&already.id);
+            }
+            match failure.downcast_ref::<DraftRefused>() {
+                Some(draft) => ListingPlan::Send(&draft.id),
+                None => ListingPlan::Skip,
+            }
+        }
     }
 }
 
@@ -334,12 +365,12 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
 /// C'était une erreur, et c'est ce qui rendait rouge un run relancé seulement pour pousser une
 /// fiche corrigée. L'action de release attend d'ailleurs ce cas comme une issue normale
 /// (`already-published`) : elle lit « already in the registry » sur la sortie standard, d'où
-/// l'avertissement plutôt qu'une erreur.
+/// l'avertissement plutôt qu'une erreur — et sur stdout, quand les autres partent sur stderr.
 fn settle(landed: Result<Landed>) -> Result<Landed> {
     match landed {
         Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
             Some(already) => {
-                ui::warn(already);
+                ui::warn_on_stdout(already);
                 Ok(Landed::InRegistry(already.id.clone()))
             }
             None => Err(failure),
@@ -459,13 +490,14 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         .clone()
         .unwrap_or_else(|| module_root.join("target/portaki"));
     let registry = resolve_registry(args.registry.as_deref(), &module_root)?;
+    let lang = notes_lang(args, &module_root);
     // Lus avant tout build : un drapeau mal formé découvert à l'annonce laisserait un artefact
     // poussé et une version non annoncée.
     let notes = crate::changelog::release_notes(
         &args.permission_reasons,
         args.host_action_required,
         &args.host_action,
-        &args.notes_lang,
+        &lang,
     )?;
 
     // Avant tout build : un refus découvert après la poussée laisserait un artefact non signé.
@@ -517,7 +549,7 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         }
     }
 
-    stamp_changelog(&module_root, &artifact_dir, args)?;
+    stamp_changelog(&module_root, &artifact_dir, args, &lang)?;
     // Avant la poussée : le registre refuserait l'annonce, mais l'artefact serait déjà sur GHCR.
     crate::commands::lint::assert_sdk_version(
         &oci::pack::publish_manifest_path(&artifact_dir),
@@ -568,24 +600,15 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
             pushing.abandon();
             failure
         })
-        .context("push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io")?;
+        .with_context(|| push_hint(&registry))?;
     pushing.done(format!("pushed to {registry}"));
     ui::field("manifest", &pushed.manifest_url);
 
     let signing = args
         .sign
         .then(|| sign::sign(&cosign, &pushed, &registry, &coords));
-    if signing.is_none()
-        && unsigned_is_refused(
-            &args.channel,
-            sign::in_ci(),
-            &auth::api_base_url(args.url.as_deref()),
-        )
-    {
-        ui::warn(
-            "unsigned — production refuses to install a stable version without a signature: \
-             publish with --sign, or from the release action",
-        );
+    if unsigned_warning(args.sign, sign::in_ci()) {
+        ui::warn(UNSIGNED);
     }
     signed_then(signing, async {
         if args.no_announce {
@@ -600,10 +623,30 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     .await
 }
 
-/// Une stable destinée à la production, publiée hors CI sans `--sign` : l'installation la
-/// refusera. En CI, c'est l'action de release qui signe, après cette commande.
-fn unsigned_is_refused(channel: &str, ci: bool, base: &str) -> bool {
-    channel == "stable" && !ci && base == auth::PRODUCTION_API
+/// Hors CI sans `--sign`, quel que soit le canal : la production exige une signature partout.
+/// En CI, c'est l'action de release qui signe, après cette commande.
+fn unsigned_warning(signed: bool, ci: bool) -> bool {
+    !signed && !ci
+}
+
+const UNSIGNED: &str = "non signée — cette version ne s'exécutera jamais en production (signature \
+     exigée) ; elle reste utilisable en sandbox. Signez avec --sign ou publiez depuis la CI.";
+
+/// Le langage de `--notes` non étiquetées et de `CHANGELOG.md`.
+fn notes_lang(args: &PublishArgs, module_root: &Path) -> String {
+    args.notes_lang
+        .clone()
+        .unwrap_or_else(|| crate::changelog::default_lang(module_root))
+}
+
+/// Ce qui manque quand la poussée échoue : GHCR n'est nommé que s'il est la cible.
+fn push_hint(registry: &str) -> String {
+    if registry.starts_with("ghcr.io") {
+        "push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io".to_string()
+    } else {
+        let host = registry.split('/').next().unwrap_or(registry);
+        format!("push OCI artifact — docker login {host}")
+    }
 }
 
 /// La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
@@ -641,10 +684,14 @@ fn artifact_matches_sources(module_root: &Path, artifact_dir: &Path) -> Result<(
 /// Inscrit `changelog` dans `publish-manifest.json` : `--notes` par langue, sinon la section de
 /// la version dans `CHANGELOG[.<lang>].md`. Fait ici et non au build, pour couvrir aussi
 /// `--skip-build`.
-fn stamp_changelog(module_root: &Path, artifact_dir: &Path, args: &PublishArgs) -> Result<()> {
+fn stamp_changelog(
+    module_root: &Path,
+    artifact_dir: &Path,
+    args: &PublishArgs,
+    lang: &str,
+) -> Result<()> {
     let coords = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
-    let lines =
-        crate::changelog::lines(&args.notes, &args.notes_lang, module_root, &coords.version)?;
+    let lines = crate::changelog::lines(&args.notes, lang, module_root, &coords.version)?;
     if lines.is_empty() {
         return Ok(());
     }
@@ -770,16 +817,25 @@ async fn announce(
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
             ui::field("digest", &pushed.digest);
-            match &outcome {
-                Outcome::Draft { missing, url } => {
-                    // Pas un échec : la version est au registre, elle attend ses notes. La CI
-                    // reste verte, l'auteur sait quoi compléter et où.
-                    ui::warn(format!("en attente : il manque {}", missing.join(", ")));
-                    if let Some(url) = url {
-                        ui::detail(format!("→ {url}"));
-                    }
+            if let Outcome::Draft { missing, url } = &outcome {
+                // Pas un échec par défaut : la version est au registre, elle attend ses notes.
+                // La CI reste verte, l'auteur sait quoi compléter et où.
+                ui::warn("brouillon — invisible des hôtes tant qu'il manque :");
+                for item in missing {
+                    ui::detail(format!("- {item}"));
                 }
-                _ => ui::field("release", "publiée"),
+                if let Some(url) = url {
+                    ui::detail(format!("→ compléter : {url}"));
+                }
+                if args.require_available && args.channel == "stable" {
+                    return Err(DraftRefused {
+                        id: coords.id.clone(),
+                        version: coords.version.clone(),
+                    }
+                    .into());
+                }
+            } else {
+                ui::field("release", "publiée");
             }
             ui::advice(
                 "publications are immutable — shipping a change means a new version, never a \
@@ -804,7 +860,7 @@ async fn announce(
             anyhow::bail!(
                 "the registry refused the token — run portaki login, or replay the job if the \
              publication credential had already been used. \
-             The artifact is on GHCR: replay with portaki publish --skip-build"
+             The artifact is pushed: replay the announcement with portaki publish --announce-only"
             )
         }
         Outcome::Refused {
@@ -815,7 +871,7 @@ async fn announce(
             announcing.abandon();
             anyhow::bail!(
                 "the registry refused the publication ({status} {code}): {message}. \
-                 The artifact is on GHCR: fix and replay with portaki publish --skip-build"
+                 The artifact is pushed: fix and replay with portaki publish --announce-only"
             )
         }
     }
@@ -1035,16 +1091,49 @@ mod tests {
         assert!(announced.get());
     }
 
+    /// Tout canal : la production exige une signature sur la preview comme sur la stable.
     #[test]
-    fn only_an_unsigned_stable_for_production_outside_ci_is_warned() {
-        assert!(unsigned_is_refused("stable", false, auth::PRODUCTION_API));
-        assert!(!unsigned_is_refused("preview", false, auth::PRODUCTION_API));
-        assert!(!unsigned_is_refused("stable", true, auth::PRODUCTION_API));
-        assert!(!unsigned_is_refused(
-            "stable",
-            false,
-            "http://localhost:8080"
-        ));
+    fn every_unsigned_publication_outside_ci_is_warned() {
+        assert!(unsigned_warning(false, false));
+        assert!(!unsigned_warning(true, false));
+        assert!(!unsigned_warning(false, true));
+        assert!(UNSIGNED.contains("sandbox"));
+    }
+
+    #[test]
+    fn the_push_hint_names_ghcr_only_for_ghcr() {
+        assert!(push_hint("ghcr.io/portakiapp").contains("ghcr.io"));
+        let other = push_hint("rg.fr-par.scw.cloud/portaki");
+        assert!(!other.contains("ghcr"), "{other}");
+        assert!(
+            other.contains("docker login rg.fr-par.scw.cloud"),
+            "{other}"
+        );
+    }
+
+    #[test]
+    fn notes_default_to_the_listings_first_language_else_french() {
+        let dir = tempdir().unwrap();
+        assert_eq!(notes_lang(&publish_args(&[]), dir.path()), "fr");
+        fs::write(dir.path().join(LISTING), r#"{"publishedLangs":["de"]}"#).unwrap();
+        assert_eq!(notes_lang(&publish_args(&[]), dir.path()), "de");
+        assert_eq!(
+            notes_lang(&publish_args(&["--notes-lang", "en"]), dir.path()),
+            "en"
+        );
+    }
+
+    /// Un brouillon refusé par `--require-available` laisse quand même partir la fiche.
+    #[test]
+    fn a_refused_draft_still_sends_the_listing() {
+        let draft: Result<Landed> = Err(DraftRefused {
+            id: "nuki".to_string(),
+            version: "1.0.0".to_string(),
+        }
+        .into());
+
+        assert_eq!(listing_plan(&draft), ListingPlan::Send("nuki"));
+        assert!(settle(draft).is_err());
     }
 
     #[test]
@@ -1307,7 +1396,7 @@ mod tests {
         let args = publish_args(&["--notes", "Keypad code", "--notes", "Faster sync"]);
 
         assert_eq!(args.notes, vec!["Keypad code", "Faster sync"]);
-        assert_eq!(args.notes_lang, "en");
+        assert_eq!(args.notes_lang, None);
     }
 
     /// Announcing a version already on GHCR compiles nothing: there is nothing to test.

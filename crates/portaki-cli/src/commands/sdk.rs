@@ -49,7 +49,8 @@ pub struct UpgradeArgs {
     /// Platform URL (defaults like `portaki dev`: PORTAKI_DEV_URL, PORTAKI_API_URL, production).
     #[arg(long)]
     pub url: Option<String>,
-    /// Run every check against the new version, then put every file it changed back.
+    /// Build, test and lint against the new version locally, then put every file it changed
+    /// back. Touches no sandbox: the renders are not compared.
     #[arg(long)]
     pub dry_run: bool,
 }
@@ -664,14 +665,8 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         &module_id,
     );
 
-    let mut sandbox = if args.no_render {
-        ui::skipped("render comparison skipped (--no-render)");
-        None
-    } else if from_repository_root {
-        // Une session de sandbox vise un module : depuis la racine, aucun ne s'impose.
-        ui::skipped(
-            "render comparison skipped — run from a module directory to compare its renders",
-        );
+    let mut sandbox = if let Some(reason) = no_sandbox(&args, from_repository_root) {
+        ui::skipped(reason);
         None
     } else {
         let token = crate::auth::access_token(&base_url)
@@ -747,11 +742,10 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             ui::success(format!(
                 "{subject} would move to portaki-sdk {resolved} — dry run, nothing was changed"
             ));
-            if baseline.is_some() {
-                ui::advice(
-                    "the sandbox now holds the upgraded build: run `portaki dev` to put yours back",
-                );
-            }
+            ui::detail(
+                "built, tested and linted locally; the sandbox renders were not compared — \
+                 drop --dry-run to compare them",
+            );
             Ok(())
         }
         Ok(resolved) => {
@@ -787,6 +781,23 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             }
             Err(failure)
         }
+    }
+}
+
+/// Pourquoi la sandbox n'est pas touchée, ou `None` pour comparer les rendus.
+///
+/// `--dry-run` n'y déploie rien et n'en prend pas le bail : un essai qui écrase la sandbox de
+/// quelqu'un d'autre n'est pas un essai.
+fn no_sandbox(args: &UpgradeArgs, from_repository_root: bool) -> Option<&'static str> {
+    if args.dry_run {
+        Some("render comparison skipped (--dry-run) — the sandbox is left untouched")
+    } else if args.no_render {
+        Some("render comparison skipped (--no-render)")
+    } else if from_repository_root {
+        // Une session de sandbox vise un module : depuis la racine, aucun ne s'impose.
+        Some("render comparison skipped — run from a module directory to compare its renders")
+    } else {
+        None
     }
 }
 
@@ -1303,6 +1314,23 @@ mod tests {
         assert!(note.contains("resolved 3.1.0"));
         assert!(note.contains("=3.0.1"));
         assert_eq!(resolution_note("3.1.0", "3.1.0"), None);
+    }
+
+    /// `--dry-run` ne déploie rien et ne prend pas le bail `dev-watch`.
+    #[test]
+    fn a_dry_run_leaves_the_sandbox_alone() {
+        let args = |flags: &[&str]| {
+            let mut argv = vec!["upgrade"];
+            argv.extend_from_slice(flags);
+            UpgradeArgs::try_parse_from(argv).unwrap()
+        };
+
+        assert!(no_sandbox(&args(&["--dry-run"]), false)
+            .unwrap()
+            .contains("--dry-run"));
+        assert!(no_sandbox(&args(&[]), false).is_none());
+        assert!(no_sandbox(&args(&["--no-render"]), false).is_some());
+        assert!(no_sandbox(&args(&[]), true).is_some());
     }
 
     fn check(id: &str) -> FailingCheck {
