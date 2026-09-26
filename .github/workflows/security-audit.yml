@@ -14,12 +14,6 @@ on:
     # 06:20 UTC — décalé de l'heure pile, où la file d'Actions est la plus chargée.
     - cron: "20 6 * * *"
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "crates/*/Cargo.toml"
-      - ".github/workflows/security-audit.yml"
 
 concurrency:
   group: security-audit-${{ github.event.pull_request.number || github.ref }}
