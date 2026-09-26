@@ -29,8 +29,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Épinglées par SHA : ce job détient les droits de publication, une étiquette déplacée
+      # exécuterait ici le code de quelqu'un d'autre.
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: PortakiApp/portaki-release-action@v1
+      - uses: PortakiApp/portaki-release-action@6d40f3b5fc0055822d505ceea10cf4a57c74c8ca # v1
+        with:
+          # Le build de ce job exécute le code du module (build.rs) : un binaire `portaki` mis en
+          # cache après lui ne se relit pas au release suivant.
+          cache: "false"

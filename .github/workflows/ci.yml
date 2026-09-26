@@ -7,6 +7,15 @@ on:
       - "**.md"
       - "docs/**"
       - ".github/CI.md"
+  # `pull_request` et jamais `pull_request_target` : le code d'une PR, fork compris, tourne sans
+  # secrets et avec un GITHUB_TOKEN en lecture seule. Sans ce déclencheur, rien ne vérifiait une
+  # PR avant son merge.
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/CI.md"
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -45,11 +54,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: fmt
         run: cargo fmt --all -- --check

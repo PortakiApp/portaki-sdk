@@ -6,8 +6,17 @@ name: Publish contracts
 # qu'un module cible : les deux contrôles de conformité correspondants restent bloqués.
 #
 # Auth : jeton OIDC de GitHub Actions, comme la publication crates.io juste à côté. Aucun secret
-# longue durée — le registre vérifie l'émetteur, l'audience, et que `repository_id` est bien
-# celui de ce dépôt.
+# longue durée. Ce que le jeton de ce job affirme, et que le registre doit exiger :
+#
+#   repository_id     celui de PortakiApp/portaki-sdk
+#   event_name        push
+#   ref               refs/tags/v<version publiée>
+#   job_workflow_ref  PortakiApp/portaki-sdk/.github/workflows/publish-contracts.yml@refs/tags/v<version>
+#   environment       contracts
+#
+# D'où : aucun déclenchement manuel, et la version publiée est celle du tag, jamais une entrée.
+# Rejouer après une indisponibilité du registre = « Re-run jobs » sur le run du tag : même
+# événement, même ref, nouveau jeton.
 #
 # Séparé de `publish-crates.yml` à dessein : un registre indisponible ne doit pas empêcher une
 # publication crates.io, ni l'inverse.
@@ -15,13 +24,6 @@ on:
   push:
     tags:
       - "v*"
-  # Rejouer après une indisponibilité du registre, sans retaguer. Republier à l'identique est
-  # sans effet : les contrats d'une version ne se réécrivent pas.
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version à publier (défaut : celle du Cargo.toml)"
-        required: false
 
 concurrency:
   group: publish-contracts
@@ -38,29 +40,19 @@ jobs:
     name: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # N'accepte que les tags `v*` (règle de l'environment) ; le registre exige ce nom dans le jeton.
+    environment: contracts
     steps:
-      # La version demandée, pas la branche d'où l'on déclenche.
-      #
-      # Sans `ref`, un `workflow_dispatch` sortait l'arbre courant et publiait SES contrats sous
-      # l'étiquette demandée : les primitives d'aujourd'hui sous le nom d'hier. Un module ciblant
-      # l'ancienne version aurait alors été typé contre les nouvelles, et les contrats étant
-      # immuables, l'erreur aurait été définitive.
-      #
-      # Le garde-fou du script (tag vs Cargo.toml) attrapait le cas et faisait échouer le job.
-      # Il reste, mais il ne devrait pas être ce qui empêche la faute : un déclenchement manuel
-      # ne doit pas être une arme chargée dont seule une vérification en aval retient le coup.
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
 
+      # La version est celle du tag : le script refuse un Cargo.toml qui ne la porte pas.
       - name: Assemble the bundle
         id: bundle
         env:
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="${TAG#v}"
-          node scripts/build-contracts-bundle.mjs ${version:+"$version"} > bundle.json
+          node scripts/build-contracts-bundle.mjs "${TAG#v}" > bundle.json
           echo "version=$(node -e 'process.stdout.write(require("./bundle.json").version)')" >> "$GITHUB_OUTPUT"
           echo "Bundle: $(wc -c < bundle.json) octets"
 
@@ -73,7 +65,7 @@ jobs:
           set -euo pipefail
 
           # L'audience est demandée par l'appelant : elle lie le jeton à ce service, elle ne
-          # prouve rien sur l'identité. C'est `repository_id` que le registre autorise.
+          # prouve rien sur l'identité. Ce sont les claims listés en tête que le registre vérifie.
           token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$OIDC_AUDIENCE" \
             | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).value))')
