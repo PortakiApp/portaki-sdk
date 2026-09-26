@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.8.1](https://github.com/PortakiApp/portaki-sdk/compare/v8.8.0...v8.8.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **cli:** emit dispatch example label as title ([ce9af26](https://github.com/PortakiApp/portaki-sdk/commit/ce9af26468419c49bd70af14486efc8224d52e78))
+
 ## [8.8.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.7.0...v8.8.0) (2026-09-26)
 
 
