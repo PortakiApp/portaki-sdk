@@ -52,21 +52,25 @@ rustup target add wasm32-unknown-unknown
 | Command | Contract |
 |---------|----------|
 | `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
+| `portaki login [--no-browser]` / `portaki logout` | Open a developer session with the device grant / end it here and revoke it on the platform that issued it |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
 | `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
 | `portaki connectors` | Show each declared egress, its permission and its credential |
 | `portaki dev --watch` | Rebuild and redeploy on every save, follow the sandbox logs, replay the 7 scenarios after each deploy |
 | `portaki dev --forget` | Remove this module from the sandbox — a tried-once module leaves a row otherwise |
+| `portaki dev` | Build, deploy to the **hosted sandbox** of your account, and show what the run did — there is no local gateway |
 | `portaki logs [module] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
 | `portaki lint [--channel preview\|stable]` | Validate capabilities, connectors, i18n keys; `sdkVersion` required, `>= 8.0.0` for stable |
 | `portaki i18n check [--all]` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
 | `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
+| `portaki sdk upgrade [--to <v>] [--dry-run]` | Move to another SDK version, then build, test, lint and compare the sandbox renders; `--dry-run` touches no file and no sandbox |
+| `portaki ci <modules\|sdk-version\|check\|info\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
 | `portaki test` | Forward to `cargo test` in the module crate |
-| `portaki publish [--channel preview\|stable] [--notes …] [--sign]` | Push the OCI artifact, then announce it to the registry — locally with `portaki login`, or from CI with OIDC |
-| `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
+| `portaki publish [--channel preview\|stable] [--notes …] [--sign] [--require-available]` | Push the OCI artifact to the configured registry (GHCR by default), then announce it to the Portaki registry — locally with `portaki login`, or from CI with OIDC |
+| `portaki link [--module <id>] [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
-| `portaki inspect` | Inspect a published OCI artifact |
-| `portaki docs` / `dev` | Docs helper / local mock gateway (evolves with the SDK) |
+| `portaki inspect <url>` | GET a URL and pretty-print it when it is JSON — no registry authentication |
+| `portaki docs` | Print how to open the local SDK documentation |
 
 ## Scaffolding a module
 
@@ -164,6 +168,10 @@ command — the logo, the heading, the `next` block, the glyphs, the margins —
 another program would come to read: the steps, the fields, the results, the errors. Failures
 there are prefixed `error:` rather than marked with a cross, so a log stays greppable.
 
+Warnings go to stderr, so stdout keeps what a script reads. One exception, kept for the release
+action v1 and the `portaki-modules` workflow that `grep` stdout for it: the « already in the
+registry » line of `publish`.
+
 Colour and animation turn themselves off when the output is not a terminal, and `NO_COLOR` is
 honoured. `portaki catalog` and `portaki inspect` write nothing but their JSON to stdout, so
 they stay pipeable into `jq`.
@@ -251,6 +259,7 @@ invocation serves both.
 | `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
 | `portaki ci check [--offline]` | Warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
+| `portaki ci report --outcome <…>` | Tell the platform how this module's CI run ended |
 
 `ci modules` reads the layout from the crates, not from a flag: a crate on `portaki-sdk` at the
 root means one module, crates under `modules/*/` mean several. A change to the shared workspace
@@ -306,7 +315,8 @@ re-run; two jobs starting together both look before either announces, so seriali
 
 `publish` announces the version to the registry after the push (needs `portaki login`).
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
-a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
+a version already pushed without pushing anything, which is how an existing catalogue is adopted —
+and how to replay an announcement that failed after a successful push.
 
 ### Signing from a workstation
 
@@ -331,18 +341,29 @@ prove nothing. The release action attests SLSA provenance in CI.
 - In CI (`CI` or `GITHUB_ACTIONS` set) `--sign` is refused: the release action signs there, with
   provenance.
 
-Without `--sign`, publishing a **stable** version to production from a workstation warns that
-production will refuse to install it.
+Without `--sign`, publishing from a workstation warns on **every** channel: production requires a
+signature everywhere, so the version never runs there — it stays usable in the sandbox. Sign with
+`--sign`, or publish from CI.
 
 ### What is new
 
 `publish` writes `changelog` into the published manifest: two or three lines a host with an older
 version sees before updating, one entry per line with every language side by side. For each
 language, `--notes` wins (`--notes fr:"Code clavier la veille"`, repeatable, at most 5 lines of 160
-characters per language; untagged lines are in `--notes-lang`, `en` by default); otherwise the
-lines come from this version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` for
-`--notes-lang` (`## [x.y.z]` or `## x.y.z`, then bullets — the release-please format, scope and
-commit link dropped), the first five kept.
+characters per language; untagged lines are in `--notes-lang`); otherwise the lines come from this
+version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` for `--notes-lang` (`## [x.y.z]`
+or `## x.y.z`, then bullets — the release-please format, scope and commit link dropped), the first
+five kept.
+
+`--notes-lang` defaults to the **first language of the listing** (`publishedLangs[0]` in
+`listing.json`), else `fr` — the registry's fallback language, the one every stable version needs
+a line in. A French module with an unsuffixed `CHANGELOG.md` therefore needs no flag; an
+English-first module lists `"publishedLangs": ["en", …]` or passes `--notes-lang en`.
+
+A line that reads like a commit message — starting with `bump`, `chore`, `fix(`, `fix:`, `feat(`,
+`feat:`, `refactor` or `deps`, whatever the case — is refused before anything is built or pushed,
+from `--notes` as from a `CHANGELOG*.md` section: the registry would keep the stable version
+invisible to hosts until it is rewritten. `portaki lint` refuses it too.
 
 Beside the manifest, the announcement carries what only the author can say: why a permission is
 added (`--permission-reason email=fr:"Pour envoyer le code"`, one per permission and language) and
@@ -350,9 +371,13 @@ whether the host has to act after updating (`--host-action-required`, `--host-ac
 
 A **stable** version stays pending at the registry — kept, but invisible to hosts — until its
 changelog has a line in every language of the module's listing and each permission added since the
-previous stable is justified in each. `publish` says which, with the console link where the version
-is completed and published; a CI that passes everything publishes straight away. Preview channels
-never wait.
+previous stable is justified in each. `publish` says it plainly — « brouillon — invisible des
+hôtes » — with the list of what is missing and the console link where the version is completed
+and published; a CI that passes everything publishes straight away. Preview channels never wait.
+
+A draft is not a failure by default, so existing workflows stay green. `--require-available`
+makes it one on `--channel stable`: the command exits non-zero once the version is in the registry
+as a draft (the listing is still sent).
 
 ### Public listing
 

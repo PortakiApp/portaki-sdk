@@ -1,4 +1,4 @@
-//! `portaki inspect` — inspect a published OCI artifact.
+//! `portaki inspect` — GET a URL, and pretty-print the body when it is JSON.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -6,7 +6,7 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 /// Arguments for `portaki inspect`.
 pub struct InspectArgs {
-    /// OCI artifact URL or digest reference.
+    /// URL to fetch (plain HTTP GET, no registry authentication).
     pub artifact_url: String,
 }
 

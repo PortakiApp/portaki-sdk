@@ -332,8 +332,20 @@ pub fn failure(message: impl Display) {
     eline(format!("{MARGIN}{} {message}", style(CROSS).red().bold()));
 }
 
-/// Une chose à savoir, qui n'empêche rien.
+/// Une chose à savoir, qui n'empêche rien — sur stderr : stdout reste à ce qu'un script lit.
 pub fn warn(message: impl Display) {
+    eline(glyphed(
+        style(BANG).yellow().bold().for_stderr().to_string(),
+        message,
+    ));
+}
+
+/// Un avertissement que des scripts lisent sur stdout.
+///
+/// Seul usage : « already in the registry », que `portaki-release-action` v1 et le workflow de
+/// `portaki-modules` cherchent par `grep` sur la sortie standard. À retirer quand l'action
+/// lira une sortie JSON.
+pub fn warn_on_stdout(message: impl Display) {
     line(glyphed(style(BANG).yellow().bold().to_string(), message));
 }
 

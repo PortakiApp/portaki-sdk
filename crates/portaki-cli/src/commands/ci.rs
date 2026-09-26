@@ -638,7 +638,7 @@ async fn check(args: CheckArgs) -> Result<()> {
     } else if let Some(lock) = find_lockfile(&root) {
         let text = std::fs::read_to_string(&lock)?;
         if let Some(resolved) = read_locked_sdk(&text) {
-            match latest_sdk().await {
+            match crate::update::latest_published("portaki-sdk").await {
                 Ok(latest) if outdated(&resolved.version, &latest) => {
                     found += 1;
                     annotate(
@@ -779,26 +779,6 @@ async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
     Ok(serde_json::from_value(entries).unwrap_or_default())
 }
 
-/// La dernière version publiée du SDK.
-async fn latest_sdk() -> Result<String> {
-    let response = crate::http::client()
-        .get("https://crates.io/api/v1/crates/portaki-sdk")
-        // crates.io refuse une requête sans agent identifiable, et le dit en 403.
-        .header(
-            "User-Agent",
-            concat!("portaki-cli/", env!("CARGO_PKG_VERSION")),
-        )
-        .send()
-        .await?;
-    let body: serde_json::Value = response.json().await?;
-    body.pointer("/crate/max_stable_version")
-        .or_else(|| body.pointer("/crate/newest_version"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-        .context("crates.io did not say which version is newest")
-}
-
-/// Rend les valeurs disponibles à l'étape suivante du workflow.
 fn emit_outputs(pairs: &[(&str, &str)]) -> Result<()> {
     let Ok(path) = std::env::var("GITHUB_OUTPUT") else {
         return Ok(());

@@ -59,7 +59,7 @@ async fn latest() -> Option<String> {
     if let Some(cached) = read_cache() {
         return Some(cached);
     }
-    let fetched = tokio::time::timeout(GIVE_UP_AFTER, ask_crates_io())
+    let fetched = tokio::time::timeout(GIVE_UP_AFTER, latest_published("portaki-cli"))
         .await
         .ok()?
         .ok()?;
@@ -67,9 +67,14 @@ async fn latest() -> Option<String> {
     Some(fetched)
 }
 
-async fn ask_crates_io() -> Result<String, reqwest::Error> {
+/// La dernière version stable publiée d'un crate sur crates.io.
+///
+/// La seule question posée à crates.io : l'avis de mise à jour et `portaki ci check` la posent
+/// tous deux, pour le CLI et pour le SDK.
+pub async fn latest_published(krate: &str) -> anyhow::Result<String> {
+    use anyhow::Context;
     let body: serde_json::Value = crate::http::client()
-        .get("https://crates.io/api/v1/crates/portaki-cli")
+        .get(format!("https://crates.io/api/v1/crates/{krate}"))
         // crates.io refuse une requête sans agent identifiable, et le dit en 403.
         .header(
             "User-Agent",
@@ -79,11 +84,11 @@ async fn ask_crates_io() -> Result<String, reqwest::Error> {
         .await?
         .json()
         .await?;
-    Ok(body
-        .pointer("/crate/max_stable_version")
+    body.pointer("/crate/max_stable_version")
+        .or_else(|| body.pointer("/crate/newest_version"))
         .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .to_string())
+        .map(str::to_string)
+        .context("crates.io did not say which version is newest")
 }
 
 fn read_cache() -> Option<String> {

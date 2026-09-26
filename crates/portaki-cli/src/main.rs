@@ -17,14 +17,18 @@
 //! | `build` | Produce Wasm + merged manifest (+ migrations/operations bundles + i18n) |
 //! | `lint` | Validate capability ids, connector bindings, i18n keys |
 //! | `test` | Forward to `cargo test` in the module crate |
-//! | `publish` | Push OCI layers to a container registry |
+//! | `login` / `logout` | Open or end a developer session (device grant) |
+//! | `dev` | Build, deploy to the hosted sandbox, and show what the run did |
+//! | `ci` | Answer what a CI workflow used to ask in bash |
+//! | `publish` | Push OCI layers to the configured OCI registry (GHCR by default), then announce them |
+//! | `sdk upgrade` | Move the module to another SDK version, and prove nothing broke |
 //! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
 //! | `permissions add` | Turn on the `portaki-sdk` feature that declares a permission |
 //! | `i18n check` | Fail on a text missing or empty in one language of the bundles |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
-//! | `inspect` | Fetch and summarize a published OCI artifact |
-//! | `docs` / `dev` | Docs helper / local mock gateway (evolve with the SDK) |
+//! | `inspect` | GET a URL and pretty-print it when it is JSON |
+//! | `docs` | Print how to open the local SDK documentation |
 //!
 //! Install: `cargo install portaki-cli`. Requires `rustup target add wasm32-unknown-unknown`.
 
@@ -113,7 +117,7 @@ enum Command {
     I18n(commands::i18n::I18nArgs),
     /// Declare a permission (`portaki permissions add email`).
     Permissions(commands::permissions::PermissionsArgs),
-    /// Push OCI artifact to Scaleway Container Registry.
+    /// Push the OCI artifact to the configured registry (GHCR by default), then announce it.
     Publish(commands::publish::PublishArgs),
     /// Link this module to its repository — with --all, every module of the monorepo.
     Link(commands::link::LinkArgs),
@@ -121,7 +125,7 @@ enum Command {
     Docs(commands::docs::DocsArgs),
     /// Dump the SDUI catalog specification.
     Catalog,
-    /// Inspect a published OCI artifact URL.
+    /// GET a URL and pretty-print the body when it is JSON (no OCI registry auth).
     Inspect(commands::inspect::InspectArgs),
 }
 
@@ -470,6 +474,22 @@ mod tests {
         assert!(is_a_screen(ErrorKind::DisplayVersion));
         assert!(!is_a_screen(ErrorKind::InvalidSubcommand));
         assert!(!is_a_screen(ErrorKind::UnknownArgument));
+    }
+
+    /// L'aide dit ce que la commande fait : pas de Scaleway, pas de passerelle locale.
+    #[test]
+    fn the_help_describes_what_the_commands_do() {
+        let root = Cli::command();
+        let about = |name: &str| {
+            root.find_subcommand(name)
+                .and_then(|sub| sub.get_about().map(ToString::to_string))
+                .unwrap_or_default()
+        };
+
+        assert!(!about("publish").contains("Scaleway"));
+        assert!(about("publish").contains("registry"));
+        assert!(about("dev").contains("hosted sandbox"));
+        assert!(!about("inspect").contains("OCI artifact"));
     }
 
     /// Un refus dont on ne saurait rien dire reste un refus : la sortie ne doit pas être vide.

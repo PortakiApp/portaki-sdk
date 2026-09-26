@@ -113,7 +113,8 @@ pub fn run(args: LintArgs) -> Result<()> {
 /// every language of its listing stays pending at the registry — better read here than after the
 /// release job.
 fn report_changelog(module_root: &std::path::Path, version: &str) -> Result<()> {
-    let lines = crate::changelog::lines(&[], "en", module_root, version)?;
+    let lang = crate::changelog::default_lang(module_root);
+    let lines = crate::changelog::lines(&[], &lang, module_root, version)?;
     let langs: std::collections::BTreeSet<&str> = lines
         .iter()
         .flat_map(|line| line.keys().map(String::as_str))

@@ -41,7 +41,10 @@ pub async fn run(args: LinkArgs) -> Result<()> {
         .map(|member| member.id)
         .unwrap_or_default();
     if current.is_empty() {
-        anyhow::bail!("portaki.module.json carries no id — run from the module root");
+        anyhow::bail!(
+            "no module here — its id comes from [package] name in Cargo.toml; run from the \
+             module root, or pass --module <id>"
+        );
     }
     let cwd = std::env::current_dir()?;
     let others: Vec<String> = workspace::members(&cwd)
