@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 /// Resolves credentials for pushing to `registry` (host or host/path prefix).
 pub fn resolve_registry_auth(registry: &str) -> Result<RegistryAuth> {
-    if let Some(auth) = auth_from_env()? {
+    if let Some(auth) = auth_from_env(registry)? {
         return Ok(auth);
     }
 
@@ -30,7 +30,12 @@ pub fn resolve_read_auth(registry: &str) -> RegistryAuth {
     resolve_registry_auth(registry).unwrap_or(RegistryAuth::Anonymous)
 }
 
-fn auth_from_env() -> Result<Option<RegistryAuth>> {
+/// `GITHUB_TOKEN` / `GHCR_TOKEN` are GitHub's: they go to `ghcr.io` and nowhere else — not to
+/// a registry named on the command line or in an artifact reference.
+fn auth_from_env(registry: &str) -> Result<Option<RegistryAuth>> {
+    if registry_host(registry) != GHCR {
+        return Ok(None);
+    }
     if let Ok(username) = std::env::var("OCI_USERNAME") {
         if !username.is_empty() {
             if let Ok(token) =
@@ -83,16 +88,12 @@ fn auth_from_docker_config(registry: &str) -> Result<Option<RegistryAuth>> {
         None => return Ok(None),
     };
 
+    // L'hôte exact : un préfixe donnait les identifiants de `ghcr.io` à `ghcr.io.evil.example`.
     let host = registry_host(registry);
     let entry = auths
-        .get(&host)
-        .or_else(|| auths.get(registry))
-        .or_else(|| {
-            auths
-                .iter()
-                .find(|(key, _)| registry.starts_with(key.as_str()) || key.starts_with(&host))
-                .map(|(_, value)| value)
-        });
+        .iter()
+        .find(|(key, _)| docker_key_host(key) == host)
+        .map(|(_, value)| value);
 
     let Some(entry) = entry else {
         return Ok(None);
@@ -131,8 +132,19 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+const GHCR: &str = "ghcr.io";
+
 fn registry_host(registry: &str) -> String {
     registry.split('/').next().unwrap_or(registry).to_string()
+}
+
+/// `https://ghcr.io/v1/` or `ghcr.io` — Docker writes both — down to the host.
+fn docker_key_host(key: &str) -> String {
+    let bare = key
+        .strip_prefix("https://")
+        .or_else(|| key.strip_prefix("http://"))
+        .unwrap_or(key);
+    registry_host(bare)
 }
 
 fn base64_decode(input: &str) -> Result<String> {
@@ -153,6 +165,23 @@ mod tests {
             registry_host("ghcr.io/portakiapp/portaki-modules"),
             "ghcr.io"
         );
+    }
+
+    #[test]
+    fn github_tokens_only_go_to_ghcr() {
+        std::env::set_var("GHCR_TOKEN", "secret");
+        assert!(auth_from_env("ghcr.io/portakiapp").unwrap().is_some());
+        assert!(auth_from_env("registry.evil.example/x").unwrap().is_none());
+        assert!(auth_from_env("ghcr.io.evil.example/x").unwrap().is_none());
+        std::env::remove_var("GHCR_TOKEN");
+    }
+
+    #[test]
+    fn docker_config_keys_match_the_exact_host() {
+        assert_eq!(docker_key_host("https://ghcr.io/v1/"), "ghcr.io");
+        assert_eq!(docker_key_host("ghcr.io"), "ghcr.io");
+        assert_ne!(docker_key_host("ghcr.io.evil.example"), "ghcr.io");
+        assert_ne!(docker_key_host("ghcr"), "ghcr.io");
     }
 
     #[test]

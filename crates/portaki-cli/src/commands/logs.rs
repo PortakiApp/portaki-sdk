@@ -66,7 +66,7 @@ pub async fn run(args: LogsArgs) -> Result<()> {
         std::env::var("PORTAKI_API_URL").ok().as_deref(),
     );
     let auth_url = auth::api_base_url(args.url.as_deref());
-    let mut token = auth::access_token()?;
+    let mut token = auth::access_token(&base)?;
     ui::field("module", &module_id);
     if let Some(code) = &args.code {
         ui::field("code", code);

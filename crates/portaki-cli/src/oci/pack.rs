@@ -383,6 +383,7 @@ pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Ve
 
     let previews_path = module_root.join(PREVIEWS);
     if previews_path.is_file() {
+        crate::manifest::ensure_inside(module_root, &previews_path)?;
         layers.push(PushLayer {
             path: previews_path,
             media_type: PREVIEWS_MEDIA.to_string(),
@@ -398,6 +399,7 @@ pub fn collect_push_layers(module_root: &Path, artifact_dir: &Path) -> Result<Ve
             .collect();
         entries.sort();
         for path in entries {
+            crate::manifest::ensure_inside(module_root, &path)?;
             layers.push(PushLayer {
                 path,
                 media_type: I18N_MEDIA.to_string(),
@@ -834,6 +836,43 @@ mod tests {
         assert!(layers
             .iter()
             .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA));
+    }
+
+    /// Un texte lié ailleurs ne part pas dans une couche publique — ni un dossier `i18n/` lié.
+    #[cfg(unix)]
+    #[test]
+    fn collect_push_layers_refuses_what_links_outside_the_module() {
+        let outside = tempdir().unwrap();
+        fs::write(outside.path().join("secret.json"), "{}").unwrap();
+
+        let linked_file = |root: &Path| {
+            fs::create_dir_all(root.join("i18n")).unwrap();
+            std::os::unix::fs::symlink(
+                outside.path().join("secret.json"),
+                root.join("i18n/fr.json"),
+            )
+            .unwrap();
+        };
+        let linked_dir = |root: &Path| {
+            std::os::unix::fs::symlink(outside.path(), root.join("i18n")).unwrap();
+        };
+        for plant in [&linked_file as &dyn Fn(&Path), &linked_dir] {
+            let root = tempdir().unwrap();
+            let artifact = root.path().join("target/portaki");
+            fs::create_dir_all(&artifact).unwrap();
+            fs::write(
+                artifact.join(PUBLISH_MANIFEST),
+                r#"{"manifestVersion":"1","id":"weather","version":"0.2.1"}"#,
+            )
+            .unwrap();
+            let wasm_dir = root.path().join("target/wasm32-unknown-unknown/release");
+            fs::create_dir_all(&wasm_dir).unwrap();
+            fs::write(wasm_dir.join("weather.wasm"), b"\0asm").unwrap();
+            plant(root.path());
+
+            let error = collect_push_layers(root.path(), &artifact).unwrap_err();
+            assert!(error.to_string().contains("refusing to publish"), "{error}");
+        }
     }
 }
 

@@ -63,8 +63,9 @@ pub struct LoginArgs {
 #[derive(Debug, Parser)]
 /// Arguments for `portaki logout`.
 pub struct LogoutArgs {
-    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
-    #[arg(long)]
+    /// Ignored, kept for scripts that pass it: the session is revoked on the platform that
+    /// issued it, and its refresh token is sent nowhere else.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
 }
 
@@ -100,6 +101,8 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     );
 
     let base = base_url(args.url.as_deref());
+    // Le jeton reviendra par cette connexion : en clair, n'importe quel réseau traversé le lit.
+    auth::ensure_transport(&base)?;
     // Le client par défaut : cinq secondes pour ouvrir la connexion, quinze pour la requête.
     // La demande de code précède tout le reste, alors elle échoue vite — une adresse fausse ou
     // une plateforme à terre se voit tout de suite, plutôt qu'au bout d'un spinner sans fin.
@@ -198,15 +201,18 @@ pub async fn run(args: LoginArgs) -> Result<()> {
                 waiting.abandon();
                 failure
             })?;
-            auth::store(&granted.access_token, &granted.refresh_token)?;
+            auth::store_issued_by(&base, &granted.access_token, &granted.refresh_token)?;
             waiting.done("approved");
-            ui::success("signed in — token stored in the system keychain");
+            ui::success(format!(
+                "signed in — session stored in {}",
+                auth::storage_label()
+            ));
             if !granted.scopes.is_empty() {
                 ui::field("scopes", granted.scopes.join(" "));
             }
             ui::advice(
-                "the access token lasts minutes and renews itself — the session lives in the \
-                 keychain until portaki logout",
+                "the access token lasts minutes and renews itself — the session is kept until \
+                 portaki logout, and only ever sent back to this platform",
             );
             ui::next(&[
                 (
@@ -334,13 +340,14 @@ fn present(started: &DeviceCode, no_browser: bool) {
 }
 
 /// Runs `portaki logout`.
-pub async fn logout(args: LogoutArgs) -> Result<()> {
+pub async fn logout(_args: LogoutArgs) -> Result<()> {
     ui::header(
         "portaki logout",
         "End the session here, and on the platform.",
     );
 
     let stored = auth::refresh_token();
+    let issuer = auth::issuer();
 
     // Effacé d'abord, quoi qu'il arrive ensuite : une déconnexion qui laisse les identifiants
     // en place parce que le réseau a hoqueté serait la pire des deux moitiés — on croit être
@@ -354,7 +361,7 @@ pub async fn logout(args: LogoutArgs) -> Result<()> {
         return Ok(());
     };
 
-    match revoke(&base_url(args.url.as_deref()), &refresh_token).await {
+    match revoke(&issuer, &refresh_token).await {
         Ok(()) => ui::success("the platform revoked this session"),
         Err(failure) => {
             // Le dire, parce que c'est la moitié qui protège : un jeton non révoqué reste

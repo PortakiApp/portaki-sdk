@@ -79,9 +79,9 @@ pub async fn run(args: DevArgs) -> Result<()> {
         return list_operations(&module_root);
     }
 
-    let mut token = crate::auth::access_token()?;
-    let module_id = read_module_id(&module_root)?;
     let base_url = base_url(&args);
+    let mut token = crate::auth::access_token(&base_url)?;
+    let module_id = read_module_id(&module_root)?;
 
     // Avant le bail : oublier n'est pas déployer, et prendre la place pour la rendre aussitôt
     // ferait attendre une autre session pour rien.

@@ -674,7 +674,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         );
         None
     } else {
-        let token = crate::auth::access_token()
+        let token = crate::auth::access_token(&base_url)
             .context("sign in with `portaki login`, or pass --no-render")?;
         let auth_url = crate::auth::api_base_url(args.url.as_deref());
         let session = crate::dev_session::start(&base_url, &auth_url, &module_id, &token).await?;

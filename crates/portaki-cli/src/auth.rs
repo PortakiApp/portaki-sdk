@@ -33,6 +33,11 @@ use anyhow::{bail, Context, Result};
 const SERVICE: &str = "app.portaki.cli";
 const ACCESS_ENTRY: &str = "access-token";
 const REFRESH_ENTRY: &str = "refresh-token";
+/// L'origine de la plateforme qui a émis la session, au `login`.
+const ORIGIN_ENTRY: &str = "origin";
+
+/// Une session rangée avant qu'on retienne son origine : la production, la seule par défaut.
+const LEGACY_ORIGIN: &str = "https://api.portaki.app";
 
 /// Le jeton posé explicitement dans l'environnement, s'il y en a un.
 ///
@@ -46,17 +51,74 @@ pub fn explicit_token() -> Option<String> {
         .filter(|token| !token.is_empty())
 }
 
-/// Reads the access token: environment first, then the keychain.
+/// Reads the access token that will be sent to `destination`: environment first, then the
+/// stored session.
 ///
 /// The environment wins so CI can inject a token without a keychain — a build agent has none.
-pub fn access_token() -> Result<String> {
+///
+/// A stored session only goes back to the platform that issued it. `--url` and
+/// `PORTAKI_API_URL` choose where a command talks, and a `.envrc` in someone else's repository
+/// sets the second: without this, cloning it was enough to hand them the session. Another
+/// platform means another `portaki login --url`.
+pub fn access_token(destination: &str) -> Result<String> {
+    ensure_transport(destination)?;
     if let Some(token) = explicit_token() {
         return Ok(token);
     }
-    match read(ACCESS_ENTRY) {
-        Ok(Some(token)) => Ok(token),
-        Ok(None) => bail!("not signed in — run `portaki login`"),
-        Err(failure) => Err(failure),
+    let token = match read(ACCESS_ENTRY)? {
+        Some(token) => token,
+        None => bail!("not signed in — run `portaki login`"),
+    };
+    ensure_issued_by(destination)?;
+    Ok(token)
+}
+
+/// `https`, or plain `http` to this machine only: a token sent in clear crosses the network.
+pub fn ensure_transport(url: &str) -> Result<()> {
+    if secure_or_loopback(url) {
+        return Ok(());
+    }
+    bail!("refusing to send credentials to {url} — https is required outside localhost")
+}
+
+/// `https://…`, or `http://` to localhost / a loopback address.
+pub fn secure_or_loopback(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    match parsed.scheme() {
+        "https" => true,
+        "http" => {
+            let host = parsed.host_str().unwrap_or_default();
+            let host = host.trim_start_matches('[').trim_end_matches(']');
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|ip| ip.is_loopback())
+        }
+        _ => false,
+    }
+}
+
+/// `scheme://host[:port]`, the part that says who receives a request.
+fn origin_of(url: &str) -> Option<String> {
+    reqwest::Url::parse(url)
+        .ok()
+        .map(|parsed| parsed.origin().ascii_serialization())
+}
+
+/// The stored session was issued by `destination`'s platform.
+fn ensure_issued_by(destination: &str) -> Result<()> {
+    same_origin(&issuer(), destination)
+}
+
+fn same_origin(issuer: &str, destination: &str) -> Result<()> {
+    match (origin_of(issuer), origin_of(destination)) {
+        (Some(issuer), Some(destination)) if issuer == destination => Ok(()),
+        _ => bail!(
+            "the stored session belongs to {issuer}, not {destination} — it is only sent back \
+             to the platform that issued it; run `portaki login --url {destination}` to sign in there"
+        ),
     }
 }
 
@@ -84,6 +146,8 @@ pub fn access_token() -> Result<String> {
 /// `auth_url` est la plateforme de la commande en cours (`--url`, puis `PORTAKI_API_URL`) :
 /// renouveler ailleurs que là où le jeton a été émis échoue, et se lisait « reconnecte-toi ».
 pub async fn refresh(auth_url: &str, stale: &str) -> Result<String> {
+    ensure_transport(auth_url)?;
+    ensure_issued_by(auth_url)?;
     let _held = RefreshLock::acquire(&config_dir()?.join(REFRESH_LOCK)).await?;
 
     if let Some(current) = read(ACCESS_ENTRY)? {
@@ -209,6 +273,31 @@ pub fn store(access_token: &str, refresh_token: &str) -> Result<()> {
     write(REFRESH_ENTRY, refresh_token)
 }
 
+/// Retient la plateforme qui vient d'émettre la session : c'est la seule où elle repartira.
+pub fn store_issued_by(origin: &str, access_token: &str, refresh_token: &str) -> Result<()> {
+    let origin = origin_of(origin).with_context(|| format!("{origin} is not a URL"))?;
+    write(ORIGIN_ENTRY, &origin)?;
+    store(access_token, refresh_token)
+}
+
+/// La plateforme qui a émis la session rangée.
+pub fn issuer() -> String {
+    read(ORIGIN_ENTRY)
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| LEGACY_ORIGIN.to_string())
+}
+
+/// Where the session lives, as a person would look for it.
+pub fn storage_label() -> String {
+    if uses_keychain() {
+        return "the system keychain".to_string();
+    }
+    credentials_path()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "the credentials file".to_string())
+}
+
 /// Le jeton de rafraîchissement rangé, s'il y en a un.
 ///
 /// Rendu pour que `logout` puisse le présenter au serveur : l'effacer d'ici ne le révoque pas,
@@ -219,7 +308,8 @@ pub fn refresh_token() -> Option<String> {
 
 pub fn forget() -> Result<()> {
     delete(ACCESS_ENTRY)?;
-    delete(REFRESH_ENTRY)
+    delete(REFRESH_ENTRY)?;
+    delete(ORIGIN_ENTRY)
 }
 
 /// Le trousseau reste accessible pour qui le préfère.
@@ -264,6 +354,8 @@ struct StoredCredentials {
     access_token: String,
     #[serde(default)]
     refresh_token: String,
+    #[serde(default)]
+    origin: String,
 }
 
 fn load() -> Result<StoredCredentials> {
@@ -300,10 +392,20 @@ fn save_to(path: &std::path::Path, credentials: &StoredCredentials) -> Result<()
 
     let temporary = path.with_extension("json.tmp");
     let body = serde_json::to_string_pretty(credentials).context("serialise credentials")?;
-    std::fs::write(&temporary, body).with_context(|| format!("write {}", temporary.display()))?;
-    // Les droits AVANT le renommage : entre l'écriture et le chmod, le fichier existerait en
-    // clair et lisible par tous.
-    restrict(&temporary, 0o600)?;
+    // Créé en 0600, pas écrit puis restreint : entre les deux, le fichier existait en 0644. Un
+    // reste d'une écriture interrompue est retiré d'abord, ses droits ne sont pas les nôtres.
+    let _ = std::fs::remove_file(&temporary);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    std::io::Write::write_all(
+        &mut options
+            .open(&temporary)
+            .with_context(|| format!("write {}", temporary.display()))?,
+        body.as_bytes(),
+    )
+    .with_context(|| format!("write {}", temporary.display()))?;
     std::fs::rename(&temporary, path).with_context(|| format!("write {}", path.display()))
 }
 
@@ -327,10 +429,10 @@ fn entry(name: &str) -> Result<keyring::Entry> {
 fn read(name: &str) -> Result<Option<String>> {
     if !uses_keychain() {
         let stored = load()?;
-        let value = if name == ACCESS_ENTRY {
-            stored.access_token
-        } else {
-            stored.refresh_token
+        let value = match name {
+            ACCESS_ENTRY => stored.access_token,
+            ORIGIN_ENTRY => stored.origin,
+            _ => stored.refresh_token,
         };
         return Ok(if value.trim().is_empty() {
             None
@@ -348,11 +450,12 @@ fn read(name: &str) -> Result<Option<String>> {
 fn write(name: &str, value: &str) -> Result<()> {
     if !uses_keychain() {
         let mut stored = load()?;
-        if name == ACCESS_ENTRY {
-            stored.access_token = value.to_string();
-        } else {
-            stored.refresh_token = value.to_string();
-        }
+        let field = match name {
+            ACCESS_ENTRY => &mut stored.access_token,
+            ORIGIN_ENTRY => &mut stored.origin,
+            _ => &mut stored.refresh_token,
+        };
+        *field = value.to_string();
         return save(&stored);
     }
     entry(name)?
@@ -472,6 +575,7 @@ mod tests {
             &StoredCredentials {
                 access_token: "acces".into(),
                 refresh_token: "renouvellement".into(),
+                origin: PROD.into(),
             },
         )
         .unwrap();
@@ -479,6 +583,7 @@ mod tests {
         let stored = load_from(&path).unwrap();
         assert_eq!(stored.access_token, "acces");
         assert_eq!(stored.refresh_token, "renouvellement");
+        assert_eq!(stored.origin, PROD);
 
         // Le fichier n'est lisible que par son propriétaire — sur une machine
         // mono-utilisateur, c'est la seule protection réelle, donc celle qu'il faut vérifier.
@@ -489,6 +594,46 @@ mod tests {
             assert_eq!(mode, 0o600, "le fichier de secrets doit être en 0600");
             let parent = std::fs::metadata(path.parent().unwrap()).unwrap();
             assert_eq!(parent.permissions().mode() & 0o777, 0o700);
+        }
+    }
+
+    /// Un `.envrc` qui pointe `PORTAKI_API_URL` ailleurs ne reçoit pas la session.
+    #[test]
+    fn a_session_only_goes_back_to_its_issuer() {
+        assert!(same_origin(PROD, "https://api.portaki.app/registry/v1/x").is_ok());
+        for elsewhere in [
+            "https://evil.example",
+            "http://api.portaki.app",
+            "https://api.portaki.app:8443",
+            "https://api.portaki.app.evil.example",
+            "not a url",
+        ] {
+            let refused = same_origin(PROD, elsewhere).unwrap_err().to_string();
+            assert!(
+                refused.contains("portaki login --url"),
+                "{elsewhere}: {refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn credentials_travel_over_https_or_to_this_machine_only() {
+        for fine in [
+            "https://api.portaki.app",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+        ] {
+            assert!(secure_or_loopback(fine), "{fine}");
+        }
+        for refused in [
+            "http://api.portaki.app",
+            "http://localhost.evil.example",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "",
+        ] {
+            assert!(!secure_or_loopback(refused), "{refused}");
         }
     }
 
@@ -529,7 +674,7 @@ mod tests {
     fn the_environment_is_the_way_in_when_there_is_no_keychain() {
         // Un agent de CI n'a pas de trousseau : l'injection doit rester une porte d'entrée.
         std::env::set_var("PORTAKI_DEV_TOKEN", "injected");
-        assert_eq!(access_token().unwrap(), "injected");
+        assert_eq!(access_token(PROD).unwrap(), "injected");
 
         // Une variable vide n'est pas un jeton — sinon on part avec une chaîne blanche.
         //
@@ -539,7 +684,7 @@ mod tests {
         // la machine ne garde rien. L'invariant réel est qu'une variable blanche ne devient
         // jamais un jeton.
         std::env::set_var("PORTAKI_DEV_TOKEN", "   ");
-        match access_token() {
+        match access_token(PROD) {
             Ok(from_keychain) => assert!(
                 !from_keychain.trim().is_empty(),
                 "une variable blanche ne doit pas devenir un jeton"

@@ -121,6 +121,7 @@ async fn report(args: ReportArgs) -> Result<()> {
 }
 
 async fn deliver(base: &str, module_id: &str, outcome: &str, run_url: Option<&str>) -> Result<()> {
+    crate::auth::ensure_transport(base)?;
     if !crate::oidc::available() {
         anyhow::bail!("no OIDC token available — add `permissions: id-token: write` to the job");
     }
