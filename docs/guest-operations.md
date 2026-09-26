@@ -34,3 +34,17 @@ by `ctx.stay` (`stay_id`), never by an id taken from the arguments, and return n
 let Some(stay) = &ctx.stay else { return Ok(Vec::new()) };
 // every read and write keyed by stay.stay_id
 ```
+
+## Where a stay's data lives
+
+When a stay is deleted, the platform deletes what modules kept about it — but only where it can
+find it:
+
+- **Tables**: rows of any table in your schema that has a `stay_id` column (next to
+  `property_id`) are deleted where `stay_id` is that stay. Give every per-guest table a
+  `stay_id` column.
+- **KV**: keys under `stay:<stay_id>:` are deleted, for every module of the property. Build
+  them with `host::kv::stay_key(stay.stay_id, "review")`, never by hand.
+
+Anything stored elsewhere (a property-wide KV blob, a table without `stay_id`) outlives the
+stay. Do not put guest data there.

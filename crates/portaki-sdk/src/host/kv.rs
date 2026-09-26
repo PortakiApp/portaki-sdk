@@ -9,6 +9,8 @@
 //! - Keys are module-private — the gateway namespaces by property and module id.
 //! - Values are opaque byte blobs — serialize JSON or protobuf yourself.
 //! - [`set`] rejects secret-like key names — never store API tokens in KV.
+//! - Per-stay data goes under [`stay_key`] (`stay:<stay_id>:<key>`): the platform deletes
+//!   every key under that prefix when the stay is deleted. A key elsewhere outlives the stay.
 //!
 //! ## What modules must not assume
 //!
@@ -80,6 +82,15 @@ pub fn list(prefix: &str) -> Result<Vec<String>> {
     backend()?.kv_list(prefix)
 }
 
+/// The key of `key` for one stay: `stay:<stay_id>:<key>`.
+///
+/// The platform owns this prefix — when the stay is deleted, every key under
+/// `stay:<stay_id>:` is deleted with it, for every module of the property. Keep
+/// anything tied to a guest (answers, reviews, drafts) under it.
+pub fn stay_key(stay_id: uuid::Uuid, key: &str) -> String {
+    format!("stay:{stay_id}:{key}")
+}
+
 #[cfg(feature = "kv")]
 fn lint_key(key: &str) -> Result<()> {
     let lower = key.to_ascii_lowercase();
@@ -96,7 +107,16 @@ fn lint_key(key: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::lint_key;
+    use super::{lint_key, stay_key};
+
+    #[test]
+    fn stay_key_is_under_the_platform_prefix() {
+        let stay = uuid::Uuid::nil();
+        assert_eq!(
+            stay_key(stay, "review"),
+            "stay:00000000-0000-0000-0000-000000000000:review"
+        );
+    }
 
     #[test]
     fn rejects_secret_like_keys() {
