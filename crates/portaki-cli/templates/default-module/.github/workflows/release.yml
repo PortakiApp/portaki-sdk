@@ -35,7 +35,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: PortakiApp/portaki-release-action@7619a50f3c34e2e1e8a17617c75d84eb70e907f2 # v1
+      - uses: PortakiApp/portaki-release-action@d0dc94f6a63ceb3ae1efbf43c55d7594c12b7251 # v1
         with:
           # Le build de ce job exécute le code du module (build.rs) : un binaire `portaki` mis en
           # cache après lui ne se relit pas au release suivant.
