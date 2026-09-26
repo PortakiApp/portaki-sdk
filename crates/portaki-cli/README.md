@@ -62,7 +62,7 @@ rustup target add wasm32-unknown-unknown
 | `portaki i18n check [--all]` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
 | `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
 | `portaki test` | Forward to `cargo test` in the module crate |
-| `portaki publish [--channel preview\|stable] [--notes …]` | Push the OCI artifact, then announce it to the registry — locally with `portaki login`, or from CI with OIDC |
+| `portaki publish [--channel preview\|stable] [--notes …] [--sign]` | Push the OCI artifact, then announce it to the registry — locally with `portaki login`, or from CI with OIDC |
 | `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect` | Inspect a published OCI artifact |
@@ -307,6 +307,29 @@ re-run; two jobs starting together both look before either announces, so seriali
 `publish` announces the version to the registry after the push (needs `portaki login`).
 `--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
 a version already on GHCR without pushing anything, which is how an existing catalogue is adopted.
+
+### Signing from a workstation
+
+`portaki publish --sign` signs the pushed digest with your GitHub identity — cosign keyless, public
+Fulcio and Rekor — after the push and before the announcement, and prints
+`signé par <address> (hors CI)`. The signature lands on the OCI registry in the format of
+`cosign sign` v3.1.3, the one the registry verifies. No provenance, no audit attestation: outside
+CI they would prove nothing.
+
+- It needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) v3.1.3 or a later
+  3.x in the `PATH` (or `PORTAKI_COSIGN`): `brew install cosign`, or
+  `go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.3`. It is checked before the build.
+- The browser opens on Sigstore's sign-in, GitHub only. The CLI does that flow itself (cosign's
+  own lets you pick Google or Microsoft), then hands the token to `cosign sign` through
+  `SIGSTORE_ID_TOKEN`: never on the command line, never printed. The key is ephemeral.
+- cosign gets the push credentials through a temporary `DOCKER_CONFIG` (mode 0600), deleted
+  afterwards.
+- A failed signature stops the publication before the announcement: nothing is announced.
+- In CI (`CI` or `GITHUB_ACTIONS` set) `--sign` is refused: the release action signs there, with
+  provenance.
+
+Without `--sign`, publishing a **stable** version to production from a workstation warns that
+production will refuse to install it.
 
 ### What is new
 

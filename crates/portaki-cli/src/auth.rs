@@ -246,6 +246,9 @@ struct RenewedTokens {
     refresh_token: String,
 }
 
+/// La plateforme de production.
+pub const PRODUCTION_API: &str = "https://api.portaki.app";
+
 /// `--url`, puis `PORTAKI_API_URL`, puis la production.
 ///
 /// Une valeur vide ou blanche vaut « non définie », pas « URL vide ». `env::var` rend `Ok("")`
@@ -263,7 +266,7 @@ fn resolve_base_url(explicit: Option<&str>, from_env: Option<&str>) -> String {
         .flatten()
         .map(str::trim)
         .find(|value| !value.is_empty())
-        .unwrap_or("https://api.portaki.app")
+        .unwrap_or(PRODUCTION_API)
         .trim_end_matches('/')
         .to_string()
 }

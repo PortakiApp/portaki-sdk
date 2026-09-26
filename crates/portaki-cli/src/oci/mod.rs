@@ -1,6 +1,6 @@
 //! OCI artifact packaging and push (ORAS-compatible layout).
 
-mod auth;
+pub mod auth;
 pub mod pack;
 
 use std::path::Path;

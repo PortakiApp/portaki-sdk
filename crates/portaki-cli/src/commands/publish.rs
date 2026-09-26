@@ -31,7 +31,7 @@ use clap::Parser;
 
 use crate::commands::build::{self, BuildArgs};
 use crate::commands::{link, test};
-use crate::{auth, oci, oidc, ui, workspace};
+use crate::{auth, oci, oidc, sign, ui, workspace};
 
 #[derive(Debug, Clone, Parser)]
 /// Arguments for `portaki publish`.
@@ -59,8 +59,13 @@ pub struct PublishArgs {
     #[arg(long)]
     pub no_announce: bool,
     /// Announce a version already on GHCR, compiling and pushing nothing.
-    #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build", "prebuilt"])]
+    #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build", "prebuilt", "sign"])]
     pub announce_only: bool,
+    /// Sign the pushed digest with your GitHub identity (cosign keyless: Fulcio and Rekor) before
+    /// announcing it. Needs cosign v3.1.3+ and a browser; refused in CI, where the release action
+    /// signs with provenance. Without it, a stable version is refused at install in production.
+    #[arg(long)]
+    pub sign: bool,
     /// Push what an earlier job built and tested, running nothing of the module — neither its
     /// build nor its tests. For a CI job that holds the publishing rights: module code must not
     /// run there. The artifact must name the module and version of the sources.
@@ -461,6 +466,13 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         &args.notes_lang,
     )?;
 
+    // Avant tout build : un refus découvert après la poussée laisserait un artefact non signé.
+    let cosign = sign::cosign_binary();
+    if args.sign {
+        sign::refuse_in_ci(sign::in_ci())?;
+        sign::check_cosign(&cosign)?;
+    }
+
     // Reprise d'un catalogue déjà sur GHCR : on lit le digest de la version publiée et on
     // l'annonce. Rien n'est recompilé ni renvoyé, donc aucun droit d'écriture nécessaire — et
     // aucun risque d'écraser un artefact par un build local qui aurait dérivé.
@@ -558,15 +570,50 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     pushing.done(format!("pushed to {registry}"));
     ui::field("manifest", &pushed.manifest_url);
 
-    if args.no_announce {
-        ui::warn("skipped the registry announcement — this version is in no catalogue");
-        ui::advice("drop --no-announce, or replay with portaki publish --announce-only");
-        ui::blank();
-        return Ok(Landed::Unannounced);
+    let signing = args.sign.then(|| sign::sign(&cosign, &pushed, &registry));
+    if signing.is_none()
+        && unsigned_is_refused(
+            &args.channel,
+            sign::in_ci(),
+            &auth::api_base_url(args.url.as_deref()),
+        )
+    {
+        ui::warn(
+            "unsigned — production refuses to install a stable version without a signature: \
+             publish with --sign, or from the release action",
+        );
     }
+    signed_then(signing, async {
+        if args.no_announce {
+            ui::warn("skipped the registry announcement — this version is in no catalogue");
+            ui::advice("drop --no-announce, or replay with portaki publish --announce-only");
+            ui::blank();
+            return Ok(Landed::Unannounced);
+        }
+        announce(args, &coords, &pushed, &notes).await?;
+        Ok(Landed::InRegistry(coords.id.clone()))
+    })
+    .await
+}
 
-    announce(args, &coords, &pushed, &notes).await?;
-    Ok(Landed::InRegistry(coords.id))
+/// Une stable destinée à la production, publiée hors CI sans `--sign` : l'installation la
+/// refusera. En CI, c'est l'action de release qui signe, après cette commande.
+fn unsigned_is_refused(channel: &str, ci: bool, base: &str) -> bool {
+    channel == "stable" && !ci && base == auth::PRODUCTION_API
+}
+
+/// La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
+async fn signed_then<T>(
+    signing: Option<impl std::future::Future<Output = Result<String>>>,
+    then: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    if let Some(signing) = signing {
+        let email = signing
+            .await
+            .context("sign the pushed artifact — nothing was announced")?;
+        ui::success(format!("signé par {email} (hors CI)"));
+    }
+    then.await
 }
 
 /// L'artefact vient d'un job qui a exécuté le code du module : il ne choisit pas sous quel nom
@@ -944,6 +991,68 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    /// cosign échoue : l'erreur remonte, et l'annonce n'est jamais lancée.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_failed_signature_announces_nothing() {
+        let dir = tempdir().unwrap();
+        let cosign = crate::sign::tests::fake_cosign(dir.path(), "", 1);
+        let announced = std::cell::Cell::new(false);
+        let signing = async {
+            let mut command = std::process::Command::new(&cosign);
+            ui::command("cosign sign", command.arg("sign"))?;
+            Ok("dev@example.com".to_string())
+        };
+
+        let outcome = signed_then(Some(signing), async {
+            announced.set(true);
+            Ok(())
+        })
+        .await;
+
+        assert!(format!("{:#}", outcome.unwrap_err()).contains("nothing was announced"));
+        assert!(!announced.get());
+    }
+
+    #[tokio::test]
+    async fn a_signature_comes_before_the_announcement() {
+        let announced = std::cell::Cell::new(false);
+        let signing = async {
+            assert!(!announced.get());
+            Ok("dev@example.com".to_string())
+        };
+        signed_then(Some(signing), async {
+            announced.set(true);
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(announced.get());
+    }
+
+    #[test]
+    fn only_an_unsigned_stable_for_production_outside_ci_is_warned() {
+        assert!(unsigned_is_refused("stable", false, auth::PRODUCTION_API));
+        assert!(!unsigned_is_refused("preview", false, auth::PRODUCTION_API));
+        assert!(!unsigned_is_refused("stable", true, auth::PRODUCTION_API));
+        assert!(!unsigned_is_refused(
+            "stable",
+            false,
+            "http://localhost:8080"
+        ));
+    }
+
+    #[test]
+    fn sign_cannot_replay_an_announcement() {
+        let refused = PublishArgs::try_parse_from(["publish", "--sign", "--announce-only"]);
+        assert!(refused.is_err());
+        assert!(
+            PublishArgs::try_parse_from(["publish", "--sign"])
+                .unwrap()
+                .sign
+        );
+    }
 
     /// A module whose tests fail: no build, no packing, no push — whatever the flags.
     fn module_with_failing_tests() -> tempfile::TempDir {

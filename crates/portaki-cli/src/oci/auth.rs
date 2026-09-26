@@ -134,7 +134,7 @@ fn dirs_home() -> PathBuf {
 
 const GHCR: &str = "ghcr.io";
 
-fn registry_host(registry: &str) -> String {
+pub fn registry_host(registry: &str) -> String {
     registry.split('/').next().unwrap_or(registry).to_string()
 }
 
