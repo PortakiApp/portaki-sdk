@@ -43,7 +43,22 @@ impl Parse for SurfaceAttrs {
             ));
         }
         input.parse::<Token![=]>()?;
+        let id_span = input.span();
         let id: WireLit = input.parse()?;
+        let (valid_id, expected) = if context == "host" {
+            (crate::typed::is_url_segment(&id.value), "[a-z0-9-]")
+        } else {
+            (
+                crate::typed::is_guest_surface_id(&id.value),
+                "[a-z0-9.-], not starting with a dot",
+            )
+        };
+        if !valid_id {
+            return Err(syn::Error::new(
+                id_span,
+                format!("a {context} surface id is 1 to 64 of {expected}: it ends up in URLs"),
+            ));
+        }
 
         let mut display_name_key = None;
         let mut catalog = serde_json::Map::new();
@@ -85,6 +100,21 @@ impl Parse for SurfaceAttrs {
                 ));
             }
             let value = crate::typed::nav_value(input, &name, &mut checks)?;
+            if name == "path" {
+                let path = value.as_str().unwrap_or_default();
+                let valid = if context == "host" {
+                    crate::typed::is_url_segment(path)
+                } else {
+                    crate::typed::is_guest_path(path)
+                };
+                if !valid {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "path is URL segments of 1 to 64 [a-z0-9-] (a host path is a single one; \
+                         a guest one may add :params): it ends up in URLs",
+                    ));
+                }
+            }
             // `placement` and `embeds` repeat: one surface can sit in several places.
             if name == "placement" || name == "embeds" {
                 catalog
@@ -217,6 +247,29 @@ mod tests {
             serde_json::json!(["HostFragmentId::PoliceForm"])
         );
         assert_eq!(attrs.catalog["role"], "GuestRole::ArrivalFormality");
+    }
+
+    #[test]
+    fn an_id_or_a_path_that_would_escape_its_url_segment_is_refused() {
+        for bad in [
+            r#"host, id = "x/../../auth/logout#""#,
+            r#"host, id = "explore.detail""#,
+            r#"host, id = "main", path = "x/../../auth""#,
+            r#"host, id = "main", path = "a%2F..""#,
+            r#"guest, id = "..""#,
+            r#"guest, id = "home/card""#,
+            r#"guest, id = "home.card", path = "../admin""#,
+            r#"guest, id = "home.card", path = "a//b""#,
+            r#"guest, id = "home.card", path = "a/:b/..""#,
+        ] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
+        for good in [
+            r#"host, id = "issue-stats", path = "tasks""#,
+            r#"guest, id = "explore.item", path = "appliances/:deviceId""#,
+        ] {
+            assert!(parse(good).is_ok(), "{good}");
+        }
     }
 
     #[test]

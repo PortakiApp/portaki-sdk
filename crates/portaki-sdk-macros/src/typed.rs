@@ -142,6 +142,35 @@ pub(crate) fn nav_value(
     Ok(typed.emitted.into())
 }
 
+/// A host `pathSegment` or surface id: the fronts build API and dashboard URLs from it, so no
+/// `/`, `.` or `%` — `^[a-z0-9-]{1,64}$` in module.v1.json.
+pub(crate) fn is_url_segment(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+/// A guest surface id: a URL segment that may hold dots, never first (`explore.detail`).
+pub(crate) fn is_guest_surface_id(value: &str) -> bool {
+    value.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && is_url_segment(&value.replace('.', "-"))
+}
+
+/// A guest route: URL segments, then `:params` (`appliances/:deviceId`).
+pub(crate) fn is_guest_path(value: &str) -> bool {
+    let mut segments = value.split('/');
+    segments.next().is_some_and(is_url_segment)
+        && segments.all(|segment| match segment.strip_prefix(':') {
+            Some(param) => {
+                (1..=64).contains(&param.len())
+                    && param.starts_with(|c: char| c.is_ascii_alphabetic())
+                    && param.bytes().all(|b| b.is_ascii_alphanumeric())
+            }
+            None => is_url_segment(segment),
+        })
+}
+
 /// A wall-clock time `HH:MM`, checked at compile time.
 pub(crate) fn local_time(literal: &LitStr) -> syn::Result<String> {
     let value = literal.value();
