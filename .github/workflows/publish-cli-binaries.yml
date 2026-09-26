@@ -1,0 +1,102 @@
+name: Publish CLI binaries
+
+# Attaches prebuilt `portaki` binaries to the GitHub Release of the tag, with their SHA-256.
+# `PortakiApp/portaki-release-action/install` downloads them instead of running
+# `cargo install portaki-cli` (~2 min per module job).
+#
+# Why here and nowhere else: a binary is only as trustworthy as the code that ran next to its
+# build. This workflow compiles the SDK workspace at the tag and nothing else — no module code,
+# no cache (a restored `target/` is state another run wrote). Module CIs never write these assets.
+#
+# Separate from `publish-crates.yml` on purpose: a failed upload must not block crates.io, nor
+# the reverse. Replay after a failure = "Re-run jobs" on the tag run (uploads use --clobber).
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: publish-cli-binaries-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+        # release-please bumps the workspace version in Cargo.toml, not in Cargo.lock:
+        # re-sync the workspace members only, then build locked on every third-party crate.
+        run: |
+          set -euo pipefail
+          cargo update --workspace
+          cargo build --release --locked -p portaki-cli --target "$TARGET"
+
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          name="portaki-${TAG#v}-${TARGET}.tar.gz"
+          mkdir dist
+          tar -czf "dist/${name}" -C "target/${TARGET}/release" portaki
+          "target/${TARGET}/release/portaki" -V
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portaki-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Only job with write access, and it compiles nothing: checksums + upload.
+  release:
+    name: release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for f in *.tar.gz; do sha256sum -- "$f" > "$f.sha256"; done
+          sha256sum -- *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload to the release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" ./*.tar.gz ./*.sha256 SHA256SUMS --clobber

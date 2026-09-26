@@ -76,6 +76,34 @@ If a tag run published some crates then failed (e.g. index lag):
 
 A failure that needs a code change is fixed on `main` and released as the next patch version.
 
+## Prebuilt CLI binaries
+
+Workflow: [`.github/workflows/publish-cli-binaries.yml`](../.github/workflows/publish-cli-binaries.yml),
+on the same `v*` tag push. It builds `portaki` in release mode and attaches to the GitHub Release
+`vX.Y.Z`:
+
+| Asset | Content |
+|-------|---------|
+| `portaki-X.Y.Z-x86_64-unknown-linux-gnu.tar.gz` | `portaki` (built on `ubuntu-latest`) |
+| `portaki-X.Y.Z-aarch64-apple-darwin.tar.gz` | `portaki` (built on `macos-latest`) |
+| `<archive>.sha256` | `sha256sum` line for that archive |
+| `SHA256SUMS` | all archives |
+
+`PortakiApp/portaki-release-action/install` downloads the archive matching the runner, checks its
+`.sha256`, and falls back to `cargo install portaki-cli` when the release has no such asset
+(versions before this workflow) or the runner has no supported target.
+
+Trust: only this workflow writes these assets. It compiles the SDK workspace at the tag and
+nothing else — no module code, no Rust cache — and the only job holding `contents: write`
+(`release`) compiles nothing: it checksums the build artifacts and runs `gh release upload`.
+No secret besides `GITHUB_TOKEN`.
+
+The build runs `cargo update --workspace` before `cargo build --locked`: release-please bumps the
+workspace version in `Cargo.toml` but not in `Cargo.lock`. Only workspace members move; every
+third-party crate stays at its locked version.
+
+Replay after a failure: **Re-run jobs** on the tag run (`--clobber` replaces partial uploads).
+
 ## Secrets (GitHub)
 
 | Secret | Usage |
