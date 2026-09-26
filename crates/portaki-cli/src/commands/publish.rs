@@ -59,8 +59,13 @@ pub struct PublishArgs {
     #[arg(long)]
     pub no_announce: bool,
     /// Announce a version already on GHCR, compiling and pushing nothing.
-    #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build"])]
+    #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build", "prebuilt"])]
     pub announce_only: bool,
+    /// Push what an earlier job built and tested, running nothing of the module — neither its
+    /// build nor its tests. For a CI job that holds the publishing rights: module code must not
+    /// run there. The artifact must name the module and version of the sources.
+    #[arg(long, conflicts_with = "skip_build")]
+    pub prebuilt: bool,
     /// In a repository holding several modules, the one to publish.
     #[arg(long, conflicts_with = "all")]
     pub module: Option<String>,
@@ -471,25 +476,31 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     }
 
     // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie de
-    // conformité est ce que tous les modules doivent à la plateforme. Pas de drapeau pour
-    // l'éviter — `--skip-build` saute un artefact qu'un job précédent a produit, et les tests ne
-    // sont pas un artefact qu'on se passe.
-    test::gate_publish(&module_root).context("tests before publish")?;
-    ui::blank();
-
-    if args.skip_build {
-        ui::skipped("build skipped (--skip-build)");
+    // conformité est ce que tous les modules doivent à la plateforme. `--skip-build` ne l'évite
+    // pas. `--prebuilt` si : le job qui détient les droits de publication ne doit exécuter aucun
+    // code du module — les tests ont tourné dans le job, sans secrets, qui a produit l'artefact.
+    if args.prebuilt {
+        ui::skipped(
+            "build and tests skipped (--prebuilt) — the job that built the artifact ran them",
+        );
+        artifact_matches_sources(&module_root, &artifact_dir)?;
     } else {
-        build::run(BuildArgs {
-            release: true,
-            manifest_only: false,
-            module: None,
-            all: false,
-            nested: true,
-        })
-        .await
-        .context("portaki build --release before publish")?;
+        test::gate_publish(&module_root).context("tests before publish")?;
         ui::blank();
+        if args.skip_build {
+            ui::skipped("build skipped (--skip-build)");
+        } else {
+            build::run(BuildArgs {
+                release: true,
+                manifest_only: false,
+                module: None,
+                all: false,
+                nested: true,
+            })
+            .await
+            .context("portaki build --release before publish")?;
+            ui::blank();
+        }
     }
 
     stamp_changelog(&module_root, &artifact_dir, args)?;
@@ -556,6 +567,24 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
 
     announce(args, &coords, &pushed, &notes).await?;
     Ok(Landed::InRegistry(coords.id))
+}
+
+/// L'artefact vient d'un job qui a exécuté le code du module : il ne choisit pas sous quel nom
+/// il part. Sans ce contrôle, un module piégé produirait un `publish-manifest.json` au nom d'un
+/// autre, et le job de publication le pousserait sous ce nom.
+fn artifact_matches_sources(module_root: &Path, artifact_dir: &Path) -> Result<()> {
+    let sources = oci::pack::read_source_coordinates(module_root)?;
+    let artifact = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
+    if artifact.id != sources.id || artifact.version != sources.version {
+        anyhow::bail!(
+            "the prebuilt artifact is {} {}, the sources are {} {} — refusing to publish it",
+            artifact.id,
+            artifact.version,
+            sources.id,
+            sources.version
+        );
+    }
+    Ok(())
 }
 
 /// Inscrit `changelog` dans `publish-manifest.json` : `--notes` par langue, sinon la section de
@@ -756,6 +785,7 @@ enum Credential {
 /// workflow ne l'a pas demandé, on le dit plutôt que de réclamer un `portaki login` introuvable
 /// sur un runner.
 async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Credential> {
+    auth::ensure_transport(base)?;
     if let Some(token) = auth::explicit_token() {
         return Ok(Credential::Person(token));
     }
@@ -772,7 +802,7 @@ async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Creden
              Le jeton est ce qui remplace un secret de publication — il n'y en a pas d'autre à poser"
         );
     }
-    auth::access_token()
+    auth::access_token(base)
         .map(Credential::Person)
         .context("portaki login required to announce a publication — or pass --no-announce to push to GHCR only")
 }
@@ -1116,6 +1146,47 @@ mod tests {
                 "{flags:?}: nothing may be built or packed once the tests fail"
             );
         }
+    }
+
+    /// `module_with_failing_tests`, plus the artifact an earlier job built — named `artifact_id`.
+    fn prebuilt_module(artifact_id: &str) -> tempfile::TempDir {
+        let module = module_with_failing_tests();
+        let artifact = module.path().join("target/portaki");
+        fs::create_dir_all(&artifact).unwrap();
+        fs::write(
+            artifact.join("publish-manifest.json"),
+            format!(r#"{{"id":"{artifact_id}","version":"0.1.0","sdkVersion":"8.7.0"}}"#),
+        )
+        .unwrap();
+        let wasm = module.path().join("target/wasm32-unknown-unknown/release");
+        fs::create_dir_all(&wasm).unwrap();
+        fs::write(wasm.join(format!("{artifact_id}.wasm")), b"\0asm").unwrap();
+        module
+    }
+
+    /// The publishing job runs nothing of the module: the tests would fail here, and are not run.
+    #[tokio::test]
+    async fn prebuilt_runs_no_module_code() {
+        let module = prebuilt_module("failing-publish");
+
+        let landed = release(module.path(), &publish_args(&["--prebuilt", "--dry-run"])).await;
+
+        assert_eq!(landed.unwrap(), Landed::DryRun);
+    }
+
+    /// An artifact built by module code does not pick the name it is pushed under.
+    #[tokio::test]
+    async fn prebuilt_refuses_an_artifact_named_after_another_module() {
+        let module = prebuilt_module("nuki");
+
+        let error = release(module.path(), &publish_args(&["--prebuilt", "--dry-run"]))
+            .await
+            .unwrap_err();
+
+        assert!(
+            format!("{error:#}").contains("refusing to publish"),
+            "{error:#}"
+        );
     }
 
     #[test]

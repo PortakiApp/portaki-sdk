@@ -86,7 +86,7 @@ struct Cli {
 enum Command {
     /// Scaffold a new module from a template.
     Init(commands::init::InitArgs),
-    /// Sign in with the device grant and store the token in the system keychain.
+    /// Sign in with the device grant; the session only goes back to the platform that issued it.
     Login(commands::login::LoginArgs),
     /// End the session here and on the platform.
     Logout(commands::login::LogoutArgs),

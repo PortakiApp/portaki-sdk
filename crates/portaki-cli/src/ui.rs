@@ -611,8 +611,11 @@ pub fn countdown(remaining: Duration) -> String {
 /// Détaché : `open` rend la main tout de suite au lieu d'attendre la fermeture du navigateur, ce
 /// qui bloquerait le sondage juste après. Un échec n'en est pas vraiment un — il reste l'URL
 /// affichée, à ouvrir à la main.
+///
+/// `https` only (plain `http` to this machine for a local platform): the URL comes from the
+/// server, and `open` hands anything else — `file:`, a custom scheme — to whatever handles it.
 pub fn open_browser(url: &str) -> bool {
-    open::that_detached(url).is_ok()
+    crate::auth::secure_or_loopback(url) && open::that_detached(url).is_ok()
 }
 
 #[cfg(test)]

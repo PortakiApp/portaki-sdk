@@ -85,7 +85,7 @@ async fn link_all(args: &LinkArgs, anchor: &str, others: &[String]) -> Result<bo
         std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
         std::env::var("PORTAKI_API_URL").ok().as_deref(),
     );
-    let mut token = auth::access_token()?;
+    let mut token = auth::access_token(&base)?;
     let reading = ui::step(format!("reading how {anchor} is linked"));
     let link = match read_link(&base, anchor, &token).await {
         Err(failure) if failure.is::<Unauthorized>() => {

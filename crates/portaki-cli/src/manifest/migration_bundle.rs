@@ -46,6 +46,7 @@ pub fn write_migration_bundle(
 
     let mut revisions = Vec::with_capacity(sql_files.len());
     for path in sql_files {
+        super::ensure_inside(module_root, &path)?;
         let file_name = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -103,6 +104,21 @@ mod tests {
         let raw = fs::read_to_string(path).unwrap();
         assert!(raw.contains("\"module_id\": \"weather\""));
         assert!(raw.contains("20260526100000_v1_baseline"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_migration_linked_outside_the_module_is_refused() {
+        let root = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        fs::write(outside.path().join("dump.sql"), "SELECT 1;").unwrap();
+        let migrations = root.path().join("db/migrations");
+        fs::create_dir_all(&migrations).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("dump.sql"), migrations.join("V1.sql"))
+            .unwrap();
+
+        let error = write_migration_bundle(root.path(), root.path(), "weather", 1).unwrap_err();
+        assert!(error.to_string().contains("refusing to publish"), "{error}");
     }
 
     #[test]
