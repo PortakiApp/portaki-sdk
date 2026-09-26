@@ -1,9 +1,12 @@
 //! `portaki publish --sign` — la signature d'auteur, hors CI.
 //!
 //! En CI, c'est l'action de release qui signe, avec provenance et audit. Depuis un poste, il ne
-//! reste que l'identité de l'auteur : un certificat Fulcio éphémère pour son compte GitHub, la
-//! signature au journal Rekor, déposée sur le registre OCI au format de `cosign sign` v3 — celui
-//! que le registre Portaki vérifie déjà. C'est donc `cosign` lui-même qui signe.
+//! reste que l'identité de l'auteur : un certificat Fulcio éphémère pour son compte GitHub, et
+//! une attestation Portaki (`cosign attest`, prédicat [`PREDICATE_TYPE`]) au journal Rekor puis
+//! sur le registre OCI. Ce n'est pas une provenance : elle dit qui a publié quel module, en
+//! quelle version, rien de la façon dont il a été construit. Pas `cosign sign` : son sujet
+//! in-toto n'a pas de `name`, et sigstore-java, côté registre, le refuse. `cosign attest` nomme
+//! le sujet d'après le dépôt, à côté du digest.
 //!
 //! Le jeton OIDC, en revanche, c'est la CLI qui le demande. Le flux navigateur de cosign laisse
 //! choisir le fournisseur (GitHub, Google, Microsoft) et n'offre aucun drapeau pour l'imposer ;
@@ -27,6 +30,9 @@ use crate::{oci, ui};
 /// L'émetteur public de Sigstore (Dex), et le connecteur GitHub qu'on lui impose.
 const ISSUER: &str = "https://oauth2.sigstore.dev/auth";
 const GITHUB: &str = "https://github.com/login/oauth";
+
+/// Le type du prédicat de l'attestation d'auteur, celui que le registre attend.
+const PREDICATE_TYPE: &str = "https://portaki.app/attestations/author/v1";
 
 /// La version de l'action de release, celle dont le registre vérifie le format.
 const MINIMUM: (u64, u64, u64) = (3, 1, 3);
@@ -92,14 +98,26 @@ fn parse_version(raw: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
-/// Signe le digest poussé et rend l'adresse de l'auteur.
-pub async fn sign(bin: &Path, pushed: &oci::PushedArtifact, registry: &str) -> Result<String> {
+/// Atteste le digest poussé au nom de l'auteur et rend son adresse.
+pub async fn sign(
+    bin: &Path,
+    pushed: &oci::PushedArtifact,
+    registry: &str,
+    coords: &oci::pack::ModuleCoordinates,
+) -> Result<String> {
     let identity = github_identity().await?;
-    let config = RegistryConfig::write(registry)?;
+    let scratch = Scratch::new()?;
+    scratch.write_registry_config(registry)?;
+    let predicate = scratch.write(
+        "predicate.json",
+        serde_json::json!({ "moduleId": coords.id, "version": coords.version })
+            .to_string()
+            .as_bytes(),
+    )?;
     let subject = subject(&pushed.image_ref, &pushed.digest);
     ui::command(
-        "cosign sign",
-        &mut cosign_sign(bin, &subject, &config.0, &identity.token),
+        "cosign attest",
+        &mut cosign_attest(bin, &subject, &predicate, &scratch.0, &identity.token),
     )?;
     Ok(identity.email)
 }
@@ -114,52 +132,75 @@ fn subject(image_ref: &str, digest: &str) -> String {
 }
 
 /// Le jeton passe par l'environnement : sur la ligne de commande, `ps` le montrerait.
-fn cosign_sign(bin: &Path, subject: &str, docker_config: &Path, token: &str) -> Command {
+fn cosign_attest(
+    bin: &Path,
+    subject: &str,
+    predicate: &Path,
+    docker_config: &Path,
+    token: &str,
+) -> Command {
     let mut command = Command::new(bin);
     command
-        .args(["sign", "--yes", "--oidc-provider", "envvar", subject])
+        .args([
+            "attest",
+            "--yes",
+            "--oidc-provider",
+            "envvar",
+            "--type",
+            PREDICATE_TYPE,
+        ])
+        .arg("--predicate")
+        .arg(predicate)
+        .arg(subject)
         .env("SIGSTORE_ID_TOKEN", token)
         .env("DOCKER_CONFIG", docker_config);
     command
 }
 
-/// Les identifiants de la poussée, remis à cosign dans un `DOCKER_CONFIG` temporaire (0600) —
-/// cosign ne lit ni `GITHUB_TOKEN` ni `GHCR_TOKEN`, et un mot de passe sur la ligne de commande
-/// se lirait dans `ps`. Effacé à la sortie, quoi qu'il arrive.
-struct RegistryConfig(PathBuf);
+/// Un dossier temporaire (0700) pour cosign : le `DOCKER_CONFIG` et le prédicat, chacun en 0600.
+/// Les identifiants de la poussée y passent parce que cosign ne lit ni `GITHUB_TOKEN` ni
+/// `GHCR_TOKEN`, et qu'un mot de passe sur la ligne de commande se lirait dans `ps`. Effacé à la
+/// sortie, quoi qu'il arrive.
+struct Scratch(PathBuf);
 
-impl RegistryConfig {
-    fn write(registry: &str) -> Result<Self> {
-        let RegistryAuth::Basic(user, password) = oci::auth::resolve_registry_auth(registry)?
-        else {
-            bail!("no registry credentials for cosign — set GITHUB_TOKEN or docker login");
-        };
+impl Scratch {
+    fn new() -> Result<Self> {
         let dir = std::env::temp_dir().join(format!("portaki-sign-{}", uuid::Uuid::new_v4()));
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
         builder
             .create(&dir)
-            .context("create a registry config for cosign")?;
-        let config = Self(dir);
-        let auth = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
-        let body = serde_json::json!({
-            "auths": { oci::auth::registry_host(registry): { "auth": auth } }
-        });
+            .context("create a temporary directory for cosign")?;
+        Ok(Self(dir))
+    }
+
+    fn write(&self, name: &str, body: &[u8]) -> Result<PathBuf> {
+        let path = self.0.join(name);
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
         std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        std::io::Write::write_all(
-            &mut options.open(config.0.join("config.json"))?,
-            body.to_string().as_bytes(),
-        )
-        .context("write the registry config for cosign")?;
-        Ok(config)
+        std::io::Write::write_all(&mut options.open(&path)?, body)
+            .with_context(|| format!("write {name} for cosign"))?;
+        Ok(path)
+    }
+
+    fn write_registry_config(&self, registry: &str) -> Result<()> {
+        let RegistryAuth::Basic(user, password) = oci::auth::resolve_registry_auth(registry)?
+        else {
+            bail!("no registry credentials for cosign — set GITHUB_TOKEN or docker login");
+        };
+        let auth = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
+        let body = serde_json::json!({
+            "auths": { oci::auth::registry_host(registry): { "auth": auth } }
+        });
+        self.write("config.json", body.to_string().as_bytes())?;
+        Ok(())
     }
 }
 
-impl Drop for RegistryConfig {
+impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
@@ -391,10 +432,11 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_command_is_cosign_sign_with_the_token_kept_off_argv() {
-        let command = cosign_sign(
+    fn the_command_is_cosign_attest_with_the_token_kept_off_argv() {
+        let command = cosign_attest(
             Path::new("/opt/cosign"),
             "ghcr.io/acme/portaki-modules-nuki@sha256:9f2c",
+            Path::new("/tmp/cfg/predicate.json"),
             Path::new("/tmp/cfg"),
             "secret.jwt.token",
         );
@@ -403,13 +445,20 @@ pub(crate) mod tests {
         assert_eq!(
             args,
             [
-                "sign",
+                "attest",
                 "--yes",
                 "--oidc-provider",
                 "envvar",
+                "--type",
+                "https://portaki.app/attestations/author/v1",
+                "--predicate",
+                "/tmp/cfg/predicate.json",
                 "ghcr.io/acme/portaki-modules-nuki@sha256:9f2c"
             ]
         );
+        assert!(!args
+            .iter()
+            .any(|arg| arg.to_string_lossy().contains("secret")));
         let envs: Vec<_> = command.get_envs().collect();
         assert!(envs.contains(&(
             std::ffi::OsStr::new("SIGSTORE_ID_TOKEN"),
@@ -450,8 +499,33 @@ pub(crate) mod tests {
     fn a_failing_cosign_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
         let bin = fake_cosign(dir.path(), "", 1);
-        let mut command = cosign_sign(&bin, "r@sha256:1", dir.path(), "t");
-        assert!(ui::command("cosign sign", &mut command).is_err());
+        let predicate = dir.path().join("predicate.json");
+        let mut command = cosign_attest(&bin, "r@sha256:1", &predicate, dir.path(), "t");
+        assert!(ui::command("cosign attest", &mut command).is_err());
+    }
+
+    #[test]
+    fn the_predicate_is_private_and_gone_afterwards() {
+        let scratch = Scratch::new().unwrap();
+        let dir = scratch.0.clone();
+        let predicate = scratch
+            .write(
+                "predicate.json",
+                br#"{"moduleId":"nuki","version":"1.4.0"}"#,
+            )
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&predicate).unwrap(),
+            r#"{"moduleId":"nuki","version":"1.4.0"}"#
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&predicate).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        drop(scratch);
+        assert!(!dir.exists());
     }
 
     #[test]

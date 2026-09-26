@@ -310,20 +310,23 @@ a version already on GHCR without pushing anything, which is how an existing cat
 
 ### Signing from a workstation
 
-`portaki publish --sign` signs the pushed digest with your GitHub identity — cosign keyless, public
-Fulcio and Rekor — after the push and before the announcement, and prints
-`signé par <address> (hors CI)`. The signature lands on the OCI registry in the format of
-`cosign sign` v3.1.3, the one the registry verifies. No provenance, no audit attestation: outside
-CI they would prove nothing.
+`portaki publish --sign` attests the pushed digest as its author, with your GitHub identity —
+cosign keyless, public Fulcio and Rekor — after the push and before the announcement, and prints
+`signé par <address> (hors CI)`. It is a **Portaki author attestation**, not provenance:
+`cosign attest --type https://portaki.app/attestations/author/v1` with the predicate
+`{"moduleId": "<id>", "version": "<version>"}`, an in-toto statement whose subject names the
+repository and carries the digest, attached to the OCI registry as a Sigstore bundle. It says who
+published which module and version, nothing about how it was built: outside CI, a provenance would
+prove nothing. The release action attests SLSA provenance in CI.
 
 - It needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) v3.1.3 or a later
   3.x in the `PATH` (or `PORTAKI_COSIGN`): `brew install cosign`, or
   `go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.3`. It is checked before the build.
 - The browser opens on Sigstore's sign-in, GitHub only. The CLI does that flow itself (cosign's
-  own lets you pick Google or Microsoft), then hands the token to `cosign sign` through
+  own lets you pick Google or Microsoft), then hands the token to `cosign attest` through
   `SIGSTORE_ID_TOKEN`: never on the command line, never printed. The key is ephemeral.
-- cosign gets the push credentials through a temporary `DOCKER_CONFIG` (mode 0600), deleted
-  afterwards.
+- cosign gets the push credentials through a temporary `DOCKER_CONFIG`, and the predicate through
+  a temporary file (both mode 0600), deleted afterwards.
 - A failed signature stops the publication before the announcement: nothing is announced.
 - In CI (`CI` or `GITHUB_ACTIONS` set) `--sign` is refused: the release action signs there, with
   provenance.

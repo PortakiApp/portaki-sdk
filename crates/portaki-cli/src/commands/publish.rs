@@ -61,9 +61,11 @@ pub struct PublishArgs {
     /// Announce a version already on GHCR, compiling and pushing nothing.
     #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build", "prebuilt", "sign"])]
     pub announce_only: bool,
-    /// Sign the pushed digest with your GitHub identity (cosign keyless: Fulcio and Rekor) before
-    /// announcing it. Needs cosign v3.1.3+ and a browser; refused in CI, where the release action
-    /// signs with provenance. Without it, a stable version is refused at install in production.
+    /// Attest the pushed digest as its author, with your GitHub identity, before announcing it: a
+    /// Portaki author attestation (cosign attest, keyless: Fulcio and Rekor) naming the module and
+    /// version — not provenance. Needs cosign v3.1.3+ and a browser; refused in CI, where the
+    /// release action attests provenance. Without it, a stable version is refused at install in
+    /// production.
     #[arg(long)]
     pub sign: bool,
     /// Push what an earlier job built and tested, running nothing of the module — neither its
@@ -570,7 +572,9 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     pushing.done(format!("pushed to {registry}"));
     ui::field("manifest", &pushed.manifest_url);
 
-    let signing = args.sign.then(|| sign::sign(&cosign, &pushed, &registry));
+    let signing = args
+        .sign
+        .then(|| sign::sign(&cosign, &pushed, &registry, &coords));
     if signing.is_none()
         && unsigned_is_refused(
             &args.channel,
@@ -1001,7 +1005,7 @@ mod tests {
         let announced = std::cell::Cell::new(false);
         let signing = async {
             let mut command = std::process::Command::new(&cosign);
-            ui::command("cosign sign", command.arg("sign"))?;
+            ui::command("cosign attest", command.arg("attest"))?;
             Ok("dev@example.com".to_string())
         };
 
