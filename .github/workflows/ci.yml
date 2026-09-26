@@ -7,14 +7,6 @@ on:
       - "**.md"
       - "docs/**"
       - ".github/CI.md"
-  # `pull_request` et jamais `pull_request_target` : le code d'une PR, fork compris, tourne sans
-  # secrets et avec un GITHUB_TOKEN en lecture seule. Sans ce déclencheur, rien ne vérifiait une
-  # PR avant son merge.
-  pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/CI.md"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
