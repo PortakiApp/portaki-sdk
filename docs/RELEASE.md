@@ -60,15 +60,21 @@ dev-deps from crates.io).
    - Repository owner: `PortakiApp`
    - Repository name: `portaki-sdk`
    - Workflow filename: `publish-crates.yml`
+   - Environment: `crates-io`
 5. Later tags: OIDC only — no long-lived token in GitHub secrets.
+
+The `crates-io` environment only deploys `v*` tags, and the job refuses any other ref: nothing
+reaches crates.io from a branch.
 
 ### Resume a partial publish
 
-If a tag run published some crates then failed (e.g. cycle / index lag):
+If a tag run published some crates then failed (e.g. index lag):
 
-1. Land the fix on `main` (versions stay at the release you’re finishing).
-2. Actions → **Publish crates.io** → **Run workflow** (`workflow_dispatch`).
-3. Already-published crate versions are skipped by `cargo ws publish`.
+1. Actions → the failed run → **Re-run failed jobs**, or **Publish crates.io** → **Run workflow**
+   on the tag `vX.Y.Z` (not on `main`: the job refuses a branch).
+2. Already-published crate versions are skipped by `cargo ws publish`.
+
+A failure that needs a code change is fixed on `main` and released as the next patch version.
 
 ## Secrets (GitHub)
 
