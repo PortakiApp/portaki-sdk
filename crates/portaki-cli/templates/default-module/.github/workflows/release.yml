@@ -40,7 +40,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: PortakiApp/portaki-release-action@c85597f78af82c5d3886644847e96977d7864298 # v1
+      - uses: PortakiApp/portaki-release-action@bda94d3269e7edd3de362a5e6aeda89afc6755a9 # v1
         with:
           # Une vulnérabilité de cette gravité (CVSS) arrête la release ; en dessous, et pour un
           # avis informationnel (crate non maintenue), un avertissement seulement.
