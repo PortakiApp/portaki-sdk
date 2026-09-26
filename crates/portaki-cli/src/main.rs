@@ -37,6 +37,7 @@ mod http;
 mod manifest;
 mod oci;
 mod oidc;
+mod sign;
 mod ui;
 mod update;
 mod watch_lock;
