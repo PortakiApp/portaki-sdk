@@ -2,9 +2,13 @@ name: release
 
 # Publie ce module quand un tag `v*` est poussé.
 #
-# Tout le travail est dans `portaki-release-action` : compiler en wasm32, valider le manifeste,
-# pousser l'artefact OCI, annoncer la version au registre, et avertir de ce qui vieillit. Ce
-# fichier ne dit que *quand*.
+# Tout le travail est dans `portaki-release-action` : auditer les dépendances (`cargo audit`),
+# compiler en wasm32, valider le manifeste, pousser l'artefact OCI, le signer sans clé avec sa
+# provenance et son rapport d'audit, annoncer la version au registre, et avertir de ce qui
+# vieillit. Ce fichier ne dit que *quand*.
+#
+# La production Portaki n'exécute qu'un artefact signé par le workflow lié à ce module : ce
+# fichier, dans ce dépôt. Un artefact poussé à la main sur GHCR n'y tournera pas.
 
 on:
   push:
@@ -13,10 +17,11 @@ on:
 
 permissions:
   contents: read
+  # L'artefact, et sa signature poussée à côté.
   packages: write
-  # Sans ce droit, GitHub n'émet aucun jeton OIDC et il n'y a rien à échanger contre un
-  # credential de publication. C'est ce jeton qui remplace un secret longue durée : il n'y a
-  # rien à ranger dans les secrets du dépôt.
+  # Sans ce droit, GitHub n'émet aucun jeton OIDC : rien à échanger contre un credential de
+  # publication, et aucune identité pour signer. C'est ce jeton qui remplace un secret longue
+  # durée et une clé de signature : il n'y a rien à ranger dans les secrets du dépôt.
   id-token: write
 
 jobs:
@@ -35,8 +40,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: PortakiApp/portaki-release-action@d0dc94f6a63ceb3ae1efbf43c55d7594c12b7251 # v1
+      - uses: PortakiApp/portaki-release-action@c85597f78af82c5d3886644847e96977d7864298 # v1
         with:
+          # Une vulnérabilité de cette gravité (CVSS) arrête la release ; en dessous, et pour un
+          # avis informationnel (crate non maintenue), un avertissement seulement.
+          audit-fail-on: critical
           # Le build de ce job exécute le code du module (build.rs) : un binaire `portaki` mis en
           # cache après lui ne se relit pas au release suivant.
           cache: "false"
