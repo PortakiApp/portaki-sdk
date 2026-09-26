@@ -8,7 +8,8 @@
   "runtime": { "wasm": "module.wasm" },
   "config": { "fields": [{ "key": "apiKey", "type": "password" }] },
   "hostSurfaces": [
-    { "type": "property-stats-strip", "pathSegment": "stats", "label": { "fr": "Stats", "en": "Stats" } }
+    { "type": "property-stats-strip", "pathSegment": "stats", "label": { "fr": "Stats", "en": "Stats" } },
+    { "type": "stay-detail", "pathSegment": "x/../../../../auth/logout#", "label": { "fr": "Séjour", "en": "Stay" } }
   ],
   "guestSurfaces": [
     { "surfaceId": "explore.missing", "path": "fixture-broken/missing", "labelKey": "nav.untranslated" }

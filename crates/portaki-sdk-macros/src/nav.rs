@@ -36,6 +36,12 @@ impl Parse for NavAttrs {
             }
             input.parse::<Token![=]>()?;
             let value = crate::typed::nav_value(input, &name, &mut checks)?;
+            if name == "path" && !crate::typed::is_url_segment(value.as_str().unwrap_or_default()) {
+                return Err(syn::Error::new(
+                    key.span(),
+                    "path is 1 to 64 of [a-z0-9-]: the dashboard builds URLs from it",
+                ));
+            }
             if fields.insert(name.clone(), value).is_some() {
                 return Err(syn::Error::new(
                     key.span(),
@@ -90,6 +96,10 @@ mod tests {
         assert!(syn::parse_str::<NavAttrs>(r#"placement = HostPlacement::StayAction"#).is_err());
         assert!(syn::parse_str::<NavAttrs>(
             r#"placement = HostPlacement::StayAction, path = "y", role = GuestRole::Card"#
+        )
+        .is_err());
+        assert!(syn::parse_str::<NavAttrs>(
+            r#"placement = HostPlacement::StayAction, path = "x/../../auth/logout#""#
         )
         .is_err());
     }

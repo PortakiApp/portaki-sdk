@@ -305,8 +305,8 @@
         },
         "pathSegment": {
           "type": "string",
-          "minLength": 1,
-          "description": "For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id). For property-stats-card: the key passed to statsSummary. For property-stats-detail: the id of the host surface rendering the detail, equal to the pathSegment of its tile."
+          "pattern": "^[a-z0-9-]{1,64}$",
+          "description": "Lowercase letters, digits and hyphens, 64 at most: the fronts build API and dashboard URLs from it. For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id). For property-stats-card: the key passed to statsSummary. For property-stats-detail: the id of the host surface rendering the detail, equal to the pathSegment of its tile."
         },
         "label": { "$ref": "#/$defs/i18nStringMap" },
         "icon": { "type": "string" },
@@ -374,13 +374,13 @@
       "properties": {
         "surfaceId": {
           "type": "string",
-          "minLength": 1,
-          "description": "Wasm/guest surface id (e.g. explore.detail, explore.item)"
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+          "description": "Wasm/guest surface id (e.g. explore.detail, explore.item): lowercase letters, digits, dots and hyphens, 64 at most — it ends up in API URLs."
         },
         "path": {
           "type": "string",
-          "minLength": 1,
-          "description": "Guest URL path under /p/[accessKey]/ (e.g. appliances, appliances/:deviceId)"
+          "pattern": "^[a-z0-9-]{1,64}(/([a-z0-9-]{1,64}|:[A-Za-z][A-Za-z0-9]{0,63}))*$",
+          "description": "Guest URL path under /p/[accessKey]/ (e.g. appliances, appliances/:deviceId): segments of lowercase letters, digits and hyphens, or :params."
         },
         "labelKey": {
           "type": "string",

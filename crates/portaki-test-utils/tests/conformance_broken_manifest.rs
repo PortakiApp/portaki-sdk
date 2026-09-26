@@ -16,6 +16,8 @@ fn a_manifest_off_schema_is_reported_where_it_breaks() {
     assert_reports(&findings, &["/version", "one"]);
     // Host surface types are a closed list.
     assert_reports(&findings, &["/hostSurfaces/0/type", "property-stats-strip"]);
+    // A `pathSegment` ends up in API URLs: nothing that leaves its segment.
+    assert_reports(&findings, &["/hostSurfaces/1/pathSegment", "auth/logout"]);
     // The root is closed: keys the platform ignores (`runtime`, `artifacts`, `config`) are refused.
     assert_reports(&findings, &["portaki.module.json at /", "runtime"]);
     // `config` is allowed, but its field types are the closed list the host form renders.
