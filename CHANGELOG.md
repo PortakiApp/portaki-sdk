@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.10.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.9.0...v8.10.0) (2026-09-27)
+
+
+### Features
+
+* **cli:** release to Portaki's OCI registry ([03a7dde](https://github.com/PortakiApp/portaki-sdk/commit/03a7ddebfd8c888c01eba20f979320bf8279ff2a))
+
 ## [8.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.8.1...v8.9.0) (2026-09-27)
 
 
