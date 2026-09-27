@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.8.1...v8.9.0) (2026-09-27)
+
+
+### Features
+
+* **cli:** add publish --sign author signature ([223c278](https://github.com/PortakiApp/portaki-sdk/commit/223c2789025af41a6cee7394f1035918c8f87500))
+* **cli:** add status, doctor, profiles and --json ([dac0174](https://github.com/PortakiApp/portaki-sdk/commit/dac0174e3fc85be833cdf66ee2a464dcb549e762))
+* **cli:** sign and audit in module template ([c76812b](https://github.com/PortakiApp/portaki-sdk/commit/c76812b97d5ac6f39d7050cf6c3b321af1fcaee7))
+
+
+### Bug Fixes
+
+* **cli:** correct help, warnings and release notes ([1f2df6c](https://github.com/PortakiApp/portaki-sdk/commit/1f2df6cc072b5626d140a814ae4408f55fadb595))
+* **cli:** drop commit lines from changelog files ([db20788](https://github.com/PortakiApp/portaki-sdk/commit/db20788425b2d8f639fbcf47a715491979e2e2c0))
+* **cli:** sign as a named author attestation ([7da954e](https://github.com/PortakiApp/portaki-sdk/commit/7da954e1dd418409d591ea7edd724c6d0f548e2b))
+
 ## [8.8.1](https://github.com/PortakiApp/portaki-sdk/compare/v8.8.0...v8.8.1) (2026-09-26)
 
 
