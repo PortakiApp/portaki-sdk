@@ -14,7 +14,7 @@
 //! ```
 //!
 //! That generates one `#[test]` per check under `portaki_conformance::` — `cargo test` (and
-//! `portaki publish`, which runs it) reports each on its own line. The macro links the module's
+//! `portaki release`, which runs it) reports each on its own line. The macro links the module's
 //! library into the test binary; when `[lib] name` cannot be read, name it:
 //! `conformance!(crate = my_module)`.
 //!

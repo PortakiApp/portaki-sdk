@@ -19,9 +19,6 @@ use crate::{sign, ui};
 pub struct DoctorArgs {
     #[command(flatten)]
     pub modules: ModuleArgs,
-    /// The OCI registry to check push access to (defaults like `portaki publish`).
-    #[arg(long)]
-    pub registry: Option<String>,
     /// Skip the lookups on crates.io and the registry — for an offline machine.
     #[arg(long)]
     pub offline: bool,
@@ -84,13 +81,6 @@ pub async fn run(args: DoctorArgs) -> Result<()> {
         let mut module = vec![
             toolchain(&member.root),
             sdk_versions(&member.root, args.offline).await,
-            registry(
-                &member.root,
-                &member.id,
-                args.registry.as_deref(),
-                args.offline,
-            )
-            .await,
             link(platform.as_mut(), &member.id).await,
             cargo_overrides(&member.root),
         ];
@@ -253,9 +243,10 @@ fn cosign() -> Check {
             Status::Ok,
             format!("cosign {}", version.unwrap_or_default()),
         ),
-        // Seul `publish --sign` en a besoin : un signal, pas un blocage.
+        // `release` signe par défaut : sans cosign, il faut `--no-sign`, et la version ne
+        // tournera qu'en sandbox. Un signal, pas un blocage.
         Err(failure) => check("cosign", Status::Warn, format!("{failure:#}"))
-            .fix("brew install cosign — only `portaki publish --sign` needs it"),
+            .fix("brew install cosign — portaki release signs with it"),
     }
 }
 
@@ -393,34 +384,6 @@ async fn sdk_versions(root: &Path, offline: bool) -> Check {
             Status::Ok,
             format!("portaki-sdk {sdk}, portaki {cli} (crates.io unreachable)"),
         ),
-    }
-}
-
-async fn registry(root: &Path, id: &str, flag: Option<&str>, offline: bool) -> Check {
-    use crate::commands::publish::{author_type, OFFICIAL_REGISTRY};
-    let registry = match flag {
-        Some(registry) => registry.to_string(),
-        None if author_type(root).as_deref() == Some("official") => OFFICIAL_REGISTRY.to_string(),
-        None => {
-            return check(
-                "registry",
-                Status::Skip,
-                "no registry to check — portaki publish needs --registry for this module",
-            )
-            .fix("portaki doctor --registry ghcr.io/<owner>")
-        }
-    };
-    if offline {
-        return check("registry", Status::Skip, format!("{registry} (offline)"));
-    }
-    match crate::oci::can_push(&registry, id).await {
-        Ok(()) => check(
-            "registry",
-            Status::Ok,
-            format!("{registry} grants a push token"),
-        ),
-        Err(failure) => check("registry", Status::Fail, format!("{failure:#}"))
-            .fix("set GITHUB_TOKEN (write:packages), or docker login ghcr.io"),
     }
 }
 

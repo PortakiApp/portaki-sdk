@@ -217,8 +217,8 @@ pub async fn run(args: LoginArgs) -> Result<()> {
                     "build, deploy to the sandbox, redeploy on every save",
                 ),
                 (
-                    "portaki publish",
-                    "push a release and announce it to the registry",
+                    "portaki release",
+                    "test, build, sign and announce a version",
                 ),
             ]);
             ui::blank();

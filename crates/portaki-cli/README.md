@@ -31,7 +31,7 @@
 
 ---
 
-Authors write modules against [`portaki-sdk`](https://crates.io/crates/portaki-sdk). At build time this binary compiles to `wasm32`, merges proc-macro emissions from `OUT_DIR/portaki-emissions/`, and packages OCI layers for registries such as GHCR.
+Authors write modules against [`portaki-sdk`](https://crates.io/crates/portaki-sdk). At build time this binary compiles to `wasm32`, merges proc-macro emissions from `OUT_DIR/portaki-emissions/`, and packages the OCI layers `portaki release` pushes to Portaki's OCI repository.
 
 ## Install
 
@@ -52,7 +52,7 @@ rustup target add wasm32-unknown-unknown
 | Command | Contract |
 |---------|----------|
 | `portaki status` | The developer space home, in the terminal: the five steps, the repository link, the sandbox, the last version (channel, `available`/`draft` and what is missing, signature, review), errors over 24 h, open reports — and the exact next command |
-| `portaki doctor [--registry <ref>] [--offline]` | Check this machine, one line per check with its fix: session for the targeted platform, CLI vs locked SDK vs latest, toolchain and wasm32 target, cosign, push access to the registry, the email Sigstore would certify vs your verified Portaki email, the repository link, `.cargo/config.toml` / `rust-toolchain.toml` that redirect `cargo` |
+| `portaki doctor [--offline]` | Check this machine, one line per check with its fix: session for the targeted platform, CLI vs locked SDK vs latest, toolchain and wasm32 target, cosign, the email Sigstore would certify vs your verified Portaki email, the repository link, `.cargo/config.toml` / `rust-toolchain.toml` that redirect `cargo` |
 | `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
 | `portaki login [--no-browser]` / `portaki logout` | Open a developer session with the device grant / end it here and revoke it on the platform that issued it |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
@@ -66,9 +66,9 @@ rustup target add wasm32-unknown-unknown
 | `portaki i18n check` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
 | `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
 | `portaki sdk upgrade [--to <v>] [--dry-run]` | Move to another SDK version, then build, test, lint and compare the sandbox renders; `--dry-run` touches no file and no sandbox |
-| `portaki ci <modules\|sdk-version\|check\|info\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
+| `portaki ci <modules\|sdk-version\|check\|info\|build\|release\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
 | `portaki test` | Forward to `cargo test` in the module crate |
-| `portaki publish [--channel preview\|stable] [--notes …] [--sign] [--require-available]` | Push the OCI artifact to the configured registry (GHCR by default), then announce it to the Portaki registry — locally with `portaki login`, or from CI with OIDC |
+| `portaki release [--channel preview\|stable] [--notes …] [--no-sign] [--require-available] [--dry-run]` | Test, build, push to Portaki's OCI repository with a short-lived push right from the registry, sign, and announce — locally with `portaki login`; from CI, `ci build` then `ci release`. `publish` is a hidden alias |
 | `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect <url>` | GET a URL and pretty-print it when it is JSON — no registry authentication |
@@ -134,7 +134,7 @@ still accepted, hidden.
 assembles and lints each module in turn. Run it from the repository root, or from any module —
 the render comparison, which needs one module's sandbox, only runs in the latter case.
 
-`portaki publish --all` publishes each module on its own — one OIDC token, one digest — prints a
+`portaki release --all` publishes each module on its own — one push right, one digest — prints a
 result per module, keeps going after a refusal, and exits non-zero if any module failed. Modules
 refused with `module_not_linked` are gathered into one link:
 
@@ -329,20 +329,20 @@ portaki --plain ci sdk-version                       # 2.2.0
 ```bash
 cd modules/weather
 portaki check
-PORTAKI_PUBLISH_VERSION=0.3.5 portaki publish --registry ghcr.io/portakiapp
+PORTAKI_PUBLISH_VERSION=0.3.5 portaki release
 ```
 
-Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>`.
+The artifact lands in Portaki's OCI repository, `<oci host>/modules/<module-id>:<semver>` — the
+host is the one the registry names when it grants the push, never configured here.
 
-`publish` runs the module's tests first — `cargo test` in the module crate, on the host — and
+`release` runs the module's tests first — `cargo test` in the module crate, on the host — and
 refuses to build or push anything when they fail, or when the conformance battery
 (`tests/conformance.rs` with `portaki_test_utils::conformance!();`) is not among them. `--dry-run`
-and `--skip-build` run them too. Only `--announce-only`, which compiles and pushes nothing, and
-`--prebuilt` skip them. `--prebuilt` is for a CI job that holds the publishing rights: it pushes
-the artifact an earlier job built and tested — without secrets — and runs nothing of the module,
-after checking that the artifact names the module and version of the sources.
+runs them too. Only `ci release` skips them: it pushes what `ci build` built and tested in a job
+without rights, runs nothing of the module, and checks that the artifact names the module,
+version and SDK of the sources and `Cargo.lock`.
 
-`publish` refuses a symbolic link, or a file resolving outside the module, in `i18n/`,
+`release` refuses a symbolic link, or a file resolving outside the module, in `i18n/`,
 `db/migrations/` and the previews: what it reads there lands in a public OCI layer.
 
 ## Platforms and sessions
@@ -365,49 +365,51 @@ Sessions are stored **per origin**: `portaki login --env staging` leaves the pro
 alone, `portaki logout --env staging` ends only that one, and a command towards an origin without
 a session says which login opens one — `portaki login --env staging`. A session is only ever sent back to its own origin, over https
 (plain http to localhost only). A credentials file from an earlier version is read as the session
-of the origin it recorded. `GITHUB_TOKEN` / `GHCR_TOKEN` only go to `ghcr.io`.
+of the origin it recorded.
 
-`publish` refuses a version the registry already holds, **before** pushing anything. Publications
+`release` refuses a version the registry already holds, **before** pushing anything. Publications
 are immutable, so a second push could only leave the OCI tag pointing at something the catalogue
-does not reference — two sources of truth disagreeing, with nothing to say so. That covers a
-re-run; two jobs starting together both look before either announces, so serialise them with a
-`concurrency:` group per module in the workflow.
+does not reference. That covers a re-run; two jobs starting together both look before either
+announces, so serialise them with a `concurrency:` group per module in the workflow.
 
-`publish` announces the version to the registry after the push (needs `portaki login`).
-`--no-announce` skips it — the artifact then belongs to no catalogue. `--announce-only` announces
-a version already pushed without pushing anything, which is how an existing catalogue is adopted —
-and how to replay an announcement that failed after a successful push.
+The push right comes from the registry (`POST /registry/v1/publications/push-token`, with the
+session or the CI's OIDC credential): 15 minutes, this module and version only, for the repository
+`modules/<module-id>` of the OCI host the answer names. The pushed digest is then signed and
+announced as `oci://<host>/modules/<module-id>@<digest>`. A failed announcement publishes nothing:
+replay `release` (or the job), which asks for a new right, pushes and signs again.
 
-### Signing from a workstation
+### Signing
 
-`portaki publish --sign` attests the pushed digest as its author, with your GitHub identity —
-cosign keyless, public Fulcio and Rekor — after the push and before the announcement, and prints
-`signé par <address> (hors CI)`. It is a **Portaki author attestation**, not provenance:
-`cosign attest --type https://portaki.app/attestations/author/v1` with the predicate
-`{"moduleId": "<id>", "version": "<version>"}`, an in-toto statement whose subject names the
-repository and carries the digest, attached to the OCI registry as a Sigstore bundle. It says who
-published which module and version, nothing about how it was built: outside CI, a provenance would
-prove nothing. The release action attests SLSA provenance in CI.
+`release` signs by default, after the push and before the announcement — a failed signature stops
+the publication: nothing is announced. `--no-sign` publishes unsigned, with a warning on **every**
+channel: production requires a signature everywhere, so the version never runs there — it stays
+usable in the sandbox.
+
+From a workstation, it attests the pushed digest as its author, with your GitHub identity — cosign
+keyless, public Fulcio and Rekor — and prints `signé par <address> (hors CI)`. It is a **Portaki
+author attestation**, not provenance: `cosign attest --type
+https://portaki.app/attestations/author/v1` with the predicate
+`{"moduleId": "<id>", "version": "<version>"}`. It says who published which module and version,
+nothing about how it was built.
+
+From CI, `portaki ci release` attests with the job's OIDC identity: SLSA v1 provenance, and the
+`cargo audit` report given with `--audit` (type `https://portaki.app/attestations/cargo-audit/v1`).
+The registry checks the certificate — workflow, repository, commit — against the module's link.
 
 - It needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) v3.1.3 or a later
   3.x in the `PATH` (or `PORTAKI_COSIGN`): `brew install cosign`, or
   `go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.3`. It is checked before the build.
-- The browser opens on Sigstore's sign-in, GitHub only. The CLI does that flow itself (cosign's
-  own lets you pick Google or Microsoft), then hands the token to `cosign attest` through
-  `SIGSTORE_ID_TOKEN`: never on the command line, never printed. The key is ephemeral.
-- cosign gets the push credentials through a temporary `DOCKER_CONFIG`, and the predicate through
-  a temporary file (both mode 0600), deleted afterwards.
-- A failed signature stops the publication before the announcement: nothing is announced.
-- In CI (`CI` or `GITHUB_ACTIONS` set) `--sign` is refused: the release action signs there, with
-  provenance.
-
-Without `--sign`, publishing from a workstation warns on **every** channel: production requires a
-signature everywhere, so the version never runs there — it stays usable in the sandbox. Sign with
-`--sign`, or publish from CI.
+- From a workstation, the browser opens on Sigstore's sign-in, GitHub only. The CLI does that flow
+  itself (cosign's own lets you pick Google or Microsoft), then hands the token to `cosign attest`
+  through `SIGSTORE_ID_TOKEN`: never on the command line, never printed. The key is ephemeral.
+- cosign gets the push right through a temporary `DOCKER_CONFIG`, and the predicate through a
+  temporary file (both mode 0600), deleted afterwards.
+- In CI (`CI` or `GITHUB_ACTIONS` set) `portaki release` refuses to sign as an author: use
+  `ci build` and `ci release`.
 
 ### What is new
 
-`publish` writes `changelog` into the published manifest: two or three lines a host with an older
+`release` writes `changelog` into the published manifest: two or three lines a host with an older
 version sees before updating, one entry per line with every language side by side. For each
 language, `--notes` wins (`--notes fr:"Code clavier la veille"`, repeatable, at most 5 lines of 160
 characters per language; untagged lines are in `--notes-lang`); otherwise the lines come from this
@@ -431,7 +433,7 @@ whether the host has to act after updating (`--host-action-required`, `--host-ac
 
 A **stable** version stays pending at the registry — kept, but invisible to hosts — until its
 changelog has a line in every language of the module's listing and each permission added since the
-previous stable is justified in each. `publish` says it plainly — « brouillon — invisible des
+previous stable is justified in each. `release` says it plainly — « brouillon — invisible des
 hôtes » — with the list of what is missing (for a changelog, the file or flag to add:
 `CHANGELOG.fr.md` or `--notes fr:…`) and the console link where the version is completed
 and published; a CI that passes everything publishes straight away. Preview channels never wait.
@@ -448,13 +450,13 @@ A module can version its public catalogue listing in `listing.json`, at the crat
 [`schema/listing.v1.json`](https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json)
 — point `"$schema"` at it and an editor completes and checks the file, each field describing what
 to write. The `listing` check of the conformance battery validates the file against it, so
-`publish`, which runs the battery, refuses an off-schema listing — or one still holding the
-`portaki init` instructions — before pushing. `publish` reads it before anything else — invalid JSON stops the
+`release`, which runs the battery, refuses an off-schema listing — or one still holding the
+`portaki init` instructions — before pushing. `release` reads it before anything else — invalid JSON stops the
 run before a push — and sends it as is once the version is in the registry: after the
 announcement, and also when the version was already there, so a fixed listing does not wait for
 the next release. An already-published version is not a failure: nothing is pushed, a warning says so,
 the listing goes out and the command succeeds — re-running the publish workflow is enough to push
-a fixed listing. `--dry-run` sends nothing; `--no-announce` skips it. In CI it takes a fresh
+a fixed listing. `--dry-run` sends nothing. In CI it takes a fresh
 OIDC exchange, the announcement having used its single-use credential.
 
 The file **overwrites the listing edited in the dashboard** — the repository is the source of
@@ -463,22 +465,32 @@ reasons. No `listing.json`, nothing changes.
 
 ### Publishing from CI
 
-No publication secret to store. In a GitHub Actions job with `id-token: write`, the CLI asks
-GitHub for the job's OIDC token and exchanges it at the registry for a single-use publication
-credential:
+No publication secret to store, and no registry credential: in a GitHub Actions job with
+`id-token: write`, the CLI exchanges the job's OIDC token at the registry for single-use
+credentials — one for the push right, one for the announcement, one for the listing.
+
+Two jobs, so that the module's code never runs where the rights are:
 
 ```yaml
-permissions:
-  contents: read
-  packages: write
-  id-token: write     # sans quoi il n'y a pas de jeton à échanger
-
 jobs:
-  publish:
-    environment: release   # exigé par la liaison pour le canal stable
+  build:                       # runs the module's code — no rights
+    permissions: { contents: read }
     steps:
-      - run: portaki publish --registry ghcr.io/portakiapp
+      - run: portaki ci build  # tests, build --release, lint, packaging
+      - uses: actions/upload-artifact@v7   # target/portaki/ + the wasm
+
+  release:                     # holds the rights — runs nothing of the module, not even cargo
+    needs: build
+    environment: release       # required by the link for the stable channel
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/download-artifact@v8
+      - run: portaki ci release --audit "$RUNNER_TEMP/cargo-audit.json"
 ```
+
+`ci release` writes `outcome` (`published`, `draft`, `already-published`), `digest`, `reference`,
+`id` and `version` to `GITHUB_OUTPUT`. [`portaki-release-action@v2`](https://github.com/PortakiApp/portaki-release-action)
+does both jobs, the audit included (produced in the release job, from `Cargo.lock`).
 
 Link the module to its repository from the dashboard first: the registry authorises on the
 repository *id* recorded there, and checks the workflow file, the triggering event and the

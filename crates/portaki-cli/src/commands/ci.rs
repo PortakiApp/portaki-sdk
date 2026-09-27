@@ -55,6 +55,23 @@ pub enum CiCommand {
     /// Tell Portaki how this run ended, so a broken module raises an alert — and a fixed one
     /// clears it.
     Report(ReportArgs),
+    /// Test, build and package, pushing nothing — the job that runs the module's code, without
+    /// publishing rights. Hand target/portaki and the wasm to the job that runs ci release.
+    Build(crate::commands::release::ReleaseArgs),
+    /// Push what ci build produced to Portaki's registry, sign it as this workflow (provenance,
+    /// cargo audit), and announce it. Runs nothing of the module, not even cargo.
+    Release(CiReleaseArgs),
+}
+
+#[derive(Debug, Parser)]
+/// Arguments for `portaki ci release`.
+pub struct CiReleaseArgs {
+    #[command(flatten)]
+    pub release: crate::commands::release::ReleaseArgs,
+    /// The `cargo audit` report to attest next to the provenance — produced in this job, from
+    /// Cargo.lock, never taken from the build job. Without it, the version shows as not audited.
+    #[arg(long, value_name = "FILE")]
+    pub audit: Option<PathBuf>,
 }
 
 /// `--root` (caché, ancien) ou `--module` / `--all` : les racines des modules visés.
@@ -77,6 +94,13 @@ pub async fn run(args: CiArgs) -> Result<()> {
         CiCommand::Check(args) => check(args).await,
         CiCommand::Info(args) => info(args),
         CiCommand::Report(args) => report(args).await,
+        CiCommand::Build(args) => {
+            crate::commands::release::run_as(args, crate::commands::release::Mode::CiBuild).await
+        }
+        CiCommand::Release(args) => {
+            let mode = crate::commands::release::Mode::CiRelease { audit: args.audit };
+            crate::commands::release::run_as(args.release, mode).await
+        }
     }
 }
 
@@ -870,7 +894,7 @@ async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
     Ok(serde_json::from_value(entries).unwrap_or_default())
 }
 
-fn emit_outputs(pairs: &[(&str, &str)]) -> Result<()> {
+pub(crate) fn emit_outputs(pairs: &[(&str, &str)]) -> Result<()> {
     let Ok(path) = std::env::var("GITHUB_OUTPUT") else {
         return Ok(());
     };

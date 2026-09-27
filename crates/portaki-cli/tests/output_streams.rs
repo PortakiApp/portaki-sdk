@@ -79,7 +79,8 @@ fn logout_takes_no_url() {
     assert_eq!(output.status.code(), Some(2));
 }
 
-/// The release action v1 and the `portaki-modules` workflow `grep` stdout for this line.
+/// `ci release` on a version already in the registry: nothing is pushed, the line stays on
+/// stdout, and the outcome reaches `GITHUB_OUTPUT` for the next step.
 #[test]
 fn already_in_the_registry_stays_on_stdout() {
     let module = tempfile::tempdir().unwrap();
@@ -101,20 +102,24 @@ fn already_in_the_registry_stays_on_stdout() {
     let wasm = root.join("target/wasm32-unknown-unknown/release");
     std::fs::create_dir_all(&wasm).unwrap();
     std::fs::write(wasm.join("streams.wasm"), b"\0asm").unwrap();
+    std::fs::write(
+        root.join("Cargo.lock"),
+        "[[package]]\nname = \"portaki-sdk\"\nversion = \"8.7.0\"\n",
+    )
+    .unwrap();
     let registry = serve(r#"[{"digest":"sha256:aaa","version":"0.1.0"}]"#);
+    let outputs = root.join("github-output");
 
-    let output = portaki(
-        root,
-        &[
-            "publish",
-            "--prebuilt",
-            "--no-announce",
-            "--registry",
-            "ghcr.io/someone",
-            "--url",
-            &registry,
-        ],
-    );
+    let output = Command::new(env!("CARGO_BIN_EXE_portaki"))
+        .args(["--plain", "--api", &registry, "ci", "release", "--no-sign"])
+        .current_dir(root)
+        .env("PORTAKI_NO_UPDATE_CHECK", "1")
+        .env("GITHUB_OUTPUT", &outputs)
+        .env_remove("PORTAKI_DEV_TOKEN")
+        .env_remove("PORTAKI_PUBLISH_VERSION")
+        .env_remove("ACTIONS_ID_TOKEN_REQUEST_URL")
+        .output()
+        .unwrap();
 
     assert!(output.status.success(), "{}", text(&output.stderr));
     assert!(
@@ -123,4 +128,7 @@ fn already_in_the_registry_stays_on_stdout() {
         text(&output.stdout),
         text(&output.stderr)
     );
+    let written = std::fs::read_to_string(&outputs).unwrap();
+    assert!(written.contains("outcome=already-published"), "{written}");
+    assert!(written.contains("digest=sha256:aaa"), "{written}");
 }

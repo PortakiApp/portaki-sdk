@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/schema/listing.v1.json",
   "title": "Portaki module public listing (listing.json)",
-  "description": "What a host reads in the catalogue before installing the module. Optional: without listing.json the listing is written in the developer dashboard. With it, portaki publish sends it on every run and it overwrites the dashboard version. Every text is a dictionary keyed by language; fr is the fallback language and must always be written — the catalogue serves a listing only once its French tagline and description are filled.",
+  "description": "What a host reads in the catalogue before installing the module. Optional: without listing.json the listing is written in the developer dashboard. With it, portaki release sends it on every run and it overwrites the dashboard version. Every text is a dictionary keyed by language; fr is the fallback language and must always be written — the catalogue serves a listing only once its French tagline and description are filled.",
   "type": "object",
   "required": ["category", "tagline", "description", "hostSurface"],
   "additionalProperties": false,
