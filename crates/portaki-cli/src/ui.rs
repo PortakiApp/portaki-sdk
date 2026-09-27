@@ -37,6 +37,10 @@ static VERBOSE: AtomicBool = AtomicBool::new(false);
 /// un journal de CI ni dans un `grep`.
 static PLAIN: AtomicBool = AtomicBool::new(false);
 
+/// `--json` : stdout ne porte que le document JSON de la commande ; tout le reste — étapes,
+/// champs, conseils, et la sortie des outils pilotés — part sur stderr.
+static JSON: AtomicBool = AtomicBool::new(false);
+
 /// Rien n'a encore été écrit depuis l'en-tête.
 ///
 /// Une section pose une ligne vide devant elle pour se détacher de ce qui précède. Juste après
@@ -56,6 +60,34 @@ pub fn init(no_color: bool, verbose: bool, plain: bool) {
 /// pendant l'analyse, donc avant qu'on sache autre chose des arguments.
 pub fn set_plain(plain: bool) {
     PLAIN.store(plain, Ordering::Relaxed);
+}
+
+/// Passe en `--json`, ce qui implique la sortie dépouillée.
+pub fn set_json(json: bool) {
+    JSON.store(json, Ordering::Relaxed);
+    if json {
+        set_plain(true);
+        set_colors(false);
+    }
+}
+
+/// stdout est-il réservé au document JSON ?
+pub fn json() -> bool {
+    JSON.load(Ordering::Relaxed)
+}
+
+/// Écrit le document de la commande, sur une ligne : c'est la seule chose qui sorte sur stdout
+/// en `--json`. Une ligne par appel, ce qui fait du NDJSON pour un flux (`portaki logs`).
+pub fn emit(document: &serde_json::Value) {
+    println!("{document}");
+}
+
+/// Un outil piloté dont la sortie passerait en direct : en `--json`, sa sortie standard
+/// rejoint stderr, pour que stdout reste un document.
+pub fn keep_stdout_clean(cmd: &mut Command) {
+    if json() {
+        cmd.stdout(std::io::stderr());
+    }
 }
 
 /// La sortie est-elle dépouillée ?
@@ -220,7 +252,11 @@ pub fn blank() {
 /// Toute écriture passe par ici ou par [`eline`] : une seule qui y échappe, et le drapeau ment.
 fn line(text: String) {
     FRESH.store(false, Ordering::Relaxed);
-    println!("{text}");
+    if json() {
+        eprintln!("{text}");
+    } else {
+        println!("{text}");
+    }
 }
 
 /// La même chose sur la sortie d'erreur.
@@ -340,11 +376,11 @@ pub fn warn(message: impl Display) {
     ));
 }
 
-/// Un avertissement que des scripts lisent sur stdout.
+/// Un avertissement que des scripts lisent sur stdout — sur stderr en `--json`.
 ///
 /// Seul usage : « already in the registry », que `portaki-release-action` v1 et le workflow de
 /// `portaki-modules` cherchent par `grep` sur la sortie standard. À retirer quand l'action
-/// lira une sortie JSON.
+/// lira la sortie `--json`.
 pub fn warn_on_stdout(message: impl Display) {
     line(glyphed(style(BANG).yellow().bold().to_string(), message));
 }
@@ -563,6 +599,7 @@ pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
     let step = step(label.to_owned());
 
     if verbose() {
+        keep_stdout_clean(cmd);
         let status = cmd.status().with_context(|| format!("run {label}"))?;
         if !status.success() {
             step.abandon();

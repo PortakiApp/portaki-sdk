@@ -46,18 +46,35 @@ pub struct UpgradeArgs {
     /// Treat a changed render as a failure, not only a surface that stopped rendering.
     #[arg(long)]
     pub strict: bool,
-    /// Platform URL (defaults like `portaki dev`: PORTAKI_DEV_URL, PORTAKI_API_URL, production).
-    #[arg(long)]
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
     /// Build, test and lint against the new version locally, then put every file it changed
     /// back. Touches no sandbox: the renders are not compared.
     #[arg(long)]
     pub dry_run: bool,
+    #[command(flatten)]
+    pub modules: workspace::ModuleArgs,
 }
 
 pub async fn run(args: SdkArgs) -> Result<()> {
     match args.command {
-        SdkCommand::Upgrade(upgrade) => run_upgrade(upgrade).await,
+        SdkCommand::Upgrade(upgrade) => {
+            // Sans drapeau, le dossier courant décide, comme avant : depuis la racine d'un
+            // monorepo, tous les modules bougent ensemble quand le workspace fixe la version.
+            if upgrade.modules.module.is_none() && !upgrade.modules.all {
+                return run_upgrade(&upgrade).await;
+            }
+            // Un module après l'autre : quand la version est héritée du workspace, le premier
+            // fait bouger tout le monde et les suivants disent « already resolves ».
+            for member in upgrade.modules.resolve()? {
+                workspace::enter(&member)?;
+                run_upgrade(&upgrade)
+                    .await
+                    .with_context(|| format!("module {}", member.id))?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -572,7 +589,7 @@ fn cargo(module_root: &Path, label: &str, args: &[&str]) -> Result<()> {
     ui::command(label, &mut cmd).with_context(|| format!("cargo {}", args.join(" ")))
 }
 
-async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
+async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
     ui::header(
         "portaki sdk upgrade",
         "Move to another SDK version — then build, test, lint and render to prove nothing broke.",
@@ -586,11 +603,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
             format!("{module_id} (repository root — every module moves)"),
         );
     }
-    let base_url = dev::resolve_base_url(
-        args.url.as_deref(),
-        std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
-        std::env::var("PORTAKI_API_URL").ok().as_deref(),
-    );
+    let base_url = crate::profile::api_url(args.url.as_deref());
 
     let metadata = cargo_metadata(&module_root)?;
     let current = metadata
@@ -665,13 +678,13 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
         &module_id,
     );
 
-    let mut sandbox = if let Some(reason) = no_sandbox(&args, from_repository_root) {
+    let mut sandbox = if let Some(reason) = no_sandbox(args, from_repository_root) {
         ui::skipped(reason);
         None
     } else {
         let token = crate::auth::access_token(&base_url)
             .context("sign in with `portaki login`, or pass --no-render")?;
-        let auth_url = crate::auth::api_base_url(args.url.as_deref());
+        let auth_url = crate::profile::api_url(args.url.as_deref());
         let session = crate::dev_session::start(&base_url, &auth_url, &module_id, &token).await?;
         Some(Sandbox {
             base_url: base_url.clone(),
@@ -716,7 +729,7 @@ async fn run_upgrade(args: UpgradeArgs) -> Result<()> {
     );
 
     let outcome = upgrade_and_verify(
-        &args,
+        args,
         &module_root,
         &declaration,
         &metadata,
@@ -1018,6 +1031,7 @@ async fn upgrade_and_verify(
         crate::commands::lint::run(crate::commands::lint::LintArgs {
             manifest: None,
             channel: "stable".to_string(),
+            modules: Default::default(),
             nested: members.len() > 1,
         })?;
     }

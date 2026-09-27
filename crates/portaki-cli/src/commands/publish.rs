@@ -52,8 +52,8 @@ pub struct PublishArgs {
     /// Release channel at the Portaki registry — `stable` needs SDK 8.0.0 or later.
     #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
     pub channel: String,
-    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
-    #[arg(long)]
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
     /// Push to GHCR without announcing it — the artifact then enters no catalogue.
     #[arg(long)]
@@ -121,7 +121,7 @@ fn plural(count: usize, noun: &str) -> String {
 }
 
 /// The namespace Portaki publishes its own modules under.
-const OFFICIAL_REGISTRY: &str = "ghcr.io/portakiapp";
+pub(crate) const OFFICIAL_REGISTRY: &str = "ghcr.io/portakiapp";
 
 /// Where this module's artifact belongs.
 ///
@@ -143,7 +143,7 @@ fn resolve_registry(flag: Option<&str>, module_root: &Path) -> Result<String> {
 }
 
 /// `author.type` as the catalogue manifest declares it, when it can be read at all.
-fn author_type(module_root: &Path) -> Option<String> {
+pub(crate) fn author_type(module_root: &Path) -> Option<String> {
     let raw = std::fs::read_to_string(module_root.join("portaki.module.json")).ok()?;
     let manifest: serde_json::Value = serde_json::from_str(&raw).ok()?;
     manifest
@@ -164,15 +164,49 @@ pub async fn run(args: PublishArgs) -> Result<()> {
     // suivants, et le code de sortie dit s'il y en a eu un.
     let chosen = workspace::resolve(args.module.as_deref(), Some(args.all))?;
     let mut outcomes = Vec::with_capacity(chosen.len());
+    let mut results = Vec::with_capacity(chosen.len());
     for member in &chosen {
         if chosen.len() > 1 {
             ui::rule(&member.id);
         }
         workspace::enter(member)?;
+        *result() = serde_json::json!({
+            "id": member.id, "version": null, "channel": args.channel, "state": "failed",
+            "digest": null, "reference": null, "missing": [], "url": null, "error": null,
+        });
         let outcome = run_in(&member.root, args.clone()).await;
+        if let Err(failure) = &outcome {
+            note("error", format!("{failure:#}"));
+        }
+        results.push(result().take());
         outcomes.push((member.id.clone(), outcome));
     }
+    if ui::json() {
+        if results
+            .iter()
+            .all(|result| result["state"] == "already-published")
+        {
+            crate::exit::nothing_to_do();
+        }
+        ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": results }));
+    }
     conclude(outcomes)
+}
+
+/// Le résultat du module en cours, pour `--json` : noté là où chaque fait est connu plutôt que
+/// passé d'étape en étape. Les modules se publient un par un, jamais ensemble.
+static RESULT: std::sync::Mutex<serde_json::Value> = std::sync::Mutex::new(serde_json::Value::Null);
+
+fn result() -> std::sync::MutexGuard<'static, serde_json::Value> {
+    RESULT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn note(key: &str, value: impl Into<serde_json::Value>) {
+    if let Some(fields) = result().as_object_mut() {
+        fields.insert(key.to_string(), value.into());
+    }
 }
 
 /// Le refus `module_not_linked` de l'échange OIDC, s'il est dans la chaîne.
@@ -370,6 +404,9 @@ fn settle(landed: Result<Landed>) -> Result<Landed> {
     match landed {
         Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
             Some(already) => {
+                note("state", "already-published");
+                note("version", already.version.clone());
+                note("digest", already.digest.clone());
                 ui::warn_on_stdout(already);
                 Ok(Landed::InRegistry(already.id.clone()))
             }
@@ -408,7 +445,7 @@ async fn send_listing(
     module_id: &str,
     listing: &serde_json::Value,
 ) -> Result<()> {
-    let base = auth::api_base_url(args.url.as_deref());
+    let base = crate::profile::api_url(args.url.as_deref());
     let outcome = match credential(&base, module_id, &args.channel).await? {
         Credential::Ci(token) => put_listing(&base, module_id, listing, &token).await?,
         Credential::Person(token) => {
@@ -517,6 +554,8 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         looking.done("found the artifact on the registry");
         ui::field("image", &pushed.image_ref);
         ui::field("digest", &pushed.digest);
+        note("digest", pushed.digest.clone());
+        note("reference", pushed.artifact_ref());
         announce(args, &coords, &pushed, &notes).await?;
         return Ok(Landed::InRegistry(coords.id));
     }
@@ -579,6 +618,7 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     }
 
     if args.dry_run {
+        note("state", "dry-run");
         ui::success("dry run — nothing was pushed, nothing was announced");
         ui::field("artifact", artifact_dir.display());
         ui::field("registry", &registry);
@@ -591,7 +631,8 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     // le second envoi se faisait refuser à l'annonce, mais il avait déjà écrasé le tag OCI —
     // qui ne désignait alors plus l'artefact que le catalogue référence.
     let coords = oci::pack::read_module_coordinates(&module_root, &artifact_dir)?;
-    refuse_if_already_published(&auth::api_base_url(args.url.as_deref()), &coords).await?;
+    note("version", coords.version.clone());
+    refuse_if_already_published(&crate::profile::api_url(args.url.as_deref()), &coords).await?;
 
     let pushing = ui::step(format!("pushing to {registry}"));
     let pushed = oci::push_artifact(&module_root, &artifact_dir, &registry)
@@ -603,6 +644,9 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         .with_context(|| push_hint(&registry))?;
     pushing.done(format!("pushed to {registry}"));
     ui::field("manifest", &pushed.manifest_url);
+    note("state", "pushed");
+    note("digest", pushed.digest.clone());
+    note("reference", pushed.artifact_ref());
 
     let signing = args
         .sign
@@ -786,7 +830,7 @@ async fn announce(
     pushed: &oci::PushedArtifact,
     notes: &serde_json::Value,
 ) -> Result<()> {
-    let base = auth::api_base_url(args.url.as_deref());
+    let base = crate::profile::api_url(args.url.as_deref());
     let announcing = ui::step(format!("announcing {} to the registry", args.channel));
     let body = serde_json::json!({
         "moduleId": coords.id,
@@ -813,6 +857,13 @@ async fn announce(
 
     match outcome {
         Outcome::Published | Outcome::Draft { .. } => {
+            note("version", coords.version.clone());
+            note("state", "published");
+            if let Outcome::Draft { missing, url } = &outcome {
+                note("state", "draft");
+                note("missing", missing.clone());
+                note("url", url.clone());
+            }
             announcing.done(format!("announced to the registry on {}", args.channel));
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
@@ -845,6 +896,7 @@ async fn announce(
             Ok(())
         }
         Outcome::AlreadyPublished => {
+            note("state", "already-published");
             // Rejouer une publication n'est pas une erreur d'opérateur : c'est le cas normal
             // d'une CI relancée. Le catalogue porte déjà cette version, il n'y a rien à faire.
             announcing.skip(format!(

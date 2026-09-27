@@ -15,13 +15,16 @@ use crate::{auth, ui};
 #[derive(Debug, Parser)]
 /// Arguments for `portaki logs`.
 pub struct LogsArgs {
-    /// The module whose logs to follow. Defaults to the module of the current directory.
-    pub module: Option<String>,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
+    /// Former positional form of --module, kept for older scripts.
+    #[arg(hide = true, conflicts_with = "module")]
+    pub positional: Option<String>,
     /// Only the lines that mention this error code (`connector_timeout`, `missing_field`…).
     #[arg(long)]
     pub code: Option<String>,
-    /// Base URL of the dev platform (defaults like `portaki dev`).
-    #[arg(long)]
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
 }
 
@@ -56,16 +59,16 @@ pub async fn run(args: LogsArgs) -> Result<()> {
         "portaki logs",
         "What the module logs in the sandbox, as it happens — the last hour is kept.",
     );
-    let module_id = match args.module {
-        Some(id) => id,
-        None => dev::read_module_id(&std::env::current_dir().context("current_dir")?)?,
+    let mut modules = args.modules.clone();
+    if modules.module.is_none() {
+        modules.module = args.positional.clone();
+    }
+    let module_id = match modules.one("logs")? {
+        member if member.id.is_empty() => dev::read_module_id(&member.root)?,
+        member => member.id,
     };
-    let base = dev::resolve_base_url(
-        args.url.as_deref(),
-        std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
-        std::env::var("PORTAKI_API_URL").ok().as_deref(),
-    );
-    let auth_url = auth::api_base_url(args.url.as_deref());
+    let base = crate::profile::api_url(args.url.as_deref());
+    let auth_url = crate::profile::api_url(args.url.as_deref());
     let mut token = auth::access_token(&base)?;
     ui::field("module", &module_id);
     if let Some(code) = &args.code {
@@ -173,6 +176,13 @@ fn mentions(line: &LogLine, code: &str) -> bool {
 }
 
 pub(crate) fn print(line: &LogLine) {
+    // `--json` : une ligne JSON par événement, telle que devapi l'a émise (NDJSON).
+    if ui::json() {
+        ui::emit(&serde_json::json!({
+            "ts": line.ts, "level": line.level, "src": line.src, "msg": line.msg,
+        }));
+        return;
+    }
     let at = chrono::DateTime::parse_from_rfc3339(&line.ts)
         .map(|at| {
             at.with_timezone(&chrono::Local)

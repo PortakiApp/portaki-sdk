@@ -57,6 +57,18 @@ pub enum CiCommand {
     Report(ReportArgs),
 }
 
+/// `--root` (caché, ancien) ou `--module` / `--all` : les racines des modules visés.
+fn roots(root: &Option<PathBuf>, modules: &crate::workspace::ModuleArgs) -> Result<Vec<PathBuf>> {
+    if let Some(root) = root {
+        return Ok(vec![root.clone()]);
+    }
+    Ok(modules
+        .resolve()?
+        .into_iter()
+        .map(|member| member.root)
+        .collect())
+}
+
 /// Runs `portaki ci`.
 pub async fn run(args: CiArgs) -> Result<()> {
     match args.command {
@@ -77,11 +89,13 @@ pub struct ReportArgs {
     /// Where to look at it. Defaults to the current GitHub Actions run.
     #[arg(long)]
     pub run_url: Option<String>,
-    /// Module root (defaults to the current directory).
-    #[arg(long)]
+    /// Former form of --module: the module root.
+    #[arg(long, hide = true)]
     pub root: Option<PathBuf>,
-    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
-    #[arg(long)]
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
 }
 
@@ -97,22 +111,28 @@ pub struct ReportArgs {
 /// Un rapport qui échoue n'échoue pas le run. Il vient après la publication, qui a déjà eu
 /// lieu ; faire rougir un job pour un compte rendu inverserait l'importance des deux.
 async fn report(args: ReportArgs) -> Result<()> {
-    let root = args
-        .root
-        .clone()
-        .map(Ok)
-        .unwrap_or_else(std::env::current_dir)
-        .context("resolve the module root")?;
-    let module_id = read_module_id(&root)?;
-    let base = crate::auth::api_base_url(args.url.as_deref());
+    let base = crate::profile::api_url(args.url.as_deref());
     let run_url = args.run_url.clone().or_else(github_run_url);
-
-    match deliver(&base, &module_id, &args.outcome, run_url.as_deref()).await {
-        Ok(()) => ui::success(format!("reported {} for {module_id}", args.outcome)),
-        Err(failure) => {
-            ui::skipped(format!("could not report the run: {failure}"));
-            ui::advice("the publication itself is unaffected — only the alert was not updated");
+    let mut reported = Vec::new();
+    for root in roots(&args.root, &args.modules)? {
+        let module_id = read_module_id(&root)?;
+        let delivered = deliver(&base, &module_id, &args.outcome, run_url.as_deref()).await;
+        match &delivered {
+            Ok(()) => ui::success(format!("reported {} for {module_id}", args.outcome)),
+            Err(failure) => {
+                ui::skipped(format!("could not report the run: {failure}"));
+                ui::advice("the publication itself is unaffected — only the alert was not updated");
+            }
         }
+        reported.push(serde_json::json!({
+            "id": module_id,
+            "outcome": args.outcome,
+            "reported": delivered.is_ok(),
+            "error": delivered.err().map(|failure| failure.to_string()),
+        }));
+    }
+    if ui::json() {
+        ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": reported }));
     }
     if !ui::plain() {
         ui::blank();
@@ -167,9 +187,11 @@ fn read_module_id(root: &Path) -> Result<String> {
 #[derive(Debug, Parser)]
 /// Arguments for `portaki ci info`.
 pub struct InfoArgs {
-    /// Module root (defaults to the current directory).
-    #[arg(long)]
+    /// Former form of --module: the module root.
+    #[arg(long, hide = true)]
     pub root: Option<PathBuf>,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
 }
 
 /// L'identité du module, pour un workflow qui doit la nommer.
@@ -177,22 +199,34 @@ pub struct InfoArgs {
 /// Sans elle, une action composite en était réduite à extraire la version du manifeste avec
 /// `python3` ou `jq` — une dépendance de plus sur le runner, pour un champ que le CLI lit déjà.
 fn info(args: InfoArgs) -> Result<()> {
-    let root = args
-        .root
-        .clone()
-        .map(Ok)
-        .unwrap_or_else(std::env::current_dir)
-        .context("resolve the module root")?;
-    let (id, version) = source::coordinates(&root)
-        .filter(|(id, version)| !id.is_empty() && !version.is_empty())
-        .with_context(|| {
-            format!(
-                "{} carries no module id or no version — run from the module root",
-                root.display()
-            )
-        })?;
+    let mut found = Vec::new();
+    for root in roots(&args.root, &args.modules)? {
+        let (id, version) = source::coordinates(&root)
+            .filter(|(id, version)| !id.is_empty() && !version.is_empty())
+            .with_context(|| {
+                format!(
+                    "{} carries no module id or no version — run from the module root",
+                    root.display()
+                )
+            })?;
+        found.push((id, version));
+    }
+    if ui::json() {
+        let modules: Vec<serde_json::Value> = found
+            .iter()
+            .map(|(id, version)| serde_json::json!({ "id": id, "version": version }))
+            .collect();
+        ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": modules }));
+        return Ok(());
+    }
+    for (id, version) in found {
+        info_one(&id, &version)?;
+    }
+    Ok(())
+}
 
-    emit_outputs(&[("id", &id), ("version", &version)])?;
+fn info_one(id: &str, version: &str) -> Result<()> {
+    emit_outputs(&[("id", id), ("version", version)])?;
 
     if ui::plain() {
         // Deux lignes, dans un ordre fixe : `read id version < <(portaki --plain ci info)`.
@@ -201,8 +235,8 @@ fn info(args: InfoArgs) -> Result<()> {
         return Ok(());
     }
     ui::header("portaki ci info", "What this module calls itself.");
-    ui::field("id", &id);
-    ui::field("version", &version);
+    ui::field("id", id);
+    ui::field("version", version);
     ui::blank();
     Ok(())
 }
@@ -211,8 +245,10 @@ fn info(args: InfoArgs) -> Result<()> {
 /// Arguments for `portaki ci modules`.
 pub struct ModulesArgs {
     /// Repository root (defaults to the current directory).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub root: Option<PathBuf>,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
     /// Keep only the modules changed since this git ref.
     #[arg(long)]
     pub changed_since: Option<String>,
@@ -245,7 +281,18 @@ fn modules(args: ModulesArgs) -> Result<()> {
         );
     }
 
-    let selection = select(&root, &known, &args)?;
+    let mut args = args;
+    if let Some(module) = args.modules.module.clone() {
+        args.only.push(module);
+    }
+    let selection = if args.modules.all {
+        Selection {
+            modules: known.clone(),
+            reason: "asked for",
+        }
+    } else {
+        select(&root, &known, &args)?
+    };
     let json = serde_json::to_string(&selection.modules)?;
 
     // Le workflow lit `modules` pour sa matrice et `any` pour sauter les jobs : sans `any`, une
@@ -256,6 +303,15 @@ fn modules(args: ModulesArgs) -> Result<()> {
         ("reason", selection.reason),
     ])?;
 
+    if ui::json() {
+        ui::emit(&serde_json::json!({
+            "schemaVersion": 1,
+            "modules": selection.modules,
+            "any": !selection.modules.is_empty(),
+            "reason": selection.reason,
+        }));
+        return Ok(());
+    }
     if ui::plain() {
         println!("{json}");
         return Ok(());
@@ -445,9 +501,11 @@ fn touches_shared(path: &str) -> bool {
 #[derive(Debug, Parser)]
 /// Arguments for `portaki ci sdk-version`.
 pub struct SdkVersionArgs {
-    /// Directory holding the `Cargo.lock` to read (defaults to the current directory).
-    #[arg(long)]
+    /// Former form of --module: the directory holding the `Cargo.lock` to read.
+    #[arg(long, hide = true)]
     pub root: Option<PathBuf>,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
 }
 
 /// Le SDK auquel ce checkout se résout, et la version de CLI à installer avec.
@@ -461,11 +519,10 @@ pub struct SdkVersionArgs {
 /// qui n'était celui d'aucune version publiée. La révision reste rendue à titre indicatif :
 /// elle dit que le checkout suit une branche, pas une release.
 fn sdk_version(args: SdkVersionArgs) -> Result<()> {
-    let root = args
-        .root
-        .clone()
-        .map(Ok)
-        .unwrap_or_else(std::env::current_dir)
+    // Un monorepo partage son lock : le premier module suffit.
+    let root = roots(&args.root, &args.modules)?
+        .into_iter()
+        .next()
         .context("resolve the checkout root")?;
     let lock = find_lockfile(&root).context(
         "no Cargo.lock found here or above — the SDK a build resolves to is written there",
@@ -480,6 +537,15 @@ fn sdk_version(args: SdkVersionArgs) -> Result<()> {
         ("key", resolved.cache_key()),
     ])?;
 
+    if ui::json() {
+        ui::emit(&serde_json::json!({
+            "schemaVersion": 1,
+            "version": resolved.version,
+            "rev": resolved.rev,
+            "key": resolved.cache_key(),
+        }));
+        return Ok(());
+    }
     if ui::plain() {
         println!("{}", resolved.cache_key());
         return Ok(());
@@ -503,8 +569,8 @@ fn sdk_version(args: SdkVersionArgs) -> Result<()> {
 
 /// Le SDK résolu par le lock.
 #[derive(Debug, PartialEq, Eq)]
-struct LockedSdk {
-    version: String,
+pub(crate) struct LockedSdk {
+    pub(crate) version: String,
     /// La révision exacte, quand le SDK vient d'un dépôt git plutôt que de crates.io.
     rev: Option<String>,
 }
@@ -518,7 +584,7 @@ impl LockedSdk {
 
 /// Le `Cargo.lock` le plus proche, en remontant : un module d'un dépôt multi-modules partage
 /// celui de la racine.
-fn find_lockfile(start: &Path) -> Option<PathBuf> {
+pub(crate) fn find_lockfile(start: &Path) -> Option<PathBuf> {
     start
         .ancestors()
         .map(|directory| directory.join("Cargo.lock"))
@@ -529,7 +595,7 @@ fn find_lockfile(start: &Path) -> Option<PathBuf> {
 ///
 /// Le format est stable et trivial — des blocs `[[package]]` de lignes `clé = "valeur"`. Ajouter
 /// un analyseur TOML complet au CLI pour deux champs coûterait plus qu'il ne protège.
-fn read_locked_sdk(lock: &str) -> Option<LockedSdk> {
+pub(crate) fn read_locked_sdk(lock: &str) -> Option<LockedSdk> {
     let mut in_sdk = false;
     let mut version = None;
     let mut source = None;
@@ -579,9 +645,11 @@ fn quoted<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 #[derive(Debug, Parser)]
 /// Arguments for `portaki ci check`.
 pub struct CheckArgs {
-    /// Module root (defaults to the current directory).
-    #[arg(long)]
+    /// Former form of --module: the module root.
+    #[arg(long, hide = true)]
     pub root: Option<PathBuf>,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
     /// Skip the crates.io lookup — for an offline runner.
     #[arg(long)]
     pub offline: bool,
@@ -589,20 +657,30 @@ pub struct CheckArgs {
 
 /// Ce qui n'empêche rien aujourd'hui et coûtera cher plus tard.
 async fn check(args: CheckArgs) -> Result<()> {
-    let root = args
-        .root
-        .clone()
-        .map(Ok)
-        .unwrap_or_else(std::env::current_dir)
-        .context("resolve the module root")?;
-
     if !ui::plain() {
         ui::header(
             "portaki ci check",
             "What still builds today and will not tomorrow.",
         );
     }
+    let mut modules = Vec::new();
+    for root in roots(&args.root, &args.modules)? {
+        let (id, warnings) = check_one(&root, args.offline).await?;
+        modules.push(serde_json::json!({ "id": id, "warnings": warnings }));
+    }
+    if ui::json() {
+        ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": modules }));
+    }
+    if !ui::plain() {
+        ui::blank();
+    }
+    Ok(())
+}
 
+/// `ci check` pour un module : ce qui vieillit, dit à mesure et rendu pour `--json`.
+async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json::Value>)> {
+    let root = root.to_path_buf();
+    warnings().clear();
     let mut found = 0;
     let (manifest, _) = crate::manifest::load_manifest(&root, None)?;
 
@@ -633,7 +711,7 @@ async fn check(args: CheckArgs) -> Result<()> {
         }
     }
 
-    if args.offline {
+    if offline {
         ui::skipped("skipped the crates.io lookup (--offline)");
     } else if let Some(lock) = find_lockfile(&root) {
         let text = std::fs::read_to_string(&lock)?;
@@ -667,10 +745,18 @@ async fn check(args: CheckArgs) -> Result<()> {
     if found == 0 {
         ui::success(format!("{} has nothing ageing", manifest.id));
     }
-    if !ui::plain() {
-        ui::blank();
-    }
-    Ok(())
+    let said = warnings().drain(..).collect();
+    Ok((manifest.id.clone(), said))
+}
+
+/// Ce que `annotate` a dit pendant le `check_one` en cours, pour `--json`. Un verrou et non un
+/// `thread_local` : la tâche change de fil à chaque `await`.
+static WARNINGS: std::sync::Mutex<Vec<serde_json::Value>> = std::sync::Mutex::new(Vec::new());
+
+fn warnings() -> std::sync::MutexGuard<'static, Vec<serde_json::Value>> {
+    WARNINGS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Écrit l'avertissement là où il sera vu.
@@ -679,6 +765,11 @@ async fn check(args: CheckArgs) -> Result<()> {
 /// des changements. Ailleurs, c'est une ligne comme une autre — la même information, sans
 /// l'encodage qui ne servirait à personne.
 fn annotate(file: Option<&str>, message: impl std::fmt::Display) {
+    warnings().push(serde_json::json!({ "file": file, "message": message.to_string() }));
+    if ui::json() {
+        ui::warn(message);
+        return;
+    }
     if std::env::var("GITHUB_ACTIONS").is_ok_and(|value| value == "true") {
         match file {
             Some(file) => println!("::warning file={file}::{message}"),
@@ -761,7 +852,7 @@ struct Withdrawn {
 /// Une version que le registre ne connaît pas — un SDK compilé depuis une branche, jamais
 /// publié — rend un 404. Ce n'est pas un défaut du module : il n'y a rien à dire, et on se tait.
 async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
-    let base = crate::auth::api_base_url(None);
+    let base = crate::profile::api_url(None);
     let response = crate::http::client()
         .get(format!(
             "{base}/registry/v1/sdk-releases/{sdk_version}/deprecations"

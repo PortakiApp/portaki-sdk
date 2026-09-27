@@ -13,6 +13,8 @@
 //!
 //! | Command | Contract |
 //! |---------|----------|
+//! | `status` | Where the module stands on the developer journey, and the next command |
+//! | `doctor` | Check the environment: session, versions, toolchain, cosign, registry, signing identity |
 //! | `init` | Scaffold a module crate from a template |
 //! | `build` | Produce Wasm + merged manifest (+ migrations/operations bundles + i18n) |
 //! | `lint` | Validate capability ids, connector bindings, i18n keys |
@@ -37,10 +39,12 @@ mod auth;
 mod changelog;
 mod commands;
 mod dev_session;
+mod exit;
 mod http;
 mod manifest;
 mod oci;
 mod oidc;
+mod profile;
 mod sign;
 mod ui;
 mod update;
@@ -83,12 +87,28 @@ struct Cli {
     #[arg(long, global = true)]
     plain: bool,
 
+    /// Print one JSON document on stdout (NDJSON for `logs`) and everything else on stderr.
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Base URL of the Portaki API. Defaults to PORTAKI_API_URL, then production.
+    #[arg(long, global = true, value_name = "URL", conflicts_with = "env")]
+    api: Option<String>,
+
+    /// Named environment: prod, staging, local, or one from ~/.config/portaki/config.toml.
+    #[arg(long, global = true, value_name = "NAME")]
+    env: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Where the module stands — the five steps, the last version, errors — and what to run next.
+    Status(commands::status::StatusArgs),
+    /// Check this machine: session, versions, toolchain, cosign, registry, signing identity.
+    Doctor(commands::doctor::DoctorArgs),
     /// Scaffold a new module from a template.
     Init(commands::init::InitArgs),
     /// Sign in with the device grant; the session only goes back to the platform that issued it.
@@ -137,17 +157,23 @@ async fn main() {
 
     let cli = parse();
     ui::init(cli.no_color, cli.verbose, cli.plain);
+    ui::set_json(cli.json);
 
     // L'échec est rendu ici, une fois, au lieu du `Debug` que `main() -> Result` imprime : la
     // chaîne des causes se lit, et la sortie d'erreur ressemble au reste de la CLI.
-    if let Err(failure) = dispatch(cli.command).await {
+    let ran = match profile::select(cli.api.as_deref(), cli.env.as_deref()) {
+        Ok(()) => dispatch(cli.command).await,
+        Err(failure) => Err(failure),
+    };
+    if let Err(failure) = ran {
         ui::report(&failure);
-        std::process::exit(1);
+        std::process::exit(exit::code(&failure));
     }
 
     // Après la commande, jamais avant : l'avis ne retarde rien de ce qu'on attendait, et
     // n'éloigne pas du regard la ligne qu'on est venu lire.
     update::notify().await;
+    std::process::exit(exit::success_code());
 }
 
 /// Analyse les arguments, en habillant l'aide et `--version` de ce que `clap` ne sait pas seul.
@@ -157,7 +183,9 @@ async fn main() {
 /// fichier de sortie qu'on avait justement demandé nu.
 fn parse() -> Cli {
     let raw: Vec<String> = std::env::args().collect();
-    let bare = raw.iter().any(|argument| argument == "--plain");
+    let bare = raw
+        .iter()
+        .any(|argument| argument == "--plain" || argument == "--json");
     ui::set_plain(bare);
     ui::set_colors(!bare && !raw.iter().any(|argument| argument == "--no-color"));
 
@@ -355,6 +383,8 @@ fn descend<'a>(root: &'a clap::Command, arguments: &[String]) -> (Vec<String>, &
 
 async fn dispatch(command: Command) -> Result<()> {
     match command {
+        Command::Status(args) => commands::status::run(args).await,
+        Command::Doctor(args) => commands::doctor::run(args).await,
         Command::Init(args) => commands::init::run(args),
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout(args) => commands::login::logout(args).await,

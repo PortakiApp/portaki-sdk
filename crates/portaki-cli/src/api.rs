@@ -46,6 +46,61 @@ pub fn error_code(body: &str) -> Option<String> {
         .and_then(|envelope| envelope.error_code)
 }
 
+/// Une session auprès de la plateforme, pour lire ses routes JSON nues (`/dev/v1`, `/registry/v1`).
+///
+/// Un 401 renouvelle le jeton une fois ; un 404 se lit « rien », pas « panne ».
+pub struct Platform {
+    pub base: String,
+    token: String,
+}
+
+impl Platform {
+    /// La session de `base`, ou [`crate::auth::NotSignedIn`].
+    pub fn open(base: &str) -> Result<Self> {
+        Ok(Self {
+            base: base.trim_end_matches('/').to_string(),
+            token: crate::auth::access_token(base)?,
+        })
+    }
+
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    /// `GET {base}{path}` : le corps, `None` sur un 404.
+    pub async fn get(&mut self, path: &str) -> Result<Option<serde_json::Value>> {
+        use anyhow::Context as _;
+        let url = format!("{}{path}", self.base);
+        let mut renewed = false;
+        loop {
+            let response = crate::http::client()
+                .get(&url)
+                .bearer_auth(&self.token)
+                .send()
+                .await
+                .map_err(|failure| crate::http::unreachable(&url, failure))?;
+            let status = response.status().as_u16();
+            if status == 401 && !renewed {
+                renewed = true;
+                self.token = crate::auth::refresh(&self.base, &self.token)
+                    .await
+                    .context("renew the session")?;
+                continue;
+            }
+            if status == 404 {
+                return Ok(None);
+            }
+            let body = response.text().await.unwrap_or_default();
+            if !(200..300).contains(&status) {
+                bail!("{}", crate::http::refused(&url, status, &body));
+            }
+            return serde_json::from_str(&body)
+                .map(Some)
+                .with_context(|| format!("unexpected answer from {url}"));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

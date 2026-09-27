@@ -3,6 +3,9 @@
 //! La GitHub App de la plateforme ne lit pas le code : c'est le CLI, qui a les fichiers sous la
 //! main, qui reconnaît un monorepo. La règle est celle de `portaki ci modules` — des modules
 //! sous `modules/*/` — et un dépôt à un seul module ne voit rien changer.
+//!
+//! Toutes les commandes qui agissent sur un module passent par ici, avec les mêmes drapeaux
+//! ([`ModuleArgs`]) : `--module <id>` et `--all`.
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -15,6 +18,57 @@ use crate::manifest::source::{is_module, module_id as manifest_id};
 
 /// Le dossier où un dépôt multi-modules les range.
 const MODULES_DIR: &str = "modules";
+
+/// `--module <id>` / `--all`, les mêmes sur toutes les commandes qui agissent sur un module.
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct ModuleArgs {
+    /// In a repository holding several modules, the one to act on.
+    #[arg(long, value_name = "ID", conflicts_with = "all")]
+    pub module: Option<String>,
+    /// Every module of the repository.
+    #[arg(long)]
+    pub all: bool,
+}
+
+impl ModuleArgs {
+    /// Les modules visés.
+    pub fn resolve(&self) -> Result<Vec<Member>> {
+        resolve(self.module.as_deref(), Some(self.all))
+    }
+
+    /// Le seul module visé, pour une commande qui n'en tient qu'un à la fois (`dev`, `logs`).
+    pub fn one(&self, command: &str) -> Result<Member> {
+        if self.all {
+            return Err(crate::exit::usage(format!(
+                "portaki {command} acts on one module at a time — pass --module <id> instead of --all"
+            )));
+        }
+        resolve(self.module.as_deref(), None)?
+            .into_iter()
+            .next()
+            .context("no module here")
+    }
+
+    /// Chaque module visé, depuis sa racine, dans l'ordre ; revient au dossier de départ.
+    pub fn for_each(&self, mut run: impl FnMut(&Member) -> Result<()>) -> Result<()> {
+        let start = std::env::current_dir().context("current_dir")?;
+        let chosen = self.resolve()?;
+        let many = chosen.len() > 1;
+        let mut ran = Ok(());
+        for member in &chosen {
+            if many {
+                ui::rule(&member.id);
+            }
+            enter(member)?;
+            ran = run(member).with_context(|| format!("module {}", member.id));
+            if ran.is_err() {
+                break;
+            }
+        }
+        std::env::set_current_dir(&start).context("return to the starting directory")?;
+        ran
+    }
+}
 
 /// Un module du dépôt : son identifiant et sa racine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +127,9 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
         let own = manifest_id(cwd);
         if let (Some(wanted), Some(own)) = (module, own.as_deref()) {
             if wanted != own {
-                anyhow::bail!("unknown module: {wanted} — this directory is {own}");
+                return Err(crate::exit::usage(format!(
+                    "unknown module: {wanted} — this directory is {own}"
+                )));
             }
         }
         return Ok(Resolved::Chosen(vec![Member {
@@ -89,7 +145,9 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
             .iter()
             .find(|member| member.id == wanted)
             .map(|member| Resolved::Chosen(vec![member.clone()]))
-            .with_context(|| format!("unknown module: {wanted} — {}", ids(members)));
+            .ok_or_else(|| {
+                crate::exit::usage(format!("unknown module: {wanted} — {}", ids(members)))
+            });
     }
     if let Some(inside) = members.iter().find(|member| cwd.starts_with(&member.root)) {
         return Ok(Resolved::Chosen(vec![inside.clone()]));
@@ -103,7 +161,8 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
 /// Les modules visés par la commande, en demandant lequel quand rien ne permet de trancher.
 ///
 /// Hors terminal, pas de question : une CI qui attendrait une réponse attendrait jusqu'à son
-/// délai. L'erreur liste les ids, pour qu'on puisse les recopier dans `--module`.
+/// délai. En `--json` non plus : la question partirait sur stdout. L'erreur — d'usage, code 2 —
+/// liste les ids, pour qu'on puisse les recopier dans `--module`.
 ///
 /// `all` vaut `None` pour une commande qui ne vise qu'un module (`dev`, `link`).
 pub fn resolve(module: Option<&str>, all: Option<bool>) -> Result<Vec<Member>> {
@@ -111,12 +170,14 @@ pub fn resolve(module: Option<&str>, all: Option<bool>) -> Result<Vec<Member>> {
     let members = members(&cwd);
     match decide(&cwd, &members, module, all == Some(true))? {
         Resolved::Chosen(chosen) => Ok(chosen),
-        Resolved::Ambiguous if std::io::stdin().is_terminal() => ask(&members).map(|m| vec![m]),
-        Resolved::Ambiguous => anyhow::bail!(
+        Resolved::Ambiguous if std::io::stdin().is_terminal() && !ui::json() => {
+            ask(&members).map(|m| vec![m])
+        }
+        Resolved::Ambiguous => Err(crate::exit::usage(format!(
             "this repository holds several modules — pass --module <id>{}: {}",
             if all.is_some() { " or --all" } else { "" },
             ids(&members)
-        ),
+        ))),
     }
 }
 
@@ -226,10 +287,12 @@ mod tests {
             chosen(decide(repo.path(), &found, None, true).unwrap()),
             vec!["access-guide", "nuki"]
         );
-        let unknown = decide(repo.path(), &found, Some("wifi"), false)
-            .unwrap_err()
-            .to_string();
-        assert!(unknown.contains("access-guide, nuki"), "{unknown}");
+        let unknown = decide(repo.path(), &found, Some("wifi"), false).unwrap_err();
+        assert!(
+            unknown.to_string().contains("access-guide, nuki"),
+            "{unknown}"
+        );
+        assert_eq!(crate::exit::code(&unknown), 2);
     }
 
     #[test]
