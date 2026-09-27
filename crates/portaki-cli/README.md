@@ -51,6 +51,8 @@ rustup target add wasm32-unknown-unknown
 
 | Command | Contract |
 |---------|----------|
+| `portaki status` | The developer space home, in the terminal: the five steps, the repository link, the sandbox, the last version (channel, `available`/`draft` and what is missing, signature, review), errors over 24 h, open reports — and the exact next command |
+| `portaki doctor [--registry <ref>] [--offline]` | Check this machine, one line per check with its fix: session for the targeted platform, CLI vs locked SDK vs latest, toolchain and wasm32 target, cosign, push access to the registry, the email Sigstore would certify vs your verified Portaki email, the repository link, `.cargo/config.toml` / `rust-toolchain.toml` that redirect `cargo` |
 | `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
 | `portaki login [--no-browser]` / `portaki logout` | Open a developer session with the device grant / end it here and revoke it on the platform that issued it |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
@@ -59,15 +61,15 @@ rustup target add wasm32-unknown-unknown
 | `portaki dev --watch` | Rebuild and redeploy on every save, follow the sandbox logs, replay the 7 scenarios after each deploy |
 | `portaki dev --forget` | Remove this module from the sandbox — a tried-once module leaves a row otherwise |
 | `portaki dev` | Build, deploy to the **hosted sandbox** of your account, and show what the run did — there is no local gateway |
-| `portaki logs [module] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
+| `portaki logs [--module <id>] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
 | `portaki lint [--channel preview\|stable]` | Validate capabilities, connectors, i18n keys; `sdkVersion` required, `>= 8.0.0` for stable |
-| `portaki i18n check [--all]` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
+| `portaki i18n check` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
 | `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
 | `portaki sdk upgrade [--to <v>] [--dry-run]` | Move to another SDK version, then build, test, lint and compare the sandbox renders; `--dry-run` touches no file and no sandbox |
 | `portaki ci <modules\|sdk-version\|check\|info\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki publish [--channel preview\|stable] [--notes …] [--sign] [--require-available]` | Push the OCI artifact to the configured registry (GHCR by default), then announce it to the Portaki registry — locally with `portaki login`, or from CI with OIDC |
-| `portaki link [--module <id>] [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
+| `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect <url>` | GET a URL and pretty-print it when it is JSON — no registry authentication |
 | `portaki docs` | Print how to open the local SDK documentation |
@@ -118,9 +120,13 @@ code fills what it leaves out. Delete a field there and the code takes over.
 
 A repository whose modules live under `modules/*/` — crates on `portaki-sdk` (the layout of
 `portaki-modules`) — is a monorepo. Inside `modules/<id>/`, every command acts on that module as
-before. From the repository root, `portaki dev`, `portaki build` and `portaki publish` take
-`--module <id>`; `build` and `publish` also take `--all`. With neither, a terminal asks which one,
-and anything else — a CI — gets an error listing the ids.
+before. From the repository root, every command that acts on a module takes the same two flags:
+`--module <id>` and `--all` — `build`, `check`, `lint`, `test`, `connectors`, `i18n check`,
+`permissions add`, `publish`, `dev`, `logs`, `link`, `sdk upgrade`, `status`, `doctor` and every
+`ci` subcommand. `dev` and `logs` hold one module at a time and refuse `--all` (exit 2). With
+neither flag, a terminal asks which one; anything else — a CI, `--json` — gets a usage error
+(exit 2) listing the ids. The former `portaki logs <module>` and `portaki ci … --root <dir>` are
+still accepted, hidden.
 
 `portaki sdk upgrade` moves the whole monorepo when the SDK is inherited from the workspace
 (`portaki-sdk = { workspace = true }`): the root `Cargo.toml`, `Cargo.lock` and
@@ -159,6 +165,9 @@ Saying so costs a line each.
 | Flag | Effect |
 |------|--------|
 | `--plain` | Bare output for scripts and CI — no logo, no headings, no glyphs, no advice. Implies `--no-color` |
+| `--json` | One JSON document on stdout, nothing else; everything a person reads goes to stderr. Implies `--plain` |
+| `--api <url>` | The Portaki API to talk to. Defaults to `PORTAKI_API_URL`, then production |
+| `--env <name>` | A named platform: `prod`, `staging`, `local`, or one of `~/.config/portaki/config.toml` |
 | `--no-color` | Same layout, without colour or spinners |
 | `-v`, `--verbose` | Stream the raw output of the tools the CLI drives |
 
@@ -170,7 +179,40 @@ there are prefixed `error:` rather than marked with a cross, so a log stays grep
 
 Warnings go to stderr, so stdout keeps what a script reads. One exception, kept for the release
 action v1 and the `portaki-modules` workflow that `grep` stdout for it: the « already in the
-registry » line of `publish`.
+registry » line of `publish` — on stdout without `--json`, on stderr with it.
+
+### `--json`
+
+Under `--json`, stdout carries exactly one JSON document (one per line for `logs`, as NDJSON)
+and nothing else — steps, warnings, advice and the output of the tools the CLI drives go to
+stderr. Every document carries `schemaVersion: 1`; fields are only ever added within a version.
+A command that renders no information writes nothing to stdout.
+
+| Command | Document |
+|---------|----------|
+| `status` | `{ schemaVersion, api, signedIn, journey: { cliConnected, deployed, rendered, conformant, published }, modules: [{ id, repository, linked, sandbox: { watchConnected, lastDeploy, lastRun } \| null, err24, openReports, failedChecks, latest: { version, digest, channel, state: available\|draft, missing: [{ kind, lang, permission? }], signature: signed\|unsigned\|unverified, signatureSource: ci\|author\|null, review, publishedAt } \| null, next }], next: { command \| null, reason } }` |
+| `doctor` | `{ schemaVersion, api, ok, checks: [{ id, module \| null, status: ok\|warn\|fail\|skip, summary, fix \| null }] }` — ids: `session`, `cli`, `cosign`, `signing`, then per module `toolchain`, `sdk`, `registry`, `link`, `overrides` |
+| `connectors` | `{ schemaVersion, modules: [{ id, connectors: [{ id, kind: builtin\|custom, baseUrl?, operations?: [{ id, method, path }], permission, credentialProviderId?, auth? }] }] }` |
+| `publish` | `{ schemaVersion, modules: [{ id, version, channel, state: published\|draft\|already-published\|pushed\|dry-run\|failed, digest, reference, missing, url, error }] }` |
+| `logs` | one `{ ts, level, src, msg }` per line |
+| `ci modules` | `{ schemaVersion, modules: [id], any, reason }` |
+| `ci sdk-version` | `{ schemaVersion, version, rev, key }` |
+| `ci info` | `{ schemaVersion, modules: [{ id, version }] }` |
+| `ci check` | `{ schemaVersion, modules: [{ id, warnings: [{ file, message }] }] }` |
+| `ci report` | `{ schemaVersion, modules: [{ id, outcome, reported, error }] }` |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Done |
+| 1 | Failed — including a `doctor` with a failing check |
+| 2 | Usage: a refused argument, an ambiguous or unknown module, an unknown `--env` |
+| 3 | Nothing to do, or already done — `permissions add` of a declared permission, `logout` without a session, `publish --json` when every version was already in the registry |
+| 130 | Interrupted (ctrl-c) |
+
+`publish` without `--json` keeps exiting 0 on « already in the registry »: the release action v1
+reads that case from stdout and would take any other code for a failure.
 
 Colour and animation turn themselves off when the output is not a terminal, and `NO_COLOR` is
 honoured. `portaki catalog` and `portaki inspect` write nothing but their JSON to stdout, so
@@ -255,7 +297,7 @@ invocation serves both.
 
 | Command | Answers |
 |---------|---------|
-| `portaki ci modules [--changed-since <ref>] [--only a,b]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
+| `portaki ci modules [--changed-since <ref>] [--only a,b] [--module <id> \| --all]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
 | `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
 | `portaki ci check [--offline]` | Warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
@@ -303,9 +345,27 @@ after checking that the artifact names the module and version of the sources.
 `publish` refuses a symbolic link, or a file resolving outside the module, in `i18n/`,
 `db/migrations/` and the previews: what it reads there lands in a public OCI layer.
 
-A session from `portaki login` is only sent back to the platform that issued it, over https
-(plain http to localhost only). `--url` or `PORTAKI_API_URL` pointing elsewhere is refused —
-sign in there with `portaki login --url`. `GITHUB_TOKEN` / `GHCR_TOKEN` only go to `ghcr.io`.
+## Platforms and sessions
+
+Every command talks to one API base, resolved once: `--api`, then `--env`, then
+`PORTAKI_API_URL`, then production. `PORTAKI_DEV_URL` is a deprecated alias of
+`PORTAKI_API_URL` (read only when the latter is unset, with a warning), and the per-command
+`--url` flags are hidden aliases of `--api`. The sandbox, the registry and sign-in share that one
+origin, so a stored session can no longer belong to one and be sent to the other.
+
+Named platforms: `prod` (`https://api.portaki.app`), `staging` (`https://api-staging.portaki.app`)
+and `local` (`http://localhost:8080`). Add or override one in `~/.config/portaki/config.toml`:
+
+```toml
+[env.preprod]
+api = "https://api-preprod.example"
+```
+
+Sessions are stored **per origin**: `portaki login --env staging` leaves the production session
+alone, `portaki logout --env staging` ends only that one, and a command towards an origin without
+a session says which login opens one — `portaki login --env staging`. A session is only ever sent back to its own origin, over https
+(plain http to localhost only). A credentials file from an earlier version is read as the session
+of the origin it recorded. `GITHUB_TOKEN` / `GHCR_TOKEN` only go to `ghcr.io`.
 
 `publish` refuses a version the registry already holds, **before** pushing anything. Publications
 are immutable, so a second push could only leave the OCI tag pointing at something the catalogue
