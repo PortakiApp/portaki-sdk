@@ -29,9 +29,8 @@ pub enum PermissionsCommand {
 pub struct AddArgs {
     /// The permission, e.g. `email`, `kv`, `stay:guest_contact:read`.
     pub permission: String,
-    /// In a repository holding several modules, the one to change.
-    #[arg(long)]
-    pub module: Option<String>,
+    #[command(flatten)]
+    pub modules: workspace::ModuleArgs,
 }
 
 /// Runs `portaki permissions`.
@@ -42,29 +41,34 @@ pub fn run(args: PermissionsArgs) -> Result<()> {
         "Turn on the portaki-sdk feature that declares the permission.",
     );
     let feature = feature_for(&args.permission)?;
-    let member = workspace::resolve(args.module.as_deref(), None)?
-        .into_iter()
-        .next()
-        .context("no module here")?;
-    let path = member.root.join("Cargo.toml");
-    let toml =
-        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    match add_feature(&toml, feature)? {
-        None => ui::skipped(format!(
-            "{} already declares {}",
-            member.id, args.permission
-        )),
-        Some(updated) => {
-            std::fs::write(&path, updated).with_context(|| format!("write {}", path.display()))?;
-            ui::success(format!(
-                "{} declares {} (portaki-sdk feature `{feature}`)",
+    let mut changed = false;
+    for member in args.modules.resolve()? {
+        let path = member.root.join("Cargo.toml");
+        let toml =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        match add_feature(&toml, feature)? {
+            None => ui::skipped(format!(
+                "{} already declares {}",
                 member.id, args.permission
-            ));
-            ui::next(&[(
-                "portaki build",
-                "writes the permission into the manifest the platform reads",
-            )]);
+            )),
+            Some(updated) => {
+                std::fs::write(&path, updated)
+                    .with_context(|| format!("write {}", path.display()))?;
+                ui::success(format!(
+                    "{} declares {} (portaki-sdk feature `{feature}`)",
+                    member.id, args.permission
+                ));
+                changed = true;
+            }
         }
+    }
+    if changed {
+        ui::next(&[(
+            "portaki build",
+            "writes the permission into the manifest the platform reads",
+        )]);
+    } else {
+        crate::exit::nothing_to_do();
     }
     ui::blank();
     Ok(())

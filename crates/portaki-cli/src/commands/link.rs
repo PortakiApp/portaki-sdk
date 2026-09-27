@@ -18,8 +18,8 @@ pub struct LinkArgs {
     /// In a repository holding several modules, the one whose page to open.
     #[arg(long)]
     pub module: Option<String>,
-    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
-    #[arg(long)]
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
     /// Print the link instead of opening it.
     #[arg(long)]
@@ -68,7 +68,7 @@ pub async fn run(args: LinkArgs) -> Result<()> {
         ));
     }
 
-    let page = link_page(&auth::api_base_url(args.url.as_deref()), &current).await?;
+    let page = link_page(&crate::profile::api_url(args.url.as_deref()), &current).await?;
     let target = with_also(&page, &others);
     if args.no_browser || !ui::open_browser(&target) {
         ui::field("open", &target);
@@ -83,16 +83,12 @@ pub async fn run(args: LinkArgs) -> Result<()> {
 /// Lie `others` au dépôt de `anchor`. `false` quand `anchor` n'est lié à rien : il n'y a alors
 /// ni dépôt ni règles à reprendre.
 async fn link_all(args: &LinkArgs, anchor: &str, others: &[String]) -> Result<bool> {
-    let base = dev::resolve_base_url(
-        args.url.as_deref(),
-        std::env::var("PORTAKI_DEV_URL").ok().as_deref(),
-        std::env::var("PORTAKI_API_URL").ok().as_deref(),
-    );
+    let base = crate::profile::api_url(args.url.as_deref());
     let mut token = auth::access_token(&base)?;
     let reading = ui::step(format!("reading how {anchor} is linked"));
     let link = match read_link(&base, anchor, &token).await {
         Err(failure) if failure.is::<Unauthorized>() => {
-            token = dev::renew(&auth::api_base_url(args.url.as_deref()), &token).await?;
+            token = dev::renew(&crate::profile::api_url(args.url.as_deref()), &token).await?;
             read_link(&base, anchor, &token).await
         }
         other => other,

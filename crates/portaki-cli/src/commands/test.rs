@@ -11,6 +11,8 @@ use crate::ui;
 #[derive(Debug, Parser)]
 /// Arguments for `portaki test`.
 pub struct TestArgs {
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
     /// Extra arguments forwarded to `cargo test`.
     #[arg(last = true)]
     pub cargo_args: Vec<String>,
@@ -23,23 +25,26 @@ pub fn run(args: TestArgs) -> Result<()> {
         "Forward to cargo test — the module's own tests, on the host target.",
     );
 
-    let mut cmd = Command::new("cargo");
-    cmd.arg("test");
-    for arg in &args.cargo_args {
-        cmd.arg(arg);
-    }
+    args.modules.for_each(|_| {
+        let mut cmd = Command::new("cargo");
+        cmd.arg("test");
+        for arg in &args.cargo_args {
+            cmd.arg(arg);
+        }
 
-    // La sortie de `cargo test` est le sujet de la commande : elle passe en direct, sans
-    // indicateur pour la masquer.
-    let status = cmd.status().context("cargo test")?;
-    ui::blank();
-    if status.success() {
-        ui::success("tests passed");
+        // La sortie de `cargo test` est le sujet de la commande : elle passe en direct, sans
+        // indicateur pour la masquer — sur stderr en `--json`.
+        ui::keep_stdout_clean(&mut cmd);
+        let status = cmd.status().context("cargo test")?;
         ui::blank();
-        Ok(())
-    } else {
-        anyhow::bail!("cargo test failed");
-    }
+        if status.success() {
+            ui::success("tests passed");
+            ui::blank();
+            Ok(())
+        } else {
+            anyhow::bail!("cargo test failed");
+        }
+    })
 }
 
 /// The name every test of the battery carries: `portaki_conformance::manifest`, …

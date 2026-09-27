@@ -51,8 +51,8 @@ const SDK_VERSION: &str = portaki_sdk::VERSION;
 #[derive(Debug, Parser)]
 /// Arguments for `portaki login`.
 pub struct LoginArgs {
-    /// Base URL of the platform. Defaults to PORTAKI_API_URL, then production.
-    #[arg(long)]
+    /// Alias of the global --api, kept for older scripts.
+    #[arg(long, hide = true)]
     pub url: Option<String>,
 
     /// Print the URL instead of opening it — for a remote shell or a headless box.
@@ -62,8 +62,8 @@ pub struct LoginArgs {
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki logout`.
-/// No `--url`: the session is revoked on the platform that issued it, and its refresh token is
-/// sent nowhere else.
+/// No `--url`: `--api` / `--env` name the platform, and only that platform's session is ended —
+/// its refresh token is sent nowhere else.
 pub struct LogoutArgs {}
 
 #[derive(Debug, serde::Deserialize)]
@@ -343,20 +343,32 @@ pub async fn logout(_args: LogoutArgs) -> Result<()> {
         "End the session here, and on the platform.",
     );
 
-    let stored = auth::refresh_token();
-    let issuer = auth::issuer();
+    let issuer = crate::profile::api_url(None);
+    let origin = auth::origin_of(&issuer).with_context(|| format!("{issuer} is not a URL"))?;
+    let stored = auth::refresh_token(&origin);
 
     // Effacé d'abord, quoi qu'il arrive ensuite : une déconnexion qui laisse les identifiants
     // en place parce que le réseau a hoqueté serait la pire des deux moitiés — on croit être
     // sorti, et on ne l'est nulle part.
-    auth::forget()?;
-    ui::success("signed out here — credentials cleared");
+    auth::forget(&origin)?;
 
     let Some(refresh_token) = stored else {
-        ui::detail("no session was stored");
+        ui::skipped(format!("no session was stored for {origin}"));
+        let elsewhere: Vec<String> = auth::signed_in_origins()
+            .into_iter()
+            .filter(|other| *other != origin)
+            .collect();
+        if !elsewhere.is_empty() {
+            ui::detail(format!(
+                "signed in to {} — add --api <url> or --env <name>",
+                elsewhere.join(", ")
+            ));
+        }
+        crate::exit::nothing_to_do();
         ui::blank();
         return Ok(());
     };
+    ui::success(format!("signed out of {origin} here — credentials cleared"));
 
     match revoke(&issuer, &refresh_token).await {
         Ok(()) => ui::success("the platform revoked this session"),
@@ -397,7 +409,7 @@ async fn revoke(base: &str, refresh_token: &str) -> Result<()> {
 }
 
 fn base_url(explicit: Option<&str>) -> String {
-    auth::api_base_url(explicit)
+    crate::profile::api_url(explicit)
 }
 
 /// This machine's name, the way its owner would recognise it.

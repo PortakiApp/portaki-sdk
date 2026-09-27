@@ -89,6 +89,25 @@ pub async fn push_artifact(
     })
 }
 
+/// Le registre accorde-t-il le droit de pousser ce module, avec les identifiants de cette
+/// machine ? La négociation de jeton seule — aucun octet n'est envoyé.
+pub async fn can_push(registry: &str, module_id: &str) -> Result<()> {
+    let image_ref = format!("{}/{module_id}:doctor", registry.trim_end_matches('/'));
+    let reference: Reference = image_ref
+        .parse()
+        .with_context(|| format!("invalid OCI reference: {image_ref}"))?;
+    let credentials = auth::resolve_registry_auth(registry)?;
+    Client::default()
+        .auth(
+            &reference,
+            &credentials,
+            oci_distribution::RegistryOperation::Push,
+        )
+        .await
+        .with_context(|| format!("{registry} refused a push token for {module_id}"))?;
+    Ok(())
+}
+
 /// Résout le digest d'une version déjà poussée, sans rien envoyer.
 ///
 /// Lecture seule : c'est ce qui permet d'annoncer au registre un catalogue déjà sur GHCR sans

@@ -18,6 +18,8 @@ pub struct CheckArgs {
     /// Skip `cargo test`.
     #[arg(long)]
     pub skip_tests: bool,
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
 }
 
 /// Runs `portaki check`.
@@ -30,7 +32,32 @@ pub async fn run(args: CheckArgs) -> Result<()> {
         "Formatting, lints, tests, the wasm build, and the manifest — what CI will ask.",
     );
     let started = std::time::Instant::now();
+    let chosen = args.modules.resolve()?;
+    for member in &chosen {
+        if chosen.len() > 1 {
+            ui::rule(&member.id);
+        }
+        crate::workspace::enter(member)?;
+        check_here(&args)
+            .await
+            .with_context(|| format!("module {}", member.id))?;
+    }
 
+    ui::blank();
+    ui::success(format!("checked in {}", ui::elapsed(started.elapsed())));
+    ui::next(&[
+        (
+            "portaki dev --watch",
+            "run it in the hosted sandbox on every save",
+        ),
+        ("portaki publish", "push the artifact and announce it"),
+    ]);
+    ui::blank();
+    Ok(())
+}
+
+/// `portaki check` pour le module du dossier courant.
+async fn check_here(args: &CheckArgs) -> Result<()> {
     format_step(args.fix)?;
     clippy_step(args.fix)?;
     if args.skip_tests {
@@ -53,20 +80,9 @@ pub async fn run(args: CheckArgs) -> Result<()> {
     lint::run(LintArgs {
         manifest: None,
         channel: "stable".to_string(),
+        modules: Default::default(),
         nested: true,
-    })?;
-
-    ui::blank();
-    ui::success(format!("checked in {}", ui::elapsed(started.elapsed())));
-    ui::next(&[
-        (
-            "portaki dev --watch",
-            "run it in the hosted sandbox on every save",
-        ),
-        ("portaki publish", "push the artifact and announce it"),
-    ]);
-    ui::blank();
-    Ok(())
+    })
 }
 
 fn format_step(fix: bool) -> Result<()> {

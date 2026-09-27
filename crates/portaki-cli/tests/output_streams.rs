@@ -55,7 +55,7 @@ fn a_warning_goes_to_stderr() {
     .unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_portaki"))
-        .args(["--plain", "logout"])
+        .args(["--plain", "--api", "http://127.0.0.1:1", "logout"])
         .env(
             "PORTAKI_CREDENTIALS_FILE",
             home.path().join("credentials.json"),

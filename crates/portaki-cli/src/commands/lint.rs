@@ -22,6 +22,9 @@ pub struct LintArgs {
     #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
     pub channel: String,
 
+    #[command(flatten)]
+    pub modules: crate::workspace::ModuleArgs,
+
     /// `check` enchaîne sur `lint` : un second en-tête ferait croire à deux commandes.
     #[arg(skip)]
     pub nested: bool,
@@ -29,16 +32,22 @@ pub struct LintArgs {
 
 /// Runs `portaki lint`.
 pub fn run(args: LintArgs) -> Result<()> {
-    if !args.nested {
-        ui::header(
-            "portaki lint",
-            "Check that everything the manifest names actually resolves.",
-        );
+    if args.nested {
+        return lint_here(&args);
     }
+    ui::header(
+        "portaki lint",
+        "Check that everything the manifest names actually resolves.",
+    );
+    args.modules.for_each(|_| lint_here(&args))
+}
 
+/// `portaki lint` pour le module du dossier courant.
+fn lint_here(args: &LintArgs) -> Result<()> {
     let module_root = std::env::current_dir().context("current_dir")?;
     let manifest_path = args
         .manifest
+        .clone()
         .unwrap_or_else(|| module_root.join("target/portaki/manifest.json"));
 
     let reading = ui::step("reading the manifest");
