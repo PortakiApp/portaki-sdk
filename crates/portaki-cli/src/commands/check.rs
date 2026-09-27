@@ -50,7 +50,10 @@ pub async fn run(args: CheckArgs) -> Result<()> {
             "portaki dev --watch",
             "run it in the hosted sandbox on every save",
         ),
-        ("portaki publish", "push the artifact and announce it"),
+        (
+            "portaki release",
+            "push the artifact, sign it and announce it",
+        ),
     ]);
     ui::blank();
     Ok(())

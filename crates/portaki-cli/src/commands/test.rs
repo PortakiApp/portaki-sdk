@@ -65,7 +65,7 @@ impl Refusal {
     /// What the person publishing reads: the rule, and what to do about it.
     pub fn message(&self) -> String {
         match self {
-            Refusal::Failed => "the module's tests fail — portaki publish does not push a module \
+            Refusal::Failed => "the module's tests fail — portaki release does not push a module \
                  whose tests do not pass, and there is no flag to make it. Fix them, then publish \
                  again; portaki test runs the same thing"
                 .to_string(),
@@ -79,7 +79,7 @@ impl Refusal {
     }
 }
 
-/// `cargo test` as `portaki publish` runs it: the module's own crate, on the host target.
+/// `cargo test` as `portaki release` runs it: the module's own crate, on the host target.
 ///
 /// Every target cargo tests by default — unit tests, `tests/*.rs` (the conformance battery among
 /// them), doctests. `CARGO_BUILD_TARGET` is dropped: publishing just compiled for wasm32, and a
@@ -115,8 +115,8 @@ pub fn verdict(success: bool, stdout: &str) -> Result<(), Refusal> {
 
 /// Runs the module's tests and refuses the publication unless they pass, battery included.
 ///
-/// Called by `portaki publish` before it builds or pushes anything — `--dry-run` and
-/// `--skip-build` included: tests are not an artifact a previous job can hand over.
+/// Called by `portaki release` and `portaki ci build` before they build or push anything —
+/// `--dry-run` included: tests are not an artifact a previous job can hand over.
 pub fn gate_publish(module_root: &Path) -> Result<()> {
     let step = ui::step("running the module's tests (conformance battery included)");
     let output = publish_test_command(module_root)

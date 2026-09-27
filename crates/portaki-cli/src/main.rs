@@ -7,7 +7,7 @@
 //! 1. Compiles the crate to `wasm32-unknown-unknown`
 //! 2. Reads proc-macro JSON under `OUT_DIR/portaki-emissions/`
 //! 3. Merges emissions (+ optional hand-written `portaki.module.json`) into `manifest.json`
-//! 4. Packages Wasm + manifests for OCI push (`portaki publish`)
+//! 4. Packages Wasm + manifests, pushed to Portaki's OCI repository by `portaki release`
 //!
 //! # Commands
 //!
@@ -22,7 +22,7 @@
 //! | `login` / `logout` | Open or end a developer session (device grant) |
 //! | `dev` | Build, deploy to the hosted sandbox, and show what the run did |
 //! | `ci` | Answer what a CI workflow used to ask in bash |
-//! | `publish` | Push OCI layers to the configured OCI registry (GHCR by default), then announce them |
+//! | `release` | Test, build, push to Portaki's OCI repository, sign, and announce a version |
 //! | `sdk upgrade` | Move the module to another SDK version, and prove nothing broke |
 //! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
@@ -137,8 +137,11 @@ enum Command {
     I18n(commands::i18n::I18nArgs),
     /// Declare a permission (`portaki permissions add email`).
     Permissions(commands::permissions::PermissionsArgs),
-    /// Push the OCI artifact to the configured registry (GHCR by default), then announce it.
-    Publish(commands::publish::PublishArgs),
+    /// Test, build, push to Portaki's registry, sign, and announce a version.
+    Release(commands::release::ReleaseArgs),
+    /// Former name of `release`.
+    #[command(hide = true)]
+    Publish(commands::release::ReleaseArgs),
     /// Link this module to its repository — with --all, every module of the monorepo.
     Link(commands::link::LinkArgs),
     /// Print how to open local SDK documentation (no docs server).
@@ -399,7 +402,11 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Permissions(args) => commands::permissions::run(args),
         Command::I18n(args) => commands::i18n::run(args),
-        Command::Publish(args) => commands::publish::run(args).await,
+        Command::Release(args) => commands::release::run(args).await,
+        Command::Publish(args) => {
+            ui::warn("portaki publish is now portaki release — use that name from now on");
+            commands::release::run(args).await
+        }
         Command::Link(args) => commands::link::run(args).await,
         Command::Docs(args) => commands::docs::run(args),
         Command::Catalog => commands::catalog::run(),
@@ -516,10 +523,16 @@ mod tests {
                 .unwrap_or_default()
         };
 
-        assert!(!about("publish").contains("Scaleway"));
-        assert!(about("publish").contains("registry"));
+        assert!(!about("release").contains("Scaleway"));
+        assert!(about("release").contains("registry"));
         assert!(about("dev").contains("hosted sandbox"));
         assert!(!about("inspect").contains("OCI artifact"));
+    }
+
+    /// Deux arguments du même nom, un groupe en double : `clap` ne le dit qu'à l'exécution.
+    #[test]
+    fn the_command_tree_is_valid() {
+        Cli::command().debug_assert();
     }
 
     /// Un refus dont on ne saurait rien dire reste un refus : la sortie ne doit pas être vide.

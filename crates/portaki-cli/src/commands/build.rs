@@ -29,7 +29,7 @@ pub struct BuildArgs {
     #[arg(long)]
     pub all: bool,
 
-    /// `publish` enchaîne sur `build` : un second en-tête ferait croire à deux commandes.
+    /// `release` enchaîne sur `build` : un second en-tête ferait croire à deux commandes.
     #[arg(skip)]
     pub nested: bool,
 }
@@ -42,7 +42,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             "Compile to wasm32, then turn the SDK's emissions into what the host reads.",
         );
     }
-    // `publish` s'est déjà placé dans le module qu'il publie.
+    // `release` s'est déjà placé dans le module qu'il publie.
     if args.nested {
         return build_here(&args).await;
     }

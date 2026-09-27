@@ -246,7 +246,7 @@ fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
     }
     let Some(latest) = &module.latest else {
         return next(
-            Some(format!("portaki publish{flag}")),
+            Some(format!("portaki release{flag}")),
             "publish a first version",
         );
     };
@@ -267,7 +267,7 @@ fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
     }
     if latest.signature != "signed" {
         return next(
-            Some(format!("portaki publish --sign{flag}")),
+            Some(format!("portaki release{flag}")),
             "sign the next version — production runs signed versions only",
         );
     }
@@ -444,7 +444,7 @@ mod tests {
         module.linked = true;
         assert_eq!(
             decide(&all_steps(), &module, "").command.as_deref(),
-            Some("portaki publish")
+            Some("portaki release")
         );
 
         module.latest = published("draft", "signed");
@@ -455,7 +455,7 @@ mod tests {
         module.latest = published("available", "unsigned");
         assert_eq!(
             decide(&all_steps(), &module, "").command.as_deref(),
-            Some("portaki publish --sign")
+            Some("portaki release")
         );
 
         module.err24 = 3;

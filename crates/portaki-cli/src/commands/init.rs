@@ -615,7 +615,7 @@ mod tests {
             fs::read_to_string(dest.join("tests/integration.rs")).expect("tests written");
         assert!(integration.contains("use concierge::{"));
         assert!(!integration.contains("{{"));
-        // Every new module runs the conformance battery `portaki publish` gates on.
+        // Every new module runs the conformance battery `portaki release` gates on.
         let conformance =
             fs::read_to_string(dest.join("tests/conformance.rs")).expect("battery written");
         assert!(conformance.contains("portaki_test_utils::conformance!();"));

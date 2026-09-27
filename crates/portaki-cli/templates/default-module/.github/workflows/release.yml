@@ -1,14 +1,15 @@
 name: release
 
-# Publie ce module quand un tag `v*` est poussé.
+# Publie ce module quand un tag `v*` est poussé, en deux jobs.
 #
-# Tout le travail est dans `portaki-release-action` : auditer les dépendances (`cargo audit`),
-# compiler en wasm32, valider le manifeste, pousser l'artefact OCI, le signer sans clé avec sa
-# provenance et son rapport d'audit, annoncer la version au registre, et avertir de ce qui
-# vieillit. Ce fichier ne dit que *quand*.
+# `build` exécute le code du module — tests, batterie de conformité, `build.rs`, build wasm32 —
+# sans aucun droit. `release` détient les droits de publication et n'exécute rien du module, pas
+# même cargo : il audite `Cargo.lock` (`cargo audit`), pousse l'artefact de `build` dans le dépôt
+# OCI de Portaki avec un droit de push court que le registre lui délivre, le signe sans clé avec
+# la provenance de ce workflow et le rapport d'audit, et annonce la version.
 #
 # La production Portaki n'exécute qu'un artefact signé par le workflow lié à ce module : ce
-# fichier, dans ce dépôt. Un artefact poussé à la main sur GHCR n'y tournera pas.
+# fichier, dans ce dépôt. Aucun secret à ranger : le jeton OIDC du job remplace tout.
 
 on:
   push:
@@ -17,34 +18,42 @@ on:
 
 permissions:
   contents: read
-  # L'artefact, et sa signature poussée à côté.
-  packages: write
-  # Sans ce droit, GitHub n'émet aucun jeton OIDC : rien à échanger contre un credential de
-  # publication, et aucune identité pour signer. C'est ce jeton qui remplace un secret longue
-  # durée et une clé de signature : il n'y a rien à ranger dans les secrets du dépôt.
-  id-token: write
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      # Tests, build --release, lint, emballage ; l'artefact part au job suivant.
+      - uses: PortakiApp/portaki-release-action/build@v2
+
   release:
+    needs: build
     runs-on: ubuntu-latest
     # La liaison enregistrée au registre exige un environment sur le canal stable : c'est lui
     # qui porte les relecteurs obligatoires. Sans lui l'échange est refusé —
     # `environment_required`. Liez d'abord ce module à ce dépôt depuis le dashboard.
     environment: release
+    permissions:
+      contents: read
+      # Sans ce droit, GitHub n'émet aucun jeton OIDC : rien à échanger contre un droit de push,
+      # et aucune identité pour signer.
+      id-token: write
+    # Une publication à la fois : deux jobs qui poussent la même version se disputeraient son tag.
+    concurrency:
+      group: portaki-release
+      cancel-in-progress: false
     steps:
+      # Les sources sont lues (Cargo.lock, CHANGELOG, listing.json), jamais compilées.
       - uses: actions/checkout@v6
 
-      # Épinglées par SHA : ce job détient les droits de publication, une étiquette déplacée
-      # exécuterait ici le code de quelqu'un d'autre.
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: PortakiApp/portaki-release-action@bda94d3269e7edd3de362a5e6aeda89afc6755a9 # v1
+      - uses: PortakiApp/portaki-release-action@v2
         with:
           # Une vulnérabilité de cette gravité (CVSS) arrête la release ; en dessous, et pour un
           # avis informationnel (crate non maintenue), un avertissement seulement.
           audit-fail-on: critical
-          # Le build de ce job exécute le code du module (build.rs) : un binaire `portaki` mis en
-          # cache après lui ne se relit pas au release suivant.
-          cache: "false"

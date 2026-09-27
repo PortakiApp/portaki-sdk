@@ -82,7 +82,7 @@ Every module runs the same checks, from one file — `tests/conformance.rs`:
 portaki_test_utils::conformance!();
 ```
 
-It generates one test per check under `portaki_conformance::`. `portaki publish` runs them and refuses to publish while one fails.
+It generates one test per check under `portaki_conformance::`. `portaki release` runs them and refuses to publish while one fails.
 
 | Test | Fails when |
 |------|------------|

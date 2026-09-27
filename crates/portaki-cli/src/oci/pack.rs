@@ -307,8 +307,8 @@ pub fn read_module_coordinates(
 
 /// Lit id/version dans les sources — `portaki.module.json` ou le crate —, sans passer par un build.
 ///
-/// C'est ce qui permet d'annoncer au registre une version déjà présente sur GHCR : rien à
-/// recompiler, rien à repousser, donc aucun jeton d'écriture nécessaire.
+/// C'est ce que le job de publication confronte à l'artefact qu'un autre job a construit : les
+/// sources nomment le module, pas le code qui l'a compilé.
 pub fn read_source_coordinates(module_root: &Path) -> Result<ModuleCoordinates> {
     let (id, version) = crate::manifest::source::coordinates(module_root).with_context(|| {
         format!(
@@ -317,21 +317,6 @@ pub fn read_source_coordinates(module_root: &Path) -> Result<ModuleCoordinates> 
         )
     })?;
     Ok(ModuleCoordinates { id, version })
-}
-
-/// Builds the OCI image reference `registry/portaki-modules-{module_id}:version`.
-pub fn image_reference(registry: &str, coords: &ModuleCoordinates) -> Result<String> {
-    let registry = registry.trim_end_matches('/');
-    if registry.is_empty() {
-        anyhow::bail!("registry must not be empty");
-    }
-    let owner = registry
-        .strip_suffix("/portaki-modules")
-        .unwrap_or(registry);
-    Ok(format!(
-        "{}/portaki-modules-{}:{}",
-        owner, coords.id, coords.version
-    ))
 }
 
 /// Discovers wasm + publish manifest + optional SDK manifest + i18n layers.
@@ -647,24 +632,6 @@ mod tests {
                 id: "weather".to_string(),
                 version: "0.2.0".to_string(),
             }
-        );
-    }
-
-    #[test]
-    fn image_reference_formats_registry_tag() {
-        let coords = ModuleCoordinates {
-            id: "weather".into(),
-            version: "0.2.0".into(),
-        };
-        let reference = image_reference("ghcr.io/portakiapp/portaki-modules", &coords).unwrap();
-        assert_eq!(
-            reference,
-            "ghcr.io/portakiapp/portaki-modules-weather:0.2.0"
-        );
-        let reference = image_reference("ghcr.io/portakiapp", &coords).unwrap();
-        assert_eq!(
-            reference,
-            "ghcr.io/portakiapp/portaki-modules-weather:0.2.0"
         );
     }
 

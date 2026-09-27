@@ -16,7 +16,7 @@ pub mod lint;
 pub mod login;
 pub mod logs;
 pub mod permissions;
-pub mod publish;
+pub mod release;
 pub mod sdk;
 pub mod status;
 pub mod test;

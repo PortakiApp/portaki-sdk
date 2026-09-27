@@ -1,7 +1,7 @@
 //! `changelog` of the published manifest: what is new in this version, for hosts on an older one.
 //!
 //! One entry per line, every language side by side: `[{ "fr": "…", "en": "…" }, …]`. For each
-//! language, `portaki publish --notes` wins (`--notes fr:"…"`, or unprefixed in `--notes-lang`);
+//! language, `portaki release --notes` wins (`--notes fr:"…"`, or unprefixed in `--notes-lang`);
 //! otherwise the version's section of `CHANGELOG.<lang>.md`, and of `CHANGELOG.md` in English
 //! (Keep a Changelog or release-please: `## [x.y.z]` or `## x.y.z`, then bullets). Nothing said
 //! in any language: the field stays as `portaki.module.json` has it.

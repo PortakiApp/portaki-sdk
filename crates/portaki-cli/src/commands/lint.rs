@@ -79,7 +79,7 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
-    // Le manifeste que `publish` enverra, écrit du code par `portaki build` : le registre le
+    // Le manifeste que `release` enverra, écrit du code par `portaki build` : le registre le
     // refuserait hors schéma, autant le dire ici.
     portaki_test_utils::conformance::Module::at(&module_root)
         .check_manifest()
@@ -116,7 +116,7 @@ fn lint_here(args: &LintArgs) -> Result<()> {
     Ok(())
 }
 
-/// What `portaki publish` would stamp as this version's changelog, by language.
+/// What `portaki release` would stamp as this version's changelog, by language.
 ///
 /// A warning, not a failure: preview channels never wait. But a stable version without a line in
 /// every language of its listing stays pending at the registry — better read here than after the
@@ -131,7 +131,7 @@ fn report_changelog(module_root: &std::path::Path, version: &str) -> Result<()> 
         ui::warn(format!(
             "no changelog for {version} — a stable publication stays pending until it has a line \
              in every language of the listing: write CHANGELOG.<lang>.md, or pass \
-             portaki publish --notes <lang>:…"
+             portaki release --notes <lang>:…"
         ));
     } else {
         ui::detail(format!(
@@ -143,7 +143,7 @@ fn report_changelog(module_root: &std::path::Path, version: &str) -> Result<()> 
     Ok(())
 }
 
-/// The manifest `publish` sends must say which SDK built it — and, for `stable`, a recent one.
+/// The manifest `release` sends must say which SDK built it — and, for `stable`, a recent one.
 ///
 /// Read from the publish manifest `portaki build` writes: that is where `sdkVersion` is stamped,
 /// from the crate cargo resolved.
@@ -174,7 +174,7 @@ fn sdk_version_problem(manifest: &serde_json::Value, channel: &str) -> Option<St
     if channel == "stable" && parse(MIN_STABLE_SDK).is_some_and(|min| parsed < min) {
         return Some(format!(
             "SDK too old for stable: built on portaki-sdk {version}, stable needs {MIN_STABLE_SDK} \
-             or later — run portaki sdk upgrade, or publish with --channel preview"
+             or later — run portaki sdk upgrade, or release with --channel preview"
         ));
     }
     None

@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>Rust SDK, CLI, connectors, and test utilities for Portaki Wasm guest modules</strong><br>
-  Build, lint, test, and publish Extism modules as OCI images on GitHub Container Registry.
+  Build, lint, test, and release Extism modules to the Portaki registry.
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="#publish-oci--ghcr">Publish</a> ·
+  <a href="#release">Release</a> ·
   <a href="#workspace-crates">Crates</a> ·
   <a href="docs/connectors-and-credentials.md">Connectors & credentials</a> ·
   <a href="docs/module-layout.md">Module layout</a> ·
@@ -38,17 +38,16 @@
 
 Portaki runs guest modules as **Extism Wasm** plugins. This workspace is what module authors use day to day: host APIs, proc-macros, connectors, mocks, and the `portaki` CLI.
 
-Official modules are published from [`portaki-modules`](https://github.com/PortakiApp/portaki-modules) as:
-
-`ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>`
+Official modules are published from [`portaki-modules`](https://github.com/PortakiApp/portaki-modules)
+to Portaki's own OCI repository, as `oci.portaki.app/modules/<module-id>:<semver>`.
 
 ## Why this SDK?
 
-- **One toolchain** — `portaki init` / `build` / `lint` / `test` / `publish`
+- **One toolchain** — `portaki init` / `build` / `lint` / `test` / `release`
 - **Compile-time metadata** — macros emit catalog + SDK manifests consumed by the host
 - **Connectors** — typed clients for OpenWeather, Google Places, Mapbox, OSM, …
 - **Testable** — `MockContext` and in-memory host functions without a full runtime
-- **OCI-native** — push to GHCR with dash-named packages (listed by the GitHub Packages API)
+- **OCI-native** — `portaki release` pushes to Portaki's OCI repository, signs, and announces
 
 ## Connectors and credentials
 
@@ -96,38 +95,29 @@ cd my-module
 portaki check
 ```
 
-## Publish (OCI / GHCR)
-
-After `portaki build --release`:
+## Release
 
 ```bash
-export GITHUB_TOKEN="<classic-pat-with-write:packages>"   # or: docker login ghcr.io
-export PORTAKI_PUBLISH_VERSION="0.2.1"                    # optional CI guard
-portaki publish --registry ghcr.io/portakiapp
+portaki login
+portaki release            # tests, build, push, sign, announce
+portaki release --dry-run  # everything up to the push
 ```
 
-Image name: `ghcr.io/portakiapp/portaki-modules-<module-id>:<semver>` (dash, not slash).
+`release` asks the Portaki registry for the right to push this version
+(`POST /registry/v1/publications/push-token`): short-lived, limited to this module and version, for
+the repository `modules/<module-id>` of the OCI host the registry names. No `docker login`, no
+GitHub token, no registry to choose. It then pushes the artifact, attests the pushed digest as its
+author (`cosign attest`, your GitHub identity — `--no-sign` skips it, and the version then runs in
+the sandbox only), and announces `oci://<host>/modules/<module-id>@<digest>` to the registry.
+Replaying a version that is already published is not an error: publications are immutable.
 
-`portaki publish --dry-run` validates the artifact without pushing.
+From CI, two jobs: `portaki ci build` runs the module's code (tests, `build.rs`) without any
+right; `portaki ci release` pushes what it built, signs it with the workflow's identity
+(SLSA provenance and `cargo audit`), and announces it — running nothing of the module, not even
+cargo. [`portaki-release-action@v2`](https://github.com/PortakiApp/portaki-release-action) wires
+both.
 
-### The registry announcement
-
-Pushing to GHCR puts the bytes somewhere; it does not put the module in a catalogue. After the
-push, `publish` announces the version to the Portaki registry — module id, version, artifact ref
-and the digest read back from GHCR — which pulls the artifact by that digest and reads the
-manifest inside it. The body says *where to look*, never *what was published*.
-
-That announcement needs `portaki login`. Replaying a version that is already published is not an
-error: publications are immutable and keyed by digest, so a re-run of a CI job is a no-op.
-
-`--no-announce` pushes to GHCR only. The artifact then exists in no catalogue — useful to inspect
-a build, not to ship one.
-
-`--announce-only` does the opposite: it announces a version **already on GHCR**, resolving its
-digest read-only and pushing nothing. That is how an existing catalogue is adopted by the
-registry — no rebuild, no re-upload, and no write credentials needed.
-
-Publish pushes the catalog written by `portaki build` from the code (merged over a
+The artifact carries the catalog written by `portaki build` from the code (merged over a
 `portaki.module.json` when the module still keeps one) and the SDK layer
 (plus optional migrations / operations / i18n / wasm):
 

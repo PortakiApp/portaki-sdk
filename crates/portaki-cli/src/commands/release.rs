@@ -1,28 +1,30 @@
-//! `portaki publish` — OCI push via `oci-distribution` (ORAS-compatible layout).
+//! `portaki release` — publier une version au registre Portaki.
 //!
-//! Runs the module's tests first — `cargo test` on the host, the conformance battery of
-//! `portaki_test_utils::conformance!()` required among them — and refuses to go further when they
-//! fail. `--dry-run` and `--skip-build` run them too; only `--announce-only`, which compiles and
-//! pushes nothing, does not.
+//! Tests (la batterie de conformité de `portaki_test_utils::conformance!()` comprise) → build
+//! `--release` → emballage → droit de push demandé au registre → poussée dans **son** dépôt OCI
+//! → signature → annonce → fiche publique. Un test qui échoue arrête tout avant le build ; une
+//! signature qui échoue, avant l'annonce.
 //!
-//! Then runs `portaki build --release` (unless `--skip-build`) so the OCI catalog layer
-//! comes from `target/portaki/publish-manifest.json`, not a hand-edited repo file at publish time.
+//! Le droit de push vient du registre (`POST /registry/v1/publications/push-token`) : court,
+//! limité à ce module et cette version, pour le seul dépôt `modules/<id>` de l'hôte OCI que la
+//! réponse nomme. Rien d'autre n'autorise une poussée — ni `docker login`, ni jeton GitHub.
 //!
-//! Authenticates with `GITHUB_TOKEN` / `GHCR_TOKEN` or Docker `~/.docker/config.json`.
+//! Qui publie : depuis un poste, la session `portaki login` ; dans un job GitHub Actions avec
+//! `id-token: write`, le jeton OIDC du job, échangé contre un credential à usage unique (un par
+//! geste : droit de push, annonce, fiche).
 //!
-//! L'annonce au registre, elle, n'a plus besoin d'un secret stocké : dans un job GitHub Actions
-//! avec `id-token: write`, la CLI demande le jeton OIDC du job et l'échange contre un credential
-//! de publication à usage unique. Hors CI, le jeton de `portaki login` fait le travail.
+//! La signature est par défaut. Depuis un poste, c'est l'auteur qui atteste (`cosign attest`,
+//! identité GitHub) ; en CI, c'est [`Mode::CiRelease`] qui atteste la provenance du workflow et
+//! l'audit des dépendances. `--no-sign` publie sans signature : la version ne tournera qu'en
+//! sandbox.
 //!
-//! Set `PORTAKI_PUBLISH_VERSION` (e.g. from CI git tag `*-vX.Y.Z`) to fail fast if `publish-manifest.json`
-//! version does not match.
+//! En CI, deux jobs : `portaki ci build` exécute le code du module (tests, `build.rs`) sans aucun
+//! droit ; `portaki ci release` pousse ce qu'il a produit, avec les droits, sans rien exécuter du
+//! module — ni cargo : id, version et SDK se lisent dans `publish-manifest.json`, les sources et
+//! `Cargo.lock`.
 //!
-//! Après la poussée OCI, la publication est **annoncée au registre Portaki**. Sans cette annonce
-//! l'artefact existe sur GHCR mais n'entre dans aucun catalogue : c'est ce qui manquait pour que
-//! l'orchestrator puisse lire son catalogue depuis le registre plutôt que depuis GHCR.
-//!
-//! Puis la fiche publique `listing.json`, si le module en a une, part au registre — y compris
-//! quand la version y était déjà.
+//! Set `PORTAKI_PUBLISH_VERSION` (e.g. from CI git tag `*-vX.Y.Z`) to fail fast if
+//! `publish-manifest.json` version does not match.
 
 use std::path::{Path, PathBuf};
 
@@ -34,45 +36,18 @@ use crate::commands::{link, test};
 use crate::{auth, oci, oidc, sign, ui, workspace};
 
 #[derive(Debug, Clone, Parser)]
-/// Arguments for `portaki publish`.
-pub struct PublishArgs {
-    /// OCI registry prefix. Defaults to ghcr.io/portakiapp for official modules; required
-    /// for any other author.
-    #[arg(long)]
-    pub registry: Option<String>,
-    /// Run the tests and validate packaging without pushing.
+/// Arguments for `portaki release`.
+pub struct ReleaseArgs {
+    /// Run the tests, build and package without pushing or announcing anything.
     #[arg(long)]
     pub dry_run: bool,
-    /// Artifact directory (defaults to `target/portaki`).
-    #[arg(long)]
-    pub artifact_dir: Option<PathBuf>,
-    /// Skip the implicit `portaki build --release` (not recommended). The tests still run.
-    #[arg(long)]
-    pub skip_build: bool,
     /// Release channel at the Portaki registry — `stable` needs SDK 8.0.0 or later.
     #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
     pub channel: String,
-    /// Alias of the global --api, kept for older scripts.
-    #[arg(long, hide = true)]
-    pub url: Option<String>,
-    /// Push to GHCR without announcing it — the artifact then enters no catalogue.
+    /// Publish without a signature. The version then never runs in production (any channel):
+    /// it stays usable in the sandbox.
     #[arg(long)]
-    pub no_announce: bool,
-    /// Announce a version already on GHCR, compiling and pushing nothing.
-    #[arg(long, conflicts_with_all = ["no_announce", "dry_run", "skip_build", "prebuilt", "sign"])]
-    pub announce_only: bool,
-    /// Attest the pushed digest as its author, with your GitHub identity, before announcing it: a
-    /// Portaki author attestation (cosign attest, keyless: Fulcio and Rekor) naming the module and
-    /// version — not provenance. Needs cosign v3.1.3+ and a browser; refused in CI, where the
-    /// release action attests provenance. Without it, the version never runs in production (any
-    /// channel): it stays usable in the sandbox.
-    #[arg(long)]
-    pub sign: bool,
-    /// Push what an earlier job built and tested, running nothing of the module — neither its
-    /// build nor its tests. For a CI job that holds the publishing rights: module code must not
-    /// run there. The artifact must name the module and version of the sources.
-    #[arg(long, conflicts_with = "skip_build")]
-    pub prebuilt: bool,
+    pub no_sign: bool,
     /// In a repository holding several modules, the one to publish.
     #[arg(long, conflicts_with = "all")]
     pub module: Option<String>,
@@ -106,6 +81,18 @@ pub struct PublishArgs {
     pub host_action: Vec<String>,
 }
 
+/// Où la publication tourne, et donc ce qu'elle a le droit d'exécuter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mode {
+    /// Un poste : tests, build, signature d'auteur.
+    Local,
+    /// `portaki ci build`, le job sans droits : tests, build, emballage — rien n'est poussé.
+    CiBuild,
+    /// `portaki ci release`, le job à droits : l'artefact de `ci build`, poussé, attesté avec la
+    /// provenance du workflow et `audit`, annoncé. Rien du module ne s'exécute.
+    CiRelease { audit: Option<PathBuf> },
+}
+
 /// A layer's size on disk, or zero when it cannot be read — the list is a report, not a gate.
 fn layer_size(path: &Path) -> u64 {
     std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
@@ -120,48 +107,30 @@ fn plural(count: usize, noun: &str) -> String {
     }
 }
 
-/// The namespace Portaki publishes its own modules under.
-pub(crate) const OFFICIAL_REGISTRY: &str = "ghcr.io/portakiapp";
-
-/// Where this module's artifact belongs.
-///
-/// The old default pushed everything to the Portaki namespace. For a module whose manifest
-/// names someone else as its author that is the wrong place, and a default nobody notices is a
-/// default that gets noticed after the push.
-fn resolve_registry(flag: Option<&str>, module_root: &Path) -> Result<String> {
-    if let Some(registry) = flag {
-        return Ok(registry.to_string());
-    }
-    if author_type(module_root).as_deref() == Some("official") {
-        return Ok(OFFICIAL_REGISTRY.to_string());
-    }
-    anyhow::bail!(
-        "--registry is required: {OFFICIAL_REGISTRY} is the Portaki namespace, and \
-         portaki.module.json does not declare an official module — pass your own, \
-         e.g. --registry ghcr.io/<owner>"
-    )
+/// Runs `portaki release`.
+pub async fn run(args: ReleaseArgs) -> Result<()> {
+    run_as(args, Mode::Local).await
 }
 
-/// `author.type` as the catalogue manifest declares it, when it can be read at all.
-pub(crate) fn author_type(module_root: &Path) -> Option<String> {
-    let raw = std::fs::read_to_string(module_root.join("portaki.module.json")).ok()?;
-    let manifest: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    manifest
-        .get("author")?
-        .get("type")?
-        .as_str()
-        .map(str::to_string)
-}
+/// `portaki release`, `portaki ci build` ou `portaki ci release`, pour chaque module visé.
+pub async fn run_as(args: ReleaseArgs, mode: Mode) -> Result<()> {
+    match mode {
+        Mode::Local => ui::header(
+            "portaki release",
+            "Test, build, push to Portaki's registry, sign, and announce.",
+        ),
+        Mode::CiBuild => ui::header(
+            "portaki ci build",
+            "Test, build and package — nothing is pushed from this job.",
+        ),
+        Mode::CiRelease { .. } => ui::header(
+            "portaki ci release",
+            "Push what ci build produced, sign it as this workflow, announce it.",
+        ),
+    }
 
-/// Runs `portaki publish`.
-pub async fn run(args: PublishArgs) -> Result<()> {
-    ui::header(
-        "portaki publish",
-        "Push the OCI artifact, then announce it so a catalogue can carry it.",
-    );
-
-    // Un module après l'autre, chacun avec son jeton et son digest : un refus n'arrête pas les
-    // suivants, et le code de sortie dit s'il y en a eu un.
+    // Un module après l'autre, chacun avec son droit de push et son digest : un refus n'arrête
+    // pas les suivants, et le code de sortie dit s'il y en a eu un.
     let chosen = workspace::resolve(args.module.as_deref(), Some(args.all))?;
     let mut outcomes = Vec::with_capacity(chosen.len());
     let mut results = Vec::with_capacity(chosen.len());
@@ -174,12 +143,15 @@ pub async fn run(args: PublishArgs) -> Result<()> {
             "id": member.id, "version": null, "channel": args.channel, "state": "failed",
             "digest": null, "reference": null, "missing": [], "url": null, "error": null,
         });
-        let outcome = run_in(&member.root, args.clone()).await;
+        let outcome = run_in(&member.root, &args, &mode).await;
         if let Err(failure) = &outcome {
             note("error", format!("{failure:#}"));
         }
         results.push(result().take());
         outcomes.push((member.id.clone(), outcome));
+    }
+    if mode != Mode::Local {
+        ci_outputs(&results)?;
     }
     if ui::json() {
         if results
@@ -191,6 +163,29 @@ pub async fn run(args: PublishArgs) -> Result<()> {
         ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": results }));
     }
     conclude(outcomes)
+}
+
+/// Ce qu'une étape suivante du workflow lit dans `GITHUB_OUTPUT` : `results` pour tous, et les
+/// champs à plat quand il n'y a qu'un module — le cas de l'action de release.
+fn ci_outputs(results: &[serde_json::Value]) -> Result<()> {
+    let mut pairs = vec![("results".to_string(), serde_json::to_string(results)?)];
+    if let [only] = results {
+        for (key, field) in [
+            ("id", "id"),
+            ("version", "version"),
+            ("outcome", "state"),
+            ("digest", "digest"),
+            ("reference", "reference"),
+        ] {
+            let value = only[field].as_str().unwrap_or_default().to_string();
+            pairs.push((key.to_string(), value));
+        }
+    }
+    let pairs: Vec<(&str, &str)> = pairs
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    crate::commands::ci::emit_outputs(&pairs)
 }
 
 /// Le résultat du module en cours, pour `--json` : noté là où chaque fait est connu plutôt que
@@ -317,8 +312,6 @@ fn read_listing(module_root: &Path) -> Result<Option<serde_json::Value>> {
 #[derive(Debug, PartialEq, Eq)]
 enum Landed {
     DryRun,
-    /// Poussé sur GHCR sans annonce (`--no-announce`) : le module peut n'être dans aucun catalogue.
-    Unannounced,
     /// La version est au registre — annoncée à l'instant, ou déjà là.
     InRegistry(String),
 }
@@ -335,10 +328,8 @@ impl std::fmt::Display for AlreadyInRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} is already in the registry ({}) — publications are immutable, so \
-             pushing again would leave the OCI tag pointing at something the catalogue does not \
-             reference. Bump the version, or replay the announcement with \
-             portaki publish --announce-only",
+            "{} {} is already in the registry ({}) — publications are immutable: bump the \
+             version to ship a change",
             self.id, self.version, self.digest
         )
     }
@@ -380,7 +371,6 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
     match landed {
         Ok(Landed::InRegistry(id)) => ListingPlan::Send(id),
         Ok(Landed::DryRun) => ListingPlan::WouldSend,
-        Ok(Landed::Unannounced) => ListingPlan::Skip,
         Err(failure) => {
             if let Some(already) = failure.downcast_ref::<AlreadyInRegistry>() {
                 return ListingPlan::Send(&already.id);
@@ -397,9 +387,8 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
 /// part quand même.
 ///
 /// C'était une erreur, et c'est ce qui rendait rouge un run relancé seulement pour pousser une
-/// fiche corrigée. L'action de release attend d'ailleurs ce cas comme une issue normale
-/// (`already-published`) : elle lit « already in the registry » sur la sortie standard, d'où
-/// l'avertissement plutôt qu'une erreur — et sur stdout, quand les autres partent sur stderr.
+/// fiche corrigée. L'avertissement part sur stdout, où les workflows de la v1 le cherchaient ;
+/// `ci release` le dit aussi dans `GITHUB_OUTPUT` (`outcome=already-published`).
 fn settle(landed: Result<Landed>) -> Result<Landed> {
     match landed {
         Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
@@ -416,14 +405,15 @@ fn settle(landed: Result<Landed>) -> Result<Landed> {
     }
 }
 
-/// `portaki publish` for the module in `module_root`, then its public listing.
-async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
+/// La publication du module de `module_root`, puis sa fiche publique.
+async fn run_in(module_root: &Path, args: &ReleaseArgs, mode: &Mode) -> Result<()> {
+    let base = crate::profile::api_url(None);
     let Some(listing) = read_listing(module_root)? else {
-        return settle(release(module_root, &args).await).map(|_| ());
+        return settle(release(module_root, args, mode, &base).await).map(|_| ());
     };
-    let landed = settle(release(module_root, &args).await);
+    let landed = settle(release(module_root, args, mode, &base).await);
     let sent = match listing_plan(&landed) {
-        ListingPlan::Send(id) => send_listing(&args, id, &listing).await,
+        ListingPlan::Send(id) => send_listing(&base, &args.channel, id, &listing).await,
         ListingPlan::WouldSend => {
             ui::field("listing", format!("would be sent ({LISTING})"));
             Ok(())
@@ -441,21 +431,21 @@ async fn run_in(module_root: &Path, args: PublishArgs) -> Result<()> {
 ///
 /// Un credential de CI est à usage unique et l'annonce a consommé le sien : on en redemande un.
 async fn send_listing(
-    args: &PublishArgs,
+    base: &str,
+    channel: &str,
     module_id: &str,
     listing: &serde_json::Value,
 ) -> Result<()> {
-    let base = crate::profile::api_url(args.url.as_deref());
-    let outcome = match credential(&base, module_id, &args.channel).await? {
-        Credential::Ci(token) => put_listing(&base, module_id, listing, &token).await?,
+    let outcome = match credential(base, module_id, channel).await? {
+        Credential::Ci(token) => put_listing(base, module_id, listing, &token).await?,
         Credential::Person(token) => {
-            let first = put_listing(&base, module_id, listing, &token).await?;
+            let first = put_listing(base, module_id, listing, &token).await?;
             if first == Outcome::Unauthorized {
                 put_listing(
-                    &base,
+                    base,
                     module_id,
                     listing,
-                    &auth::refresh(&base, &token).await?,
+                    &auth::refresh(base, &token).await?,
                 )
                 .await?
             } else {
@@ -519,15 +509,15 @@ fn listing_verdict(module_id: &str, outcome: Outcome) -> Result<()> {
     }
 }
 
-/// `portaki publish` for the module in `module_root`, up to the announcement.
-async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
-    let module_root = module_root.to_path_buf();
-    let artifact_dir = args
-        .artifact_dir
-        .clone()
-        .unwrap_or_else(|| module_root.join("target/portaki"));
-    let registry = resolve_registry(args.registry.as_deref(), &module_root)?;
-    let lang = notes_lang(args, &module_root);
+/// La publication du module de `module_root`, jusqu'à l'annonce.
+async fn release(
+    module_root: &Path,
+    args: &ReleaseArgs,
+    mode: &Mode,
+    base: &str,
+) -> Result<Landed> {
+    let artifact_dir = module_root.join("target/portaki");
+    let lang = notes_lang(args, module_root);
     // Lus avant tout build : un drapeau mal formé découvert à l'annonce laisserait un artefact
     // poussé et une version non annoncée.
     let notes = crate::changelog::release_notes(
@@ -538,58 +528,60 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     )?;
 
     // Avant tout build : un refus découvert après la poussée laisserait un artefact non signé.
+    let signs = !args.no_sign && *mode != Mode::CiBuild;
     let cosign = sign::cosign_binary();
-    if args.sign {
-        sign::refuse_in_ci(sign::in_ci())?;
+    if signs && !args.dry_run {
+        match mode {
+            Mode::Local => sign::refuse_in_ci(sign::in_ci())?,
+            _ if !oidc::available() => anyhow::bail!(
+                "signing in CI needs the job's OIDC token — add `permissions: id-token: write` \
+                 to the job (--no-sign publishes unsigned, for the sandbox only)"
+            ),
+            _ => {}
+        }
         sign::check_cosign(&cosign)?;
     }
 
-    // Reprise d'un catalogue déjà sur GHCR : on lit le digest de la version publiée et on
-    // l'annonce. Rien n'est recompilé ni renvoyé, donc aucun droit d'écriture nécessaire — et
-    // aucun risque d'écraser un artefact par un build local qui aurait dérivé.
-    if args.announce_only {
-        let coords = oci::pack::read_source_coordinates(&module_root)?;
-        let looking = ui::step("looking up the pushed artifact");
-        let pushed = oci::resolve_pushed_artifact(&module_root, &registry).await?;
-        looking.done("found the artifact on the registry");
-        ui::field("image", &pushed.image_ref);
-        ui::field("digest", &pushed.digest);
-        note("digest", pushed.digest.clone());
-        note("reference", pushed.artifact_ref());
-        announce(args, &coords, &pushed, &notes).await?;
-        return Ok(Landed::InRegistry(coords.id));
-    }
-
-    // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie de
-    // conformité est ce que tous les modules doivent à la plateforme. `--skip-build` ne l'évite
-    // pas. `--prebuilt` si : le job qui détient les droits de publication ne doit exécuter aucun
-    // code du module — les tests ont tourné dans le job, sans secrets, qui a produit l'artefact.
-    if args.prebuilt {
-        ui::skipped(
-            "build and tests skipped (--prebuilt) — the job that built the artifact ran them",
-        );
-        artifact_matches_sources(&module_root, &artifact_dir)?;
-    } else {
-        test::gate_publish(&module_root).context("tests before publish")?;
-        ui::blank();
-        if args.skip_build {
-            ui::skipped("build skipped (--skip-build)");
-        } else {
-            build::run(BuildArgs {
-                release: true,
-                manifest_only: false,
-                module: None,
-                all: false,
-                nested: true,
-            })
-            .await
-            .context("portaki build --release before publish")?;
-            ui::blank();
+    if let Mode::CiRelease { audit } = mode {
+        // Le job qui détient les droits n'exécute rien du module : ni ses tests, ni son build, ni
+        // cargo. L'artefact vient de `ci build` ; il ne choisit ni son nom ni son SDK.
+        ui::skipped("build and tests skipped — portaki ci build ran them, in a job without rights");
+        artifact_matches_sources(module_root, &artifact_dir)?;
+        sdk_matches_lock(module_root, &artifact_dir)?;
+        if let Some(audit) = audit.as_deref().filter(|_| signs) {
+            anyhow::ensure!(
+                audit.is_file(),
+                "no cargo audit report at {} — produce it in this job, from Cargo.lock",
+                audit.display()
+            );
         }
+    } else {
+        // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie
+        // de conformité est ce que tous les modules doivent à la plateforme.
+        test::gate_publish(module_root).context("tests before publish")?;
+        ui::blank();
+        build::run(BuildArgs {
+            release: true,
+            manifest_only: false,
+            module: None,
+            all: false,
+            nested: true,
+        })
+        .await
+        .context("portaki build --release before publish")?;
+        // Ce que le registre refuserait à l'annonce, dit ici, avant tout droit de push.
+        crate::commands::lint::run(crate::commands::lint::LintArgs {
+            manifest: None,
+            channel: args.channel.clone(),
+            modules: workspace::ModuleArgs::default(),
+            nested: true,
+        })
+        .context("portaki lint before publish")?;
+        ui::blank();
     }
 
-    stamp_changelog(&module_root, &artifact_dir, args, &lang)?;
-    // Avant la poussée : le registre refuserait l'annonce, mais l'artefact serait déjà sur GHCR.
+    stamp_changelog(module_root, &artifact_dir, args, &lang)?;
+    // Avant la poussée : le registre refuserait l'annonce, mais l'artefact serait déjà poussé.
     crate::commands::lint::assert_sdk_version(
         &oci::pack::publish_manifest_path(&artifact_dir),
         &args.channel,
@@ -598,12 +590,11 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
     let packing = ui::step("packing the OCI artifact");
     // The layer list the push would send, assembled here rather than at push time: it is what
     // says the wasm exists. A dry run that skipped it answered a question it had not checked.
-    let layers =
-        oci::pack::collect_push_layers(&module_root, &artifact_dir).map_err(|failure| {
-            packing.abandon();
-            failure
-        })?;
-    assert_publish_version_matches_env(&module_root, &artifact_dir)?;
+    let layers = oci::pack::collect_push_layers(module_root, &artifact_dir).map_err(|failure| {
+        packing.abandon();
+        failure
+    })?;
+    assert_publish_version_matches_env(module_root, &artifact_dir)?;
     packing.done(format!("packed {}", plural(layers.len(), "layer")));
     for layer in &layers {
         ui::detail(format!(
@@ -617,94 +608,79 @@ async fn release(module_root: &Path, args: &PublishArgs) -> Result<Landed> {
         ));
     }
 
-    if args.dry_run {
+    let coords = oci::pack::read_module_coordinates(module_root, &artifact_dir)?;
+    note("version", coords.version.clone());
+    if args.dry_run || *mode == Mode::CiBuild {
         note("state", "dry-run");
-        ui::success("dry run — nothing was pushed, nothing was announced");
+        ui::success("nothing was pushed, nothing was announced");
         ui::field("artifact", artifact_dir.display());
-        ui::field("registry", &registry);
-        ui::advice("drop --dry-run to push these layers and announce the version");
+        if *mode == Mode::CiBuild {
+            ui::advice("hand target/portaki and the wasm to the job that runs portaki ci release");
+        } else {
+            ui::advice("drop --dry-run to push these layers and announce the version");
+        }
         ui::blank();
         return Ok(Landed::DryRun);
     }
 
     // Demandé avant de pousser, pas découvert après. Une publication est immuable (ADR-0005) :
-    // le second envoi se faisait refuser à l'annonce, mais il avait déjà écrasé le tag OCI —
-    // qui ne désignait alors plus l'artefact que le catalogue référence.
-    let coords = oci::pack::read_module_coordinates(&module_root, &artifact_dir)?;
-    note("version", coords.version.clone());
-    refuse_if_already_published(&crate::profile::api_url(args.url.as_deref()), &coords).await?;
+    // republier réécrirait le tag OCI, qui ne désignerait plus l'artefact que le catalogue
+    // référence.
+    refuse_if_already_published(base, &coords).await?;
 
-    let pushing = ui::step(format!("pushing to {registry}"));
-    let pushed = oci::push_artifact(&module_root, &artifact_dir, &registry)
+    let pushing = ui::step("asking the registry for the right to push");
+    let grant = push_grant(base, &coords, &args.channel)
         .await
         .map_err(|failure| {
             pushing.abandon();
             failure
-        })
-        .with_context(|| push_hint(&registry))?;
-    pushing.done(format!("pushed to {registry}"));
-    ui::field("manifest", &pushed.manifest_url);
+        })?;
+    pushing.say(format!("pushing to {}", grant.reference));
+    let pushed = oci::push_artifact(module_root, &artifact_dir, &grant)
+        .await
+        .map_err(|failure| {
+            pushing.abandon();
+            failure
+        })?;
+    pushing.done(format!("pushed to {}", grant.reference));
+    ui::field("digest", &pushed.digest);
     note("state", "pushed");
     note("digest", pushed.digest.clone());
     note("reference", pushed.artifact_ref());
 
-    let signing = args
-        .sign
-        .then(|| sign::sign(&cosign, &pushed, &registry, &coords));
-    if unsigned_warning(args.sign, sign::in_ci()) {
-        ui::warn(UNSIGNED);
-    }
-    signed_then(signing, async {
-        if args.no_announce {
-            ui::warn("skipped the registry announcement — this version is in no catalogue");
-            ui::advice("drop --no-announce, or replay with portaki publish --announce-only");
-            ui::blank();
-            return Ok(Landed::Unannounced);
+    // La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
+    match mode {
+        _ if !signs => ui::warn(UNSIGNED),
+        Mode::CiRelease { audit } => {
+            let audited = sign::attest_ci(&cosign, &pushed, &grant, audit.as_deref())
+                .context("sign the pushed artifact — nothing was announced")?;
+            ui::success("signed with this workflow's identity (provenance)");
+            if !audited {
+                ui::warn(
+                    "no cargo audit report — the registry will show this version as not audited",
+                );
+            }
         }
-        announce(args, &coords, &pushed, &notes).await?;
-        Ok(Landed::InRegistry(coords.id.clone()))
-    })
-    .await
-}
+        _ => {
+            let email = sign::sign(&cosign, &pushed, &grant, &coords)
+                .await
+                .context("sign the pushed artifact — nothing was announced")?;
+            ui::success(format!("signé par {email} (hors CI)"));
+        }
+    }
 
-/// Hors CI sans `--sign`, quel que soit le canal : la production exige une signature partout.
-/// En CI, c'est l'action de release qui signe, après cette commande.
-fn unsigned_warning(signed: bool, ci: bool) -> bool {
-    !signed && !ci
+    announce(base, args, &coords, &pushed, &notes).await?;
+    Ok(Landed::InRegistry(coords.id))
 }
 
 const UNSIGNED: &str = "non signée — cette version ne s'exécutera jamais en production (signature \
-     exigée) ; elle reste utilisable en sandbox. Signez avec --sign ou publiez depuis la CI.";
+     exigée) ; elle reste utilisable en sandbox. Retirez --no-sign, ou publiez depuis la CI.";
 
 /// La langue des `--notes` et textes non étiquetés.
-fn notes_lang(args: &PublishArgs, module_root: &Path) -> String {
+fn notes_lang(args: &ReleaseArgs, module_root: &Path) -> String {
     args.notes_lang
         .clone()
         .unwrap_or_else(|| crate::changelog::default_lang(module_root))
-}
-
-/// Ce qui manque quand la poussée échoue : GHCR n'est nommé que s'il est la cible.
-fn push_hint(registry: &str) -> String {
-    if registry.starts_with("ghcr.io") {
-        "push OCI artifact — set GITHUB_TOKEN or docker login ghcr.io".to_string()
-    } else {
-        let host = registry.split('/').next().unwrap_or(registry);
-        format!("push OCI artifact — docker login {host}")
-    }
-}
-
-/// La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
-async fn signed_then<T>(
-    signing: Option<impl std::future::Future<Output = Result<String>>>,
-    then: impl std::future::Future<Output = Result<T>>,
-) -> Result<T> {
-    if let Some(signing) = signing {
-        let email = signing
-            .await
-            .context("sign the pushed artifact — nothing was announced")?;
-        ui::success(format!("signé par {email} (hors CI)"));
-    }
-    then.await
 }
 
 /// L'artefact vient d'un job qui a exécuté le code du module : il ne choisit pas sous quel nom
@@ -725,13 +701,40 @@ fn artifact_matches_sources(module_root: &Path, artifact_dir: &Path) -> Result<(
     Ok(())
 }
 
+/// Le SDK que l'artefact déclare est celui que `Cargo.lock` résout : lu dans le lock, sans cargo
+/// — un `rust-toolchain.toml` ou un `.cargo/config.toml` du module ne choisit rien ici.
+fn sdk_matches_lock(module_root: &Path, artifact_dir: &Path) -> Result<()> {
+    use crate::commands::ci::{find_lockfile, read_locked_sdk};
+    let path = oci::pack::publish_manifest_path(artifact_dir);
+    let declared = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|manifest| Some(manifest.get("sdkVersion")?.as_str()?.to_string()));
+    let lock = find_lockfile(module_root).context(
+        "no Cargo.lock here or above — commit it: it says which SDK the module is built on",
+    )?;
+    let text =
+        std::fs::read_to_string(&lock).with_context(|| format!("read {}", lock.display()))?;
+    let locked = read_locked_sdk(&text)
+        .with_context(|| format!("{} carries no portaki-sdk", lock.display()))?;
+    if declared.as_deref() != Some(locked.version.as_str()) {
+        anyhow::bail!(
+            "the prebuilt artifact declares portaki-sdk {}, Cargo.lock resolves {} — refusing to \
+             publish it",
+            declared.as_deref().unwrap_or("nothing"),
+            locked.version
+        );
+    }
+    Ok(())
+}
+
 /// Inscrit `changelog` dans `publish-manifest.json` : `--notes` par langue, sinon la section de
-/// la version dans `CHANGELOG[.<lang>].md`. Fait ici et non au build, pour couvrir aussi
-/// `--skip-build`.
+/// la version dans `CHANGELOG[.<lang>].md`. Lu dans les sources, jamais dans ce qu'un build a
+/// produit.
 fn stamp_changelog(
     module_root: &Path,
     artifact_dir: &Path,
-    args: &PublishArgs,
+    args: &ReleaseArgs,
     lang: &str,
 ) -> Result<()> {
     let coords = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
@@ -760,15 +763,10 @@ fn stamp_changelog(
 
 /// Une version publiée ne se republie pas.
 ///
-/// Le registre le disait déjà, mais à l'annonce — c'est-à-dire après la poussée OCI. Le tag
-/// avait donc été réécrit, et ne désignait plus l'artefact dont le catalogue porte le digest :
-/// deux sources de vérité en désaccord, sans que rien ne le signale.
-///
+/// Demandé avant la poussée : l'annonce le refuserait, mais le tag aurait déjà été réécrit.
 /// Le catalogue est public : la question ne coûte ni jeton ni droit.
 ///
-/// Injoignable, on continue. Refuser de publier parce qu'une lecture de contrôle échoue
-/// bloquerait une livraison pour une raison qui n'en est pas une, et l'annonce refusera de
-/// toute façon si la version existe.
+/// Injoignable, on continue. Le droit de push refuse de toute façon une version publiée.
 async fn refuse_if_already_published(
     base: &str,
     coords: &oci::pack::ModuleCoordinates,
@@ -820,17 +818,83 @@ fn digest_of(published: &[PublishedVersion], version: &str) -> Option<String> {
         .map(|candidate| candidate.digest.clone())
 }
 
+/// Le droit de pousser cette version, demandé au registre (`push-token`) avec le même publieur
+/// que l'annonce : la session, ou un credential échangé contre le jeton OIDC du job.
+async fn push_grant(
+    base: &str,
+    coords: &oci::pack::ModuleCoordinates,
+    channel: &str,
+) -> Result<oci::PushGrant> {
+    let body = serde_json::json!({
+        "moduleId": coords.id,
+        "version": coords.version,
+        "channel": channel,
+    });
+    let (status, text) = match credential(base, &coords.id, channel).await? {
+        Credential::Ci(token) => post_push_token(base, &body, &token).await?,
+        Credential::Person(token) => {
+            let first = post_push_token(base, &body, &token).await?;
+            if first.0 == 401 {
+                post_push_token(base, &body, &auth::refresh(base, &token).await?).await?
+            } else {
+                first
+            }
+        }
+    };
+    grant_from(status, &text)
+}
+
+async fn post_push_token(
+    base: &str,
+    body: &serde_json::Value,
+    token: &str,
+) -> Result<(u16, String)> {
+    let response = crate::http::client()
+        .post(format!(
+            "{}/registry/v1/publications/push-token",
+            base.trim_end_matches('/')
+        ))
+        .bearer_auth(token)
+        .json(body)
+        .send()
+        .await
+        .context("ask the registry for the right to push")?;
+    Ok((
+        response.status().as_u16(),
+        response.text().await.unwrap_or_default(),
+    ))
+}
+
+/// La réponse du registre : le droit de push, ou le refus avec son code stable.
+fn grant_from(status: u16, body: &str) -> Result<oci::PushGrant> {
+    if (200..300).contains(&status) {
+        return serde_json::from_str(body)
+            .context("the registry returned an unreadable push grant");
+    }
+    match classify(status, body) {
+        Outcome::Unauthorized => anyhow::bail!(
+            "the registry refused the token for a push — run portaki login, or replay the job"
+        ),
+        Outcome::Refused {
+            status,
+            code,
+            message,
+        } => anyhow::bail!("the registry refused the push ({status} {code}): {message}"),
+        _ => anyhow::bail!("the registry refused the push ({status}): {body}"),
+    }
+}
+
 /// Annonce la publication au registre, en renouvelant le jeton une fois sur un 401.
 ///
-/// L'échec ici n'annule pas la poussée OCI — l'artefact est sur GHCR quoi qu'il arrive. Le
-/// message dit donc quoi rejouer, plutôt que de laisser croire que rien n'a eu lieu.
+/// L'échec ici laisse l'artefact poussé et signé, mais rien n'est publié : rejouer `release`
+/// (ou le job) redemande un droit de push, repousse, resigne et annonce.
 async fn announce(
-    args: &PublishArgs,
+    base: &str,
+    args: &ReleaseArgs,
     coords: &oci::pack::ModuleCoordinates,
     pushed: &oci::PushedArtifact,
     notes: &serde_json::Value,
 ) -> Result<()> {
-    let base = crate::profile::api_url(args.url.as_deref());
     let announcing = ui::step(format!("announcing {} to the registry", args.channel));
     let body = serde_json::json!({
         "moduleId": coords.id,
@@ -841,14 +905,14 @@ async fn announce(
         "releaseNotes": notes,
     });
 
-    let outcome = match credential(&base, &coords.id, &args.channel).await? {
+    let outcome = match credential(base, &coords.id, &args.channel).await? {
         // Une CI : le credential est à usage unique, un 401 veut dire consommé ou expiré. Le
         // rejouer avec le même n'aurait aucune chance, il faut un nouvel échange.
-        Credential::Ci(token) => post_publication(&base, &body, &token).await?,
+        Credential::Ci(token) => post_publication(base, &body, &token).await?,
         Credential::Person(token) => {
-            let first = post_publication(&base, &body, &token).await?;
+            let first = post_publication(base, &body, &token).await?;
             if first == Outcome::Unauthorized {
-                post_publication(&base, &body, &auth::refresh(&base, &token).await?).await?
+                post_publication(base, &body, &auth::refresh(base, &token).await?).await?
             } else {
                 first
             }
@@ -867,7 +931,7 @@ async fn announce(
             announcing.done(format!("announced to the registry on {}", args.channel));
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
-            ui::field("digest", &pushed.digest);
+            ui::field("reference", pushed.artifact_ref());
             if let Outcome::Draft { missing, url } = &outcome {
                 // Pas un échec par défaut : la version est au registre, elle attend ses notes.
                 // La CI reste verte, l'auteur sait quoi compléter et où.
@@ -910,9 +974,8 @@ async fn announce(
         Outcome::Unauthorized | Outcome::Ignored(_) => {
             announcing.abandon();
             anyhow::bail!(
-                "the registry refused the token — run portaki login, or replay the job if the \
-             publication credential had already been used. \
-             The artifact is pushed: replay the announcement with portaki publish --announce-only"
+                "the registry refused the token — run portaki login, or replay the job. Nothing \
+                 is published until the announcement passes: replaying pushes and signs again"
             )
         }
         Outcome::Refused {
@@ -922,8 +985,8 @@ async fn announce(
         } => {
             announcing.abandon();
             anyhow::bail!(
-                "the registry refused the publication ({status} {code}): {message}. \
-                 The artifact is pushed: fix and replay with portaki publish --announce-only"
+                "the registry refused the publication ({status} {code}): {message}. Nothing is \
+                 published: fix it and replay"
             )
         }
     }
@@ -963,7 +1026,7 @@ async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Creden
     }
     auth::access_token(base)
         .map(Credential::Person)
-        .context("portaki login required to announce a publication — or pass --no-announce to push to GHCR only")
+        .context("portaki login required to release")
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1109,65 +1172,6 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    /// cosign échoue : l'erreur remonte, et l'annonce n'est jamais lancée.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn a_failed_signature_announces_nothing() {
-        let dir = tempdir().unwrap();
-        let cosign = crate::sign::tests::fake_cosign(dir.path(), "", 1);
-        let announced = std::cell::Cell::new(false);
-        let signing = async {
-            let mut command = std::process::Command::new(&cosign);
-            ui::command("cosign attest", command.arg("attest"))?;
-            Ok("dev@example.com".to_string())
-        };
-
-        let outcome = signed_then(Some(signing), async {
-            announced.set(true);
-            Ok(())
-        })
-        .await;
-
-        assert!(format!("{:#}", outcome.unwrap_err()).contains("nothing was announced"));
-        assert!(!announced.get());
-    }
-
-    #[tokio::test]
-    async fn a_signature_comes_before_the_announcement() {
-        let announced = std::cell::Cell::new(false);
-        let signing = async {
-            assert!(!announced.get());
-            Ok("dev@example.com".to_string())
-        };
-        signed_then(Some(signing), async {
-            announced.set(true);
-            Ok(())
-        })
-        .await
-        .unwrap();
-        assert!(announced.get());
-    }
-
-    /// Tout canal : la production exige une signature sur la preview comme sur la stable.
-    #[test]
-    fn every_unsigned_publication_outside_ci_is_warned() {
-        assert!(unsigned_warning(false, false));
-        assert!(!unsigned_warning(true, false));
-        assert!(!unsigned_warning(false, true));
-        assert!(UNSIGNED.contains("sandbox"));
-    }
-
-    #[test]
-    fn the_push_hint_names_ghcr_only_for_ghcr() {
-        assert!(push_hint("ghcr.io/portakiapp").contains("ghcr.io"));
-        let other = push_hint("rg.fr-par.scw.cloud/portaki");
-        assert!(!other.contains("ghcr"), "{other}");
-        assert!(
-            other.contains("docker login rg.fr-par.scw.cloud"),
-            "{other}"
-        );
-    }
-
     #[test]
     fn notes_default_to_the_listings_first_language_else_french() {
         let dir = tempdir().unwrap();
@@ -1191,17 +1195,6 @@ mod tests {
 
         assert_eq!(listing_plan(&draft), ListingPlan::Send("nuki"));
         assert!(settle(draft).is_err());
-    }
-
-    #[test]
-    fn sign_cannot_replay_an_announcement() {
-        let refused = PublishArgs::try_parse_from(["publish", "--sign", "--announce-only"]);
-        assert!(refused.is_err());
-        assert!(
-            PublishArgs::try_parse_from(["publish", "--sign"])
-                .unwrap()
-                .sign
-        );
     }
 
     /// A module whose tests fail: no build, no packing, no push — whatever the flags.
@@ -1312,7 +1305,6 @@ mod tests {
         assert_eq!(listing_plan(&published), ListingPlan::Send("nuki"));
         assert_eq!(listing_plan(&already), ListingPlan::Send("nuki"));
         assert_eq!(listing_plan(&Ok(Landed::DryRun)), ListingPlan::WouldSend);
-        assert_eq!(listing_plan(&Ok(Landed::Unannounced)), ListingPlan::Skip);
         assert_eq!(
             listing_plan(&refused("module_not_linked").map(|()| Landed::DryRun)),
             ListingPlan::Skip
@@ -1375,25 +1367,24 @@ mod tests {
         assert!(error.contains("module_name_not_owned"), "{error}");
     }
 
-    fn publish_args(flags: &[&str]) -> PublishArgs {
-        let mut argv = vec!["publish", "--registry", "ghcr.io/someone"];
+    fn publish_args(flags: &[&str]) -> ReleaseArgs {
+        let mut argv = vec!["release"];
         argv.extend_from_slice(flags);
-        PublishArgs::try_parse_from(argv).unwrap()
+        ReleaseArgs::try_parse_from(argv).unwrap()
     }
 
-    /// The release action publishes with `--skip-build` after its own build, and `--dry-run` is
-    /// what a pull request runs: both must stop at failing tests, before any packing.
+    /// `ci build` is what the job without rights runs, `--dry-run` what a pull request runs:
+    /// every path that builds stops at failing tests, before any packing.
     #[tokio::test]
     async fn failing_tests_stop_every_publication_path() {
-        for flags in [
-            &["--dry-run"][..],
-            &["--skip-build"][..],
-            &["--dry-run", "--skip-build"][..],
-            &[][..],
+        for (flags, mode) in [
+            (&["--dry-run"][..], Mode::Local),
+            (&["--no-sign"][..], Mode::Local),
+            (&[][..], Mode::CiBuild),
         ] {
             let module = module_with_failing_tests();
 
-            let error = run_in(module.path(), publish_args(flags))
+            let error = run_in(module.path(), &publish_args(flags), &mode)
                 .await
                 .unwrap_err();
 
@@ -1420,7 +1411,16 @@ mod tests {
         let wasm = module.path().join("target/wasm32-unknown-unknown/release");
         fs::create_dir_all(&wasm).unwrap();
         fs::write(wasm.join(format!("{artifact_id}.wasm")), b"\0asm").unwrap();
+        fs::write(
+            module.path().join("Cargo.lock"),
+            "[[package]]\nname = \"portaki-sdk\"\nversion = \"8.7.0\"\n",
+        )
+        .unwrap();
         module
+    }
+
+    fn ci_release() -> Mode {
+        Mode::CiRelease { audit: None }
     }
 
     /// The publishing job runs nothing of the module: the tests would fail here, and are not run.
@@ -1428,7 +1428,13 @@ mod tests {
     async fn prebuilt_runs_no_module_code() {
         let module = prebuilt_module("failing-publish");
 
-        let landed = release(module.path(), &publish_args(&["--prebuilt", "--dry-run"])).await;
+        let landed = release(
+            module.path(),
+            &publish_args(&["--dry-run"]),
+            &ci_release(),
+            "http://127.0.0.1:1",
+        )
+        .await;
 
         assert_eq!(landed.unwrap(), Landed::DryRun);
     }
@@ -1438,14 +1444,77 @@ mod tests {
     async fn prebuilt_refuses_an_artifact_named_after_another_module() {
         let module = prebuilt_module("nuki");
 
-        let error = release(module.path(), &publish_args(&["--prebuilt", "--dry-run"]))
-            .await
-            .unwrap_err();
+        let error = release(
+            module.path(),
+            &publish_args(&["--dry-run"]),
+            &ci_release(),
+            "http://127.0.0.1:1",
+        )
+        .await
+        .unwrap_err();
 
         assert!(
             format!("{error:#}").contains("refusing to publish"),
             "{error:#}"
         );
+    }
+
+    /// The SDK an artifact declares is the one Cargo.lock resolves — read without cargo.
+    #[tokio::test]
+    async fn ci_release_refuses_an_sdk_the_lock_does_not_resolve() {
+        let module = prebuilt_module("failing-publish");
+        fs::write(
+            module.path().join("Cargo.lock"),
+            "[[package]]\nname = \"portaki-sdk\"\nversion = \"8.9.0\"\n",
+        )
+        .unwrap();
+
+        let error = release(
+            module.path(),
+            &publish_args(&["--dry-run"]),
+            &ci_release(),
+            "http://127.0.0.1:1",
+        )
+        .await
+        .unwrap_err();
+
+        let chain = format!("{error:#}");
+        assert!(chain.contains("declares portaki-sdk 8.7.0"), "{chain}");
+        assert!(chain.contains("resolves 8.9.0"), "{chain}");
+        fs::remove_file(module.path().join("Cargo.lock")).unwrap();
+        let error = release(
+            module.path(),
+            &publish_args(&["--dry-run"]),
+            &ci_release(),
+            "http://127.0.0.1:1",
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("no Cargo.lock"), "{error:#}");
+    }
+
+    /// The registry's answer, handed as is to the OCI client — or its refusal, with its code.
+    #[test]
+    fn a_push_grant_is_read_and_a_refusal_keeps_its_code() {
+        let grant = grant_from(
+            201,
+            r#"{"registry":"oci-staging.portaki.app","repository":"modules/nuki",
+                "reference":"oci-staging.portaki.app/modules/nuki:1.4.0","username":"portaki-push",
+                "password":"pk_push_x","moduleId":"nuki","version":"1.4.0","channel":"stable",
+                "expiresAt":"2026-09-27T12:00:00Z"}"#,
+        )
+        .unwrap();
+        assert_eq!(grant.registry, "oci-staging.portaki.app");
+        assert_eq!(grant.password, "pk_push_x");
+
+        let refused = grant_from(
+            403,
+            r#"{"code":"official_requires_ci","message":"nuki est un module officiel"}"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(refused.contains("official_requires_ci"), "{refused}");
+        assert!(grant_from(401, "").is_err());
     }
 
     #[test]
@@ -1456,63 +1525,11 @@ mod tests {
         assert_eq!(args.notes_lang, None);
     }
 
-    /// Announcing a version already on GHCR compiles nothing: there is nothing to test.
-    #[test]
-    fn announce_only_does_not_take_the_other_flags() {
-        assert!(PublishArgs::try_parse_from(["publish", "--announce-only", "--dry-run"]).is_err());
-        assert!(
-            PublishArgs::try_parse_from(["publish", "--announce-only", "--skip-build"]).is_err()
-        );
-    }
-
-    fn module_with_author(author_type: &str) -> tempfile::TempDir {
-        let dir = tempdir().unwrap();
-        fs::write(
-            dir.path().join("portaki.module.json"),
-            format!(
-                r#"{{"id":"x","version":"0.1.0","author":{{"name":"n","type":"{author_type}"}}}}"#
-            ),
-        )
-        .unwrap();
-        dir
-    }
-
     #[test]
     fn one_layer_is_not_layers() {
         assert_eq!(plural(1, "layer"), "1 layer");
         assert_eq!(plural(5, "layer"), "5 layers");
         assert_eq!(plural(0, "layer"), "0 layers");
-    }
-
-    #[test]
-    fn an_official_module_keeps_the_portaki_namespace() {
-        let dir = module_with_author("official");
-
-        assert_eq!(
-            resolve_registry(None, dir.path()).unwrap(),
-            OFFICIAL_REGISTRY
-        );
-    }
-
-    /// The default that only gets noticed after the push.
-    #[test]
-    fn anyone_else_has_to_name_their_own() {
-        let dir = module_with_author("community");
-
-        let error = resolve_registry(None, dir.path()).unwrap_err().to_string();
-        assert!(error.contains("--registry is required"), "{error}");
-        // Given explicitly, the namespace is theirs to choose.
-        assert_eq!(
-            resolve_registry(Some("ghcr.io/someone"), dir.path()).unwrap(),
-            "ghcr.io/someone"
-        );
-    }
-
-    #[test]
-    fn a_manifest_that_cannot_be_read_is_not_treated_as_official() {
-        let dir = tempdir().unwrap();
-
-        assert!(resolve_registry(None, dir.path()).is_err());
     }
 
     /// Le catalogue rend toutes les versions : c'est la nôtre qu'il faut y trouver, pas la

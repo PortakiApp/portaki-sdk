@@ -1,14 +1,20 @@
-//! `portaki publish --sign` — la signature d'auteur, hors CI.
+//! La signature par défaut de `portaki release` : sans clé (Sigstore), sur le digest poussé dans
+//! le dépôt OCI de Portaki, avec les identifiants éphémères du droit de push.
 //!
-//! En CI, c'est l'action de release qui signe, avec provenance et audit. Depuis un poste, il ne
-//! reste que l'identité de l'auteur : un certificat Fulcio éphémère pour son compte GitHub, et
-//! une attestation Portaki (`cosign attest`, prédicat [`PREDICATE_TYPE`]) au journal Rekor puis
-//! sur le registre OCI. Ce n'est pas une provenance : elle dit qui a publié quel module, en
-//! quelle version, rien de la façon dont il a été construit. Pas `cosign sign` : son sujet
-//! in-toto n'a pas de `name`, et sigstore-java, côté registre, le refuse. `cosign attest` nomme
-//! le sujet d'après le dépôt, à côté du digest.
+//! **En CI** (`portaki ci release`), l'identité est le jeton OIDC du job : deux attestations
+//! `cosign attest` — la provenance SLSA v1 (dépôt, commit, workflow) et le rapport `cargo audit`
+//! ([`AUDIT_TYPE`]). Le certificat Fulcio porte lui-même le workflow, le dépôt et le commit :
+//! c'est lui que le registre confronte à la liaison du module.
 //!
-//! Le jeton OIDC, en revanche, c'est la CLI qui le demande. Le flux navigateur de cosign laisse
+//! **Depuis un poste**, il ne reste que l'identité de l'auteur : un certificat Fulcio éphémère
+//! pour son compte GitHub, et une attestation Portaki ([`PREDICATE_TYPE`]) au journal Rekor puis
+//! sur le dépôt OCI. Ce n'est pas une provenance : elle dit qui a publié quel module, en quelle
+//! version, rien de la façon dont il a été construit.
+//!
+//! Pas `cosign sign` : son sujet in-toto n'a pas de `name`, et sigstore-java, côté registre, ne
+//! le lit pas. `cosign attest` nomme le sujet d'après le dépôt, à côté du digest.
+//!
+//! Le jeton OIDC d'un poste, c'est la CLI qui le demande. Le flux navigateur de cosign laisse
 //! choisir le fournisseur (GitHub, Google, Microsoft) et n'offre aucun drapeau pour l'imposer ;
 //! il ne dit pas non plus au nom de qui il a signé. La CLI fait donc le même flux que cosign
 //! (PKCE auprès de `oauth2.sigstore.dev`) avec `connector_id` fixé à GitHub, lit l'adresse dans
@@ -21,7 +27,6 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use base64::Engine;
-use oci_distribution::secrets::RegistryAuth;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -33,6 +38,12 @@ const GITHUB: &str = "https://github.com/login/oauth";
 
 /// Le type du prédicat de l'attestation d'auteur, celui que le registre attend.
 const PREDICATE_TYPE: &str = "https://portaki.app/attestations/author/v1";
+
+/// La provenance SLSA v1 (`https://slsa.dev/provenance/v1`), sous le nom court de cosign.
+const PROVENANCE_TYPE: &str = "slsaprovenance1";
+
+/// Le rapport `cargo audit`, que le registre lit à côté de la provenance.
+pub const AUDIT_TYPE: &str = "https://portaki.app/attestations/cargo-audit/v1";
 
 /// La version de l'action de release, celle dont le registre vérifie le format.
 const MINIMUM: (u64, u64, u64) = (3, 1, 3);
@@ -49,12 +60,15 @@ pub fn in_ci() -> bool {
         .any(|name| std::env::var_os(name).is_some())
 }
 
-/// En CI, la signature revient à l'action de release : elle seule y ajoute la provenance.
+/// La signature d'auteur demande un navigateur : en CI, c'est `portaki ci release` qui signe,
+/// avec la provenance du workflow.
 pub fn refuse_in_ci(ci: bool) -> Result<()> {
     if ci {
         bail!(
-            "--sign signs from a workstation, with your GitHub identity — in CI the release \
-             action (PortakiApp/portaki-release-action) signs, with provenance: drop --sign"
+            "portaki release signs with your GitHub identity, from a workstation — in CI, build \
+             with portaki ci build and publish with portaki ci release (or \
+             PortakiApp/portaki-release-action@v2), which signs with the workflow's provenance; \
+             --no-sign publishes unsigned, for the sandbox only"
         );
     }
     Ok(())
@@ -68,11 +82,11 @@ pub fn cosign_binary() -> PathBuf {
 }
 
 /// Vérifié avant tout build : découvrir l'absence de cosign après la poussée laisserait un
-/// artefact sur GHCR sans signature ni annonce.
+/// artefact poussé sans signature ni annonce.
 pub fn check_cosign(bin: &Path) -> Result<()> {
     let output = match Command::new(bin).args(["version", "--json"]).output() {
         Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
-            bail!("--sign needs cosign v3.1.3 or a later 3.x, and none is installed — {INSTALL}")
+            bail!("signing needs cosign v3.1.3 or a later 3.x, and none is installed — {INSTALL} (or --no-sign: sandbox only)")
         }
         other => other.context("run cosign version")?,
     };
@@ -82,7 +96,7 @@ pub fn check_cosign(bin: &Path) -> Result<()> {
     match found.as_deref().and_then(parse_version) {
         Some(version) if version.0 == MINIMUM.0 && version >= MINIMUM => Ok(()),
         _ => bail!(
-            "--sign needs cosign v3.1.3 or a later 3.x — the format the registry verifies — and \
+            "signing needs cosign v3.1.3 or a later 3.x — the format the registry verifies — and \
              found {} — {INSTALL}",
             found.as_deref().unwrap_or("a version it cannot read")
         ),
@@ -102,65 +116,138 @@ fn parse_version(raw: &str) -> Option<(u64, u64, u64)> {
 pub async fn sign(
     bin: &Path,
     pushed: &oci::PushedArtifact,
-    registry: &str,
+    grant: &oci::PushGrant,
     coords: &oci::pack::ModuleCoordinates,
 ) -> Result<String> {
     let identity = github_identity().await?;
     let scratch = Scratch::new()?;
-    scratch.write_registry_config(registry)?;
+    scratch.write_registry_config(grant)?;
     let predicate = scratch.write(
         "predicate.json",
         serde_json::json!({ "moduleId": coords.id, "version": coords.version })
             .to_string()
             .as_bytes(),
     )?;
-    let subject = subject(&pushed.image_ref, &pushed.digest);
-    ui::command(
-        "cosign attest",
-        &mut cosign_attest(bin, &subject, &predicate, &scratch.0, &identity.token),
-    )?;
+    let mut command = cosign_attest(
+        bin,
+        PREDICATE_TYPE,
+        &predicate,
+        pushed,
+        &scratch.0,
+        "envvar",
+    );
+    command.env("SIGSTORE_ID_TOKEN", &identity.token);
+    ui::command("cosign attest", &mut command)?;
     Ok(identity.email)
 }
 
-/// `dépôt@digest` : c'est le digest poussé qu'on signe, jamais le tag.
-fn subject(image_ref: &str, digest: &str) -> String {
-    let repository = match image_ref.rsplit_once(':') {
-        Some((repository, tag)) if !tag.contains('/') => repository,
-        _ => image_ref,
+/// Atteste le digest poussé depuis la CI : la provenance du workflow, puis le rapport d'audit
+/// s'il y en a un. Rend vrai quand l'audit est attesté.
+///
+/// L'identité est le jeton OIDC de ce job (`id-token: write`), que cosign demande lui-même à
+/// GitHub. Aucun code du module ne tourne ici.
+pub fn attest_ci(
+    bin: &Path,
+    pushed: &oci::PushedArtifact,
+    grant: &oci::PushGrant,
+    audit: Option<&Path>,
+) -> Result<bool> {
+    let scratch = Scratch::new()?;
+    scratch.write_registry_config(grant)?;
+    let provenance = scratch.write(
+        "provenance.json",
+        provenance(&|name| std::env::var(name).ok())
+            .to_string()
+            .as_bytes(),
+    )?;
+    let mut command = cosign_attest(bin, PROVENANCE_TYPE, &provenance, pushed, &scratch.0, CI);
+    ui::command("cosign attest (provenance)", &mut command)?;
+
+    let Some(audit) = audit else {
+        return Ok(false);
     };
-    format!("{repository}@{digest}")
+    let mut command = cosign_attest(bin, AUDIT_TYPE, audit, pushed, &scratch.0, CI);
+    ui::command("cosign attest (audit)", &mut command)?;
+    Ok(true)
 }
 
-/// Le jeton passe par l'environnement : sur la ligne de commande, `ps` le montrerait.
+/// La provenance SLSA v1 de ce run, depuis ce que GitHub Actions pose dans l'environnement.
+///
+/// Le registre ne croit pas ce contenu : il vérifie le certificat, qui porte les mêmes faits
+/// signés par GitHub. Le prédicat les rend lisibles à qui relit l'attestation.
+fn provenance(env: &dyn Fn(&str) -> Option<String>) -> serde_json::Value {
+    let get = |name: &str| env(name).unwrap_or_default();
+    let server = env("GITHUB_SERVER_URL").unwrap_or_else(|| "https://github.com".to_string());
+    let repository = get("GITHUB_REPOSITORY");
+    let workflow_ref = get("GITHUB_WORKFLOW_REF");
+    let path = workflow_ref
+        .strip_prefix(&format!("{repository}/"))
+        .unwrap_or(&workflow_ref);
+    let path = path.split_once('@').map_or(path, |(path, _)| path);
+    let reference = get("GITHUB_REF");
+    serde_json::json!({
+        "buildDefinition": {
+            "buildType": "https://portaki.app/buildtypes/release-action/v2",
+            "externalParameters": {
+                "workflow": { "repository": format!("{server}/{repository}"), "path": path, "ref": reference }
+            },
+            "internalParameters": {
+                "github": {
+                    "event_name": get("GITHUB_EVENT_NAME"),
+                    "repository_id": get("GITHUB_REPOSITORY_ID"),
+                    "repository_owner_id": get("GITHUB_REPOSITORY_OWNER_ID"),
+                }
+            },
+            "resolvedDependencies": [{
+                "uri": format!("git+{server}/{repository}@{reference}"),
+                "digest": { "gitCommit": get("GITHUB_SHA") }
+            }]
+        },
+        "runDetails": {
+            "builder": { "id": format!("{server}/{workflow_ref}") },
+            "metadata": {
+                "invocationId": format!(
+                    "{server}/{repository}/actions/runs/{}/attempts/{}",
+                    get("GITHUB_RUN_ID"),
+                    get("GITHUB_RUN_ATTEMPT")
+                )
+            }
+        }
+    })
+}
+
+/// Le fournisseur d'identité de cosign dans un job GitHub Actions : le jeton OIDC du job.
+const CI: &str = "github-actions";
+
+/// `cosign attest` sur le digest poussé, avec les identifiants du droit de push dans un
+/// `DOCKER_CONFIG` éphémère : ni jeton ni mot de passe sur la ligne de commande, où `ps` les
+/// montrerait.
 fn cosign_attest(
     bin: &Path,
-    subject: &str,
+    predicate_type: &str,
     predicate: &Path,
+    pushed: &oci::PushedArtifact,
     docker_config: &Path,
-    token: &str,
+    oidc_provider: &str,
 ) -> Command {
     let mut command = Command::new(bin);
     command
-        .args([
-            "attest",
-            "--yes",
-            "--oidc-provider",
-            "envvar",
-            "--type",
-            PREDICATE_TYPE,
-        ])
+        .args(["attest", "--yes", "--oidc-provider", oidc_provider])
+        .args(["--type", predicate_type])
         .arg("--predicate")
         .arg(predicate)
-        .arg(subject)
-        .env("SIGSTORE_ID_TOKEN", token)
         .env("DOCKER_CONFIG", docker_config);
+    if oci::is_local(&pushed.registry) {
+        command.arg("--allow-http-registry");
+    }
+    command.arg(pushed.subject());
     command
 }
 
 /// Un dossier temporaire (0700) pour cosign : le `DOCKER_CONFIG` et le prédicat, chacun en 0600.
-/// Les identifiants de la poussée y passent parce que cosign ne lit ni `GITHUB_TOKEN` ni
-/// `GHCR_TOKEN`, et qu'un mot de passe sur la ligne de commande se lirait dans `ps`. Effacé à la
-/// sortie, quoi qu'il arrive.
+/// Le droit de push y passe parce que cosign pousse ses attestations dans le même dépôt, et
+/// qu'un mot de passe sur la ligne de commande se lirait dans `ps`. Effacé à la sortie, quoi
+/// qu'il arrive.
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -186,15 +273,10 @@ impl Scratch {
         Ok(path)
     }
 
-    fn write_registry_config(&self, registry: &str) -> Result<()> {
-        let RegistryAuth::Basic(user, password) = oci::auth::resolve_registry_auth(registry)?
-        else {
-            bail!("no registry credentials for cosign — set GITHUB_TOKEN or docker login");
-        };
-        let auth = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
-        let body = serde_json::json!({
-            "auths": { oci::auth::registry_host(registry): { "auth": auth } }
-        });
+    fn write_registry_config(&self, grant: &oci::PushGrant) -> Result<()> {
+        let auth = base64::engine::general_purpose::STANDARD
+            .encode(format!("{}:{}", grant.username, grant.password));
+        let body = serde_json::json!({ "auths": { &grant.registry: { "auth": auth } } });
         self.write("config.json", body.to_string().as_bytes())?;
         Ok(())
     }
@@ -413,32 +495,42 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn ci_refuses_and_points_at_the_release_action() {
+    fn ci_refuses_and_points_at_ci_release() {
         let refusal = refuse_in_ci(true).unwrap_err().to_string();
-        assert!(refusal.contains("portaki-release-action"));
+        assert!(refusal.contains("portaki ci release"), "{refusal}");
+        assert!(refusal.contains("--no-sign"), "{refusal}");
         assert!(refuse_in_ci(false).is_ok());
     }
 
-    #[test]
-    fn the_pushed_digest_is_signed_never_the_tag() {
-        assert_eq!(
-            subject("ghcr.io/acme/portaki-modules-nuki:1.4.0", "sha256:9f2c"),
-            "ghcr.io/acme/portaki-modules-nuki@sha256:9f2c"
-        );
-        assert_eq!(
-            subject("localhost:5000/portaki-modules-nuki:1.4.0", "sha256:9f2c"),
-            "localhost:5000/portaki-modules-nuki@sha256:9f2c"
-        );
+    pub(crate) fn pushed(registry: &str) -> oci::PushedArtifact {
+        oci::PushedArtifact {
+            registry: registry.to_string(),
+            repository: "modules/nuki".to_string(),
+            digest: "sha256:9f2c".to_string(),
+        }
+    }
+
+    pub(crate) fn grant(registry: &str) -> oci::PushGrant {
+        serde_json::from_value(serde_json::json!({
+            "registry": registry,
+            "repository": "modules/nuki",
+            "reference": format!("{registry}/modules/nuki:1.4.0"),
+            "username": "portaki-push",
+            "password": "pk_push_secret",
+            "expiresAt": "2026-09-27T12:00:00Z",
+        }))
+        .unwrap()
     }
 
     #[test]
-    fn the_command_is_cosign_attest_with_the_token_kept_off_argv() {
+    fn the_pushed_digest_is_attested_never_the_tag() {
         let command = cosign_attest(
             Path::new("/opt/cosign"),
-            "ghcr.io/acme/portaki-modules-nuki@sha256:9f2c",
+            PREDICATE_TYPE,
             Path::new("/tmp/cfg/predicate.json"),
+            &pushed("oci.portaki.app"),
             Path::new("/tmp/cfg"),
-            "secret.jwt.token",
+            "envvar",
         );
         assert_eq!(command.get_program(), "/opt/cosign");
         let args: Vec<_> = command.get_args().collect();
@@ -453,21 +545,117 @@ pub(crate) mod tests {
                 "https://portaki.app/attestations/author/v1",
                 "--predicate",
                 "/tmp/cfg/predicate.json",
-                "ghcr.io/acme/portaki-modules-nuki@sha256:9f2c"
+                "oci.portaki.app/modules/nuki@sha256:9f2c"
             ]
         );
-        assert!(!args
-            .iter()
-            .any(|arg| arg.to_string_lossy().contains("secret")));
         let envs: Vec<_> = command.get_envs().collect();
-        assert!(envs.contains(&(
-            std::ffi::OsStr::new("SIGSTORE_ID_TOKEN"),
-            Some(std::ffi::OsStr::new("secret.jwt.token"))
-        )));
         assert!(envs.contains(&(
             std::ffi::OsStr::new("DOCKER_CONFIG"),
             Some(std::ffi::OsStr::new("/tmp/cfg"))
         )));
+    }
+
+    #[test]
+    fn a_development_repository_is_attested_over_http() {
+        let command = cosign_attest(
+            Path::new("cosign"),
+            PREDICATE_TYPE,
+            Path::new("p.json"),
+            &pushed("oci.localhost:8080"),
+            Path::new("/tmp/cfg"),
+            CI,
+        );
+        assert!(command.get_args().any(|arg| arg == "--allow-http-registry"));
+    }
+
+    /// Deux attestations sur le digest, la provenance d'abord ; le droit de push n'est que dans
+    /// le `DOCKER_CONFIG` éphémère, pour l'hôte que le registre a nommé.
+    #[cfg(unix)]
+    #[test]
+    fn ci_attests_provenance_then_audit_with_the_push_grant() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("calls");
+        let bin = dir.path().join("cosign");
+        std::fs::write(
+            &bin,
+            format!(
+                "#!/bin/sh\necho \"$*\" >>{log}\ncat \"$DOCKER_CONFIG/config.json\" >>{log}\necho >>{log}\n",
+                log = log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let audit = dir.path().join("cargo-audit.json");
+        std::fs::write(&audit, "{}").unwrap();
+        let registry = "oci-staging.portaki.app";
+
+        let audited = attest_ci(&bin, &pushed(registry), &grant(registry), Some(&audit)).unwrap();
+
+        assert!(audited);
+        let calls = std::fs::read_to_string(&log).unwrap();
+        let lines: Vec<&str> = calls
+            .lines()
+            .filter(|line| line.starts_with("attest"))
+            .collect();
+        assert_eq!(lines.len(), 2, "{calls}");
+        assert!(lines[0].contains("--type slsaprovenance1"), "{calls}");
+        assert!(
+            lines[1].contains(&format!("--type {AUDIT_TYPE}")),
+            "{calls}"
+        );
+        for line in &lines {
+            assert!(
+                line.ends_with("oci-staging.portaki.app/modules/nuki@sha256:9f2c"),
+                "{line}"
+            );
+            assert!(line.contains("--oidc-provider github-actions"), "{line}");
+            assert!(!line.contains("pk_push_secret"), "{line}");
+        }
+        let auth = base64::engine::general_purpose::STANDARD.encode("portaki-push:pk_push_secret");
+        assert!(
+            calls.contains(&format!(
+                r#"{{"auths":{{"{registry}":{{"auth":"{auth}"}}}}}}"#
+            )),
+            "{calls}"
+        );
+    }
+
+    #[test]
+    fn provenance_names_the_workflow_file_and_the_commit() {
+        let env = |name: &str| {
+            Some(
+                match name {
+                    "GITHUB_REPOSITORY" => "PortakiApp/portaki-modules",
+                    "GITHUB_WORKFLOW_REF" => {
+                        "PortakiApp/portaki-modules/.github/workflows/ci.yml@refs/heads/main"
+                    }
+                    "GITHUB_REF" => "refs/heads/main",
+                    "GITHUB_SHA" => "0123",
+                    "GITHUB_RUN_ID" => "7",
+                    "GITHUB_RUN_ATTEMPT" => "1",
+                    _ => return None,
+                }
+                .to_string(),
+            )
+        };
+
+        let predicate = provenance(&env);
+
+        let workflow = &predicate["buildDefinition"]["externalParameters"]["workflow"];
+        assert_eq!(workflow["path"], ".github/workflows/ci.yml");
+        assert_eq!(
+            workflow["repository"],
+            "https://github.com/PortakiApp/portaki-modules"
+        );
+        assert_eq!(
+            predicate["buildDefinition"]["resolvedDependencies"][0]["digest"]["gitCommit"],
+            "0123"
+        );
+        assert_eq!(
+            predicate["runDetails"]["builder"]["id"],
+            "https://github.com/PortakiApp/portaki-modules/.github/workflows/ci.yml@refs/heads/main"
+        );
     }
 
     #[cfg(unix)]
@@ -499,9 +687,8 @@ pub(crate) mod tests {
     fn a_failing_cosign_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
         let bin = fake_cosign(dir.path(), "", 1);
-        let predicate = dir.path().join("predicate.json");
-        let mut command = cosign_attest(&bin, "r@sha256:1", &predicate, dir.path(), "t");
-        assert!(ui::command("cosign attest", &mut command).is_err());
+        let registry = "oci.portaki.app";
+        assert!(attest_ci(&bin, &pushed(registry), &grant(registry), None).is_err());
     }
 
     #[test]
