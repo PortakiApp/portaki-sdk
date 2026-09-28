@@ -41,6 +41,31 @@
           "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.dependencies.portaki-test-utils.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='portaki-cli')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='portaki-connectors')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='portaki-sdk')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='portaki-sdk-macros')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name=='portaki-test-utils')].version"
         }
       ],
       "changelog-sections": [
