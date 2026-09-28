@@ -39,8 +39,9 @@ impl ModuleArgs {
     /// Le seul module visé, pour une commande qui n'en tient qu'un à la fois (`dev`, `logs`).
     pub fn one(&self, command: &str) -> Result<Member> {
         if self.all {
-            return Err(crate::exit::usage(format!(
-                "portaki {command} acts on one module at a time — pass --module <id> instead of --all"
+            return Err(crate::exit::usage(crate::tr!(
+                "portaki {command} acts on one module at a time — pass --module <id> instead of --all",
+                "portaki {command} agit sur un module à la fois — passez --module <id> au lieu de --all"
             )));
         }
         resolve(self.module.as_deref(), None)?
@@ -127,8 +128,9 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
         let own = manifest_id(cwd);
         if let (Some(wanted), Some(own)) = (module, own.as_deref()) {
             if wanted != own {
-                return Err(crate::exit::usage(format!(
-                    "unknown module: {wanted} — this directory is {own}"
+                return Err(crate::exit::usage(crate::tr!(
+                    "unknown module: {wanted} — this directory is {own}",
+                    "module inconnu : {wanted} — ce dossier est {own}"
                 )));
             }
         }
@@ -146,7 +148,11 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
             .find(|member| member.id == wanted)
             .map(|member| Resolved::Chosen(vec![member.clone()]))
             .ok_or_else(|| {
-                crate::exit::usage(format!("unknown module: {wanted} — {}", ids(members)))
+                crate::exit::usage(crate::tr!(
+                    "unknown module: {wanted} — {}",
+                    "module inconnu : {wanted} — {}",
+                    ids(members)
+                ))
             });
     }
     if let Some(inside) = members.iter().find(|member| cwd.starts_with(&member.root)) {
@@ -173,9 +179,14 @@ pub fn resolve(module: Option<&str>, all: Option<bool>) -> Result<Vec<Member>> {
         Resolved::Ambiguous if std::io::stdin().is_terminal() && !ui::json() => {
             ask(&members).map(|m| vec![m])
         }
-        Resolved::Ambiguous => Err(crate::exit::usage(format!(
+        Resolved::Ambiguous => Err(crate::exit::usage(crate::tr!(
             "this repository holds several modules — pass --module <id>{}: {}",
-            if all.is_some() { " or --all" } else { "" },
+            "ce dépôt porte plusieurs modules — passez --module <id>{} : {}",
+            if all.is_some() {
+                crate::tr!(" or --all", " ou --all")
+            } else {
+                String::new()
+            },
             ids(&members)
         ))),
     }
@@ -189,7 +200,7 @@ fn ask(members: &[Member]) -> Result<Member> {
         .map(|(number, member)| (number.as_str(), member.id.as_str()))
         .collect();
     ui::list("modules", &rows);
-    print!("    which one? ");
+    print!("    {} ", crate::tr!("which one?", "lequel ?"));
     std::io::stdout().flush()?;
     let mut answer = String::new();
     std::io::stdin().lock().read_line(&mut answer)?;

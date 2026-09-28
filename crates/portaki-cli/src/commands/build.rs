@@ -39,7 +39,10 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     if !args.nested {
         ui::header(
             "portaki build",
-            "Compile to wasm32, then turn the SDK's emissions into what the host reads.",
+            &crate::tr!(
+                "Compile to wasm32, then turn the SDK's emissions into what the host reads.",
+                "Compiler en wasm32, puis transformer les émissions du SDK en ce que l'hôte lit."
+            ),
         );
     }
     // `release` s'est déjà placé dans le module qu'il publie.
@@ -103,16 +106,26 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
     }
 
     ui::blank();
-    ui::detail(format!("built in {}", ui::elapsed(started.elapsed())));
+    ui::detail(crate::tr!(
+        "built in {}",
+        "compilé en {}",
+        ui::elapsed(started.elapsed())
+    ));
     if !args.nested {
         ui::next(&[
             (
-                "portaki lint",
-                "check capability ids, connector bindings and i18n keys",
+                "portaki check",
+                &crate::tr!(
+                    "the gate portaki release applies: tests, manifest, texts",
+                    "la porte que portaki release applique : tests, manifeste, textes"
+                ),
             ),
             (
                 "portaki dev --watch",
-                "deploy to the sandbox and see what a run does",
+                &crate::tr!(
+                    "deploy to the sandbox and see what a run does",
+                    "déployer en sandbox et voir ce que fait une exécution"
+                ),
             ),
         ]);
         ui::blank();
@@ -230,12 +243,18 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
             ui::detail(supported.join(" "));
         }
     } else if !catalog_path.exists() {
-        anyhow::bail!("no SDK emissions — add portaki_module!(...) to lib.rs");
+        anyhow::bail!(crate::tr!(
+            "no SDK emissions — add portaki_module!(...) to lib.rs",
+            "aucune émission du SDK — ajoutez portaki_module!(...) à lib.rs"
+        ));
     }
 
     let publish_path = pack::assemble_publish_manifest(module_root, &out_dir)?;
     ui::wrote("publish", relative(&publish_path, module_root));
-    ui::advice("written from the code — portaki_module!, #[surface], #[email] and the portaki-sdk features");
+    ui::advice(crate::tr!(
+        "written from the code — portaki_module!, #[surface], #[email] and the portaki-sdk features",
+        "écrit depuis le code — portaki_module!, #[surface], #[email] et les features de portaki-sdk"
+    ));
     Ok(())
 }
 

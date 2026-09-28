@@ -11,6 +11,7 @@ fn portaki(cwd: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(cwd)
         .env("PORTAKI_NO_UPDATE_CHECK", "1")
+        .env("PORTAKI_LANG", "en")
         .env_remove("PORTAKI_API_URL")
         .env_remove("PORTAKI_DEV_TOKEN")
         .env_remove("CI")
@@ -61,6 +62,7 @@ fn a_warning_goes_to_stderr() {
             home.path().join("credentials.json"),
         )
         .env("PORTAKI_NO_UPDATE_CHECK", "1")
+        .env("PORTAKI_LANG", "en")
         .env_remove("PORTAKI_CREDENTIALS")
         .output()
         .unwrap();
@@ -114,6 +116,7 @@ fn already_in_the_registry_stays_on_stdout() {
         .args(["--plain", "--api", &registry, "ci", "release", "--no-sign"])
         .current_dir(root)
         .env("PORTAKI_NO_UPDATE_CHECK", "1")
+        .env("PORTAKI_LANG", "en")
         .env("GITHUB_OUTPUT", &outputs)
         .env_remove("PORTAKI_DEV_TOKEN")
         .env_remove("PORTAKI_PUBLISH_VERSION")

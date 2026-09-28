@@ -28,16 +28,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
+          # La porte de `portaki release` joue `cargo fmt --check` et `cargo clippy` : sans ces
+          # composants, elle refuse avant même les tests.
+          components: rustfmt, clippy
 
-      # Tests, build --release, lint, emballage ; l'artefact part au job suivant.
+      # La porte (format, clippy, tests, build --release, manifeste, textes), puis l'emballage ;
+      # l'artefact part au job suivant.
       - uses: PortakiApp/portaki-release-action/build@v2
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    # La liaison enregistrée au registre exige un environment sur le canal stable : c'est lui
-    # qui porte les relecteurs obligatoires. Sans lui l'échange est refusé —
-    # `environment_required`. Liez d'abord ce module à ce dépôt depuis le dashboard.
+    # La stable se publie depuis l'environnement GitHub `release`, que la liaison au registre
+    # exige : c'est lui qui porte les relecteurs obligatoires. Sans lui l'échange est refusé —
+    # `environment_required`. Créez-le dans Settings → Environments, puis liez ce module à ce
+    # dépôt depuis l'espace développeur.
     environment: release
     permissions:
       contents: read

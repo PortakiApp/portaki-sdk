@@ -94,7 +94,10 @@ struct Granted {
 pub async fn run(args: LoginArgs) -> Result<()> {
     ui::header(
         "portaki login",
-        "Device grant — the code below ties this terminal to your Portaki account.",
+        &crate::tr!(
+            "Device grant — the code below ties this terminal to your Portaki account.",
+            "Connecter la CLI — le code ci-dessous relie ce terminal à votre compte Portaki."
+        ),
     );
 
     let base = base_url(args.url.as_deref());
@@ -214,11 +217,17 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             ui::next(&[
                 (
                     "portaki dev --watch",
-                    "build, deploy to the sandbox, redeploy on every save",
+                    &crate::tr!(
+                        "build, deploy to the sandbox, redeploy on every save",
+                        "déployer en sandbox, redéployer à chaque sauvegarde"
+                    ),
                 ),
                 (
                     "portaki release",
-                    "test, build, sign and announce a version",
+                    &crate::tr!(
+                        "test, build, sign and announce a version",
+                        "la porte de check, puis pousser, signer et annoncer une version"
+                    ),
                 ),
             ]);
             ui::blank();
@@ -340,7 +349,10 @@ fn present(started: &DeviceCode, no_browser: bool) {
 pub async fn logout(_args: LogoutArgs) -> Result<()> {
     ui::header(
         "portaki logout",
-        "End the session here, and on the platform.",
+        &crate::tr!(
+            "End the session here, and on the platform.",
+            "Fermer la session ici, et sur la plateforme."
+        ),
     );
 
     let issuer = crate::profile::api_url(None);

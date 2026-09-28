@@ -57,7 +57,10 @@ impl std::error::Error for NotServed {}
 pub async fn run(args: LogsArgs) -> Result<()> {
     ui::header(
         "portaki logs",
-        "What the module logs in the sandbox, as it happens — the last hour is kept.",
+        &crate::tr!(
+            "What the module logs in the sandbox, as it happens — the last hour is kept.",
+            "Ce que le module journalise en sandbox, en direct — la dernière heure est gardée."
+        ),
     );
     let mut modules = args.modules.clone();
     if modules.module.is_none() {

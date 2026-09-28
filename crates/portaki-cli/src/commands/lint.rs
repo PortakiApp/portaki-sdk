@@ -39,6 +39,10 @@ pub fn run(args: LintArgs) -> Result<()> {
         "portaki lint",
         "Check that everything the manifest names actually resolves.",
     );
+    ui::warn(crate::tr!(
+        "portaki lint is now portaki check --only lint — use that from now on",
+        "portaki lint devient portaki check --only lint — utilisez désormais ce nom"
+    ));
     args.modules.for_each(|_| lint_here(&args))
 }
 
@@ -50,7 +54,7 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| module_root.join("target/portaki/manifest.json"));
 
-    let reading = ui::step("reading the manifest");
+    let reading = ui::step(crate::tr!("reading the manifest", "lecture du manifeste"));
     let manifest = if manifest_path.exists() {
         let file = std::fs::File::open(&manifest_path)?;
         let manifest = from_reader::<_, ModuleManifest>(file)?;
@@ -67,10 +71,16 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         manifest
     } else {
         reading.abandon();
-        anyhow::bail!("no manifest or emissions found — run portaki build first");
+        anyhow::bail!(crate::tr!(
+            "no manifest or emissions found — run portaki build first",
+            "ni manifeste ni émissions — lancez d'abord portaki build"
+        ));
     };
 
-    let checking = ui::step("checking capability ids, connector bindings, and i18n keys");
+    let checking = ui::step(crate::tr!(
+        "checking capability ids, connector bindings, and i18n keys",
+        "vérification des capacités, des connecteurs et des clés i18n"
+    ));
     validate_manifest(&manifest, &module_root.join("i18n")).map_err(|failure| {
         checking.abandon();
         failure
@@ -103,7 +113,7 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
-    checking.done(format!("{} passes", manifest.id));
+    checking.done(crate::tr!("{} passes", "{} passe", manifest.id));
     for name in host_like_guest_commands(&manifest.commands) {
         ui::warn(format!(
             "command {name} is open to guests but reads like a host operation — \
@@ -111,7 +121,10 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         ));
     }
     report_changelog(&module_root, &manifest.version)?;
-    ui::detail("capability ids, connector bindings and i18n keys all resolve");
+    ui::detail(crate::tr!(
+        "capability ids, connector bindings and i18n keys all resolve",
+        "capacités, connecteurs et clés i18n se résolvent tous"
+    ));
     ui::blank();
     Ok(())
 }

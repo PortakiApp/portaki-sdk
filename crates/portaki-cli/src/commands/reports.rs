@@ -49,7 +49,7 @@ pub enum ReportsAction {
 pub async fn run(args: ReportsArgs) -> Result<()> {
     ui::header(
         "portaki reports",
-        "Errors Portaki caught, problems and suggestions from hosts — fix, then resolve.",
+        &crate::tr!("Errors Portaki caught, problems and suggestions from hosts — fix, then resolve.", "Les erreurs relevées par Portaki, les problèmes et suggestions des hôtes — corrigez, puis marquez résolu."),
     );
     let mut platform = Platform::open(&crate::profile::api_url(None))?;
     if let Some(ReportsAction::Resolve { id, note }) = args.action {
@@ -84,7 +84,10 @@ pub async fn run(args: ReportsArgs) -> Result<()> {
     if open > 0 {
         ui::next(&[(
             "portaki reports resolve <id> --note \"…\"",
-            "once fixed: resolve it, with an internal note",
+            &crate::tr!(
+                "once fixed: resolve it, with an internal note",
+                "une fois corrigé : le marquer résolu, avec une note interne"
+            ),
         )]);
     }
     ui::blank();
@@ -95,7 +98,7 @@ fn show(id: &str, page: &Value) {
     ui::section(id);
     let items = page["items"].as_array().cloned().unwrap_or_default();
     if items.is_empty() {
-        ui::skipped("no report");
+        ui::skipped(crate::tr!("no report", "aucun rapport"));
         return;
     }
     for report in &items {
@@ -120,13 +123,14 @@ fn show(id: &str, page: &Value) {
             ui::detail(format!("surface {surface}"));
         }
         if let Some(note) = report["internalNote"].as_str() {
-            ui::detail(format!("note: {note}"));
+            ui::detail(crate::tr!("note: {note}", "note : {note}"));
         }
     }
     let total = page["total"].as_u64().unwrap_or(0);
     if total > items.len() as u64 {
-        ui::detail(format!(
+        ui::detail(crate::tr!(
             "{} more in the developer space",
+            "{} de plus dans l'espace développeur",
             total - items.len() as u64
         ));
     }
@@ -134,11 +138,12 @@ fn show(id: &str, page: &Value) {
 
 async fn resolve(platform: &mut Platform, id: &str, note: &str) -> Result<()> {
     if note.trim().is_empty() {
-        return Err(crate::exit::usage(
+        return Err(crate::exit::usage(&crate::tr!(
             "--note: say what was fixed — the note stays internal, the host never reads it",
-        ));
+            "--note : dites ce qui a été corrigé — la note reste interne, l'hôte ne la lit jamais"
+        )));
     }
-    let resolving = ui::step(format!("resolving {id}"));
+    let resolving = ui::step(crate::tr!("resolving {id}", "résolution de {id}"));
     let report = platform
         .call(
             Method::PATCH,
@@ -150,14 +155,18 @@ async fn resolve(platform: &mut Platform, id: &str, note: &str) -> Result<()> {
             resolving.abandon();
             failure
         })?;
-    resolving.done(format!(
+    resolving.done(crate::tr!(
         "{} resolved",
+        "{} résolu",
         report["title"].as_str().unwrap_or(id)
     ));
     if ui::json() {
         ui::emit(&json!({ "schemaVersion": 1, "report": report }));
     } else {
-        ui::next(&[("portaki reports --open", "what is still open")]);
+        ui::next(&[(
+            "portaki reports --open",
+            &crate::tr!("what is still open", "ce qui reste ouvert"),
+        )]);
         ui::blank();
     }
     Ok(())

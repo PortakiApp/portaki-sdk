@@ -62,7 +62,10 @@ pub struct DevArgs {
 pub async fn run(args: DevArgs) -> Result<()> {
     ui::header(
         "portaki dev",
-        "Runs against the real host in the hosted sandbox — not a local mock.",
+        &crate::tr!(
+            "Runs against the real host in the hosted sandbox — not a local mock.",
+            "Tourne contre le vrai hôte, dans la sandbox hébergée — pas une simulation locale."
+        ),
     );
 
     // Un seul module à la fois : le bac à sable et son bail se tiennent par module.
@@ -71,8 +74,9 @@ pub async fn run(args: DevArgs) -> Result<()> {
 
     // Ancien nom, gardé caché le temps de deux mineures : il marche, et dit le nouveau.
     if let Some(operation) = args.dispatch.as_deref() {
-        ui::warn(format!(
+        ui::warn(crate::tr!(
             "portaki dev --dispatch is now portaki run {} — use that name from now on",
+            "portaki dev --dispatch devient portaki run {} — utilisez désormais ce nom",
             if operation.is_empty() {
                 "<operation>"
             } else {
@@ -157,15 +161,24 @@ pub async fn run(args: DevArgs) -> Result<()> {
         ui::next(&[
             (
                 "portaki run <operation>",
-                "run a query or a command on this build",
+                &crate::tr!(
+                    "run a query or a command on this build",
+                    "lancer une query (lire) ou une command (agir) sur ce build"
+                ),
             ),
             (
                 "portaki preview <surface>",
-                "render a surface as hosts and guests will see it",
+                &crate::tr!(
+                    "render a surface as hosts and guests will see it",
+                    "vérifier le rendu, là où l'hôte et le voyageur le verront"
+                ),
             ),
             (
                 "portaki check",
-                "the gate portaki release applies, before publishing",
+                &crate::tr!(
+                    "the gate portaki release applies, before publishing",
+                    "la porte que portaki release applique, avant de publier"
+                ),
             ),
         ]);
         ui::blank();
@@ -178,29 +191,44 @@ pub async fn run(args: DevArgs) -> Result<()> {
     // absolu de soixante-dix caractères repousse son explication à la ligne suivante, et la
     // liste cesse de se lire en colonnes.
     ui::list(
-        "watching",
+        &crate::tr!("watching", "surveillé"),
         &[
             (
                 "src/",
-                "every save rebuilds, redeploys and dispatches again",
+                &crate::tr!(
+                    "every save rebuilds and redeploys",
+                    "chaque sauvegarde recompile et redéploie"
+                ),
             ),
             (
                 "Cargo.toml",
-                "a portaki-sdk feature added or dropped changes the permissions",
+                &crate::tr!(
+                    "a portaki-sdk feature added or dropped changes the permissions",
+                    "une feature de portaki-sdk ajoutée ou retirée change les permissions"
+                ),
             ),
             (
                 "i18n/",
-                "the module's name, description and tab labels are read there",
+                &crate::tr!(
+                    "the module's name, description and tab labels are read there",
+                    "le nom, la description et les libellés d'onglet du module s'y lisent"
+                ),
             ),
             (
                 "db/migrations/",
-                "an edited migration replays from zero in the sandbox",
+                &crate::tr!(
+                    "an edited migration replays from zero in the sandbox",
+                    "une migration modifiée se rejoue depuis zéro en sandbox"
+                ),
             ),
         ],
     );
     ui::blank();
-    ui::advice("a build that fails does not stop the loop — fix and save again");
-    ui::detail(format!("from {}", module_root.display()));
+    ui::advice(crate::tr!(
+        "a build that fails does not stop the loop — fix and save again",
+        "un build en échec n'arrête pas la boucle — corrigez et sauvegardez à nouveau"
+    ));
+    ui::detail(crate::tr!("from {}", "depuis {}", module_root.display()));
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |event| {
@@ -280,14 +308,22 @@ pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
             "from {}",
             path.strip_prefix(module_root).unwrap_or(&path).display()
         )),
-        crate::manifest::ManifestSource::Emissions => {
-            ui::detail("from the SDK emissions — no build output yet")
-        }
+        crate::manifest::ManifestSource::Emissions => ui::detail(crate::tr!(
+            "from the SDK emissions — no build output yet",
+            "depuis les émissions du SDK — pas encore de build"
+        )),
     }
 
     if manifest.queries.is_empty() && manifest.commands.is_empty() {
-        ui::warn(format!("{} exposes no operation", manifest.id));
-        ui::detail("add a #[portaki_sdk::query] or #[portaki_sdk::command] function, then build");
+        ui::warn(crate::tr!(
+            "{} exposes no operation",
+            "{} n'expose aucune opération",
+            manifest.id
+        ));
+        ui::detail(crate::tr!(
+            "add a #[portaki_sdk::query] or #[portaki_sdk::command] function, then build",
+            "ajoutez une fonction #[portaki_sdk::query] ou #[portaki_sdk::command], puis compilez"
+        ));
         ui::blank();
         return Ok(());
     }
@@ -323,12 +359,18 @@ pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
 
     ui::next(&[(
         &format!("portaki run {sample}"),
-        "run it on the build deployed by portaki dev",
+        &crate::tr!(
+            "run it on the build deployed by portaki dev",
+            "la lancer sur le build que portaki dev a déployé"
+        ),
     )]);
     ui::blank();
     // `--kind query` est le défaut : le rappeler n'apprendrait rien. C'est `command` qu'il faut
     // penser à poser, et c'est justement celui qu'on oublie.
-    ui::advice("--kind command for a mutating one · --params '{…}' passes arguments");
+    ui::advice(crate::tr!(
+        "--params '{{…}}' passes arguments · the kind is read from the manifest",
+        "--params '{{…}}' passe des arguments · le genre se lit dans le manifeste"
+    ));
     ui::blank();
     Ok(())
 }
@@ -377,8 +419,9 @@ async fn cycle(
     let fingerprint =
         upload_fingerprint(&wasm, &manifest, migrations.as_deref().unwrap_or_default());
     if fingerprint == *last_digest {
-        ui::skipped(format!(
+        ui::skipped(crate::tr!(
             "unchanged ({}) — nothing to upload",
+            "inchangé ({}) — rien à envoyer",
             short(&sha256(&wasm))
         ));
         return Ok(());
@@ -386,7 +429,10 @@ async fn cycle(
 
     // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
     // l'emprunt du jeton pendant qu'on cherche à le remplacer.
-    let uploading = ui::step(format!("deploying {module_id} to the sandbox"));
+    let uploading = ui::step(crate::tr!(
+        "deploying {module_id} to the sandbox",
+        "déploiement de {module_id} en sandbox"
+    ));
     let first = deploy(
         base_url,
         module_id,
@@ -399,9 +445,15 @@ async fn cycle(
     .await;
     let deployed = match first {
         Err(failure) if failure.is::<Unauthorized>() => {
-            uploading.say("renewing the access token");
+            uploading.say(crate::tr!(
+                "renewing the access token",
+                "renouvellement du jeton d'accès"
+            ));
             *token = reauthenticate(args, token).await?;
-            uploading.say(format!("deploying {module_id} to the sandbox"));
+            uploading.say(crate::tr!(
+                "deploying {module_id} to the sandbox",
+                "déploiement de {module_id} en sandbox"
+            ));
             deploy(
                 base_url,
                 module_id,
@@ -418,7 +470,7 @@ async fn cycle(
             failure
         })?,
     };
-    uploading.done(format!("deployed {module_id}"));
+    uploading.done(crate::tr!("deployed {module_id}", "{module_id} déployé"));
     ui::field("digest", short(&deployed.digest));
     ui::field("size", ui::bytes(deployed.size_bytes));
     if let Some(install) = &deployed.install {
@@ -471,7 +523,10 @@ pub(crate) struct ScenarioCell {
 /// Jamais fatal : un cas en échec est ce qu'on vient chercher, pas une raison d'arrêter la
 /// boucle — et une plateforme qui ne sait pas les jouer n'empêche pas de développer.
 async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &mut String) {
-    let running = ui::step("replaying the 7 scenarios");
+    let running = ui::step(crate::tr!(
+        "replaying the 7 scenarios",
+        "relance des 7 scénarios"
+    ));
     let mut outcome = post_scenarios(base_url, module_id, token).await;
     if outcome
         .as_ref()
@@ -486,7 +541,10 @@ async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &
         Ok(cells) => cells,
         Err(failure) => {
             running.abandon();
-            ui::warn(format!("scenarios not replayed — {failure:#}"));
+            ui::warn(crate::tr!(
+                "scenarios not replayed — {failure:#}",
+                "scénarios non relancés — {failure:#}"
+            ));
             return;
         }
     };
@@ -497,8 +555,9 @@ async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &
 /// « scenarios — 12 of 14 ok ».
 pub(crate) fn scenarios_line(cells: &[ScenarioCell]) -> String {
     let failing = cells.iter().filter(|cell| cell.status != "ok").count();
-    format!(
+    crate::tr!(
         "scenarios — {} of {} ok",
+        "scénarios — {} sur {} ok",
         cells.len() - failing,
         cells.len()
     )
@@ -596,8 +655,14 @@ pub(crate) fn build(module_root: &Path) -> Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     cmd.current_dir(module_root)
         .args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
-    ui::command("compiling wasm32-unknown-unknown (release)", &mut cmd)
-        .context("cargo build wasm32")
+    ui::command(
+        &crate::tr!(
+            "compiling wasm32-unknown-unknown (release)",
+            "compilation wasm32-unknown-unknown (release)"
+        ),
+        &mut cmd,
+    )
+    .context("cargo build wasm32")
 }
 
 /// devapi rend du camelCase, comme toutes les API Portaki. Sans ce rename, `size_bytes` ne
@@ -698,7 +763,10 @@ pub(crate) async fn deploy(
 /// restait dans l'inventaire, à côté de ceux sur lesquels on travaille. Rien n'est recompilé ici
 /// — c'est une ligne qu'on retire, pas un artefact qu'on remplace.
 async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
-    let forgetting = ui::step(format!("forgetting {module_id}"));
+    let forgetting = ui::step(crate::tr!(
+        "forgetting {module_id}",
+        "retrait de {module_id}"
+    ));
     let response = crate::http::client()
         .delete(format!("{base_url}/dev/v1/modules/{module_id}/dev-deploy"))
         .bearer_auth(token)
@@ -716,8 +784,14 @@ async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
         let body = response.text().await.unwrap_or_default();
         anyhow::bail!("the dev platform answered {status}: {}", body.trim());
     }
-    forgetting.done(format!("{module_id} is gone from the sandbox"));
-    ui::advice("its inventory row is what goes — a published version, if any, is untouched");
+    forgetting.done(crate::tr!(
+        "{module_id} is gone from the sandbox",
+        "{module_id} a quitté la sandbox"
+    ));
+    ui::advice(crate::tr!(
+        "its inventory row is what goes — a published version, if any, is untouched",
+        "c'est sa ligne d'inventaire qui part — une version publiée, s'il y en a, reste intacte"
+    ));
     ui::blank();
     Ok(())
 }
@@ -792,7 +866,10 @@ async fn dispatch(
 /// Prints what the run did — and what the sandbox refused to do.
 pub(crate) fn print_trace(trace: &DispatchResponse) {
     if !trace.host_calls.is_empty() || !trace.captured_effects.is_empty() {
-        ui::detail("what the run asked the host for:");
+        ui::detail(crate::tr!(
+            "what the run asked the host for:",
+            "ce que l'exécution a demandé à l'hôte :"
+        ));
     }
     for call in &trace.host_calls {
         // Dans l'ordre des appels, la voix du module au milieu de ce qu'il a demandé : un `log`
@@ -828,7 +905,10 @@ pub(crate) fn print_trace(trace: &DispatchResponse) {
     // « captured » et « would publish » se ressemblent assez pour qu'on les prenne pour des
     // choses faites. Elles ne le sont pas : la sandbox les note et les retient.
     if !trace.captured_effects.is_empty() || !trace.published_events.is_empty() {
-        ui::detail("captured and would-publish lines were held, not performed");
+        ui::detail(crate::tr!(
+            "captured and would-publish lines were held, not performed",
+            "les lignes captured et would-publish ont été retenues, pas exécutées"
+        ));
     }
     if !trace.result_json.is_empty() {
         ui::result(&trace.result_json);

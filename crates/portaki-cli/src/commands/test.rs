@@ -65,14 +65,20 @@ impl Refusal {
     /// What the person publishing reads: the rule, and what to do about it.
     pub fn message(&self) -> String {
         match self {
-            Refusal::Failed => "the module's tests fail — portaki release does not push a module \
-                 whose tests do not pass, and there is no flag to make it. Fix them, then publish \
-                 again; portaki test runs the same thing"
-                .to_string(),
-            Refusal::NoConformance => format!(
+            Refusal::Failed => crate::tr!(
+                "the module's tests fail — portaki release does not push a module whose tests do \
+                 not pass, and there is no flag to make it. Fix them, then run portaki check again",
+                "les tests du module échouent — portaki release ne pousse pas un module dont les \
+                 tests ne passent pas, et aucune option ne le permet. Corrigez-les, puis relancez \
+                 portaki check"
+            ),
+            Refusal::NoConformance => crate::tr!(
                 "the module's tests pass, but the conformance battery did not run — portaki \
-                 publish requires it. Add tests/conformance.rs containing \
+                 release requires it. Add tests/conformance.rs containing \
                  `portaki_test_utils::conformance!();` (portaki-test-utils {} or later)",
+                "les tests du module passent, mais la batterie de conformité n'a pas tourné — \
+                 portaki release l'exige. Ajoutez tests/conformance.rs avec \
+                 `portaki_test_utils::conformance!();` (portaki-test-utils {} ou plus récent)",
                 env!("CARGO_PKG_VERSION")
             ),
         }
@@ -118,7 +124,10 @@ pub fn verdict(success: bool, stdout: &str) -> Result<(), Refusal> {
 /// Called by `portaki release` and `portaki ci build` before they build or push anything —
 /// `--dry-run` included: tests are not an artifact a previous job can hand over.
 pub fn gate_publish(module_root: &Path) -> Result<()> {
-    let step = ui::step("running the module's tests (conformance battery included)");
+    let step = ui::step(crate::tr!(
+        "running the module's tests (conformance battery included)",
+        "tests du module (batterie de conformité comprise)"
+    ));
     let output = publish_test_command(module_root)
         .output()
         .context("run cargo test")?;
@@ -129,7 +138,10 @@ pub fn gate_publish(module_root: &Path) -> Result<()> {
             if ui::verbose() {
                 ui::emit_captured(&output.stdout);
             }
-            step.done("tests passed, conformance battery included");
+            step.done(crate::tr!(
+                "tests passed, conformance battery included",
+                "tests passés, batterie de conformité comprise"
+            ));
             Ok(())
         }
         Err(refusal) => {
@@ -192,7 +204,7 @@ mod tests {
     fn the_refusals_say_what_to_do() {
         let failed = Refusal::Failed.message();
         assert!(failed.contains("tests fail"), "{failed}");
-        assert!(failed.contains("portaki test"), "{failed}");
+        assert!(failed.contains("portaki check"), "{failed}");
 
         let missing = Refusal::NoConformance.message();
         assert!(missing.contains("tests/conformance.rs"), "{missing}");

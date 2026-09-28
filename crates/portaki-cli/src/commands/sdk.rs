@@ -58,24 +58,30 @@ pub struct UpgradeArgs {
 }
 
 pub async fn run(args: SdkArgs) -> Result<()> {
-    match args.command {
-        SdkCommand::Upgrade(upgrade) => {
-            // Sans drapeau, le dossier courant décide, comme avant : depuis la racine d'un
-            // monorepo, tous les modules bougent ensemble quand le workspace fixe la version.
-            if upgrade.modules.module.is_none() && !upgrade.modules.all {
-                return run_upgrade(&upgrade).await;
-            }
-            // Un module après l'autre : quand la version est héritée du workspace, le premier
-            // fait bouger tout le monde et les suivants disent « already resolves ».
-            for member in upgrade.modules.resolve()? {
-                workspace::enter(&member)?;
-                run_upgrade(&upgrade)
-                    .await
-                    .with_context(|| format!("module {}", member.id))?;
-            }
-            Ok(())
-        }
+    let SdkCommand::Upgrade(upgrade) = args.command;
+    ui::warn(crate::tr!(
+        "portaki sdk upgrade is now portaki upgrade — use that from now on",
+        "portaki sdk upgrade devient portaki upgrade — utilisez désormais ce nom"
+    ));
+    self::upgrade(upgrade).await
+}
+
+/// Runs `portaki upgrade`.
+pub async fn upgrade(upgrade: UpgradeArgs) -> Result<()> {
+    // Sans drapeau, le dossier courant décide, comme avant : depuis la racine d'un
+    // monorepo, tous les modules bougent ensemble quand le workspace fixe la version.
+    if upgrade.modules.module.is_none() && !upgrade.modules.all {
+        return run_upgrade(&upgrade).await;
     }
+    // Un module après l'autre : quand la version est héritée du workspace, le premier
+    // fait bouger tout le monde et les suivants disent « already resolves ».
+    for member in upgrade.modules.resolve()? {
+        workspace::enter(&member)?;
+        run_upgrade(&upgrade)
+            .await
+            .with_context(|| format!("module {}", member.id))?;
+    }
+    Ok(())
 }
 
 // ─── Où la version est déclarée ──────────────────────────────────────────────
@@ -591,7 +597,7 @@ fn cargo(module_root: &Path, label: &str, args: &[&str]) -> Result<()> {
 
 async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
     ui::header(
-        "portaki sdk upgrade",
+        "portaki upgrade",
         "Move to another SDK version — then build, test, lint and render to prove nothing broke.",
     );
     let cwd = std::env::current_dir().context("current_dir")?;

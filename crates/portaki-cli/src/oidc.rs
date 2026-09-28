@@ -164,7 +164,7 @@ fn refusal(status: u16, body: &str) -> String {
             "la liaison attend un autre fichier de workflow — corrige-la ou publie depuis celui déclaré"
         }
         "environment_required" => {
-            "le canal stable exige l'environment déclaré dans la liaison : ajoute `environment:` au job"
+            "le canal stable exige l'environnement GitHub `release` : ajoutez `environment: release` au job de publication, et nommez-le dans la liaison"
         }
         "event_not_allowed" => "cet événement déclencheur n'est pas autorisé par la liaison",
         "runner_not_allowed" => "la liaison exige un runner hébergé par GitHub",
@@ -212,7 +212,7 @@ mod tests {
         let refused = refusal(403, r#"{"code":"environment_required","message":"aucun"}"#);
 
         assert!(refused.contains("environment_required"));
-        assert!(refused.contains("environment:"));
+        assert!(refused.contains("environment: release"));
     }
 
     #[test]

@@ -65,7 +65,7 @@ impl Check {
 pub async fn run(args: DoctorArgs) -> Result<()> {
     ui::header(
         "portaki doctor",
-        "What on this machine would stop you from developing or publishing — and the fix.",
+        &crate::tr!("What on this machine would stop you from developing or publishing — and the fix.", "Ce qui, sur cette machine, empêcherait de développer ou de publier — et la correction."),
     );
     let base = crate::profile::api_url(None);
     let mut checks = Vec::new();
@@ -373,7 +373,7 @@ async fn sdk_versions(root: &Path, offline: bool) -> Check {
             Status::Warn,
             format!("portaki-sdk {sdk} — {latest} is published"),
         )
-        .fix("portaki sdk upgrade"),
+        .fix("portaki upgrade"),
         Ok(_) => check(
             "sdk",
             Status::Ok,
@@ -387,19 +387,35 @@ async fn sdk_versions(root: &Path, offline: bool) -> Check {
     }
 }
 
+/// L'environnement GitHub qui porte les relecteurs de la stable — décision du 28 sept.
+const STABLE_ENVIRONMENT: &str = "release";
+
 async fn link(platform: Option<&mut Platform>, id: &str) -> Check {
     let Some(platform) = platform else {
         return check("link", Status::Skip, "needs a session");
     };
     match platform.get(&format!("/dev/v1/modules/{id}/link")).await {
-        Ok(Some(link)) => check(
-            "link",
-            Status::Ok,
-            format!(
-                "linked to {}",
-                link["repository"].as_str().unwrap_or("a repository")
-            ),
-        ),
+        Ok(Some(link)) => {
+            let repository = link["repository"].as_str().unwrap_or("a repository");
+            match link["requiredEnvironment"].as_str() {
+                Some(STABLE_ENVIRONMENT) => check(
+                    "link",
+                    Status::Ok,
+                    format!("linked to {repository}, stable from the `release` environment"),
+                ),
+                other => check(
+                    "link",
+                    Status::Warn,
+                    format!(
+                        "linked to {repository}, but the stable channel's GitHub environment is {} — Portaki expects `release`",
+                        other.map(|name| format!("`{name}`")).unwrap_or_else(|| "not set".to_string())
+                    ),
+                )
+                .fix(format!(
+                    "set the environment to `release` in the link (portaki link --module {id}), and `environment: release` on the release job"
+                )),
+            }
+        }
         Ok(None) => check(
             "link",
             Status::Warn,

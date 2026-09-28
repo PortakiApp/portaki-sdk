@@ -21,7 +21,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-/// Bounds of `schema/module.v1.json` — a host reads two or three lines, not a release note.
+/// Bounds of `schema/module.v1.json` and of the release-notes contract — a host reads two or
+/// three lines, not a release note.
 pub const MAX_LINES: usize = 5;
 pub const MAX_CHARS: usize = 160;
 
@@ -58,17 +59,54 @@ pub fn default_lang(module_root: &Path) -> String {
         .unwrap_or_else(|| FALLBACK_LANG.to_string())
 }
 
-/// Same list as the registry's `ReleaseNotes.looksLikeCommit`, plus `fix:` and `feat:`.
-const COMMIT_PREFIXES: [&str; 8] = [
-    "bump", "chore", "fix(", "feat(", "refactor", "deps", "fix:", "feat:",
-];
+/// Synced copy of portaki-platform's `contracts/release-notes-rules.json`: the registry
+/// (`ReleaseNotes`), the console's « Compléter la version » drawer and this CLI apply the same
+/// rules. Replace the file when the platform's changes — the tests replay its examples.
+const RULES: &str = include_str!("../contracts/release-notes-rules.json");
 
-/// A commit message, not a line a host reads.
+#[derive(serde::Deserialize)]
+struct Rules {
+    commit: CommitRules,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommitRules {
+    conventional_types: Vec<String>,
+    words: Vec<String>,
+}
+
+fn rules() -> &'static Rules {
+    static PARSED: std::sync::OnceLock<Rules> = std::sync::OnceLock::new();
+    PARSED.get_or_init(|| serde_json::from_str(RULES).expect("release-notes-rules.json is JSON"))
+}
+
+/// A commit message, not a line a host reads — the contract's `commit.rule`.
+///
+/// Trimmed and lowercased, it starts with (a) a conventional type, an optional `(scope)`, an
+/// optional `!`, then `:` right away — « fix: x », « feat(ui)!: x »; or (b) one of the words,
+/// followed by the end of the line or a character that is neither a letter nor a digit. A type
+/// alone stays prose: « Style des cartes revu », « Chorégraphie des arrivées ».
 pub fn looks_like_commit(line: &str) -> bool {
-    let start = line.trim().to_lowercase();
-    COMMIT_PREFIXES
-        .iter()
-        .any(|prefix| start.starts_with(prefix))
+    let line = line.trim().to_lowercase();
+    let rules = &rules().commit;
+    let conventional = rules.conventional_types.iter().any(|kind| {
+        let Some(mut rest) = line.strip_prefix(kind.as_str()) else {
+            return false;
+        };
+        if let Some(scoped) = rest.strip_prefix('(') {
+            match scoped.split_once(')') {
+                Some((_, after)) => rest = after,
+                None => return false,
+            }
+        }
+        rest.strip_prefix('!').unwrap_or(rest).starts_with(':')
+    });
+    conventional
+        || rules.words.iter().any(|word| {
+            line.strip_prefix(word.as_str())
+                .is_some_and(|rest| !rest.chars().next().is_some_and(char::is_alphanumeric))
+        })
 }
 
 /// Refuses a commit-like `--notes` line: it was written by hand, for this purpose.
@@ -418,6 +456,29 @@ mod tests {
         assert!(lines(&six, "en", dir.path(), "1.0.0").is_err());
         assert!(lines(&["x".repeat(MAX_CHARS + 1)], "en", dir.path(), "1.0.0").is_err());
         assert!(lines(&[" ".to_string()], "en", dir.path(), "1.0.0").is_err());
+    }
+
+    /// The contract's examples, replayed as the registry replays them.
+    #[test]
+    fn the_release_notes_contract_is_applied_as_written() {
+        let contract: serde_json::Value = serde_json::from_str(RULES).unwrap();
+        assert_eq!(contract["maxLines"], MAX_LINES);
+        assert_eq!(contract["maxChars"], MAX_CHARS);
+        let examples = |kind: &str| -> Vec<String> {
+            contract["commit"]["examples"][kind]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|example| example.as_str().unwrap().to_string())
+                .collect()
+        };
+        for commit in examples("commit") {
+            assert!(looks_like_commit(&commit), "a commit: {commit}");
+        }
+        for prose in examples("prose") {
+            assert!(!looks_like_commit(&prose), "prose: {prose}");
+        }
+        assert!(!examples("prose").is_empty());
     }
 
     #[test]

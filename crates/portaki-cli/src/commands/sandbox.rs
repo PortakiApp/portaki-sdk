@@ -19,8 +19,12 @@ use crate::workspace::ModuleArgs;
 
 /// Ce que devient un build de sandbox hors d'elle : rien. Dit à chaque rendu, parce qu'un aperçu
 /// réussi ressemble à s'y méprendre à une version prête.
-pub const SANDBOX_ONLY: &str =
-    "sandbox build, unsigned — it will never run in production; portaki release publishes a signed version";
+pub fn sandbox_only() -> String {
+    crate::tr!(
+        "sandbox build, unsigned — it will never run in production; portaki release publishes a signed version",
+        "build de sandbox, non signé — il ne s'exécutera jamais en production ; portaki release publie une version signée"
+    )
+}
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki run`.
@@ -93,21 +97,31 @@ fn open() -> Result<Platform> {
 pub async fn run(args: RunArgs) -> Result<()> {
     ui::header(
         "portaki run",
-        "Run a query or a command on the build in the hosted sandbox.",
+        &crate::tr!(
+            "Run a query or a command on the build in the hosted sandbox.",
+            "Lancer une query (lire) ou une command (agir) sur le build de la sandbox hébergée."
+        ),
     );
     let member = args.modules.one("run")?;
     let Some(operation) = args.operation.as_deref() else {
         return dev::list_operations(&member.root);
     };
-    serde_json::from_str::<Value>(&args.params)
-        .map_err(|failure| crate::exit::usage(format!("--params is not JSON: {failure}")))?;
+    serde_json::from_str::<Value>(&args.params).map_err(|failure| {
+        crate::exit::usage(crate::tr!(
+            "--params is not JSON: {failure}",
+            "--params n'est pas du JSON : {failure}"
+        ))
+    })?;
     let kind = match &args.kind {
         Some(kind) => kind.clone(),
         None => kind_of(&member.root, operation),
     };
 
     let mut platform = open()?;
-    let running = ui::step(format!("running {kind} {operation}"));
+    let running = ui::step(crate::tr!(
+        "running {kind} {operation}",
+        "exécution de {kind} {operation}"
+    ));
     let body = json!({
         "operation": operation,
         "kind": kind,
@@ -126,8 +140,9 @@ pub async fn run(args: RunArgs) -> Result<()> {
         .await
         .map_err(|failure| {
             running.abandon();
-            failure.context(format!(
+            failure.context(crate::tr!(
                 "run {operation} — has portaki dev deployed {} to the sandbox?",
+                "exécuter {operation} — portaki dev a-t-il déployé {} en sandbox ?",
                 member.id
             ))
         })?;
@@ -138,7 +153,10 @@ pub async fn run(args: RunArgs) -> Result<()> {
         None => running.done(format!("{kind} {operation} — {} ms", trace.duration_ms)),
         Some(code) => {
             running.abandon();
-            ui::failure(format!("{kind} {operation} — refused: {code}"));
+            ui::failure(crate::tr!(
+                "{kind} {operation} — refused: {code}",
+                "{kind} {operation} — refusé : {code}"
+            ));
         }
     }
     if ui::json() {
@@ -154,17 +172,26 @@ pub async fn run(args: RunArgs) -> Result<()> {
         ui::next(&[
             (
                 &format!("portaki logs --code <code>{}", flag(&args.modules)),
-                "follow what the module logs",
+                &crate::tr!(
+                    "follow what the module logs",
+                    "suivre les journaux du module"
+                ),
             ),
             (
                 "portaki preview <surface>",
-                "render a surface of this build",
+                &crate::tr!(
+                    "render a surface of this build",
+                    "vérifier le rendu d'une surface de ce build"
+                ),
             ),
         ]);
         ui::blank();
     }
     match trace.error_code {
-        Some(code) => anyhow::bail!("{operation} did not finish: {code}"),
+        Some(code) => anyhow::bail!(crate::tr!(
+            "{operation} did not finish: {code}",
+            "{operation} n'a pas abouti : {code}"
+        )),
         None => Ok(()),
     }
 }
@@ -191,7 +218,7 @@ fn flag(modules: &ModuleArgs) -> String {
 pub async fn scenarios(args: ScenariosArgs) -> Result<()> {
     ui::header(
         "portaki scenarios",
-        "Every surface against the seven pathological stays — the Scenarios tab of the sandbox.",
+        &crate::tr!("Every surface against the seven pathological stays — the Scenarios tab of the sandbox.", "Chaque surface face aux sept séjours pathologiques — l'onglet Scénarios de la sandbox."),
     );
     let mut platform = open()?;
     let (modules, replay) = match args.action {
@@ -202,7 +229,10 @@ pub async fn scenarios(args: ScenariosArgs) -> Result<()> {
     let member = modules.one("scenarios")?;
     let path = format!("/dev/v1/modules/{}/scenarios", member.id);
     let answer = if replay {
-        let running = ui::step("replaying the 7 scenarios");
+        let running = ui::step(&crate::tr!(
+            "replaying the 7 scenarios",
+            "relance des 7 scénarios"
+        ));
         let answer = platform
             .call(Method::POST, &format!("{path}/run"), None)
             .await
@@ -210,7 +240,7 @@ pub async fn scenarios(args: ScenariosArgs) -> Result<()> {
                 running.abandon();
                 failure
             })?;
-        running.done("replayed");
+        running.done(&crate::tr!("replayed", "relancés"));
         answer
     } else {
         platform
@@ -225,10 +255,16 @@ pub async fn scenarios(args: ScenariosArgs) -> Result<()> {
     if ui::json() {
         ui::emit(&json!({ "schemaVersion": 1, "module": member.id, "cells": cells }));
     } else if cells.is_empty() {
-        ui::skipped("no scenario played yet on this build");
+        ui::skipped(&crate::tr!(
+            "no scenario played yet on this build",
+            "aucun scénario joué sur ce build"
+        ));
         ui::next(&[(
             &format!("portaki scenarios run{}", flag(&modules)),
-            "replay the seven cases now",
+            &crate::tr!(
+                "replay the seven cases now",
+                "relancer les sept cas maintenant"
+            ),
         )]);
         ui::blank();
     } else {
@@ -237,24 +273,36 @@ pub async fn scenarios(args: ScenariosArgs) -> Result<()> {
         if failing > 0 {
             ui::next(&[(
                 &format!("portaki preview <surface>{}", flag(&modules)),
-                "render the failing surface and fix it",
+                &crate::tr!(
+                    "render the failing surface and fix it",
+                    "vérifier le rendu de la surface en échec, et la corriger"
+                ),
             )]);
         } else {
             ui::next(&[(
                 &format!("portaki check{}", flag(&modules)),
-                "the gate portaki release applies",
+                &crate::tr!(
+                    "the gate portaki release applies",
+                    "la porte que portaki release applique"
+                ),
             )]);
         }
         ui::blank();
     }
     if failing > 0 {
-        anyhow::bail!("{failing} scenario(s) fail");
+        anyhow::bail!(crate::tr!(
+            "{failing} scenario(s) fail",
+            "{failing} scénario(s) en échec"
+        ));
     }
     Ok(())
 }
 
 async fn reset(platform: &mut Platform) -> Result<()> {
-    let resetting = ui::step("resetting the sandbox fixtures");
+    let resetting = ui::step(&crate::tr!(
+        "resetting the sandbox fixtures",
+        "réinitialisation des fixtures de la sandbox"
+    ));
     let answer = platform
         .call(Method::POST, "/dev/v1/sandbox/fixtures/reset", None)
         .await
@@ -267,10 +315,16 @@ async fn reset(platform: &mut Platform) -> Result<()> {
         ui::emit(&json!({ "schemaVersion": 1, "generation": generation }));
         return Ok(());
     }
-    resetting.done(format!("fixtures reset (generation {generation})"));
+    resetting.done(crate::tr!(
+        "fixtures reset (generation {generation})",
+        "fixtures réinitialisées (génération {generation})"
+    ));
     ui::next(&[(
         "portaki scenarios run",
-        "replay the seven cases on fresh fixtures",
+        &crate::tr!(
+            "replay the seven cases on fresh fixtures",
+            "relancer les sept cas sur des fixtures neuves"
+        ),
     )]);
     ui::blank();
     Ok(())
@@ -280,7 +334,7 @@ async fn reset(platform: &mut Platform) -> Result<()> {
 pub async fn preview(args: PreviewArgs) -> Result<()> {
     ui::header(
         "portaki preview",
-        "Render a surface of the sandbox build, as the host or the guest will see it.",
+        &crate::tr!("Render a surface of the sandbox build, as the host or the guest will see it.", "Vérifier le rendu d'une surface du build de sandbox, là où l'hôte ou le voyageur le verra."),
     );
     let member = args.modules.one("preview")?;
     let mut platform = open()?;
@@ -288,13 +342,17 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
         return surfaces(&mut platform, &member.id, &args.modules).await;
     };
     if let Some(input) = &args.input {
-        serde_json::from_str::<Value>(input)
-            .map_err(|failure| crate::exit::usage(format!("--input is not JSON: {failure}")))?;
+        serde_json::from_str::<Value>(input).map_err(|failure| {
+            crate::exit::usage(crate::tr!(
+                "--input is not JSON: {failure}",
+                "--input n'est pas du JSON : {failure}"
+            ))
+        })?;
     }
     // Avant le rendu, sur stderr : un script qui lit `--json` n'en est pas gêné, et personne ne
     // prend un aperçu réussi pour une version prête.
-    ui::warn(SANDBOX_ONLY);
-    let rendering = ui::step(format!("rendering {surface}"));
+    ui::warn(sandbox_only());
+    let rendering = ui::step(crate::tr!("rendering {surface}", "rendu de {surface}"));
     let body = json!({
         "inputJson": args.input,
         "propertyId": args.property,
@@ -309,8 +367,9 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
         .await
         .map_err(|failure| {
             rendering.abandon();
-            failure.context(format!(
+            failure.context(crate::tr!(
                 "render {surface} — has portaki dev deployed {} to the sandbox?",
+                "rendre {surface} — portaki dev a-t-il déployé {} en sandbox ?",
                 member.id
             ))
         })?;
@@ -318,8 +377,9 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
     let code = answer["errorCode"].as_str().map(str::to_string);
 
     if rendered {
-        rendering.done(format!(
+        rendering.done(crate::tr!(
             "{surface} rendered · {}",
+            "{surface} rendue · {}",
             answer["type"].as_str().unwrap_or_default()
         ));
     } else {
@@ -336,17 +396,21 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
         }
         ui::next(&[(
             &format!("portaki scenarios run{}", flag(&args.modules)),
-            "the same surface against the seven pathological stays",
+            &crate::tr!(
+                "the same surface against the seven pathological stays",
+                "la même surface face aux sept séjours pathologiques"
+            ),
         )]);
         ui::blank();
     }
     if rendered {
         Ok(())
     } else {
-        anyhow::bail!(
+        anyhow::bail!(crate::tr!(
             "{surface} did not render: {}",
+            "{surface} ne s'est pas rendue : {}",
             code.unwrap_or_else(|| "no tree".to_string())
-        )
+        ))
     }
 }
 
@@ -383,10 +447,17 @@ async fn surfaces(platform: &mut Platform, id: &str, modules: &ModuleArgs) -> Re
         })
         .collect();
     let Some((sample, _)) = rows.first() else {
-        ui::skipped(format!(
-            "{id} has no build in the sandbox, or declares no surface"
+        ui::skipped(crate::tr!(
+            "{id} has no build in the sandbox, or declares no surface",
+            "{id} n'a aucun build en sandbox, ou ne déclare aucune surface"
         ));
-        ui::next(&[("portaki dev", "build and deploy to the sandbox")]);
+        ui::next(&[(
+            "portaki dev",
+            &crate::tr!(
+                "build and deploy to the sandbox",
+                "compiler et déployer en sandbox"
+            ),
+        )]);
         ui::blank();
         return Ok(());
     };
@@ -394,7 +465,7 @@ async fn surfaces(platform: &mut Platform, id: &str, modules: &ModuleArgs) -> Re
     ui::list("surfaces", &borrowed);
     ui::next(&[(
         &format!("portaki preview {sample}{}", flag(modules)),
-        "render it",
+        &crate::tr!("render it", "vérifier son rendu"),
     )]);
     ui::blank();
     Ok(())

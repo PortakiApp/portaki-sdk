@@ -1,4 +1,4 @@
-//! `portaki permissions add` — declare a permission the way the SDK reads it.
+//! `portaki add permission` (formerly `portaki permissions add`) — declare a permission the way the SDK reads it.
 //!
 //! A permission is not written in a manifest any more: each is a feature of `portaki-sdk`, whose
 //! API does not exist without it, and `portaki build` derives `permissions` from the features the
@@ -25,7 +25,7 @@ pub enum PermissionsCommand {
 }
 
 #[derive(Debug, Parser)]
-/// Arguments for `portaki permissions add`.
+/// Arguments for `portaki add permission`.
 pub struct AddArgs {
     /// The permission, e.g. `email`, `kv`, `stay:guest_contact:read`.
     pub permission: String,
@@ -33,12 +33,24 @@ pub struct AddArgs {
     pub modules: workspace::ModuleArgs,
 }
 
-/// Runs `portaki permissions`.
+/// Runs `portaki permissions add` — the former name of `portaki add permission`.
 pub fn run(args: PermissionsArgs) -> Result<()> {
     let PermissionsCommand::Add(args) = args.command;
+    ui::warn(crate::tr!(
+        "portaki permissions add is now portaki add permission — use that from now on",
+        "portaki permissions add devient portaki add permission — utilisez désormais ce nom"
+    ));
+    add(args)
+}
+
+/// Runs `portaki add permission`.
+pub fn add(args: AddArgs) -> Result<()> {
     ui::header(
-        "portaki permissions add",
-        "Turn on the portaki-sdk feature that declares the permission.",
+        "portaki add permission",
+        &crate::tr!(
+            "Turn on the portaki-sdk feature that declares the permission.",
+            "Activer la feature de portaki-sdk qui déclare la permission."
+        ),
     );
     let feature = feature_for(&args.permission)?;
     let mut changed = false;
@@ -47,16 +59,20 @@ pub fn run(args: PermissionsArgs) -> Result<()> {
         let toml =
             std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         match add_feature(&toml, feature)? {
-            None => ui::skipped(format!(
+            None => ui::skipped(crate::tr!(
                 "{} already declares {}",
-                member.id, args.permission
+                "{} déclare déjà {}",
+                member.id,
+                args.permission
             )),
             Some(updated) => {
                 std::fs::write(&path, updated)
                     .with_context(|| format!("write {}", path.display()))?;
-                ui::success(format!(
+                ui::success(crate::tr!(
                     "{} declares {} (portaki-sdk feature `{feature}`)",
-                    member.id, args.permission
+                    "{} déclare {} (feature `{feature}` de portaki-sdk)",
+                    member.id,
+                    args.permission
                 ));
                 changed = true;
             }
@@ -64,8 +80,11 @@ pub fn run(args: PermissionsArgs) -> Result<()> {
     }
     if changed {
         ui::next(&[(
-            "portaki build",
-            "writes the permission into the manifest the platform reads",
+            "portaki dev",
+            &crate::tr!(
+                "deploy to the sandbox — the build writes the permission into the manifest",
+                "déployer en sandbox — le build écrit la permission dans le manifeste"
+            ),
         )]);
     } else {
         crate::exit::nothing_to_do();
