@@ -242,6 +242,12 @@
             }
           }
         },
+        "reveal": {
+          "type": "array",
+          "description": "Only on a secret field: where the module shows its value, closed. guest_pre_arrival — the guest booklet before the stay; guest_stay — the guest booklet during the stay (never after departure); arrival_email — the emailContext answer the platform puts in arrival e-mails. Anywhere else (host surfaces, logs, events, e-mails the module sends, other answers) the conformance battery fails the version. A reveal added since the previous stable is justified in the release notes like an added permission (permissionReasons key reveal:<key>:<place>).",
+          "uniqueItems": true,
+          "items": { "enum": ["guest_pre_arrival", "guest_stay", "arrival_email"] }
+        },
         "item": {
           "type": "object",
           "description": "The rows of a structured list (or the keys of a structured object). A save merges each received row into the stored one — same id, else same position: sub-keys it does not carry are kept, localized sub-keys follow the localized rule.",
