@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.12.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.11.1...v8.12.0) (2026-09-28)
+
+
+### Features
+
+* **cli:** add run, scenarios, preview, reports, release notes ([82581e1](https://github.com/PortakiApp/portaki-sdk/commit/82581e1da98fd479691fde65fb6d87379f9529da))
+* **cli:** make check the release gate, add family ([87a210d](https://github.com/PortakiApp/portaki-sdk/commit/87a210d309f69fda48a624fb994a423bb46a0e88))
+
+
+### Bug Fixes
+
+* **release:** keep Cargo.lock in step with versions ([b4e184f](https://github.com/PortakiApp/portaki-sdk/commit/b4e184f90e8494fbc2c4988884ec36913e738134))
+
 ## [8.11.1](https://github.com/PortakiApp/portaki-sdk/compare/v8.11.0...v8.11.1) (2026-09-28)
 
 
