@@ -69,13 +69,24 @@ fn wasm_host_backend() -> Arc<dyn HostBackend> {
     }
 }
 
+/// The query the platform calls for guest-email variables — see [`crate::email`].
+const EMAIL_CONTEXT_QUERY: &str = "emailContext";
+
 fn dispatch_envelope(input: &str) -> Result<String> {
     let envelope: WasmRequestEnvelope = serde_json::from_str(input)
         .map_err(|e| PortakiError::Host(format!("wasm_envelope_parse_failed: {e}")))?;
     let operation = envelope.operation_name()?.to_string();
+    let ctx = envelope.to_context(&operation)?;
+    // `emailContext` rend les codes d'accès d'un e-mail d'arrivée. La plateforme seule l'appelle,
+    // sur un séjour (appelant voyageur) ; un appel hôte, ou sans séjour, est refusé ici, avant
+    // le module — il ne dépend pas de la seule garde de la plateforme.
+    if operation == EMAIL_CONTEXT_QUERY && ctx.guest.is_none() {
+        return Err(PortakiError::Host(format!(
+            "operation_not_host_callable: {EMAIL_CONTEXT_QUERY} is called by the platform for a stay"
+        )));
+    }
     let registration = registry::find_handler(&operation)
         .ok_or_else(|| PortakiError::Host(format!("wasm_handler_not_found: {operation}")))?;
-    let ctx = envelope.to_context(&operation)?;
     let params = envelope.params;
     let backend = wasm_host_backend();
     let result = with_host(backend, ctx.clone(), || {
@@ -94,4 +105,37 @@ pub fn dispatch_query_json(input: &str) -> Result<String> {
 pub fn dispatch_command_json(input: &str) -> Result<String> {
     dispatch_envelope(input)?;
     Ok(String::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dispatch_query_json;
+
+    fn email_context(context: &str) -> String {
+        let envelope = format!(
+            r#"{{"query":"emailContext","params":{{"templateKey":"arrival"}},"context":{{"moduleId":"access-guide","moduleVersion":"1.0.0","propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2"{context}}}}}"#
+        );
+        dispatch_query_json(&envelope)
+            .expect_err("refused")
+            .to_string()
+    }
+
+    /// Hôte ou sans séjour : refusé avant de chercher le handler — donc avant le module.
+    #[test]
+    fn email_context_is_refused_outside_the_platform_stay_path() {
+        let stay = r#","stayId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890""#;
+        for context in [
+            format!(r#"{stay},"caller":"host""#),
+            r#","caller":"guest""#.to_string(),
+            String::new(),
+        ] {
+            assert!(
+                email_context(&context).contains("operation_not_host_callable"),
+                "{context}"
+            );
+        }
+        // Le chemin séjour de la plateforme passe la garde (ici, faute de handler enregistré).
+        assert!(email_context(&format!(r#"{stay},"caller":"guest""#))
+            .contains("wasm_handler_not_found"));
+    }
 }
