@@ -33,6 +33,26 @@ pub const EMAIL_BODY_MAX_CHARS: usize = 5000;
 /// Longueur maximale du libellé du CTA, en caractères, pour chaque locale.
 pub const EMAIL_CTA_LABEL_MAX_CHARS: usize = 80;
 
+// ── Blocs d'un email (`ModuleEmailSdui::blocks`) ─────────────────────────────────────────
+//
+// `emailBlocks` de `contracts/module-limits.json` côté plateforme. Un bloc hors contrat y refuse
+// l'email entier.
+
+/// Nombre maximal de blocs par email.
+pub const EMAIL_BLOCKS_MAX: usize = 10;
+
+/// Nombre maximal d'éléments par bloc (au moins un ; `stats` en prend 2 ou 4).
+pub const EMAIL_BLOCK_ITEMS_MAX: usize = 12;
+
+/// Longueur maximale de chaque texte d'un bloc, en caractères, pour chaque locale.
+pub const EMAIL_BLOCK_TEXT_MAX_CHARS: usize = 200;
+
+/// Longueur maximale d'un emoji de bloc, en unités UTF-16 (drapeaux, séquences ZWJ).
+///
+/// La plateforme exige en plus un seul graphème de la catégorie « symbole » ; le SDK, sans
+/// segmentation Unicode, refuse seulement l'ASCII, les lettres, chiffres et espaces.
+pub const EMAIL_BLOCK_EMOJI_MAX_UTF16: usize = 16;
+
 // ── Par invocation ───────────────────────────────────────────────────────────────────────
 
 /// Nombre maximal d'appels `email.send` par invocation.
