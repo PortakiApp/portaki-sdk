@@ -127,13 +127,23 @@ impl Home {
         .unwrap()
     }
 
+    /// In English, whatever the machine's locale.
     pub fn run(&self, cwd: &Path, args: &[&str]) -> Output {
+        self.run_in("en", cwd, args)
+    }
+
+    /// With `LANG` set to `lang` and `PORTAKI_LANG` unset: the system's language decides.
+    pub fn run_in(&self, lang: &str, cwd: &Path, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_portaki"))
             .args(args)
             .current_dir(cwd)
             .env("XDG_CONFIG_HOME", self.0.path())
             .env("XDG_CACHE_HOME", self.0.path())
             .env("PORTAKI_NO_UPDATE_CHECK", "1")
+            .env_remove("PORTAKI_LANG")
+            .env_remove("LC_ALL")
+            .env_remove("LC_MESSAGES")
+            .env("LANG", lang)
             .env("PORTAKI_COSIGN", "/nonexistent/cosign")
             .env("PORTAKI_GH", "/nonexistent/gh")
             .env_remove("PORTAKI_CREDENTIALS_FILE")

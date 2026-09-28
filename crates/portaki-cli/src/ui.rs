@@ -438,7 +438,7 @@ pub fn next(steps: &[(&str, &str)]) {
     if plain() {
         return;
     }
-    list("next", steps);
+    list(&crate::tr!("next", "ensuite"), steps);
 }
 
 /// Un trait de séparation, pour marquer une reprise dans une session qui dure.
@@ -515,7 +515,7 @@ pub fn report(failure: &anyhow::Error) {
     for cause in failure.chain().skip(1) {
         eline(format!(
             "{MARGIN}  {} {}",
-            style("caused by").dim(),
+            style(crate::tr!("caused by", "cause")).dim(),
             style(cause).dim()
         ));
     }

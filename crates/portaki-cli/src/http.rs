@@ -85,11 +85,18 @@ pub fn reach(failure: &reqwest::Error) -> Reach {
 /// L'URL y figure entière : c'est le seul endroit où un `PORTAKI_API_URL` mal réglé se voit.
 pub fn describe(url: &str, reach: Reach) -> String {
     match reach {
-        Reach::Connect => {
-            format!("cannot reach the platform at {url} — no connection could be opened")
-        }
-        Reach::Timeout => format!("cannot reach the platform at {url} — it did not answer in time"),
-        Reach::Transport => format!("cannot reach the platform at {url} — the connection failed"),
+        Reach::Connect => crate::tr!(
+            "cannot reach the platform at {url} — no connection could be opened",
+            "plateforme injoignable à {url} — aucune connexion n'a pu s'ouvrir"
+        ),
+        Reach::Timeout => crate::tr!(
+            "cannot reach the platform at {url} — it did not answer in time",
+            "plateforme injoignable à {url} — elle n'a pas répondu à temps"
+        ),
+        Reach::Transport => crate::tr!(
+            "cannot reach the platform at {url} — the connection failed",
+            "plateforme injoignable à {url} — la connexion a échoué"
+        ),
     }
 }
 
@@ -105,8 +112,14 @@ pub fn unreachable(url: &str, failure: reqwest::Error) -> anyhow::Error {
 /// à séparer « la route n'existe pas sur cet hôte » d'un refus métier.
 pub fn refused(url: &str, status: u16, body: &str) -> String {
     match crate::api::error_code(body) {
-        Some(code) => format!("the platform answered {status} ({code}) at {url}"),
-        None => format!("the platform answered {status} at {url}"),
+        Some(code) => crate::tr!(
+            "the platform answered {status} ({code}) at {url}",
+            "la plateforme a répondu {status} ({code}) à {url}"
+        ),
+        None => crate::tr!(
+            "the platform answered {status} at {url}",
+            "la plateforme a répondu {status} à {url}"
+        ),
     }
 }
 

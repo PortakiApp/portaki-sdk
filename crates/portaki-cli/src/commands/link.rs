@@ -33,7 +33,7 @@ pub struct LinkArgs {
 pub async fn run(args: LinkArgs) -> Result<()> {
     ui::header(
         "portaki link",
-        "Link the module to its repository — the first link is chosen in the dashboard.",
+        &crate::tr!("Link the module to its repository — the first link is chosen in the dashboard.", "Lier le module à son dépôt — la première liaison se choisit dans l'espace développeur."),
     );
     let current = workspace::resolve(args.module.as_deref(), None)?
         .into_iter()

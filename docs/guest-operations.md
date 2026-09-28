@@ -21,7 +21,7 @@ SDK.
 
 Open it only when a guest screen calls it, and no host screen does — a form the guest submits, a list the booklet shows.
 Configuration, moderation, status changes, seeding and task toggles are host gestures: leave
-them closed. `portaki lint` warns about a guest command named like one (`updateConfig`,
+them closed. `portaki check` warns about a guest command named like one (`updateConfig`,
 `resolve`, `updateStatus`, `seedDefaults`, `replaceItems`, `task*`).
 
 ## What an open operation owes

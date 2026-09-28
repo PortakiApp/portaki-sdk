@@ -31,8 +31,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::Parser;
 
-use crate::commands::build::{self, BuildArgs};
-use crate::commands::{link, test};
+use crate::commands::link;
 use crate::{auth, oci, oidc, sign, ui, workspace};
 
 #[derive(Debug, Clone, Parser)]
@@ -117,7 +116,10 @@ pub async fn run_as(args: ReleaseArgs, mode: Mode) -> Result<()> {
     match mode {
         Mode::Local => ui::header(
             "portaki release",
-            "Test, build, push to Portaki's registry, sign, and announce.",
+            &crate::tr!(
+                "The gate of portaki check, then push to Portaki's registry, sign, and announce.",
+                "La porte de portaki check, puis poussée au registre Portaki, signature et annonce."
+            ),
         ),
         Mode::CiBuild => ui::header(
             "portaki ci build",
@@ -243,7 +245,7 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
     for (id, outcome) in outcomes {
         let Err(failure) = outcome else {
             if total > 1 {
-                ui::success(format!("{id} published"));
+                ui::success(crate::tr!("{id} published", "{id} publié"));
             }
             continue;
         };
@@ -251,7 +253,10 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
         if let Some(refused) = not_linked(&failure) {
             status = refused.status;
             if total > 1 {
-                ui::failure(format!("{id} — not linked to any repository"));
+                ui::failure(crate::tr!(
+                    "{id} — not linked to any repository",
+                    "{id} — lié à aucun dépôt"
+                ));
             }
         } else if total == 1 {
             // Un module seul : l'échec remonte tel quel, comme avant.
@@ -263,15 +268,18 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
 
     if let Some(first) = unlinked.first() {
         ui::blank();
-        ui::failure(format!(
+        ui::failure(crate::tr!(
+            "{status} module_not_linked — « {first} » is not linked to any repository",
             "{status} module_not_linked — « {first} » n'est lié à aucun dépôt"
         ));
-        ui::detail(format!(
+        ui::detail(crate::tr!(
+            "Modules not linked in this repository: {}",
             "Modules non liés dans ce dépôt : {}",
             unlinked.join(", ")
         ));
         if let Some(page) = &page {
-            ui::detail(format!(
+            ui::detail(crate::tr!(
+                "→ Link them at once: {}",
                 "→ Liez-les en une fois : {}",
                 link::with_also(page, &unlinked[1..])
             ));
@@ -281,8 +289,15 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
 
     match failed {
         0 => Ok(()),
-        _ if total == 1 => anyhow::bail!("{} was not published", unlinked.join(", ")),
-        _ => anyhow::bail!("{failed} of {total} modules failed"),
+        _ if total == 1 => anyhow::bail!(crate::tr!(
+            "{} was not published",
+            "{} n'a pas été publié",
+            unlinked.join(", ")
+        )),
+        _ => anyhow::bail!(crate::tr!(
+            "{failed} of {total} modules failed",
+            "{failed} modules sur {total} en échec"
+        )),
     }
 }
 
@@ -556,27 +571,14 @@ async fn release(
             );
         }
     } else {
-        // Avant tout build : un module dont les tests échouent n'a rien à pousser, et la batterie
-        // de conformité est ce que tous les modules doivent à la plateforme.
-        test::gate_publish(module_root).context("tests before publish")?;
-        ui::blank();
-        build::run(BuildArgs {
-            release: true,
-            manifest_only: false,
-            module: None,
-            all: false,
-            nested: true,
-        })
-        .await
-        .context("portaki build --release before publish")?;
-        // Ce que le registre refuserait à l'annonce, dit ici, avant tout droit de push.
-        crate::commands::lint::run(crate::commands::lint::LintArgs {
-            manifest: None,
-            channel: args.channel.clone(),
-            modules: workspace::ModuleArgs::default(),
-            nested: true,
-        })
-        .context("portaki lint before publish")?;
+        // La porte de `portaki check`, telle quelle : ce qu'elle laisse passer, et seulement ça.
+        // Avant tout droit de push — un refus découvert après laisserait un artefact poussé.
+        crate::commands::check::gate(module_root, &args.channel, false, &[])
+            .await
+            .context(crate::tr!(
+                "the gate before publishing — portaki check runs the same",
+                "la porte avant publication — portaki check joue la même"
+            ))?;
         ui::blank();
     }
 
@@ -612,12 +614,18 @@ async fn release(
     note("version", coords.version.clone());
     if args.dry_run || *mode == Mode::CiBuild {
         note("state", "dry-run");
-        ui::success("nothing was pushed, nothing was announced");
+        ui::success(crate::tr!(
+            "nothing was pushed, nothing was announced",
+            "rien n'a été poussé, rien n'a été annoncé"
+        ));
         ui::field("artifact", artifact_dir.display());
         if *mode == Mode::CiBuild {
             ui::advice("hand target/portaki and the wasm to the job that runs portaki ci release");
         } else {
-            ui::advice("drop --dry-run to push these layers and announce the version");
+            ui::advice(crate::tr!(
+                "drop --dry-run to push these layers and announce the version",
+                "retirez --dry-run pour pousser ces couches et annoncer la version"
+            ));
         }
         ui::blank();
         return Ok(Landed::DryRun);
@@ -628,21 +636,32 @@ async fn release(
     // référence.
     refuse_if_already_published(base, &coords).await?;
 
-    let pushing = ui::step("asking the registry for the right to push");
+    let pushing = ui::step(crate::tr!(
+        "asking the registry for the right to push",
+        "demande du droit de push au registre"
+    ));
     let grant = push_grant(base, &coords, &args.channel)
         .await
         .map_err(|failure| {
             pushing.abandon();
             failure
         })?;
-    pushing.say(format!("pushing to {}", grant.reference));
+    pushing.say(crate::tr!(
+        "pushing to {}",
+        "poussée vers {}",
+        grant.reference
+    ));
     let pushed = oci::push_artifact(module_root, &artifact_dir, &grant)
         .await
         .map_err(|failure| {
             pushing.abandon();
             failure
         })?;
-    pushing.done(format!("pushed to {}", grant.reference));
+    pushing.done(crate::tr!(
+        "pushed to {}",
+        "poussé vers {}",
+        grant.reference
+    ));
     ui::field("digest", &pushed.digest);
     note("state", "pushed");
     note("digest", pushed.digest.clone());
@@ -650,7 +669,12 @@ async fn release(
 
     // La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
     match mode {
-        _ if !signs => ui::warn(UNSIGNED),
+        _ if !signs => ui::warn(crate::tr!(
+            "unsigned — this version will never run in production (a signature is required); it \
+             stays usable in the sandbox. Drop --no-sign, or publish from CI.",
+            "non signée — cette version ne s'exécutera jamais en production (signature exigée) ; \
+             elle reste utilisable en sandbox. Retirez --no-sign, ou publiez depuis la CI."
+        )),
         Mode::CiRelease { audit } => {
             let audited = sign::attest_ci(&cosign, &pushed, &grant, audit.as_deref())
                 .context("sign the pushed artifact — nothing was announced")?;
@@ -665,16 +689,16 @@ async fn release(
             let email = sign::sign(&cosign, &pushed, &grant, &coords)
                 .await
                 .context("sign the pushed artifact — nothing was announced")?;
-            ui::success(format!("signé par {email} (hors CI)"));
+            ui::success(crate::tr!(
+                "signed by {email} (outside CI)",
+                "signé par {email} (hors CI)"
+            ));
         }
     }
 
     announce(base, args, &coords, &pushed, &notes).await?;
     Ok(Landed::InRegistry(coords.id))
 }
-
-const UNSIGNED: &str = "non signée — cette version ne s'exécutera jamais en production (signature \
-     exigée) ; elle reste utilisable en sandbox. Retirez --no-sign, ou publiez depuis la CI.";
 
 /// La langue des `--notes` et textes non étiquetés.
 fn notes_lang(args: &ReleaseArgs, module_root: &Path) -> String {
@@ -895,7 +919,11 @@ async fn announce(
     pushed: &oci::PushedArtifact,
     notes: &serde_json::Value,
 ) -> Result<()> {
-    let announcing = ui::step(format!("announcing {} to the registry", args.channel));
+    let announcing = ui::step(crate::tr!(
+        "announcing {} to the registry",
+        "annonce en {} au registre",
+        args.channel
+    ));
     let body = serde_json::json!({
         "moduleId": coords.id,
         "version": coords.version,
@@ -928,20 +956,34 @@ async fn announce(
                 note("missing", missing.clone());
                 note("url", url.clone());
             }
-            announcing.done(format!("announced to the registry on {}", args.channel));
+            announcing.done(crate::tr!(
+                "announced to the registry on {}",
+                "annoncée au registre en {}",
+                args.channel
+            ));
             ui::field("module", format!("{} {}", coords.id, coords.version));
             ui::field("channel", &args.channel);
             ui::field("reference", pushed.artifact_ref());
             if let Outcome::Draft { missing, url } = &outcome {
                 // Pas un échec par défaut : la version est au registre, elle attend ses notes.
                 // La CI reste verte, l'auteur sait quoi compléter et où.
-                ui::warn("brouillon — invisible des hôtes tant qu'il manque :");
+                ui::warn(crate::tr!(
+                    "draft — invisible to hosts while it misses:",
+                    "brouillon — invisible des hôtes tant qu'il manque :"
+                ));
                 for item in missing {
                     ui::detail(format!("- {item}"));
                 }
                 if let Some(url) = url {
-                    ui::detail(format!("→ compléter : {url}"));
+                    ui::detail(crate::tr!("→ complete: {url}", "→ compléter : {url}"));
                 }
+                ui::next(&[(
+                    &format!("portaki release notes {} --complete", coords.version),
+                    &crate::tr!(
+                        "complete the notes from here — --notes, or CHANGELOG.<lang>.md",
+                        "compléter la version d'ici — --notes, ou CHANGELOG.<lang>.md"
+                    ),
+                )]);
                 if args.require_available && args.channel == "stable" {
                     return Err(DraftRefused {
                         id: coords.id.clone(),
@@ -950,12 +992,30 @@ async fn announce(
                     .into());
                 }
             } else {
-                ui::field("release", "publiée");
+                ui::field("release", crate::tr!("available", "disponible"));
+                ui::next(&[
+                    (
+                        &format!("portaki release status {}", coords.version),
+                        &crate::tr!(
+                            "signature, review, what hosts see",
+                            "signature, revue, ce que voient les hôtes"
+                        ),
+                    ),
+                    (
+                        "portaki reports --open",
+                        &crate::tr!(
+                            "what hosts and the runtime report",
+                            "ce que remontent les hôtes et le runtime"
+                        ),
+                    ),
+                ]);
             }
-            ui::advice(
+            ui::advice(crate::tr!(
                 "publications are immutable — shipping a change means a new version, never a \
                  re-push of this one",
-            );
+                "une publication est immuable — livrer un changement, c'est une nouvelle version, \
+                 jamais une nouvelle poussée de celle-ci"
+            ));
             ui::blank();
             Ok(())
         }
@@ -973,10 +1033,12 @@ async fn announce(
         }
         Outcome::Unauthorized | Outcome::Ignored(_) => {
             announcing.abandon();
-            anyhow::bail!(
+            anyhow::bail!(crate::tr!(
                 "the registry refused the token — run portaki login, or replay the job. Nothing \
-                 is published until the announcement passes: replaying pushes and signs again"
-            )
+                 is published until the announcement passes: replaying pushes and signs again",
+                "le registre a refusé le jeton — lancez portaki login, ou rejouez le job. Rien \
+                 n'est publié tant que l'annonce ne passe pas : rejouer pousse et signe à nouveau"
+            ))
         }
         Outcome::Refused {
             status,
@@ -984,10 +1046,12 @@ async fn announce(
             message,
         } => {
             announcing.abandon();
-            anyhow::bail!(
+            anyhow::bail!(crate::tr!(
                 "the registry refused the publication ({status} {code}): {message}. Nothing is \
-                 published: fix it and replay"
-            )
+                 published: fix it and replay",
+                "le registre a refusé la publication ({status} {code}) : {message}. Rien n'est \
+                 publié : corrigez, puis rejouez"
+            ))
         }
     }
 }
@@ -1019,14 +1083,19 @@ async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Creden
         ));
     }
     if oidc::inside_github_actions() {
-        anyhow::bail!(
-            "aucun jeton OIDC disponible : ajoute `permissions: id-token: write` au job. \
-             Le jeton est ce qui remplace un secret de publication — il n'y en a pas d'autre à poser"
-        );
+        anyhow::bail!(crate::tr!(
+            "no OIDC token available: add `permissions: id-token: write` to the job. The token \
+             replaces a publication secret — there is no other one to set",
+            "aucun jeton OIDC disponible : ajoutez `permissions: id-token: write` au job. \
+             Le jeton remplace un secret de publication — il n'y en a pas d'autre à poser"
+        ));
     }
     auth::access_token(base)
         .map(Credential::Person)
-        .context("portaki login required to release")
+        .context(crate::tr!(
+            "portaki login required to release",
+            "portaki login est nécessaire pour publier"
+        ))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1206,11 +1275,12 @@ mod tests {
         )
         .unwrap();
         fs::create_dir_all(dir.path().join("src")).unwrap();
-        fs::write(dir.path().join("src/lib.rs"), "").unwrap();
+        fs::write(dir.path().join("src/lib.rs"), "//! Fixture.\n").unwrap();
         fs::create_dir_all(dir.path().join("tests")).unwrap();
         fs::write(
             dir.path().join("tests/conformance.rs"),
-            "mod portaki_conformance { #[test] fn surfaces() { panic!(\"home.card panicked\") } }\n",
+            // Formatée comme rustfmt la veut : la porte joue `cargo fmt --check` avant les tests.
+            "mod portaki_conformance {\n    #[test]\n    fn surfaces() {\n        panic!(\"home.card panicked\")\n    }\n}\n",
         )
         .unwrap();
         dir

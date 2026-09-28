@@ -14,7 +14,7 @@ use serde_json::{Map, Value};
 use crate::{ui, workspace};
 
 /// The bundle directories a module may keep.
-const BUNDLE_DIRS: [&str; 2] = ["i18n", "email_i18n"];
+pub(crate) const BUNDLE_DIRS: [&str; 2] = ["i18n", "email_i18n"];
 
 #[derive(Debug, Parser)]
 /// Arguments for `portaki i18n`.
@@ -40,47 +40,61 @@ pub struct CheckArgs {
     pub all: bool,
 }
 
-/// Runs `portaki i18n`.
+/// Runs `portaki i18n` — the former name of `portaki check --only i18n`.
 pub fn run(args: I18nArgs) -> Result<()> {
     let I18nCommand::Check(args) = args.command;
-    ui::header(
-        "portaki i18n check",
-        "Every key, in every language the module ships.",
-    );
-    let mut total = 0;
+    ui::warn(crate::tr!(
+        "portaki i18n check is now portaki check --only i18n — use that from now on",
+        "portaki i18n check devient portaki check --only i18n — utilisez désormais ce nom"
+    ));
     for member in workspace::resolve(args.module.as_deref(), Some(args.all))? {
-        let mut problems = Vec::new();
-        for dir in BUNDLE_DIRS {
-            let bundles = read_bundles(&member.root.join(dir))?;
-            problems.extend(
-                incomplete(&bundles)
-                    .into_iter()
-                    .map(|problem| format!("{dir}/{problem}")),
-            );
-        }
-        if problems.is_empty() {
-            ui::success(format!("{} — complete", member.id));
-        } else {
-            ui::failure(format!(
-                "{} — {} missing text(s)",
-                member.id,
-                problems.len()
-            ));
-            for problem in &problems {
-                ui::detail(problem);
-            }
-        }
-        total += problems.len();
+        gate(&member.root).with_context(|| format!("module {}", member.id))?;
     }
     ui::blank();
-    if total > 0 {
-        anyhow::bail!("{total} text(s) missing — write them, then run portaki i18n check again");
-    }
     Ok(())
 }
 
+/// Le contrôle `i18n` de la porte : chaque texte, dans chaque langue des bundles.
+pub fn gate(module_root: &Path) -> Result<()> {
+    let checking = ui::step(crate::tr!(
+        "checking every text in every language",
+        "vérification de chaque texte dans chaque langue"
+    ));
+    let problems = problems(module_root)?;
+    if problems.is_empty() {
+        checking.done(crate::tr!(
+            "every text, in every language",
+            "chaque texte, dans chaque langue"
+        ));
+        return Ok(());
+    }
+    checking.abandon();
+    for problem in &problems {
+        ui::detail(problem);
+    }
+    anyhow::bail!(crate::tr!(
+        "{} text(s) missing — write them, then run portaki check --only i18n again",
+        "{} texte(s) manquant(s) — écrivez-les, puis relancez portaki check --only i18n",
+        problems.len()
+    ))
+}
+
+/// Ce qui manque, bundle par bundle, dans `i18n/` et `email_i18n/`.
+pub fn problems(module_root: &Path) -> Result<Vec<String>> {
+    let mut problems = Vec::new();
+    for dir in BUNDLE_DIRS {
+        let bundles = read_bundles(&module_root.join(dir))?;
+        problems.extend(
+            incomplete(&bundles)
+                .into_iter()
+                .map(|problem| format!("{dir}/{problem}")),
+        );
+    }
+    Ok(problems)
+}
+
 /// `<locale>.json` → its keys and texts. Empty when the directory does not exist.
-fn read_bundles(dir: &Path) -> Result<BTreeMap<String, Map<String, Value>>> {
+pub(crate) fn read_bundles(dir: &Path) -> Result<BTreeMap<String, Map<String, Value>>> {
     let mut bundles = BTreeMap::new();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Ok(bundles);

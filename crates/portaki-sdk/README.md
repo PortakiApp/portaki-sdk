@@ -66,8 +66,8 @@ fn guest_home(_ctx: &Context) -> Result<Surface> {
 
 ```bash
 cargo install portaki-cli
-portaki build --release
-portaki lint
+portaki dev --watch   # the hosted sandbox, on every save
+portaki check         # the gate portaki release applies
 ```
 
 ## Host configuration
@@ -228,7 +228,7 @@ used to read Paris). Tests: `MockContext::guest().with_coordinates(None)`.
 |---------|------|
 | `host::*` | Typed host wrappers — KV, repo, connectors, events, i18n, … |
 | `sdui::*` | Surfaces, components, actions the shell can render |
-| `capability::*` | Capability ids checked by the orchestrator and `portaki lint` |
+| `capability::*` | Capability ids checked by the orchestrator and `portaki check` |
 | Proc-macros | `portaki_module!`, `#[surface]`, `#[query]`, `#[command]`, … |
 
 ## Workspace

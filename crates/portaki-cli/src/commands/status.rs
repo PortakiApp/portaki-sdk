@@ -23,12 +23,16 @@ pub struct StatusArgs {
 }
 
 /// Les cinq étapes, dans l'ordre et avec les mots de l'espace développeur.
-const JOURNEY: [(&str, &str); 5] = [
-    ("cliConnected", "Connect the CLI"),
-    ("deployed", "Deploy to the sandbox"),
-    ("rendered", "Check the render"),
-    ("conformant", "Get conformance to green"),
-    ("published", "Publish"),
+const JOURNEY: [(&str, &str, &str); 5] = [
+    ("cliConnected", "Connect the CLI", "Connecter la CLI"),
+    ("deployed", "Deploy to the sandbox", "Déployer en sandbox"),
+    ("rendered", "Check the render", "Vérifier le rendu"),
+    (
+        "conformant",
+        "Get conformance to green",
+        "Passer la conformité au vert",
+    ),
+    ("published", "Publish", "Publier"),
 ];
 
 /// Ce qu'on sait d'un module, tel que `--json` le rend.
@@ -66,16 +70,26 @@ struct Latest {
 }
 
 /// La commande suivante — ou, quand aucune commande n'existe encore, ce qu'il faut faire.
+///
+/// `reason` part en anglais dans `--json`, quelle que soit la langue ; `said` est ce qu'on lit.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 struct Next {
     command: Option<String>,
     reason: String,
+    #[serde(skip)]
+    said: String,
 }
 
-fn next(command: Option<String>, reason: &str) -> Next {
+fn next(command: Option<String>, reason: &str, french: &str) -> Next {
     Next {
         command,
         reason: reason.to_string(),
+        said: if crate::lang::french() {
+            french
+        } else {
+            reason
+        }
+        .to_string(),
     }
 }
 
@@ -83,7 +97,10 @@ fn next(command: Option<String>, reason: &str) -> Next {
 pub async fn run(args: StatusArgs) -> Result<()> {
     ui::header(
         "portaki status",
-        "Where the module stands on the developer journey — and what to run next.",
+        &crate::tr!(
+            "Where the module stands on the developer journey — and what to run next.",
+            "Où en est le module sur le parcours de l'espace développeur — et la commande suivante."
+        ),
     );
     let members: Vec<String> = args
         .modules
@@ -112,6 +129,7 @@ pub async fn run(args: StatusArgs) -> Result<()> {
                 next(
                     Some(login),
                     "sign in — the journey is read from your account",
+                    "connectez la CLI — le parcours se lit sur votre compte",
                 ),
             );
         }
@@ -175,6 +193,7 @@ pub async fn run(args: StatusArgs) -> Result<()> {
             next(
                 Some("portaki init <name>".to_string()),
                 "no module here — create one, or pass --module <id> from its repository",
+                "aucun module ici — créez-en un, ou passez --module <id> depuis son dépôt",
             )
         });
     render(&base, Some(&journey), &modules, first)
@@ -224,59 +243,69 @@ fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
         return next(
             Some(format!("portaki dev --watch{flag}")),
             "deploy to the sandbox — it rebuilds and redeploys on every save",
+            "déployer en sandbox — recompile et redéploie à chaque sauvegarde",
         );
     }
     if !step("rendered") {
         return next(
-            Some(format!("portaki dev --watch{flag}")),
+            Some(format!("portaki preview{flag}")),
             "check the render in the developer space sandbox, where hosts and guests will see it",
+            "vérifier le rendu, là où l'hôte et le voyageur le verront",
         );
     }
     if module.failed_checks > 0 || !step("conformant") {
         return next(
             Some(format!("portaki check{flag}")),
             "get conformance to green before publishing",
+            "passer la conformité au vert avant de publier",
         );
     }
     if !module.linked {
         return next(
             Some(format!("portaki link{flag}")),
             "link the module to its repository — publishing from CI needs it",
+            "lier le module à son dépôt — publier depuis la CI l'exige",
         );
     }
     let Some(latest) = &module.latest else {
         return next(
             Some(format!("portaki release{flag}")),
             "publish a first version",
+            "publier une première version",
         );
     };
     if latest.state == "draft" {
         return next(
             Some(format!("portaki release notes {}{flag}", latest.version)),
             "complete the release notes of the draft — it stays invisible to hosts until then",
+            "compléter la version en brouillon — invisible des hôtes jusque-là",
         );
     }
     if module.err24 > 0 {
         return next(
             Some(format!("portaki logs{flag}")),
             "errors in the last 24 hours — follow the sandbox logs",
+            "des erreurs sur 24 h — suivre les journaux de la sandbox",
         );
     }
     if module.open_reports > 0 {
         return next(
             Some(format!("portaki reports --open{flag}")),
             "open reports are waiting — fix, then resolve them",
+            "des rapports ouverts attendent — corrigez, puis marquez-les résolus",
         );
     }
     if latest.signature != "signed" {
         return next(
             Some(format!("portaki release{flag}")),
             "sign the next version — production runs signed versions only",
+            "signer la prochaine version — la production n'exécute que des versions signées",
         );
     }
     next(
         Some(format!("portaki dev --watch{flag}")),
         "all set — keep iterating in the sandbox",
+        "tout est en ordre — continuez en sandbox",
     )
 }
 
@@ -289,7 +318,7 @@ fn render(
     if ui::json() {
         let steps: serde_json::Map<String, Value> = JOURNEY
             .iter()
-            .map(|(key, _)| {
+            .map(|(key, _, _)| {
                 let done = journey.and_then(|journey| journey[*key].as_bool());
                 ((*key).to_string(), json!(done.unwrap_or(false)))
             })
@@ -306,8 +335,9 @@ fn render(
     }
 
     ui::field("api", base);
-    ui::section("journey");
-    for (key, title) in JOURNEY {
+    ui::section(&crate::tr!("journey", "parcours"));
+    for (key, en, fr) in JOURNEY {
+        let title = if crate::lang::french() { fr } else { en };
         match journey.and_then(|journey| journey[key].as_bool()) {
             Some(true) => ui::success(title),
             _ => ui::skipped(title),
@@ -343,10 +373,10 @@ fn render(
         }
     }
     match &first.command {
-        Some(command) => ui::next(&[(command, &first.reason)]),
+        Some(command) => ui::next(&[(command, &first.said)]),
         None => {
-            ui::section("next");
-            ui::detail(&first.reason);
+            ui::section(&crate::tr!("next", "ensuite"));
+            ui::detail(&first.said);
         }
     }
     ui::blank();
@@ -396,8 +426,8 @@ fn missing_line(missing: &Value) -> String {
 
 fn next_line(next: &Next) -> String {
     match &next.command {
-        Some(command) => format!("{command} — {}", next.reason),
-        None => next.reason.clone(),
+        Some(command) => format!("{command} — {}", next.said),
+        None => next.said.clone(),
     }
 }
 

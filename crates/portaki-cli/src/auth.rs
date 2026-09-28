@@ -60,7 +60,12 @@ pub struct NotSignedIn {
 
 impl std::fmt::Display for NotSignedIn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "not signed in to {} — run `{}`", self.origin, self.login)
+        f.write_str(&crate::tr!(
+            "not signed in to {} — run `{}`",
+            "aucune session sur {} — lancez `{}`",
+            self.origin,
+            self.login
+        ))
     }
 }
 

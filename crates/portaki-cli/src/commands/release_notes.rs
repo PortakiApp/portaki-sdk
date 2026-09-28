@@ -85,7 +85,10 @@ pub async fn run(action: ReleaseAction) -> Result<()> {
 async fn status(args: StatusArgs) -> Result<()> {
     ui::header(
         "portaki release status",
-        "Where a published version stands — and what it still needs.",
+        &crate::tr!(
+            "Where a published version stands — and what it still needs.",
+            "Où en est une version publiée — et ce qui lui manque encore."
+        ),
     );
     let member = args.modules.one("release status")?;
     let mut platform = open()?;
@@ -126,10 +129,18 @@ async fn status(args: StatusArgs) -> Result<()> {
     ui::field("review", text(&entry["status"]));
     ui::field("signature", signature_line(&release["supplyChain"]));
     if entry["yanked"].as_bool().unwrap_or(false) {
-        ui::warn("yanked — hosts can no longer install it");
+        ui::warn(crate::tr!(
+            "yanked — hosts can no longer install it",
+            "retirée — les hôtes ne peuvent plus l'installer"
+        ));
     }
     print_missing(&release["missing"]);
-    ui::next(&[(next.0.as_deref().unwrap_or("—"), &next.1)]);
+    let said = if crate::lang::french() {
+        next.2
+    } else {
+        next.1
+    };
+    ui::next(&[(next.0.as_deref().unwrap_or("—"), said)]);
     ui::blank();
     Ok(())
 }
@@ -137,7 +148,7 @@ async fn status(args: StatusArgs) -> Result<()> {
 async fn notes(args: NotesArgs) -> Result<()> {
     ui::header(
         "portaki release notes",
-        "A version's release notes, as hosts read them — completed here, checked by the registry.",
+        &crate::tr!("A version's release notes, as hosts read them — completed here, checked by the registry.", "Les notes d'une version, telles que les hôtes les lisent — complétées ici, vérifiées par le registre."),
     );
     let member = args.modules.one("release notes")?;
     let mut platform = open()?;
@@ -151,13 +162,17 @@ async fn notes(args: NotesArgs) -> Result<()> {
 
     if args.completes() {
         let body = merged_notes(&release["notes"], &args, &member.root)?;
-        let sending = ui::step("sending the notes to the registry");
+        let sending = ui::step(crate::tr!(
+            "sending the notes to the registry",
+            "envoi des notes au registre"
+        ));
         let path = format!("/dev/v1/publications/{}/release", text(&release["digest"]));
         let (status, answer) = platform.send(Method::PUT, &path, Some(&body)).await?;
         match status {
             200..=299 => {
-                sending.done(format!(
+                sending.done(crate::tr!(
                     "{} is {}",
+                    "{} est {}",
                     args.version,
                     text(&answer["releaseState"])
                 ));
@@ -167,13 +182,14 @@ async fn notes(args: NotesArgs) -> Result<()> {
                 sending.abandon();
                 // Refusé sans rien écrire : ce qui manque est dans le refus, à dire tel quel.
                 print_missing(&answer["missing"]);
-                anyhow::bail!(
+                anyhow::bail!(crate::tr!(
                     "the registry kept {} as a draft — {}",
+                    "le registre garde {} en brouillon — {}",
                     args.version,
                     answer["message"]
                         .as_str()
                         .unwrap_or("notes still incomplete")
-                );
+                ));
             }
             _ => {
                 sending.abandon();
@@ -222,7 +238,7 @@ async fn notes(args: NotesArgs) -> Result<()> {
             .filter_map(|line| line[lang.as_str()].as_str())
             .collect();
         if lines.is_empty() {
-            ui::skipped("no line");
+            ui::skipped(crate::tr!("no line", "aucune ligne"));
         }
         for line in lines {
             ui::detail(format!("- {line}"));
@@ -232,7 +248,10 @@ async fn notes(args: NotesArgs) -> Result<()> {
         .as_object()
         .filter(|r| !r.is_empty())
     {
-        ui::section("permission reasons");
+        ui::section(&crate::tr!(
+            "permission reasons",
+            "justifications de permission"
+        ));
         for (permission, by_lang) in reasons {
             for (lang, reason) in by_lang.as_object().into_iter().flatten() {
                 ui::field(
@@ -243,14 +262,19 @@ async fn notes(args: NotesArgs) -> Result<()> {
         }
     }
     if notes["hostActionRequired"].as_bool().unwrap_or(false) {
-        ui::section("host action");
+        ui::section(&crate::tr!("host action", "action de l'hôte"));
         for (lang, action) in notes["hostAction"].as_object().into_iter().flatten() {
             ui::field(lang, action.as_str().unwrap_or_default());
         }
     }
     print_missing(&release["missing"]);
     let next = next_for(&release, &args.version, &args.modules);
-    ui::next(&[(next.0.as_deref().unwrap_or("—"), &next.1)]);
+    let said = if crate::lang::french() {
+        next.2
+    } else {
+        next.1
+    };
+    ui::next(&[(next.0.as_deref().unwrap_or("—"), said)]);
     ui::blank();
     Ok(())
 }
@@ -275,7 +299,10 @@ async fn find(
         .await?
         .unwrap_or(Value::Array(Vec::new()));
     let entry = pick(&versions, version, channel).with_context(|| {
-        format!("{id} {version} is not published — portaki status lists the latest version")
+        crate::tr!(
+            "{id} {version} is not published — portaki status lists the latest version",
+            "{id} {version} n'est pas publiée — portaki status donne la dernière version"
+        )
     })?;
     let digest = text(&entry["digest"]);
     let release = platform
@@ -372,7 +399,7 @@ fn print_missing(missing: &Value) {
     if items.is_empty() {
         return;
     }
-    ui::section("missing");
+    ui::section(&crate::tr!("missing", "ce qui manque"));
     for item in &items {
         ui::failure(missing_line(item));
     }
@@ -382,18 +409,26 @@ pub(crate) fn missing_line(item: &Value) -> String {
     let lang = item["lang"].as_str().unwrap_or("?");
     match item["kind"].as_str().unwrap_or_default() {
         "changelog" => format!("changelog ({lang})"),
-        "changelogRewrite" => format!("changelog to rewrite ({lang}) — a line reads like a commit"),
-        "hostAction" => format!("host action ({lang})"),
-        "permissionReason" => format!(
+        "changelogRewrite" => crate::tr!(
+            "changelog to rewrite ({lang}) — a line reads like a commit",
+            "changelog à reformuler ({lang}) — une ligne ressemble à un commit"
+        ),
+        "hostAction" => crate::tr!("host action ({lang})", "action de l'hôte ({lang})"),
+        "permissionReason" => crate::tr!(
             "reason for {} ({lang})",
+            "justification de {} ({lang})",
             item["permission"].as_str().unwrap_or("?")
         ),
-        "conformance" => format!(
+        "conformance" => crate::tr!(
             "check {} fails — fix the module and publish a new version",
+            "contrôle {} en échec — corrigez le module et publiez une nouvelle version",
             item["check"].as_str().unwrap_or("?")
         ),
         "conformance_pending" => {
-            "checks still running — the version goes live by itself if they pass".to_string()
+            crate::tr!(
+                "checks still running — the version goes live by itself if they pass",
+                "contrôles techniques en cours — la version paraîtra d'elle-même s'ils passent"
+            )
         }
         other => other.to_string(),
     }
@@ -404,15 +439,26 @@ fn signature_line(chain: &Value) -> String {
         chain["signature"].as_str(),
         chain["signatureSource"].as_str(),
     ) {
-        (Some("signed"), Some(source)) => format!("signed ({source})"),
-        (Some("signed"), None) => "signed".to_string(),
-        (Some("unverified"), _) => "not verified — production will not run it".to_string(),
-        _ => "unsigned — production will never run it".to_string(),
+        (Some("signed"), Some(source)) => crate::tr!("signed ({source})", "signée ({source})"),
+        (Some("signed"), None) => crate::tr!("signed", "signée"),
+        (Some("unverified"), _) => crate::tr!(
+            "not verified — production will not run it",
+            "non vérifiée — la production ne l'exécutera pas"
+        ),
+        _ => crate::tr!(
+            "unsigned — production will never run it",
+            "non signée — la production ne l'exécutera jamais"
+        ),
     }
 }
 
 /// La commande suivante pour cette version.
-fn next_for(release: &Value, version: &str, modules: &ModuleArgs) -> (Option<String>, String) {
+/// La commande suivante, la raison en anglais (celle de `--json`) et en français.
+fn next_for(
+    release: &Value,
+    version: &str,
+    modules: &ModuleArgs,
+) -> (Option<String>, &'static str, &'static str) {
     let flag = modules
         .module
         .as_deref()
@@ -427,31 +473,35 @@ fn next_for(release: &Value, version: &str, modules: &ModuleArgs) -> (Option<Str
     if kinds.contains(&"conformance") {
         return (
             Some(format!("portaki check{flag}")),
-            "a blocking check fails on this digest — fix, then release a new version".to_string(),
+            "a blocking check fails on this digest — fix, then release a new version",
+            "un contrôle bloquant échoue sur ce digest — corrigez, puis publiez une nouvelle version",
         );
     }
     if kinds.contains(&"conformance_pending") {
         return (
             Some(format!("portaki release status {version}{flag}")),
-            "checks are still running — look again in a moment".to_string(),
+            "checks are still running — look again in a moment",
+            "les contrôles tournent encore — revenez dans un instant",
         );
     }
     if !kinds.is_empty() {
         return (
             Some(format!("portaki release notes {version} --complete{flag}")),
-            "write what is missing (--notes, CHANGELOG.<lang>.md), then complete the version"
-                .to_string(),
+            "write what is missing (--notes, CHANGELOG.<lang>.md), then complete the version",
+            "écrivez ce qui manque (--notes, CHANGELOG.<lang>.md), puis complétez la version",
         );
     }
     if release["supplyChain"]["signature"] != "signed" {
         return (
             Some(format!("portaki release{flag}")),
-            "sign the next version — production runs signed versions only".to_string(),
+            "sign the next version — production runs signed versions only",
+            "signer la prochaine version — la production n'exécute que des versions signées",
         );
     }
     (
         Some(format!("portaki reports --open{flag}")),
-        "live — follow what hosts and the runtime report".to_string(),
+        "live — follow what hosts and the runtime report",
+        "disponible — suivez ce que remontent les hôtes et le runtime",
     )
 }
 

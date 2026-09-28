@@ -1,0 +1,45 @@
+{
+  "$comment": "Les bornes d'une note de version (changelog, justification de permission, action de l'hôte) et ce qui trahit un message de commit. Le registre fait autorité (ReleaseNotes) ; le tiroir « Compléter la version » de la console et `portaki publish` préviennent avec les mêmes règles. Épinglé par ReleaseNotesRulesContractTest (registre) : chaque exemple y est rejoué.",
+  "version": 1,
+  "maxLines": 5,
+  "maxChars": 160,
+  "commit": {
+    "rule": "Rogner la ligne et la passer en minuscules. C'est un message de commit si elle commence par (a) un des `conventionalTypes`, suivi d'une portée facultative `(…)`, d'un `!` facultatif, puis immédiatement de `:` — « fix: x », « feat(ui)!: x » ; ou (b) un des `words`, suivi de la fin de la ligne ou d'un caractère qui n'est ni une lettre ni un chiffre — « bump serde », « Chore - x ». Les types seuls (« Style des cartes revu », « Test : … », « Fix the crash ») restent des phrases : sans deux-points collé, un mot courant n'est pas refusé.",
+    "conventionalTypes": ["feat", "fix", "chore", "refactor", "deps", "build", "ci", "perf", "test", "tests", "docs", "doc", "style", "revert", "release"],
+    "words": ["bump", "chore", "refactor", "deps", "wip", "merge branch", "merge pull request"],
+    "examples": {
+      "commit": [
+        "fix: retry on timeout",
+        "feat: dark mode",
+        "Fix(sync): retry",
+        "FEAT(ui)!: new layout",
+        "chore: release 1.2",
+        "Chore - release 1.2",
+        "refactor store",
+        "deps: tokio 1.40",
+        "build(deps): bump serde",
+        "ci: cache cargo",
+        "perf(render): memoize",
+        "test: cover rollback",
+        "docs: readme",
+        "style: rustfmt",
+        "revert: \"feat: x\"",
+        "bump deps",
+        "WIP",
+        "Merge pull request #12 from a/b",
+        "Merge branch 'main'"
+      ],
+      "prose": [
+        "Le code se régénère à chaque départ",
+        "Fixed a bug",
+        "Fix the crash when the lock is offline",
+        "Style des cartes revu pour les petits écrans",
+        "Test : la serrure répond plus vite",
+        "Chorégraphie des arrivées simplifiée",
+        "Documents d'arrivée traduits en anglais",
+        "Build plus léger, chargement plus rapide",
+        "Performances améliorées"
+      ]
+    }
+  }
+}

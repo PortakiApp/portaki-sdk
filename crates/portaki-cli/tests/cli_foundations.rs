@@ -228,7 +228,10 @@ fn status_reads_the_journey_and_names_the_next_command() {
 fn doctor_says_what_fails_and_how_to_fix_it() {
     let fake = Fake::start(vec![
         ("/dev/v1/onboarding", "{}".to_string()),
-        ("/dev/v1/modules/nuki/link", "{}".to_string()),
+        (
+            "/dev/v1/modules/nuki/link",
+            r#"{"repository":"acme/nuki","requiredEnvironment":"release"}"#.to_string(),
+        ),
     ]);
     let home = Home::new();
     let dir = tempfile::tempdir().unwrap();
@@ -315,6 +318,7 @@ fn the_old_dev_variable_is_a_deprecated_alias() {
         .current_dir(dir.path())
         .env("XDG_CONFIG_HOME", home.0.path())
         .env("PORTAKI_NO_UPDATE_CHECK", "1")
+        .env("PORTAKI_LANG", "en")
         .env("PORTAKI_DEV_URL", "https://dev.example")
         .env_remove("PORTAKI_API_URL")
         .env_remove("PORTAKI_DEV_TOKEN")

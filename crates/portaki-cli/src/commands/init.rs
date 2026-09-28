@@ -236,7 +236,10 @@ fn git_user_name() -> Option<String> {
 pub fn run(args: InitArgs) -> Result<()> {
     ui::header(
         "portaki init",
-        "Scaffold a module crate — buildable, runnable in the sandbox, publishable.",
+        &crate::tr!(
+            "Scaffold a module crate — buildable, runnable in the sandbox, publishable.",
+            "Créer un module — qui compile, tourne en sandbox et se publie."
+        ),
     );
 
     let dest = args
@@ -247,29 +250,38 @@ pub fn run(args: InitArgs) -> Result<()> {
     let template_dir = TEMPLATES
         .get_dir(directory(&args.template))
         .with_context(|| {
-            format!(
+            crate::tr!(
                 "template missing from this build: {}",
+                "gabarit absent de ce build : {}",
                 label(&args.template)
             )
         })?;
 
     if dest.exists() && !dest.is_dir() {
-        bail!("destination is not a directory: {}", dest.display());
+        bail!(crate::tr!(
+            "destination is not a directory: {}",
+            "la destination n'est pas un dossier : {}",
+            dest.display()
+        ));
     }
 
     // A cloned repository is the usual starting point — the directory is there, and holds a
     // `.git` and maybe a licence. Only a file the scaffold would overwrite is a reason to stop.
     let clashes = clashes(&dest, &planned_paths(template_dir));
     if !clashes.is_empty() {
-        bail!(
+        bail!(crate::tr!(
             "{} already has {} — move them aside, or scaffold elsewhere",
+            "{} contient déjà {} — déplacez-les, ou créez le module ailleurs",
             dest.display(),
             listed(&clashes)
-        );
+        ));
     }
 
     if args.tagline.as_deref().is_some_and(too_long) {
-        bail!("--tagline is longer than {TAGLINE_MAX} characters — the registry refuses it");
+        bail!(crate::tr!(
+            "--tagline is longer than {TAGLINE_MAX} characters — the registry refuses it",
+            "--tagline dépasse {TAGLINE_MAX} caractères — le registre la refuse"
+        ));
     }
     let preset = Answers {
         display_name: args.display_name.clone(),
@@ -291,29 +303,43 @@ pub fn run(args: InitArgs) -> Result<()> {
         )?
     };
 
-    let scaffolding = ui::step(format!(
+    let scaffolding = ui::step(crate::tr!(
         "scaffolding {} from the {} template",
+        "création de {} depuis le gabarit {}",
         args.name,
         label(&args.template)
     ));
     copy_template(template_dir, &dest, &args.name, &answers)?;
-    scaffolding.done(format!("created {}", dest.display()));
+    scaffolding.done(crate::tr!("created {}", "créé : {}", dest.display()));
 
     describe(&args.template);
-    let mut next: Vec<(&str, &str)> = Vec::new();
     let cd = format!("cd {}", dest.display());
+    let mut next: Vec<(String, String)> = Vec::new();
     // Scaffolded in place — `cd .` would be a step that does nothing.
     if dest != Path::new(".") {
-        next.push((cd.as_str(), "everything below runs from the module root"));
+        next.push((
+            cd,
+            crate::tr!(
+                "everything below runs from the module root",
+                "la suite se lance depuis la racine du module"
+            ),
+        ));
     }
     next.push((
-        "portaki build",
-        "compile to wasm32 and assemble the manifest",
+        "portaki login".to_string(),
+        crate::tr!(
+            "once: connect the CLI to your developer account",
+            "une fois : connecter la CLI à votre compte développeur"
+        ),
     ));
     next.push((
-        "portaki dev --watch",
-        "run it in the hosted sandbox on every save",
+        "portaki dev --watch".to_string(),
+        crate::tr!(
+            "deploy to the sandbox, on every save",
+            "déployer en sandbox, à chaque sauvegarde"
+        ),
     ));
+    let next: Vec<(&str, &str)> = next.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
     ui::next(&next);
     ui::blank();
     Ok(())
@@ -323,39 +349,98 @@ pub fn run(args: InitArgs) -> Result<()> {
 ///
 /// Un squelette qu'on découvre fichier par fichier se lit mal : chaque morceau dit à quoi il sert.
 fn describe(template: &InitTemplate) {
-    let mut rows = vec![("src/lib.rs", "the module — entity, manifest")];
+    use crate::tr;
+    let mut rows = vec![(
+        "src/lib.rs",
+        tr!(
+            "the module — entity, manifest",
+            "le module — entité, manifeste"
+        ),
+    )];
     if matches!(template, InitTemplate::Default) {
-        rows.push(("src/host/", "surfaces the host dashboard renders"));
-        rows.push(("src/guest/", "surfaces the guest booklet renders"));
+        rows.push((
+            "src/host/",
+            tr!(
+                "surfaces the host dashboard renders",
+                "les surfaces que le dashboard de l'hôte affiche"
+            ),
+        ));
+        rows.push((
+            "src/guest/",
+            tr!(
+                "surfaces the guest booklet renders",
+                "les surfaces que le livret du voyageur affiche"
+            ),
+        ));
         rows.push((
             "src/config.rs",
-            "the settings the host fills in — the platform stores them",
+            tr!(
+                "the settings the host fills in — the platform stores them",
+                "les réglages que l'hôte remplit — la plateforme les garde"
+            ),
         ));
-        rows.push(("tests/", "the mock host, the settings read back"));
+        rows.push((
+            "tests/",
+            tr!(
+                "the mock host, the settings read back",
+                "l'hôte simulé, les réglages relus"
+            ),
+        ));
         rows.push((
             "tests/conformance.rs",
-            "the battery every module passes before it publishes",
+            tr!(
+                "the battery every module passes before it publishes",
+                "la batterie de conformité que tout module passe avant de publier"
+            ),
         ));
     }
     rows.push((
         "i18n/*.json",
-        "one file per locale — the i18n: keys the surfaces point at",
+        tr!(
+            "one file per locale — the i18n: keys the surfaces point at",
+            "un fichier par langue — les clés i18n: que les surfaces citent"
+        ),
     ));
-    rows.push(("Cargo.toml", "wired to portaki-sdk, cdylib for wasm32"));
+    rows.push((
+        "Cargo.toml",
+        tr!(
+            "wired to portaki-sdk, cdylib for wasm32",
+            "branché sur portaki-sdk, cdylib pour wasm32"
+        ),
+    ));
     rows.push((
         "build.rs",
-        "no build step — it exists so cargo gives the macros an OUT_DIR",
+        tr!(
+            "no build step — it exists so cargo gives the macros an OUT_DIR",
+            "aucune étape — il existe pour que cargo donne un OUT_DIR aux macros"
+        ),
     ));
     rows.push((
         "src/lib.rs",
-        "portaki_module! — author, icon, maturity; build writes the catalogue from the code",
+        tr!(
+            "portaki_module! — author, icon, maturity; build writes the catalogue from the code",
+            "portaki_module! — auteur, icône, maturité ; le build écrit le catalogue depuis le code"
+        ),
     ));
     rows.push((
         "listing.json",
-        "the public listing — published with each release",
+        tr!(
+            "the public listing — published with each release",
+            "la fiche publique — publiée à chaque version"
+        ),
     ));
+    if matches!(template, InitTemplate::Default) {
+        rows.push((
+            ".github/workflows/release.yml",
+            tr!(
+                "publishes on a v* tag — stable from the GitHub environment `release`",
+                "publie sur un tag v* — la stable depuis l'environnement GitHub `release`"
+            ),
+        ));
+    }
 
-    ui::list("what you got", &rows);
+    let rows: Vec<(&str, &str)> = rows.iter().map(|(a, b)| (*a, b.as_str())).collect();
+    ui::list(&tr!("what you got", "ce que vous avez"), &rows);
 }
 
 fn label(template: &InitTemplate) -> &'static str {

@@ -17,7 +17,8 @@
 //! | `doctor` | Check the environment: session, versions, toolchain, cosign, registry, signing identity |
 //! | `init` | Scaffold a module crate from a template |
 //! | `build` | Produce Wasm + merged manifest (+ migrations/operations bundles + i18n) |
-//! | `lint` | Validate capability ids, connector bindings, i18n keys |
+//! | `check` | The gate `release` applies: fmt, clippy, tests, build, manifest, texts |
+//! | `add permission\|connector\|language` | Declare what the module uses, where the SDK reads it |
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `login` / `logout` | Open or end a developer session (device grant) |
 //! | `dev` | Build, deploy to the hosted sandbox, and show what the run did |
@@ -28,11 +29,9 @@
 //! | `ci` | Answer what a CI workflow used to ask in bash |
 //! | `release` | Test, build, push to Portaki's OCI repository, sign, and announce a version |
 //! | `release status <v>` / `release notes <v>` | A published version: where it stands, its notes |
-//! | `sdk upgrade` | Move the module to another SDK version, and prove nothing broke |
+//! | `upgrade` | Move the module to another SDK version, and prove nothing broke |
 //! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
-//! | `permissions add` | Turn on the `portaki-sdk` feature that declares a permission |
-//! | `i18n check` | Fail on a text missing or empty in one language of the bundles |
 //! | `catalog` | Dump the SDUI primitive catalog the host understands |
 //! | `inspect` | GET a URL and pretty-print it when it is JSON |
 //! | `docs` | Print how to open the local SDK documentation |
@@ -46,6 +45,7 @@ mod commands;
 mod dev_session;
 mod exit;
 mod http;
+mod lang;
 mod manifest;
 mod oci;
 mod oidc;
@@ -134,21 +134,29 @@ enum Command {
     Build(commands::build::BuildArgs),
     /// Answer the questions a CI workflow used to ask in bash.
     Ci(commands::ci::CiArgs),
-    /// Run everything CI runs: fmt, clippy, tests, the wasm build, the manifest.
+    /// The gate portaki release applies: fmt, clippy, tests, the wasm build, the manifest, the texts.
     Check(commands::check::CheckArgs),
+    /// Declare a permission, a built-in connector or a language.
+    Add(commands::add::AddArgs),
+    /// Move the module to another SDK version, and prove nothing broke.
+    Upgrade(commands::sdk::UpgradeArgs),
     /// Show every declared connector, and what it needs to actually call.
     Connectors(commands::connectors::ConnectorsArgs),
-    /// Validate manifest, i18n keys, and capability ids.
+    /// Former name of `check --only lint`.
+    #[command(hide = true)]
     Lint(commands::lint::LintArgs),
     /// Follow what a module logs in the sandbox, live.
     Logs(commands::logs::LogsArgs),
     /// Run `cargo test` in the module crate.
     Test(commands::test::TestArgs),
-    /// Move the module to another SDK version, and prove nothing broke.
+    /// Former name of `upgrade`.
+    #[command(hide = true)]
     Sdk(commands::sdk::SdkArgs),
-    /// Check that every text exists in every language of the bundles.
+    /// Former name of `check --only i18n`.
+    #[command(hide = true)]
     I18n(commands::i18n::I18nArgs),
-    /// Declare a permission (`portaki permissions add email`).
+    /// Former name of `add permission`.
+    #[command(hide = true)]
     Permissions(commands::permissions::PermissionsArgs),
     /// Test, build, push to Portaki's registry, sign, and announce a version — or `status`/`notes`
     /// of a published one.
@@ -307,14 +315,20 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
             .iter()
             .map(|(name, about)| (name.as_str(), about.as_str()))
             .collect();
-        ui::list("commands", &rows);
+        ui::list(&tr!("commands", "commandes"), &rows);
     }
 
     let help = match invoked_command(command) {
         Some(name) => format!("portaki {name} --help"),
         None => "portaki --help".to_string(),
     };
-    ui::next(&[(&help, "every flag this command takes")]);
+    ui::next(&[(
+        &help,
+        &tr!(
+            "every flag this command takes",
+            "chaque option de cette commande"
+        ),
+    )]);
     ui::blank();
     std::process::exit(2);
 }
@@ -367,7 +381,7 @@ fn refusal_lines(rendered: &str) -> (String, Vec<String>) {
     let headline = paragraph
         .next()
         .map(|line| line.trim_start_matches("error: ").to_string())
-        .unwrap_or_else(|| "invalid arguments".to_string());
+        .unwrap_or_else(|| tr!("invalid arguments", "arguments refusés"));
     (headline, paragraph.collect())
 }
 
@@ -423,6 +437,8 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Build(args) => commands::build::run(args).await,
         Command::Ci(args) => commands::ci::run(args).await,
         Command::Check(args) => commands::check::run(args).await,
+        Command::Add(args) => commands::add::run(args),
+        Command::Upgrade(args) => commands::sdk::upgrade(args).await,
         Command::Connectors(args) => commands::connectors::run(args),
         Command::Lint(args) => commands::lint::run(args),
         Command::Logs(args) => commands::logs::run(args).await,

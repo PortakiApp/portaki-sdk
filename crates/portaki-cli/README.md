@@ -56,7 +56,11 @@ rustup target add wasm32-unknown-unknown
 | `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
 | `portaki login [--no-browser]` / `portaki logout` | Open a developer session with the device grant / end it here and revoke it on the platform that issued it |
 | `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
-| `portaki check` | Everything CI runs: fmt, clippy, tests, the wasm build, the manifest |
+| `portaki check [--fix] [--only fmt,clippy,tests,build,lint,i18n] [--channel preview\|stable]` | The gate `portaki release` applies, the same code: `cargo fmt --check`, `cargo clippy -D warnings`, tests with the conformance battery, the wasm build, the manifest, every text in every language. `--fix` formats and applies clippy's fixes first. `lint` and `i18n check` are hidden aliases |
+| `portaki add permission <perm>` | Turn on the `portaki-sdk` feature that declares the permission (`permissions add` is a hidden alias) |
+| `portaki add connector <id>` | Declare a built-in connector (`open-weather`, `nuki`, …) with its `#[portaki_sdk::connector]` in `src/lib.rs` |
+| `portaki add language <lang>` | Write `i18n/<locale>.json` (and `email_i18n/`) with every key of the other bundles, texts to write |
+| `portaki upgrade [--to <v>] [--dry-run]` | Move to another SDK version, then build, test, lint and compare the sandbox renders; `--dry-run` touches no file and no sandbox. `sdk upgrade` is a hidden alias |
 | `portaki connectors` | Show each declared egress, its permission and its credential |
 | `portaki dev --watch` | Rebuild and redeploy on every save, follow the sandbox logs, replay the 7 scenarios after each deploy |
 | `portaki dev --forget` | Remove this module from the sandbox — a tried-once module leaves a row otherwise |
@@ -66,10 +70,6 @@ rustup target add wasm32-unknown-unknown
 | `portaki preview <surface> [--input <json>] [--stay <id>]` | Render a surface of the sandbox build; bare, list the surfaces. A sandbox build is unsigned: it never runs in production |
 | `portaki reports [--open] [--type error\|problem\|suggestion]` / `portaki reports resolve <id> --note "…"` | What the runtime and hosts report on the module; resolve one once fixed, with an internal note the host never reads |
 | `portaki logs [--module <id>] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
-| `portaki lint [--channel preview\|stable]` | Validate capabilities, connectors, i18n keys; `sdkVersion` required, `>= 8.0.0` for stable |
-| `portaki i18n check` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
-| `portaki permissions add <perm>` | Turn on the `portaki-sdk` feature that declares the permission |
-| `portaki sdk upgrade [--to <v>] [--dry-run]` | Move to another SDK version, then build, test, lint and compare the sandbox renders; `--dry-run` touches no file and no sandbox |
 | `portaki ci <modules\|sdk-version\|check\|info\|build\|release\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki release [--channel preview\|stable] [--notes …] [--no-sign] [--require-available] [--dry-run]` | Test, build, push to Portaki's OCI repository with a short-lived push right from the registry, sign, and announce — locally with `portaki login`; from CI, `ci build` then `ci release`. `publish` is a hidden alias |
@@ -127,14 +127,14 @@ code fills what it leaves out. Delete a field there and the code takes over.
 A repository whose modules live under `modules/*/` — crates on `portaki-sdk` (the layout of
 `portaki-modules`) — is a monorepo. Inside `modules/<id>/`, every command acts on that module as
 before. From the repository root, every command that acts on a module takes the same two flags:
-`--module <id>` and `--all` — `build`, `check`, `lint`, `test`, `connectors`, `i18n check`,
-`permissions add`, `publish`, `dev`, `logs`, `link`, `sdk upgrade`, `status`, `doctor` and every
+`--module <id>` and `--all` — `build`, `check`, `test`, `connectors`, `add`, `release`, `dev`,
+`run`, `scenarios`, `preview`, `reports`, `logs`, `link`, `upgrade`, `status`, `doctor` and every
 `ci` subcommand. `dev` and `logs` hold one module at a time and refuse `--all` (exit 2). With
 neither flag, a terminal asks which one; anything else — a CI, `--json` — gets a usage error
 (exit 2) listing the ids. The former `portaki logs <module>` and `portaki ci … --root <dir>` are
 still accepted, hidden.
 
-`portaki sdk upgrade` moves the whole monorepo when the SDK is inherited from the workspace
+`portaki upgrade` moves the whole monorepo when the SDK is inherited from the workspace
 (`portaki-sdk = { workspace = true }`): the root `Cargo.toml`, `Cargo.lock` and
 `requiresModuleSdk` in every `portaki.module.json` still kept, then builds and tests the workspace, and
 assembles and lints each module in turn. Run it from the repository root, or from any module —
@@ -163,6 +163,11 @@ per line, a spinner while it runs, the elapsed time once it is done, and a `next
 what to run afterwards and what each one gives you. The tools the CLI drives (`cargo build`,
 `cargo test`) stay quiet unless they fail — then their whole output surfaces, because that is
 what you were looking for.
+
+The CLI speaks the system's language: French when `PORTAKI_LANG`, else `LC_ALL`, `LC_MESSAGES`
+or `LANG` starts with `fr` — with the developer space's words — English otherwise
+(`PORTAKI_LANG=en` forces it). Only what a person reads changes: `--json` is always English, and
+error codes and exit codes are the same in both languages.
 
 The explanatory lines earn their place: `dev` does not start a local gateway, `publish` does not
 just push, and `init` leaves a tree whose halves (`ids.rs` and `i18n/`) only make sense together.
@@ -201,6 +206,7 @@ A command that renders no information writes nothing to stdout.
 | `connectors` | `{ schemaVersion, modules: [{ id, connectors: [{ id, kind: builtin\|custom, baseUrl?, operations?: [{ id, method, path }], permission, credentialProviderId?, auth? }] }] }` |
 | `publish` | `{ schemaVersion, modules: [{ id, version, channel, state: published\|draft\|already-published\|pushed\|dry-run\|failed, digest, reference, missing, url, error }] }` |
 | `logs` | one `{ ts, level, src, msg }` per line |
+| `check` | `{ schemaVersion, controls: [fmt\|clippy\|tests\|build\|lint\|i18n], modules: [{ id, ok, error }] }` |
 | `run` | `{ schemaVersion, module, operation, kind, run: <devapi dispatch response> }` |
 | `scenarios`, `scenarios run` | `{ schemaVersion, module, cells: [{ surface, case, status: ok\|watch\|fail, code?, message? }] }` — `scenarios reset`: `{ schemaVersion, generation }` |
 | `preview` | `{ schemaVersion, module, preview: { surfaceId, guest, type, types, rendered, tree, errorCode } }` — bare: `{ schemaVersion, module, surfaces }` |
@@ -220,7 +226,7 @@ A command that renders no information writes nothing to stdout.
 | 0 | Done |
 | 1 | Failed — including a `doctor` with a failing check |
 | 2 | Usage: a refused argument, an ambiguous or unknown module, an unknown `--env` |
-| 3 | Nothing to do, or already done — `permissions add` of a declared permission, `logout` without a session, `publish --json` when every version was already in the registry |
+| 3 | Nothing to do, or already done — `add permission` of a declared permission, `logout` without a session, `publish --json` when every version was already in the registry |
 | 130 | Interrupted (ctrl-c) |
 
 `publish` without `--json` keeps exiting 0 on « already in the registry »: the release action v1
@@ -285,7 +291,7 @@ What a network failure does, since it will happen:
 | A renewal fails | Retries in silence. The lease outlives several missed renewals; only a long outage is reported |
 | The lease was taken over | Stops. Carrying on would be exactly the mutual clobbering this exists to prevent |
 
-`portaki dev --dispatch`, with no operation name, lists what the module exposes — queries and
+`portaki run`, with no operation name, lists what the module exposes — queries and
 commands, each with the Rust function behind it — read from the manifest, without building or
 deploying. And when an argument is refused, the refusal is rendered like everything else: the
 CLI's own commands follow when the question was *which command*, `clap`'s suggestion is kept,
@@ -488,12 +494,14 @@ jobs:
   build:                       # runs the module's code — no rights
     permissions: { contents: read }
     steps:
-      - run: portaki ci build  # tests, build --release, lint, packaging
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-unknown-unknown, components: "rustfmt, clippy" }
+      - run: portaki ci build  # the gate of portaki check, then packaging
       - uses: actions/upload-artifact@v7   # target/portaki/ + the wasm
 
   release:                     # holds the rights — runs nothing of the module, not even cargo
     needs: build
-    environment: release       # required by the link for the stable channel
+    environment: release       # the GitHub environment the link requires for the stable channel
     permissions: { contents: read, id-token: write }
     steps:
       - uses: actions/download-artifact@v8
@@ -503,6 +511,10 @@ jobs:
 `ci release` writes `outcome` (`published`, `draft`, `already-published`), `digest`, `reference`,
 `id` and `version` to `GITHUB_OUTPUT`. [`portaki-release-action@v2`](https://github.com/PortakiApp/portaki-release-action)
 does both jobs, the audit included (produced in the release job, from `Cargo.lock`).
+
+Create the `release` environment in the repository (Settings → Environments, with its required
+reviewers) and name it in the link: the stable channel is refused from any other job —
+`environment_required`. `portaki doctor` warns when the link names another one.
 
 Link the module to its repository from the dashboard first: the registry authorises on the
 repository *id* recorded there, and checks the workflow file, the triggering event and the

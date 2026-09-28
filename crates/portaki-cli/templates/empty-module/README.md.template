@@ -24,9 +24,9 @@ A Portaki module: Rust compiled to wasm, published as an OCI artifact. Scaffolde
 ## Development
 
 ```
-cargo test
-portaki build --release && portaki lint
-portaki dev --watch
+portaki dev --watch   # build and deploy to the sandbox on every save
+portaki check         # the gate portaki release applies
+portaki release       # push, sign and announce
 ```
 
 The version lives in `Cargo.toml` only. There is no manifest to write: `portaki build` reads `portaki_module!`, `#[surface]`, `#[email]`, the `portaki-sdk` features and `i18n/`.
