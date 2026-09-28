@@ -519,11 +519,22 @@ pub fn params(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | `kind = "…"` | `text`, `textarea`, `url`, `number`, `secret`, `toggle`, `select`, `readonly`, `structured`, `localized` |
 /// | `options = ["…", …]` | the values of a `select`; each label is the i18n key `<label>.<value>` |
 /// | `item_id = "…"` | on a `structured` list: the row sub-key that identifies a row (default: a row field named `id`) |
+/// | `reveal(…)` | on a `secret` field: where the module shows its value — `guest_pre_arrival` (guest surfaces before the stay), `guest_stay` (guest surfaces during the stay), `arrival_email` (the `emailContext` answer); see below |
 ///
 /// Without `kind`, the Rust type decides: `I18nText` → `localized`, `String` → `text`, `bool` →
 /// `toggle`, numbers → `number`, anything else → `structured` (`Option<T>` reads as `T`). The key
 /// is the serde name (`rename`, `rename_all`). A field without `#[field]` is not declared: the
 /// host never edits it.
+///
+/// # Revealed secrets
+///
+/// A secret never leaves the module, except where `reveal(…)` says so: a door code the booklet
+/// shows during the stay is `#[field(secret, reveal(guest_stay), label = "…")]`. The conformance
+/// battery seeds each secret with a sentinel and fails on any other output — host surfaces, the
+/// guest booklet after departure, logs, events, e-mails the module sends, ordinary query and
+/// command answers. Hosts and reviewers read the declaration; a reveal added since the previous
+/// stable is justified in the release notes like an added permission. When the value shows is
+/// still the module's call — see [`reveal`](../portaki_sdk/reveal/index.html) for the timing.
 ///
 /// # Translated text
 ///

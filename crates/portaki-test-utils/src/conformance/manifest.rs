@@ -115,6 +115,16 @@ fn config_problems(
             }
         }
 
+        // What the battery accepts and the reviewer reads is the manifest: it says what the code
+        // reveals, no more, no less.
+        if resolved.get("reveal") != stated.get("reveal") {
+            let code_reveal = resolved.get("reveal").cloned().unwrap_or(Value::Null);
+            problems.push(format!(
+                "config field `{key}` reveal must be {code_reveal} (its #[field(reveal(…))]) — \
+                 rebuild with portaki build"
+            ));
+        }
+
         let Some(row) = field["itemType"].as_str() else {
             continue;
         };
@@ -167,12 +177,14 @@ mod tests {
             json!({ "key": "welcome", "type": "localized" }),
             json!({ "key": "steps", "type": "structured", "itemType": "Step" }),
             json!({ "key": "spots", "type": "structured", "itemType": "Step", "item": { "id": "slug" } }),
+            json!({ "key": "code", "type": "secret", "reveal": ["guest_stay"] }),
         ];
         let shape_of = |name: &str| if name == "Step" { step() } else { None };
 
         let built = json!({ "config": { "fields": [
             { "key": "welcome", "type": "localized" },
             { "key": "steps", "type": "structured", "item": { "id": "id", "localized": ["title"], "secret": ["code"] } },
+            { "key": "code", "type": "secret", "reveal": ["guest_stay"] },
         ] } });
         assert!(config_problems(&built, &code, shape_of).is_empty());
 
@@ -180,6 +192,7 @@ mod tests {
             { "key": "welcome", "type": "text" },
             { "key": "steps", "type": "structured", "item": { "localized": ["titel"] } },
             { "key": "spots", "type": "structured", "item": { "id": "slug", "localized": ["title"], "secret": ["code"] } },
+            { "key": "code", "type": "secret", "reveal": ["guest_stay", "arrival_email"] },
         ] } });
         assert_eq!(
             config_problems(&stale, &code, shape_of),
@@ -189,6 +202,7 @@ mod tests {
                 "config field `steps` item.secret must be [\"code\"] (the row's #[field(secret)] fields) — rebuild with portaki build",
                 "config field `steps` item names `titel`, which is not a field of Step (id, title, note, code)",
                 "config field `spots` item names `slug`, which is not a field of Step (id, title, note, code)",
+                "config field `code` reveal must be [\"guest_stay\"] (its #[field(reveal(…))]) — rebuild with portaki build",
             ]
         );
     }

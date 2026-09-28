@@ -45,6 +45,10 @@ const KINDS: [&str; 10] = [
     "localized",
 ];
 
+/// Where a `secret` field may be shown — `reveal(…)`, closed: the conformance battery accepts the
+/// value in these outputs only, and the registry refuses anything else.
+const REVEALS: [&str; 3] = ["guest_pre_arrival", "guest_stay", "arrival_email"];
+
 /// What `#[portaki_sdk::config(…)]` takes.
 #[derive(Default)]
 struct ConfigAttrs {
@@ -243,6 +247,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
     let mut description: Option<String> = None;
     let mut options: Option<Vec<String>> = None;
     let mut item_id: Option<String> = None;
+    let mut reveal: Vec<String> = Vec::new();
 
     let mut set_kind = |value: String, span| -> syn::Result<()> {
         if let Some(previous) = &kind {
@@ -279,6 +284,20 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             "label" => label = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "description" => description = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "item_id" => item_id = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "reveal" => meta.parse_nested_meta(|place| {
+                let value = place
+                    .path
+                    .get_ident()
+                    .map(ToString::to_string)
+                    .unwrap_or_default();
+                if !REVEALS.contains(&value.as_str()) {
+                    return Err(place.error(format!("reveal takes {}", REVEALS.join(", "))));
+                }
+                if !reveal.contains(&value) {
+                    reveal.push(value);
+                }
+                Ok(())
+            })?,
             "options" => {
                 let list: syn::ExprArray = meta.value()?.parse()?;
                 let mut values = Vec::new();
@@ -301,7 +320,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             _ => {
                 return Err(meta.error(
                     "unknown #[field] attribute — required, recommended, secret, structured, \
-                     label, description, kind, options, item_id",
+                     label, description, kind, options, item_id, reveal",
                 ))
             }
         }
@@ -337,6 +356,12 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
         return Err(syn::Error::new(
             attr.span(),
             "item_id names the sub-key identifying a row — only on a structured field",
+        ));
+    }
+    if !reveal.is_empty() && kind != "secret" {
+        return Err(syn::Error::new(
+            attr.span(),
+            "reveal names where a secret is shown — only on a secret field",
         ));
     }
     if kind == "readonly" && (required || recommended) {
@@ -376,6 +401,9 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
     }
     if let Some(id) = item_id {
         schema["item"] = json!({ "id": id });
+    }
+    if !reveal.is_empty() {
+        schema["reveal"] = json!(reveal);
     }
     // The macro cannot see the row type's fields; `portaki build` reads them from its `#[params]`
     // emission and fills `item` (see `portaki_sdk::config::resolve_items`).
@@ -459,6 +487,8 @@ mod tests {
                 pub ssid: String,
                 #[field(secret, recommended, label = "config.password", description = "config.password.help")]
                 pub password: String,
+                #[field(secret, reveal(guest_stay, arrival_email, guest_stay), label = "config.code")]
+                pub code: String,
                 #[field(structured, label = "config.contacts")]
                 pub contacts: Vec<Contact>,
                 #[field(kind = "select", options = ["wpa2", "wep"], label = "config.security")]
@@ -478,6 +508,8 @@ mod tests {
                 json!({ "key": "ssid", "type": "text", "required": true, "recommended": false, "label": "config.ssid" }),
                 json!({ "key": "password", "type": "secret", "required": false, "recommended": true,
                         "label": "config.password", "description": "config.password.help" }),
+                json!({ "key": "code", "type": "secret", "required": false, "recommended": false,
+                        "label": "config.code", "reveal": ["guest_stay", "arrival_email"] }),
                 json!({ "key": "contacts", "type": "structured", "required": false, "recommended": false,
                         "label": "config.contacts", "itemType": "Contact" }),
                 json!({ "key": "security", "type": "select", "required": false, "recommended": false,
@@ -570,6 +602,9 @@ mod tests {
             parse_quote! { struct C { #[field(kind = "localized", label = "a")] a: String } },
             parse_quote! { struct C { #[field(kind = "textarea", label = "a")] a: I18nText } },
             parse_quote! { struct C { #[field(item_id = "id", label = "a")] a: String } },
+            parse_quote! { struct C { #[field(reveal(guest_stay), label = "a")] a: String } },
+            parse_quote! { struct C { #[field(secret, reveal(host), label = "a")] a: String } },
+            parse_quote! { struct C { #[field(secret, reveal(logs), label = "a")] a: String } },
         ] {
             let item: ItemStruct = item;
             let shown = quote!(#item).to_string();
@@ -629,6 +664,16 @@ mod tests {
         assert_eq!(
             schema["$defs"]["configField"]["properties"]["type"]["enum"],
             json!(KINDS)
+        );
+    }
+
+    #[test]
+    fn the_reveals_are_the_schema_ones() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../../../schema/module.v1.json")).unwrap();
+        assert_eq!(
+            schema["$defs"]["configField"]["properties"]["reveal"]["items"]["enum"],
+            json!(REVEALS)
         );
     }
 
