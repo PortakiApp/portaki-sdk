@@ -61,6 +61,10 @@ rustup target add wasm32-unknown-unknown
 | `portaki dev --watch` | Rebuild and redeploy on every save, follow the sandbox logs, replay the 7 scenarios after each deploy |
 | `portaki dev --forget` | Remove this module from the sandbox — a tried-once module leaves a row otherwise |
 | `portaki dev` | Build, deploy to the **hosted sandbox** of your account, and show what the run did — there is no local gateway |
+| `portaki run <operation> [--params <json>] [--as host\|guest] [--stay <id>]` | Run a query or a command on the build `portaki dev` deployed, and print its trace; bare, list the operations. `dev --dispatch` is a hidden alias |
+| `portaki scenarios [run\|reset]` | The Scenarios tab: every surface against the seven pathological stays — the last grid, `run` to replay it, `reset` to put the sandbox fixtures back |
+| `portaki preview <surface> [--input <json>] [--stay <id>]` | Render a surface of the sandbox build; bare, list the surfaces. A sandbox build is unsigned: it never runs in production |
+| `portaki reports [--open] [--type error\|problem\|suggestion]` / `portaki reports resolve <id> --note "…"` | What the runtime and hosts report on the module; resolve one once fixed, with an internal note the host never reads |
 | `portaki logs [--module <id>] [--code <code>]` | Follow the module's sandbox logs, optionally only the lines naming an error code |
 | `portaki lint [--channel preview\|stable]` | Validate capabilities, connectors, i18n keys; `sdkVersion` required, `>= 8.0.0` for stable |
 | `portaki i18n check` | Fail on a text missing or empty in one language of `i18n/` or `email_i18n/` |
@@ -69,6 +73,8 @@ rustup target add wasm32-unknown-unknown
 | `portaki ci <modules\|sdk-version\|check\|info\|build\|release\|report>` | What a CI workflow used to ask in bash — see [From a CI workflow](#from-a-ci-workflow) |
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki release [--channel preview\|stable] [--notes …] [--no-sign] [--require-available] [--dry-run]` | Test, build, push to Portaki's OCI repository with a short-lived push right from the registry, sign, and announce — locally with `portaki login`; from CI, `ci build` then `ci release`. `publish` is a hidden alias |
+| `portaki release status <v>` | Where a published version stands: draft or available, signature, review, what is missing — and the next command |
+| `portaki release notes <v> [--complete] [--notes …] [--permission-reason …] [--host-action …]` | Read a version's release notes; with a flag, complete them — from the flags, then `CHANGELOG*.md` — and let the registry publish the draft |
 | `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect <url>` | GET a URL and pretty-print it when it is JSON — no registry authentication |
@@ -195,6 +201,12 @@ A command that renders no information writes nothing to stdout.
 | `connectors` | `{ schemaVersion, modules: [{ id, connectors: [{ id, kind: builtin\|custom, baseUrl?, operations?: [{ id, method, path }], permission, credentialProviderId?, auth? }] }] }` |
 | `publish` | `{ schemaVersion, modules: [{ id, version, channel, state: published\|draft\|already-published\|pushed\|dry-run\|failed, digest, reference, missing, url, error }] }` |
 | `logs` | one `{ ts, level, src, msg }` per line |
+| `run` | `{ schemaVersion, module, operation, kind, run: <devapi dispatch response> }` |
+| `scenarios`, `scenarios run` | `{ schemaVersion, module, cells: [{ surface, case, status: ok\|watch\|fail, code?, message? }] }` — `scenarios reset`: `{ schemaVersion, generation }` |
+| `preview` | `{ schemaVersion, module, preview: { surfaceId, guest, type, types, rendered, tree, errorCode } }` — bare: `{ schemaVersion, module, surfaces }` |
+| `reports` | `{ schemaVersion, modules: [{ id, reports: { items, page, size, total, counts } }] }` — `reports resolve`: `{ schemaVersion, report }` |
+| `release status` | `{ schemaVersion, module, version, channel, digest, state, review, yanked, signature, signatureSource, missing, next: { command, reason } }` |
+| `release notes` | `{ schemaVersion, module, version, digest, state, langs, added, notes, missing }` |
 | `ci modules` | `{ schemaVersion, modules: [id], any, reason }` |
 | `ci sdk-version` | `{ schemaVersion, version, rev, key }` |
 | `ci info` | `{ schemaVersion, modules: [{ id, version }] }` |

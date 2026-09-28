@@ -40,18 +40,18 @@ pub struct DevArgs {
     #[arg(long, conflicts_with_all = ["watch", "dispatch"])]
     pub forget: bool,
 
-    /// Operation to dispatch after each deploy. Bare, it lists what this module exposes.
+    /// Former way to run an operation after each deploy — now `portaki run <operation>`.
     // `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
     // laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
-    #[arg(long, num_args = 0..=1, default_missing_value = "")]
+    #[arg(long, num_args = 0..=1, default_missing_value = "", hide = true)]
     pub dispatch: Option<String>,
 
     /// JSON parameters for `--dispatch`.
-    #[arg(long, default_value = "{}")]
+    #[arg(long, default_value = "{}", hide = true)]
     pub params: String,
 
     /// `query` reads, `command` writes — the SDK's own distinction.
-    #[arg(long, default_value = "query")]
+    #[arg(long, default_value = "query", hide = true)]
     pub kind: String,
 
     #[command(flatten)]
@@ -69,6 +69,17 @@ pub async fn run(args: DevArgs) -> Result<()> {
     crate::workspace::enter(&args.modules.one("dev")?)?;
     let module_root = std::env::current_dir().context("current_dir")?;
 
+    // Ancien nom, gardé caché le temps de deux mineures : il marche, et dit le nouveau.
+    if let Some(operation) = args.dispatch.as_deref() {
+        ui::warn(format!(
+            "portaki dev --dispatch is now portaki run {} — use that name from now on",
+            if operation.is_empty() {
+                "<operation>"
+            } else {
+                operation
+            }
+        ));
+    }
     // `--dispatch` nu ne demande pas un déploiement : il demande les noms. On les montre et on
     // s'arrête — compiler et pousser pour finir sur « laquelle ? » serait une minute perdue.
     if args.dispatch.as_deref() == Some("") {
@@ -143,6 +154,20 @@ pub async fn run(args: DevArgs) -> Result<()> {
     first?;
 
     if !args.watch {
+        ui::next(&[
+            (
+                "portaki run <operation>",
+                "run a query or a command on this build",
+            ),
+            (
+                "portaki preview <surface>",
+                "render a surface as hosts and guests will see it",
+            ),
+            (
+                "portaki check",
+                "the gate portaki release applies, before publishing",
+            ),
+        ]);
         ui::blank();
         return Ok(());
     }
@@ -247,7 +272,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
 ///
 /// Lu du manifeste, pas de la sandbox : la question se pose avant le premier déploiement, et
 /// souvent sans réseau.
-fn list_operations(module_root: &Path) -> Result<()> {
+pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
     let (manifest, source) = crate::manifest::load_manifest(module_root, None)?;
 
     match source {
@@ -297,8 +322,8 @@ fn list_operations(module_root: &Path) -> Result<()> {
         .unwrap_or("listThings");
 
     ui::next(&[(
-        &format!("portaki dev --dispatch {sample}"),
-        "build, deploy, then run it",
+        &format!("portaki run {sample}"),
+        "run it on the build deployed by portaki dev",
     )]);
     ui::blank();
     // `--kind query` est le défaut : le rappeler n'apprendrait rien. C'est `command` qu'il faut
@@ -429,16 +454,16 @@ async fn cycle(
 }
 
 /// Une case de la grille Scénarios : une surface sur un cas pathologique.
-#[derive(Debug, serde::Deserialize)]
-struct ScenarioCell {
-    surface: String,
-    case: String,
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) struct ScenarioCell {
+    pub(crate) surface: String,
+    pub(crate) case: String,
     /// `ok`, `watch` ou `fail`.
-    status: String,
+    pub(crate) status: String,
     #[serde(default)]
-    code: Option<String>,
+    pub(crate) code: Option<String>,
     #[serde(default)]
-    message: Option<String>,
+    pub(crate) message: Option<String>,
 }
 
 /// Rejoue les sept cas sur ce qui vient d'être déployé, et affiche la grille.
@@ -465,13 +490,23 @@ async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &
             return;
         }
     };
+    running.done(scenarios_line(&cells));
+    print_grid(&cells);
+}
+
+/// « scenarios — 12 of 14 ok ».
+pub(crate) fn scenarios_line(cells: &[ScenarioCell]) -> String {
     let failing = cells.iter().filter(|cell| cell.status != "ok").count();
-    running.done(format!(
+    format!(
         "scenarios — {} of {} ok",
         cells.len() - failing,
         cells.len()
-    ));
-    for row in matrix(&cells) {
+    )
+}
+
+/// La grille, puis une ligne par case qui n'est pas verte, avec son code et son message.
+pub(crate) fn print_grid(cells: &[ScenarioCell]) {
+    for row in matrix(cells) {
         ui::detail(row);
     }
     for cell in cells.iter().filter(|cell| cell.status != "ok") {
@@ -692,11 +727,14 @@ async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
 /// invocation qui avait parfaitement tourné.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DispatchResponse {
+pub(crate) struct DispatchResponse {
     #[serde(default)]
     result_json: String,
     #[serde(default)]
-    duration_ms: u64,
+    pub(crate) duration_ms: u64,
+    /// Ce que le runtime a refusé ; absent quand le passage a abouti.
+    #[serde(default)]
+    pub(crate) error_code: Option<String>,
     #[serde(default)]
     host_calls: Vec<HostCall>,
     #[serde(default)]
@@ -752,7 +790,7 @@ async fn dispatch(
 }
 
 /// Prints what the run did — and what the sandbox refused to do.
-fn print_trace(trace: &DispatchResponse) {
+pub(crate) fn print_trace(trace: &DispatchResponse) {
     if !trace.host_calls.is_empty() || !trace.captured_effects.is_empty() {
         ui::detail("what the run asked the host for:");
     }
