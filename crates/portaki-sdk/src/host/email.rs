@@ -30,6 +30,38 @@
 //! | ≤ 5 `email.send` per invocation | host (mocked by `portaki-test-utils`) | [`EmailError::LimitExceeded`] (`email_limit_exceeded`) |
 //! | ≤ 3 module emails per guest stay per rolling 24 h, ≤ 10 per stay, all modules | no — platform only | dropped |
 //! | ≤ 20 host emails per module per workspace per rolling 24 h | no — platform only | dropped |
+//! | ≤ 10 blocks, 1–12 items per block (`stats`: 2 or 4), required texts not blank | yes | [`EmailError::InvalidBlock`] |
+//! | Every block text ≤ 200 chars per locale | yes | [`EmailError::InvalidBlock`] (`text_too_long`) |
+//! | Block emoji: one short symbol (≤ 16 UTF-16 units, no ASCII, letter, digit or space) | yes; the platform also requires a single grapheme | [`EmailError::InvalidBlock`] |
+//! | No link written in any text (`scheme://`, `www.`) — links go through the CTA only | no — platform only | dropped |
+//! | Unknown block type, tone or hero | cannot be built with these types | dropped |
+//!
+//! ## Blocks
+//!
+//! Beyond the paragraphs of `body`, [`ModuleEmailSdui::blocks`] carries structured blocks the
+//! platform renders with its own templates — a checklist, address cards, a timetable, a form
+//! preview, a receipt, figures, label/value rows, details, a note — and
+//! [`ModuleEmailSdui::hero`] picks the header: plain intro, dark tile holding the button, or a
+//! toned alert tile. Every text is plain text (never HTML). A block outside the contract makes
+//! the platform refuse the whole email, never send it without the block.
+//!
+//! ```
+//! use portaki_sdk::host::email::{
+//!     EmailBlock, EmailHero, EmailPair, EmailTone, LocalizedEmailText as T, ModuleEmailSdui,
+//! };
+//!
+//! let content = ModuleEmailSdui {
+//!     subject: T::new("Synchronisation échouée", "Sync failed"),
+//!     body: T::new("Nous n’arrivons plus à lire votre calendrier.", "We can no longer read your calendar."),
+//!     hero: EmailHero::Alert { tone: EmailTone::Warning },
+//!     blocks: vec![
+//!         EmailBlock::rows([EmailPair::new(T::both("Source"), T::both("Airbnb · iCal"))]),
+//!         EmailBlock::note(EmailTone::Info, T::new("Vérifiez le lien iCal.", "Check the iCal link.")),
+//!     ],
+//!     ..Default::default()
+//! };
+//! assert_eq!(content.blocks.len(), 2);
+//! ```
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -248,6 +280,493 @@ pub struct ModuleEmailCta {
     pub portaki_action: Option<String>,
 }
 
+/// Tone of a [`EmailBlock::Note`] or an [`EmailHero::Alert`] — the platform's closed list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmailTone {
+    /// Property / Portaki colour.
+    Brand,
+    /// Green.
+    Success,
+    /// Blue.
+    Info,
+    /// Amber.
+    Warning,
+    /// Red.
+    Danger,
+    /// Grey.
+    Neutral,
+}
+
+/// Header of a module email. Wire: `{ "kind": "intro" | "ink" | "alert", "tone"? }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum EmailHero {
+    /// Eyebrow, title, greeting and body paragraphs on the page (default, not sent on the wire).
+    #[default]
+    Intro,
+    /// Dark tile: title, greeting, paragraphs and the CTA button inside the tile.
+    Ink,
+    /// Tile coloured by `tone`, eyebrow with a dot — for failures and warnings.
+    Alert {
+        /// Colour of the tile.
+        tone: EmailTone,
+    },
+}
+
+impl EmailHero {
+    fn is_intro(&self) -> bool {
+        *self == Self::Intro
+    }
+}
+
+/// A `label` / `value` line of [`EmailBlock::Receipt`], [`EmailBlock::Stats`],
+/// [`EmailBlock::Rows`] and [`EmailBlock::Details`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailPair {
+    /// Left-hand label.
+    pub label: LocalizedEmailText,
+    /// Right-hand value.
+    pub value: LocalizedEmailText,
+}
+
+impl EmailPair {
+    /// `label` → `value`.
+    pub fn new(label: LocalizedEmailText, value: LocalizedEmailText) -> Self {
+        Self { label, value }
+    }
+}
+
+/// An address card of [`EmailBlock::Places`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailPlace {
+    /// One emoji (`"🥐"`), shown in a square.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Name of the place.
+    pub name: LocalizedEmailText,
+    /// Small line under the name (`Boulangerie · 800 m`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<LocalizedEmailText>,
+}
+
+impl EmailPlace {
+    /// A card with just a name.
+    pub fn new(name: LocalizedEmailText) -> Self {
+        Self {
+            name,
+            ..Self::default()
+        }
+    }
+
+    /// Sets the emoji.
+    pub fn with_emoji(mut self, emoji: impl Into<String>) -> Self {
+        self.emoji = Some(emoji.into());
+        self
+    }
+
+    /// Sets the line under the name.
+    pub fn with_meta(mut self, meta: LocalizedEmailText) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
+
+/// A line of [`EmailBlock::Timetable`]: a time in large figures, then its line.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailTimeLine {
+    /// `08:12`.
+    pub time: LocalizedEmailText,
+    /// `Antibes → Nice-Ville`.
+    pub text: LocalizedEmailText,
+}
+
+impl EmailTimeLine {
+    /// `time` then `text`.
+    pub fn new(time: LocalizedEmailText, text: LocalizedEmailText) -> Self {
+        Self { time, text }
+    }
+}
+
+/// A field previewed by [`EmailBlock::Fields`]: its label over an empty dashed box.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailFormField {
+    /// Field label.
+    pub label: LocalizedEmailText,
+    /// Greyed text in the box (`À renseigner`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<LocalizedEmailText>,
+}
+
+impl EmailFormField {
+    /// A field with no hint.
+    pub fn new(label: LocalizedEmailText) -> Self {
+        Self { label, hint: None }
+    }
+
+    /// Sets the greyed hint.
+    pub fn with_hint(mut self, hint: LocalizedEmailText) -> Self {
+        self.hint = Some(hint);
+        self
+    }
+}
+
+/// A structured block of a module email, rendered by the platform's templates.
+///
+/// Wire: `{ "type": "checklist", … }`. Every text is plain text. Build them with the
+/// constructors ([`EmailBlock::checklist`], [`EmailBlock::rows`], …) and
+/// [`EmailBlock::labeled`]; limits in [`crate::limits`] (`EMAIL_BLOCK_*`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum EmailBlock {
+    /// Tile of check boxes, one per item.
+    Checklist {
+        /// Small heading above the block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// One line per box.
+        items: Vec<LocalizedEmailText>,
+    },
+    /// Address cards, three per row on desktop, stacked on mobile.
+    Places {
+        /// Small heading above the block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The cards.
+        items: Vec<EmailPlace>,
+    },
+    /// Times in large figures, each with its line.
+    Timetable {
+        /// Heading inside the tile.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The lines.
+        items: Vec<EmailTimeLine>,
+    },
+    /// Preview of a form: each field's label over an empty box.
+    Fields {
+        /// Small heading above the block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The fields.
+        items: Vec<EmailFormField>,
+    },
+    /// Receipt card: header, lines, optional total.
+    #[serde(rename_all = "camelCase")]
+    Receipt {
+        /// Header, left.
+        label: LocalizedEmailText,
+        /// Header, right.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        meta: Option<LocalizedEmailText>,
+        /// The lines.
+        items: Vec<EmailPair>,
+        /// Label of the total — set with `total`, or neither.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        total_label: Option<LocalizedEmailText>,
+        /// The total, in large figures.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        total: Option<LocalizedEmailText>,
+    },
+    /// Two or four figures in tiles, two per row.
+    Stats {
+        /// First tile dark.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        ink: bool,
+        /// Exactly 2 or 4.
+        items: Vec<EmailPair>,
+    },
+    /// Label / value lines.
+    Rows {
+        /// Small heading above the block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The lines.
+        items: Vec<EmailPair>,
+    },
+    /// Label / value lines in a grey box (device, source, error…).
+    Details {
+        /// Heading of the box.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The lines.
+        items: Vec<EmailPair>,
+    },
+    /// Callout after a rule: a dot of `tone` with its label, then the text.
+    Note {
+        /// Colour of the dot and label.
+        tone: EmailTone,
+        /// Label next to the dot.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<LocalizedEmailText>,
+        /// The text.
+        text: LocalizedEmailText,
+    },
+}
+
+impl EmailBlock {
+    /// Check boxes.
+    pub fn checklist(items: impl IntoIterator<Item = LocalizedEmailText>) -> Self {
+        Self::Checklist {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Address cards.
+    pub fn places(items: impl IntoIterator<Item = EmailPlace>) -> Self {
+        Self::Places {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Times and their lines.
+    pub fn timetable(items: impl IntoIterator<Item = EmailTimeLine>) -> Self {
+        Self::Timetable {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Form preview.
+    pub fn fields(items: impl IntoIterator<Item = EmailFormField>) -> Self {
+        Self::Fields {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Receipt without total — add one with [`EmailBlock::with_total`].
+    pub fn receipt(label: LocalizedEmailText, items: impl IntoIterator<Item = EmailPair>) -> Self {
+        Self::Receipt {
+            label,
+            meta: None,
+            items: items.into_iter().collect(),
+            total_label: None,
+            total: None,
+        }
+    }
+
+    /// Two or four figures; [`EmailBlock::ink`] darkens the first.
+    pub fn stats(items: impl IntoIterator<Item = EmailPair>) -> Self {
+        Self::Stats {
+            ink: false,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Label / value lines.
+    pub fn rows(items: impl IntoIterator<Item = EmailPair>) -> Self {
+        Self::Rows {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Label / value lines in a grey box.
+    pub fn details(items: impl IntoIterator<Item = EmailPair>) -> Self {
+        Self::Details {
+            label: None,
+            items: items.into_iter().collect(),
+        }
+    }
+
+    /// Callout.
+    pub fn note(tone: EmailTone, text: LocalizedEmailText) -> Self {
+        Self::Note {
+            tone,
+            label: None,
+            text,
+        }
+    }
+
+    /// Sets the heading of the block (the header of a receipt); no effect on `stats`.
+    pub fn labeled(mut self, text: LocalizedEmailText) -> Self {
+        match &mut self {
+            Self::Checklist { label, .. }
+            | Self::Places { label, .. }
+            | Self::Timetable { label, .. }
+            | Self::Fields { label, .. }
+            | Self::Rows { label, .. }
+            | Self::Details { label, .. }
+            | Self::Note { label, .. } => *label = Some(text),
+            Self::Receipt { label, .. } => *label = text,
+            Self::Stats { .. } => {}
+        }
+        self
+    }
+
+    /// Sets the right-hand header of a receipt; no effect on other blocks.
+    pub fn with_meta(mut self, text: LocalizedEmailText) -> Self {
+        if let Self::Receipt { meta, .. } = &mut self {
+            *meta = Some(text);
+        }
+        self
+    }
+
+    /// Sets the total of a receipt; no effect on other blocks.
+    pub fn with_total(mut self, label: LocalizedEmailText, value: LocalizedEmailText) -> Self {
+        if let Self::Receipt {
+            total_label, total, ..
+        } = &mut self
+        {
+            *total_label = Some(label);
+            *total = Some(value);
+        }
+        self
+    }
+
+    /// Darkens the first figure of `stats`; no effect on other blocks.
+    pub fn ink(mut self) -> Self {
+        if let Self::Stats { ink, .. } = &mut self {
+            *ink = true;
+        }
+        self
+    }
+
+    /// Wire name of the block type.
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            Self::Checklist { .. } => "checklist",
+            Self::Places { .. } => "places",
+            Self::Timetable { .. } => "timetable",
+            Self::Fields { .. } => "fields",
+            Self::Receipt { .. } => "receipt",
+            Self::Stats { .. } => "stats",
+            Self::Rows { .. } => "rows",
+            Self::Details { .. } => "details",
+            Self::Note { .. } => "note",
+        }
+    }
+
+    /// `(required texts, optional texts, item count, emojis)` — what [`Self::check`] judges.
+    fn parts(
+        &self,
+    ) -> (
+        Vec<&LocalizedEmailText>,
+        Vec<&LocalizedEmailText>,
+        Option<usize>,
+        Vec<&str>,
+    ) {
+        fn pairs(items: &[EmailPair]) -> Vec<&LocalizedEmailText> {
+            items.iter().flat_map(|p| [&p.label, &p.value]).collect()
+        }
+        match self {
+            Self::Checklist { label, items } => (
+                items.iter().collect(),
+                label.iter().collect(),
+                Some(items.len()),
+                vec![],
+            ),
+            Self::Places { label, items } => (
+                items.iter().map(|p| &p.name).collect(),
+                label
+                    .iter()
+                    .chain(items.iter().filter_map(|p| p.meta.as_ref()))
+                    .collect(),
+                Some(items.len()),
+                items.iter().filter_map(|p| p.emoji.as_deref()).collect(),
+            ),
+            Self::Timetable { label, items } => (
+                items.iter().flat_map(|l| [&l.time, &l.text]).collect(),
+                label.iter().collect(),
+                Some(items.len()),
+                vec![],
+            ),
+            Self::Fields { label, items } => (
+                items.iter().map(|f| &f.label).collect(),
+                label
+                    .iter()
+                    .chain(items.iter().filter_map(|f| f.hint.as_ref()))
+                    .collect(),
+                Some(items.len()),
+                vec![],
+            ),
+            Self::Receipt {
+                label,
+                meta,
+                items,
+                total_label,
+                total,
+            } => {
+                let mut required = pairs(items);
+                required.push(label);
+                (
+                    required,
+                    meta.iter().chain(total_label).chain(total).collect(),
+                    Some(items.len()),
+                    vec![],
+                )
+            }
+            Self::Stats { items, .. } => (pairs(items), vec![], Some(items.len()), vec![]),
+            Self::Rows { label, items } | Self::Details { label, items } => (
+                pairs(items),
+                label.iter().collect(),
+                Some(items.len()),
+                vec![],
+            ),
+            Self::Note { label, text, .. } => (vec![text], label.iter().collect(), None, vec![]),
+        }
+    }
+
+    /// The platform's rules for one block, as far as the SDK can judge them.
+    fn check(&self, index: usize) -> std::result::Result<(), EmailError> {
+        let invalid = |reason| EmailError::InvalidBlock {
+            index,
+            kind: self.kind(),
+            reason,
+        };
+        let (required, optional, count, emojis) = self.parts();
+        if let Some(count) = count {
+            let (min, max) = match self {
+                Self::Stats { .. } => (2, 4),
+                _ => (1, limits::EMAIL_BLOCK_ITEMS_MAX),
+            };
+            if count < min || count > max || (matches!(self, Self::Stats { .. }) && count % 2 != 0)
+            {
+                return Err(invalid("item_count"));
+            }
+        }
+        if let Self::Receipt {
+            total_label, total, ..
+        } = self
+        {
+            if total_label.is_some() != total.is_some() {
+                return Err(invalid("total_and_label_together"));
+            }
+        }
+        if required.iter().any(|text| text.is_blank()) {
+            return Err(invalid("required_text_blank"));
+        }
+        let too_long = required.iter().chain(&optional).any(|text| {
+            text.entries()
+                .any(|(_, copy)| copy.chars().count() > limits::EMAIL_BLOCK_TEXT_MAX_CHARS)
+        });
+        if too_long {
+            return Err(invalid("text_too_long"));
+        }
+        if !emojis.into_iter().all(is_block_emoji) {
+            return Err(invalid("not_an_emoji"));
+        }
+        Ok(())
+    }
+}
+
+/// One short symbol: ≤ [`limits::EMAIL_BLOCK_EMOJI_MAX_UTF16`] UTF-16 units, nothing ASCII,
+/// alphanumeric, blank or control. The platform additionally requires a single grapheme.
+fn is_block_emoji(emoji: &str) -> bool {
+    let units = emoji.encode_utf16().count();
+    (1..=limits::EMAIL_BLOCK_EMOJI_MAX_UTF16).contains(&units)
+        && !emoji
+            .chars()
+            .any(|c| c.is_ascii() || c.is_alphanumeric() || c.is_whitespace() || c.is_control())
+}
+
 /// Module-owned email body (email SDUI / content contract).
 ///
 /// Rendered inside `_base-guest` (or host shell) via Thymeleaf
@@ -269,6 +788,13 @@ pub struct ModuleEmailSdui {
     /// Optional CTA.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cta: Option<ModuleEmailCta>,
+    /// Header: plain intro (default), dark tile holding the CTA, or toned alert tile.
+    #[serde(default, skip_serializing_if = "EmailHero::is_intro")]
+    pub hero: EmailHero,
+    /// Structured blocks after the body paragraphs, before the CTA — see the
+    /// [module docs](self#blocks).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocks: Vec<EmailBlock>,
 }
 
 /// Arguments for [`send`].
@@ -357,6 +883,23 @@ pub enum EmailError {
         max: usize,
     },
 
+    /// A block breaks the platform's contract: item count, blank required text, text over
+    /// [`limits::EMAIL_BLOCK_TEXT_MAX_CHARS`], total without its label, emoji that is not one.
+    #[error("email_block_invalid: blocks[{index}] ({kind}): {reason}")]
+    InvalidBlock {
+        /// Position in [`ModuleEmailSdui::blocks`].
+        index: usize,
+        /// Wire type of the block.
+        kind: &'static str,
+        /// `item_count`, `required_text_blank`, `text_too_long`, `total_and_label_together`,
+        /// `not_an_emoji`.
+        reason: &'static str,
+    },
+
+    /// More than [`limits::EMAIL_BLOCKS_MAX`] blocks.
+    #[error("email_too_many_blocks: at most {} blocks", limits::EMAIL_BLOCKS_MAX)]
+    TooManyBlocks,
+
     /// `action_url` is not an absolute `https://` URL.
     ///
     /// The platform additionally requires the Portaki web origin and drops the link
@@ -393,6 +936,8 @@ impl EmailError {
             Self::EmptyField { .. } => "email_field_empty",
             Self::FieldTooLong { .. } => "email_field_too_long",
             Self::ActionUrlNotHttps => "email_action_url_not_https",
+            Self::InvalidBlock { .. } => "email_block_invalid",
+            Self::TooManyBlocks => "email_too_many_blocks",
             Self::StayEnded => Self::STAY_ENDED_CODE,
             Self::LimitExceeded => Self::LIMIT_EXCEEDED_CODE,
         }
@@ -483,6 +1028,12 @@ impl SendEmailArgs {
         if let Some(cta) = &content.cta {
             cta.label
                 .check_max_chars(EmailField::CtaLabel, limits::EMAIL_CTA_LABEL_MAX_CHARS)?;
+        }
+        if content.blocks.len() > limits::EMAIL_BLOCKS_MAX {
+            return Err(EmailError::TooManyBlocks);
+        }
+        for (index, block) in content.blocks.iter().enumerate() {
+            block.check(index)?;
         }
         if let Some(url) = &self.action_url {
             if !is_absolute_https(url) {
@@ -874,6 +1425,144 @@ mod guard_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn t(text: &str) -> LocalizedEmailText {
+        LocalizedEmailText::both(text)
+    }
+
+    fn with_blocks(hero: EmailHero, blocks: Vec<EmailBlock>) -> SendEmailArgs {
+        SendEmailArgs {
+            email_id: "digest".into(),
+            audience: EmailAudience::Host,
+            content: ModuleEmailSdui {
+                subject: t("Subject"),
+                body: t("Body"),
+                hero,
+                blocks,
+                ..Default::default()
+            },
+            stay_id: None,
+            property_id: None,
+            action_url: None,
+        }
+    }
+
+    #[test]
+    fn legacy_content_serializes_without_hero_or_blocks() {
+        let json = serde_json::to_value(with_blocks(EmailHero::Intro, vec![]).content).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"subject": {"fr": "Subject", "en": "Subject"}, "body": {"fr": "Body", "en": "Body"}})
+        );
+        let back: ModuleEmailSdui = serde_json::from_value(json).unwrap();
+        assert_eq!(back.hero, EmailHero::Intro);
+        assert!(back.blocks.is_empty());
+    }
+
+    #[test]
+    fn blocks_and_hero_match_the_platform_wire() {
+        let args = with_blocks(
+            EmailHero::Alert {
+                tone: EmailTone::Warning,
+            },
+            vec![
+                EmailBlock::receipt(t("Reçu"), [EmailPair::new(t("Départ"), t("+25 €"))])
+                    .with_meta(t("L’Islette"))
+                    .with_total(t("Total"), t("25 €")),
+                EmailBlock::stats([
+                    EmailPair::new(t("Nouveaux"), t("4")),
+                    EmailPair::new(t("Mis à jour"), t("2")),
+                ])
+                .ink(),
+                EmailBlock::places([EmailPlace::new(t("Plage")).with_emoji("🏖️")])
+                    .labeled(t("Autour")),
+                EmailBlock::note(EmailTone::Info, t("À savoir")),
+            ],
+        );
+        assert_eq!(args.validate(), Ok(()));
+        let json = serde_json::to_value(&args.content).unwrap();
+        assert_eq!(
+            json["hero"],
+            serde_json::json!({"kind": "alert", "tone": "warning"})
+        );
+        let blocks = &json["blocks"];
+        assert_eq!(blocks[0]["type"], "receipt");
+        assert_eq!(blocks[0]["totalLabel"]["fr"], "Total");
+        assert_eq!(blocks[0]["items"][0]["value"]["en"], "+25 €");
+        assert_eq!(blocks[1]["type"], "stats");
+        assert_eq!(blocks[1]["ink"], true);
+        assert_eq!(blocks[2]["items"][0]["emoji"], "🏖️");
+        assert_eq!(blocks[2]["label"]["fr"], "Autour");
+        assert_eq!(blocks[3]["tone"], "info");
+        assert!(blocks[3].get("label").is_none());
+        let back: ModuleEmailSdui = serde_json::from_value(json).unwrap();
+        assert_eq!(back, args.content);
+    }
+
+    #[test]
+    fn blocks_outside_the_contract_are_refused() {
+        let pair = || EmailPair::new(t("a"), t("1"));
+        let cases: Vec<(EmailBlock, &str)> = vec![
+            (EmailBlock::checklist([]), "item_count"),
+            (
+                EmailBlock::checklist(vec![t("x"); limits::EMAIL_BLOCK_ITEMS_MAX + 1]),
+                "item_count",
+            ),
+            (EmailBlock::stats([pair()]), "item_count"),
+            (EmailBlock::stats([pair(), pair(), pair()]), "item_count"),
+            (
+                EmailBlock::rows([EmailPair::new(t("a"), t(" "))]),
+                "required_text_blank",
+            ),
+            (
+                EmailBlock::checklist([t(&"é".repeat(limits::EMAIL_BLOCK_TEXT_MAX_CHARS + 1))]),
+                "text_too_long",
+            ),
+            (
+                EmailBlock::note(EmailTone::Info, t("ok"))
+                    .labeled(t(&"x".repeat(limits::EMAIL_BLOCK_TEXT_MAX_CHARS + 1))),
+                "text_too_long",
+            ),
+            (
+                EmailBlock::Receipt {
+                    label: t("Reçu"),
+                    meta: None,
+                    items: vec![pair()],
+                    total_label: None,
+                    total: Some(t("25 €")),
+                },
+                "total_and_label_together",
+            ),
+        ];
+        for emoji in ["", "a", "<", "🍝 ", "é", "🏖️🏖️🏖️🏖️🏖️🏖️"] {
+            let place = EmailPlace::new(t("n")).with_emoji(emoji);
+            assert!(!is_block_emoji(emoji), "{emoji:?}");
+            let err = with_blocks(EmailHero::Intro, vec![EmailBlock::places([place])])
+                .validate()
+                .unwrap_err();
+            assert_eq!(err.code(), "email_block_invalid");
+        }
+        for (block, reason) in cases {
+            let err = with_blocks(
+                EmailHero::Intro,
+                vec![EmailBlock::checklist([t("ok")]), block],
+            )
+            .validate()
+            .unwrap_err();
+            assert!(
+                matches!(err, EmailError::InvalidBlock { index: 1, reason: r, .. } if r == reason),
+                "{reason}: {err}"
+            );
+        }
+        let too_many = vec![EmailBlock::checklist([t("x")]); limits::EMAIL_BLOCKS_MAX + 1];
+        assert_eq!(
+            with_blocks(EmailHero::Ink, too_many).validate(),
+            Err(EmailError::TooManyBlocks)
+        );
+        for emoji in ["🍝", "🏖️", "🇫🇷", "👩‍👩‍👧"] {
+            assert!(is_block_emoji(emoji), "{emoji}");
+        }
+    }
 
     #[test]
     fn legacy_fr_en_roundtrip() {

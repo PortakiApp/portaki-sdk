@@ -123,6 +123,10 @@ fails where production would drop the mail. Values live in `portaki_sdk::limits`
   body ≤ 5000, CTA label ≤ 80. `email_id`, subject and body must not be blank.
 - `action_url` must be `https` on the Portaki web origin — the SDK checks the
   scheme, the platform drops the link on any other origin.
+- Blocks (`content.blocks`, `EmailBlock`): at most 10, 1–12 items each (`stats`:
+  2 or 4), every text ≤ 200 chars per locale, plain text only, no link written in
+  text; an emoji is one short symbol. A block outside the contract makes the
+  platform refuse the whole email (`email_block_invalid` from the SDK).
 - Guest emails are refused once `checkout + 7 days` has passed (`email_stay_ended`).
 - At most 5 `email.send` (`email_limit_exceeded`) and 20 events
   (`event_limit_exceeded`) per invocation; at most 5 connector calls.
