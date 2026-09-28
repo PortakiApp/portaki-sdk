@@ -40,10 +40,13 @@ pub fn unwrap<T: DeserializeOwned>(body: &str) -> Result<T> {
 }
 
 /// Le code d'erreur, quand la réponse en porte un. Absent, l'appelant décide quoi en dire.
+///
+/// L'enveloppe `/api/v1` le porte en `error_code` ; devapi et le registre, en `code`.
 pub fn error_code(body: &str) -> Option<String> {
-    serde_json::from_str::<Envelope<serde_json::Value>>(body)
-        .ok()
-        .and_then(|envelope| envelope.error_code)
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    ["error_code", "code"]
+        .iter()
+        .find_map(|key| value[key].as_str().map(str::to_string))
 }
 
 /// Une session auprès de la plateforme, pour lire ses routes JSON nues (`/dev/v1`, `/registry/v1`).
@@ -69,13 +72,73 @@ impl Platform {
 
     /// `GET {base}{path}` : le corps, `None` sur un 404.
     pub async fn get(&mut self, path: &str) -> Result<Option<serde_json::Value>> {
+        let (status, body) = self.send(reqwest::Method::GET, path, None).await?;
+        if status == 404 {
+            return Ok(None);
+        }
+        self.accept(path, status, body).map(Some)
+    }
+
+    /// `POST`, `PUT`, `PATCH` : le corps de la réponse, ou le refus — un 404 compris, puisqu'on
+    /// écrivait quelque chose.
+    pub async fn call(
+        &mut self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let (status, answer) = self.send(method, path, body).await?;
+        self.accept(path, status, answer)
+    }
+
+    fn accept(
+        &self,
+        path: &str,
+        status: u16,
+        body: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        if (200..300).contains(&status) {
+            return Ok(body);
+        }
+        let url = format!("{}{path}", self.base);
+        let raw = body.to_string();
+        let refused = crate::http::refused(&url, status, &raw);
+        match body["message"]
+            .as_str()
+            .filter(|message| !message.is_empty())
+        {
+            Some(message) => bail!("{refused} — {message}"),
+            None => bail!("{refused}"),
+        }
+    }
+
+    /// La requête, renouvelée une fois sur un 401 : le statut et le corps lu en JSON (`Null`
+    /// quand il est vide, la chaîne brute quand il n'est pas du JSON).
+    ///
+    /// Patient hors `GET` : un dispatch, un rendu ou une grille de scénarios exécutent le module
+    /// avant de répondre.
+    pub async fn send(
+        &mut self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value)> {
         use anyhow::Context as _;
         let url = format!("{}{path}", self.base);
+        let client = if method == reqwest::Method::GET {
+            crate::http::client()
+        } else {
+            crate::http::patient_client()
+        };
         let mut renewed = false;
         loop {
-            let response = crate::http::client()
-                .get(&url)
-                .bearer_auth(&self.token)
+            let mut request = client
+                .request(method.clone(), &url)
+                .bearer_auth(&self.token);
+            if let Some(body) = body {
+                request = request.json(body);
+            }
+            let response = request
                 .send()
                 .await
                 .map_err(|failure| crate::http::unreachable(&url, failure))?;
@@ -87,16 +150,13 @@ impl Platform {
                     .context("renew the session")?;
                 continue;
             }
-            if status == 404 {
-                return Ok(None);
-            }
-            let body = response.text().await.unwrap_or_default();
-            if !(200..300).contains(&status) {
-                bail!("{}", crate::http::refused(&url, status, &body));
-            }
-            return serde_json::from_str(&body)
-                .map(Some)
-                .with_context(|| format!("unexpected answer from {url}"));
+            let raw = response.text().await.unwrap_or_default();
+            let parsed = if raw.trim().is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::from_str(&raw).unwrap_or(serde_json::Value::String(raw))
+            };
+            return Ok((status, parsed));
         }
     }
 }

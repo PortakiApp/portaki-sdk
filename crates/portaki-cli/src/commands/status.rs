@@ -252,8 +252,8 @@ fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
     };
     if latest.state == "draft" {
         return next(
-            None,
-            "complete the release notes of the draft in the developer space — it stays invisible to hosts until then",
+            Some(format!("portaki release notes {}{flag}", latest.version)),
+            "complete the release notes of the draft — it stays invisible to hosts until then",
         );
     }
     if module.err24 > 0 {
@@ -263,7 +263,10 @@ fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
         );
     }
     if module.open_reports > 0 {
-        return next(None, "open reports are waiting in the developer space");
+        return next(
+            Some(format!("portaki reports --open{flag}")),
+            "open reports are waiting — fix, then resolve them",
+        );
     }
     if latest.signature != "signed" {
         return next(
@@ -449,7 +452,16 @@ mod tests {
 
         module.latest = published("draft", "signed");
         let draft = decide(&all_steps(), &module, "");
-        assert!(draft.command.is_none());
+        assert_eq!(
+            draft.command.as_deref(),
+            Some(
+                format!(
+                    "portaki release notes {}",
+                    module.latest.as_ref().unwrap().version
+                )
+                .as_str()
+            )
+        );
         assert!(draft.reason.contains("release notes"));
 
         module.latest = published("available", "unsigned");

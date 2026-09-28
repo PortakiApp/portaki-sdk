@@ -21,8 +21,13 @@
 //! | `test` | Forward to `cargo test` in the module crate |
 //! | `login` / `logout` | Open or end a developer session (device grant) |
 //! | `dev` | Build, deploy to the hosted sandbox, and show what the run did |
+//! | `run` | Run a query or command on the sandbox build |
+//! | `scenarios` | The seven pathological stays against every surface; `run`, `reset` |
+//! | `preview` | Render a surface of the sandbox build |
+//! | `reports` | What hosts and the runtime report; `resolve <id> --note` |
 //! | `ci` | Answer what a CI workflow used to ask in bash |
 //! | `release` | Test, build, push to Portaki's OCI repository, sign, and announce a version |
+//! | `release status <v>` / `release notes <v>` | A published version: where it stands, its notes |
 //! | `sdk upgrade` | Move the module to another SDK version, and prove nothing broke |
 //! | `link` | Open the repository page, or with `--all` link every monorepo module like this one |
 //! | `logs` | Follow a module's sandbox logs, optionally one error code |
@@ -117,6 +122,14 @@ enum Command {
     Logout(commands::login::LogoutArgs),
     /// Build, push to the hosted sandbox, and show what the run did.
     Dev(commands::dev::DevArgs),
+    /// Run a query or a command on the sandbox build — bare, list them.
+    Run(commands::sandbox::RunArgs),
+    /// The seven pathological stays against every surface: show, `run` again, or `reset` fixtures.
+    Scenarios(commands::sandbox::ScenariosArgs),
+    /// Render a surface of the sandbox build — bare, list them.
+    Preview(commands::sandbox::PreviewArgs),
+    /// What hosts and the runtime report on a module — and `resolve` once fixed.
+    Reports(commands::reports::ReportsArgs),
     /// Build wasm32 artifact, manifest, and i18n bundle.
     Build(commands::build::BuildArgs),
     /// Answer the questions a CI workflow used to ask in bash.
@@ -137,8 +150,9 @@ enum Command {
     I18n(commands::i18n::I18nArgs),
     /// Declare a permission (`portaki permissions add email`).
     Permissions(commands::permissions::PermissionsArgs),
-    /// Test, build, push to Portaki's registry, sign, and announce a version.
-    Release(commands::release::ReleaseArgs),
+    /// Test, build, push to Portaki's registry, sign, and announce a version — or `status`/`notes`
+    /// of a published one.
+    Release(ReleaseCommand),
     /// Former name of `release`.
     #[command(hide = true)]
     Publish(commands::release::ReleaseArgs),
@@ -150,6 +164,16 @@ enum Command {
     Catalog,
     /// GET a URL and pretty-print the body when it is JSON (no OCI registry auth).
     Inspect(commands::inspect::InspectArgs),
+}
+
+/// `release` publie ; `release status <v>` et `release notes <v>` lisent une version publiée.
+#[derive(Debug, clap::Args)]
+#[command(args_conflicts_with_subcommands = true)]
+struct ReleaseCommand {
+    #[command(subcommand)]
+    action: Option<commands::release_notes::ReleaseAction>,
+    #[command(flatten)]
+    args: commands::release::ReleaseArgs,
 }
 
 #[tokio::main]
@@ -392,6 +416,10 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Login(args) => commands::login::run(args).await,
         Command::Logout(args) => commands::login::logout(args).await,
         Command::Dev(args) => commands::dev::run(args).await,
+        Command::Run(args) => commands::sandbox::run(args).await,
+        Command::Scenarios(args) => commands::sandbox::scenarios(args).await,
+        Command::Preview(args) => commands::sandbox::preview(args).await,
+        Command::Reports(args) => commands::reports::run(args).await,
         Command::Build(args) => commands::build::run(args).await,
         Command::Ci(args) => commands::ci::run(args).await,
         Command::Check(args) => commands::check::run(args).await,
@@ -402,7 +430,11 @@ async fn dispatch(command: Command) -> Result<()> {
         Command::Sdk(args) => commands::sdk::run(args).await,
         Command::Permissions(args) => commands::permissions::run(args),
         Command::I18n(args) => commands::i18n::run(args),
-        Command::Release(args) => commands::release::run(args).await,
+        Command::Release(ReleaseCommand {
+            action: Some(action),
+            ..
+        }) => commands::release_notes::run(action).await,
+        Command::Release(ReleaseCommand { args, .. }) => commands::release::run(args).await,
         Command::Publish(args) => {
             ui::warn("portaki publish is now portaki release — use that name from now on");
             commands::release::run(args).await
