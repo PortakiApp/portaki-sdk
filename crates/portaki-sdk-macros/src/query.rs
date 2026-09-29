@@ -109,8 +109,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         "fn": fn_name,
         "guest": attrs.guest,
     });
-    // Le type d'arguments, par son nom : `portaki build` y joint les champs émis par son
-    // `#[params]`, et la sandbox en tire un formulaire.
+    // The argument type, by name: `portaki build` joins the fields its `#[params]` emitted, and
+    // the sandbox turns them into a form.
     if let Some(args) = crate::params::args_type_name(&function_item) {
         declaration["args"] = serde_json::Value::String(args);
     }

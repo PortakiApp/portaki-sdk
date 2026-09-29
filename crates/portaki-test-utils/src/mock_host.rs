@@ -589,7 +589,7 @@ impl HostBackend for MockHostFunctions {
     }
 
     fn email_send(&self, payload_json: &str) -> Result<()> {
-        // Comme la plateforme : chaque appel de l'op compte, même refusé ensuite.
+        // Like the platform: every call of the op counts, even one refused further down.
         {
             let mut calls = self.email_send_calls.lock().expect("email calls lock");
             *calls += 1;
@@ -597,8 +597,8 @@ impl HostBackend for MockHostFunctions {
                 return Err(EmailError::LimitExceeded.into());
             }
         }
-        // `email::send` a déjà validé ; le mock revérifie parce que la plateforme ne fait pas
-        // confiance au SDK non plus, et qu'un backend peut être appelé sans passer par lui.
+        // `email::send` has already validated; the mock checks again because the platform does
+        // not trust the SDK either, and because a backend can be called without going through it.
         let args: SendEmailArgs = serde_json::from_str(payload_json)?;
         args.validate()?;
         if args.is_after_stay(&self.context, self.now()) {
@@ -864,7 +864,7 @@ mod tests {
         }
     }
 
-    /// Sans déclaration, le runtime ne transmet pas le contact : le mock part du même vide.
+    /// Without the declaration, the runtime passes no contact: the mock starts from the same blank.
     #[test]
     fn guest_contact_is_absent_unless_the_test_grants_it() {
         let ctx = MockContext::guest()
