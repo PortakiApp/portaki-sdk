@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.12.0...v9.0.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **email:** ModuleEmailSdui has new fields; struct literals must add
+
+### Features
+
+* **email:** add blocks and hero to module emails ([e8f86ba](https://github.com/PortakiApp/portaki-sdk/commit/e8f86bacf0c55b430c22be2d7ba6e55d42cee1e2))
+
 ## [8.12.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.11.1...v8.12.0) (2026-09-28)
 
 
