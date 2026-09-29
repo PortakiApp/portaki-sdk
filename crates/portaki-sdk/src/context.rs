@@ -193,6 +193,39 @@ pub struct StayContext {
     pub guest_phone: Option<String>,
 }
 
+/// The host, as the guest sees them.
+///
+/// Filled by the platform on every invocation it knows a host for; a module never composes
+/// it and never stores it. It exists because the booklet quotes the host everywhere — "le
+/// conseil de Claire", "prévenir Claire", the word of welcome — and a module that had to ask
+/// the host to retype their own name would get a different one in each module.
+///
+/// `None` on an invocation with no host behind it (a preview, a workspace with no owner yet).
+/// Build one with `..HostProfile::default()`: a field added later must not break the literal.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HostProfile {
+    /// First name or display name, as the host wrote it for this property.
+    pub name: String,
+    /// Initials, for when there is no photo. Computed by the platform, never by a module.
+    #[serde(default)]
+    pub initials: Option<String>,
+    /// Profile photo URL, already resolved against the plan.
+    #[serde(default)]
+    pub photo_url: Option<String>,
+    /// Role line, translated: `votre hôte`, `votre hôte depuis 2019`.
+    #[serde(default)]
+    pub role: Option<String>,
+    /// Phone the guest may call, in international form. `None` when the host gave none —
+    /// then no call button, rather than a button that fails.
+    #[serde(default)]
+    pub phone: Option<String>,
+    /// When the host usually answers, already written for the guest
+    /// (`en général sous 2 h`, `9 h – 20 h`). Reused by every module that announces a delay,
+    /// so they all announce the same one.
+    #[serde(default)]
+    pub response_time: Option<String>,
+}
+
 /// Shell accessibility and theme preferences from the client runtime.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DisplayPreferences {
@@ -236,6 +269,9 @@ pub struct Context {
     pub stay: Option<StayContext>,
     /// Property metadata bundle.
     pub property: PropertyContext,
+    /// The host of this property, as the guest sees them; `None` when unknown.
+    #[serde(default)]
+    pub host: Option<HostProfile>,
     /// Surface/query/command input params from the host (route params, overlay args, …).
     #[serde(default)]
     pub input: Value,
@@ -386,6 +422,7 @@ impl Default for Context {
                 Some(GeoPoint::new(43.55, 7.01)),
                 None,
             ),
+            host: None,
             input: Value::Null,
             module_config: None,
             property_lang: None,

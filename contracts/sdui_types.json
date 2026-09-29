@@ -122,6 +122,9 @@
         "name": "openHostFragment"
       },
       {
+        "name": "close"
+      },
+      {
         "fields": {
           "event": {
             "type": "String"
@@ -185,6 +188,26 @@
       }
     ]
   },
+  "Author": {
+    "fields": {
+      "initials": {
+        "optional": true,
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      },
+      "photo": {
+        "optional": true,
+        "type": "String"
+      },
+      "role": {
+        "optional": true,
+        "type": "String"
+      }
+    },
+    "kind": "struct"
+  },
   "ButtonVariant": {
     "kind": "enum",
     "variants": [
@@ -196,6 +219,17 @@
       },
       {
         "name": "ghost"
+      }
+    ]
+  },
+  "CardPresentation": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "full"
+      },
+      {
+        "name": "row"
       }
     ]
   },
@@ -256,12 +290,38 @@
       },
       {
         "name": "cards"
+      },
+      {
+        "name": "list"
+      },
+      {
+        "name": "grid"
+      },
+      {
+        "name": "segmented"
+      },
+      {
+        "name": "checklist"
+      },
+      {
+        "name": "combobox"
+      },
+      {
+        "name": "stars"
       }
     ]
   },
   "ChoiceOption": {
     "fields": {
       "description": {
+        "optional": true,
+        "type": "String"
+      },
+      "emoji": {
+        "optional": true,
+        "type": "String"
+      },
+      "group": {
         "optional": true,
         "type": "String"
       },
@@ -291,6 +351,20 @@
         "name": "neutral"
       }
     ]
+  },
+  "DetailRow": {
+    "fields": {
+      "current": {
+        "type": "bool"
+      },
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    },
+    "kind": "struct"
   },
   "EditableListItem": {
     "fields": {
@@ -630,6 +704,39 @@
       }
     ]
   },
+  "KeyValueLayout": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "row"
+      },
+      {
+        "name": "tile"
+      }
+    ]
+  },
+  "Leading": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Icon"
+      },
+      {
+        "name": "Visual"
+      }
+    ]
+  },
+  "ListItemLayout": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "row"
+      },
+      {
+        "name": "tile"
+      }
+    ]
+  },
   "MapClustering": {
     "fields": {
       "enabled": {
@@ -659,7 +766,15 @@
   },
   "MapMarker": {
     "fields": {
+      "action": {
+        "optional": true,
+        "type": "Action"
+      },
       "category": {
+        "optional": true,
+        "type": "String"
+      },
+      "emoji": {
         "optional": true,
         "type": "String"
       },
@@ -683,6 +798,10 @@
       },
       "lng": {
         "type": "f64"
+      },
+      "subtitle": {
+        "optional": true,
+        "type": "String"
       },
       "tone": {
         "optional": true,
@@ -740,6 +859,29 @@
         "name": "fullscreen"
       }
     ]
+  },
+  "RichTextVariant": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "body"
+      },
+      {
+        "name": "lead"
+      }
+    ]
+  },
+  "SecretState": {
+    "fields": {
+      "reveal_at": {
+        "optional": true,
+        "type": "String"
+      },
+      "revealed": {
+        "type": "bool"
+      }
+    },
+    "kind": "struct"
   },
   "StackDirection": {
     "kind": "enum",
@@ -906,6 +1048,17 @@
       },
       {
         "name": "emergency"
+      }
+    ]
+  },
+  "Trailing": {
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Text"
+      },
+      {
+        "name": "Visual"
       }
     ]
   },

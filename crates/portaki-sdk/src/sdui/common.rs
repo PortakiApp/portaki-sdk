@@ -248,11 +248,23 @@ pub enum MapInteractionMode {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ChoiceListLayout {
-    /// Compact list rows.
+    /// Compact rows, chosen inline.
     #[default]
     Compact,
     /// Card grid.
     Cards,
+    /// One description per row, stacked.
+    List,
+    /// Tiles in a grid — emoji plus label, several may be picked.
+    Grid,
+    /// Segmented control, two to four short choices side by side.
+    Segmented,
+    /// Checklist with progress, groups and a done banner.
+    Checklist,
+    /// Free text with suggestions, accent-insensitive (station search).
+    Combobox,
+    /// One to five stars, draggable, arrow keys included.
+    Stars,
 }
 
 /// Map marker kind.
@@ -326,6 +338,15 @@ pub struct MapMarker {
     /// Marker kind (`property` hub vs `poi` pin).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<MapMarkerKind>,
+    /// Emoji drawn in the pin — what the booklet map uses for a module's places.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Second line under the name, on the map and in the row of places.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// What tapping the pin does — normally opens the module's own detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
 }
 
 impl MapMarker {
@@ -340,6 +361,9 @@ impl MapMarker {
             icon: None,
             tone: None,
             kind: None,
+            emoji: None,
+            subtitle: None,
+            action: None,
         }
     }
 
@@ -366,6 +390,24 @@ impl MapMarker {
         self.icon = Some(value);
         self
     }
+
+    /// Sets the emoji drawn in the pin.
+    pub fn emoji(mut self, value: impl Into<String>) -> Self {
+        self.emoji = Some(value.into());
+        self
+    }
+
+    /// Sets the second line under the name.
+    pub fn subtitle(mut self, value: impl Into<String>) -> Self {
+        self.subtitle = Some(value.into());
+        self
+    }
+
+    /// Sets what tapping the pin does.
+    pub fn action(mut self, value: Action) -> Self {
+        self.action = Some(value);
+        self
+    }
 }
 
 /// Option row for [`crate::sdui::primitives::ChoiceList`] / Select / RadioGroup.
@@ -381,6 +423,12 @@ pub struct ChoiceOption {
     /// Optional icon.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<IconName>,
+    /// Optional emoji, shown instead of an icon on tile layouts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Heading this option sits under (checklist groups, room names).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 impl ChoiceOption {
@@ -391,7 +439,21 @@ impl ChoiceOption {
             label: label.into(),
             description: None,
             icon: None,
+            emoji: None,
+            group: None,
         }
+    }
+
+    /// Sets the emoji.
+    pub fn emoji(mut self, value: impl Into<String>) -> Self {
+        self.emoji = Some(value.into());
+        self
+    }
+
+    /// Sets the group heading.
+    pub fn group(mut self, value: impl Into<String>) -> Self {
+        self.group = Some(value.into());
+        self
     }
 
     /// Sets the description.
@@ -809,4 +871,249 @@ impl FeedStatus {
             tone,
         }
     }
+}
+
+// ─── Livret voyageur v3 — visuels et états nommés par les primitives révisées.
+//
+// Le module envoie du contenu et une intention ; il ne choisit ni couleur, ni variante de
+// carte, ni fond. Ces types décrivent donc ce qu'il y a à montrer, jamais comment le peindre.
+
+/// How a [`Card`](super::primitives::Card) fills its slot.
+///
+/// Not a look: the booklet still picks the card's variant from its placement.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CardPresentation {
+    /// Full card with its own header.
+    #[default]
+    Full,
+    /// One row inside a list of cards.
+    Row,
+}
+
+/// Shape of a [`ListItem`](super::primitives::ListItem).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ListItemLayout {
+    /// Row, full width.
+    #[default]
+    Row,
+    /// Tile, sized by its container (carousels, grids).
+    Tile,
+}
+
+/// Shape of a [`KeyValue`](super::primitives::KeyValue).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyValueLayout {
+    /// Label and value on one row.
+    #[default]
+    Row,
+    /// Tile: label above, value large below.
+    Tile,
+}
+
+/// What stands at the head of a [`ListItem`](super::primitives::ListItem).
+///
+/// A bare string stays readable on the wire — older payloads sent an icon name — and
+/// deserializes as [`Leading::Icon`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Leading {
+    /// Icon name alone (legacy wire form).
+    Icon(String),
+    /// One of the named visuals.
+    Visual(Box<LeadingVisual>),
+}
+
+impl Default for Leading {
+    fn default() -> Self {
+        Self::Visual(Box::default())
+    }
+}
+
+/// The named visuals a row may lead with — at most one is set.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct LeadingVisual {
+    /// Icon name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<IconName>,
+    /// Emoji, shown as-is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Rank in a numbered list of steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<u32>,
+    /// Color swatch (waste bins).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swatch: Option<Swatch>,
+    /// Time, in the property's local time (`08:12`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+    /// Map thumbnail centred on this point.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<GeoPoint>,
+    /// Photo URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// Provider logo — `url` plus the name it stands for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logo: Option<LeadingLogo>,
+}
+
+/// A provider logo at the head of a row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LeadingLogo {
+    /// Image URL (`https` only).
+    pub url: String,
+    /// Provider name, for the alternative text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// What closes a [`ListItem`](super::primitives::ListItem): a badge, or plain text.
+///
+/// A bare string deserializes as [`Trailing::Text`] — the legacy wire form.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Trailing {
+    /// Plain text (legacy wire form).
+    Text(String),
+    /// One of the named trailing visuals.
+    Visual(Box<TrailingVisual>),
+}
+
+impl Default for Trailing {
+    fn default() -> Self {
+        Self::Visual(Box::default())
+    }
+}
+
+/// Badge or text at the end of a row — at most one is set.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TrailingVisual {
+    /// Status badge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub badge: Option<BadgeSpec>,
+    /// Plain text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Render the text in the monospaced face (codes, times).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mono: bool,
+}
+
+/// A badge described by what it says, not how it looks.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct BadgeSpec {
+    /// Badge text.
+    pub label: String,
+    /// Semantic tone; the status tones carry their own glyph.
+    #[serde(default)]
+    pub tone: Tone,
+    /// Ask for the leading dot on a tone that has no glyph of its own.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dot: bool,
+}
+
+impl BadgeSpec {
+    /// A `tone` badge reading `label`.
+    pub fn new(label: impl Into<String>, tone: Tone) -> Self {
+        Self {
+            label: label.into(),
+            tone,
+            dot: false,
+        }
+    }
+}
+
+/// One line of a row that unfolds (opening hours, day by day).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DetailRow {
+    /// Left label (a weekday, a stop).
+    pub label: String,
+    /// Right value (`09:00 – 19:00`, `Fermé`).
+    pub value: String,
+    /// This line is the one happening now — the shell highlights it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub current: bool,
+}
+
+impl DetailRow {
+    /// A `label` / `value` line.
+    pub fn new(label: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            value: value.into(),
+            current: false,
+        }
+    }
+
+    /// Marks this line as the current one.
+    pub fn current(mut self) -> Self {
+        self.current = true;
+        self
+    }
+}
+
+/// Whether a secret value may be shown yet.
+///
+/// The module masks the value itself — this only tells the shell what to say about it.
+/// A secret is never sent in clear before `revealed` is `true`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SecretState {
+    /// The value carried alongside is the real one.
+    pub revealed: bool,
+    /// When it becomes available, formatted for the guest. `None` once revealed, or
+    /// when no date can be computed (no check-in on the stay).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal_at: Option<String>,
+}
+
+impl SecretState {
+    /// A secret still hidden, available at `reveal_at` when known.
+    pub fn hidden(reveal_at: Option<String>) -> Self {
+        Self {
+            revealed: false,
+            reveal_at,
+        }
+    }
+
+    /// A secret the guest may see.
+    pub fn revealed() -> Self {
+        Self {
+            revealed: true,
+            reveal_at: None,
+        }
+    }
+}
+
+/// The person a quote is signed by — always the host, filled by the platform.
+///
+/// A module never composes it: it asks for the host by leaving it to the shell, or quotes
+/// text the host wrote and the shell signs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct Author {
+    /// Display name.
+    pub name: String,
+    /// Role line (`votre hôte`, `votre hôte depuis 2019`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Initials, used when there is no photo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initials: Option<String>,
+    /// Profile photo URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub photo: Option<String>,
+}
+
+/// Emphasis of a [`RichText`](super::primitives::RichText) block.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RichTextVariant {
+    /// Running text.
+    #[default]
+    Body,
+    /// A quote, set larger — a card holding only this becomes the editorial variant.
+    Lead,
 }

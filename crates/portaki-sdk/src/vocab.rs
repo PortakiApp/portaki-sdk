@@ -95,6 +95,12 @@ vocabulary! {
         PostStay = "post-stay",
         /// Shown in the "upcoming" section before arrival.
         Upcoming = "upcoming",
+        /// The access cell of the booklet status strip: what the guest opens the door with,
+        /// on the schedule the module itself decides. The booklet draws it in the strip
+        /// above the sections, and knows nothing of the module behind it.
+        StatusCell = "status-cell",
+        /// The pull quote under the status strip — the host's word, first sentence only.
+        StatusNote = "status-note",
     }
 }
 

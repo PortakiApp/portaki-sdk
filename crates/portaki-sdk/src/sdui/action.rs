@@ -245,6 +245,11 @@ pub enum Action {
         #[serde(skip_serializing_if = "Option::is_none")]
         args: Option<OverlayArgs>,
     },
+    /// Close the panel this action was pressed in, and nothing else.
+    ///
+    /// The shell owns the panel, so only the shell can close it: a module that finished a form
+    /// says `Close`, it does not navigate somewhere to get out.
+    Close,
     /// Emit a client-side event handled locally by the shell.
     Emit {
         /// Event name registered with the shell runtime.
@@ -346,6 +351,11 @@ impl Action {
             event: event.as_str().to_string(),
             payload,
         }
+    }
+
+    /// Builds a [`Action::Close`]: closes the panel it was pressed in.
+    pub const fn close() -> Self {
+        Action::Close
     }
 
     /// Builds a [`Action::Copy`] clipboard action.

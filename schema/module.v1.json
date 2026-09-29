@@ -394,8 +394,8 @@
         },
         "role": {
           "type": "string",
-          "enum": ["card", "arrival-formality", "post-stay", "upcoming"],
-          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form) | post-stay (rendered on the dedicated end-of-stay screen once the stay is over) | upcoming (compact prep card rendered on the pre-arrival timeline before check-in)"
+          "enum": ["card", "arrival-formality", "post-stay", "upcoming", "status-cell", "status-note"],
+          "description": "card (default booklet card) | arrival-formality (composed into Accueil formalities; may embed HostFragment for regulatory.police-form) | post-stay (rendered on the dedicated end-of-stay screen once the stay is over) | upcoming (compact prep card rendered on the pre-arrival timeline before check-in) | status-cell (the access cell of the booklet status strip, on the module's own reveal schedule) | status-note (the pull quote under the status strip: the host's word)"
         },
         "embedsHostFragments": {
           "type": "array",
