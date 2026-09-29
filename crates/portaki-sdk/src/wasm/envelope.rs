@@ -7,8 +7,8 @@ use uuid::Uuid;
 use chrono::{DateTime, NaiveTime, Utc};
 
 use crate::context::{
-    CapabilityGrant, Context, DisplayPreferences, GuestIdentity, PlanInfo, PropertyContext,
-    StayContext,
+    CapabilityGrant, Context, DisplayPreferences, GuestIdentity, HostProfile, PlanInfo,
+    PropertyContext, StayContext,
 };
 use crate::error::{PortakiError, Result};
 use crate::ids::ModuleId;
@@ -97,6 +97,9 @@ pub struct WasmContextEnvelope {
     /// Property timezone (`Europe/Paris`) — legacy alias; prefer `propertyTimezone`.
     #[serde(default)]
     pub timezone: Option<String>,
+    /// The host as the guest sees them; absent on an invocation with no host behind it.
+    #[serde(rename = "host", default)]
+    pub host: Option<HostProfile>,
 }
 
 impl WasmRequestEnvelope {
@@ -179,6 +182,7 @@ impl WasmRequestEnvelope {
                 }),
             stay,
             property,
+            host: ctx.host.clone().filter(|host| !host.name.trim().is_empty()),
             input: self.params.clone(),
             module_config: ctx.module_config.clone(),
             property_lang: ctx

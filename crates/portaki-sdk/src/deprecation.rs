@@ -35,6 +35,8 @@ pub enum Subject {
     Connector,
     /// A host operation from `host-ops.json`.
     HostOp,
+    /// An SDUI primitive from the catalog.
+    Primitive,
 }
 
 /// An announced withdrawal.
@@ -55,11 +57,24 @@ pub struct Deprecation {
 }
 
 /// Everything deprecated to date.
-///
-/// Empty, and rightly so: nothing has been withdrawn yet. The table exists so that the first
-/// deprecation is a line to add, not a mechanism to design in a hurry — at the exact moment
-/// when what you want is to warn the authors, not to build.
-pub const DEPRECATIONS: &[Deprecation] = &[];
+pub const DEPRECATIONS: &[Deprecation] = &[
+    Deprecation {
+        id: "SuccessState",
+        subject: Subject::Primitive,
+        since: "9.2.0",
+        replacement: Some("Celebration"),
+        note: "Le livret voyageur ne dessine plus qu'une confirmation de succès : Celebration, \
+               pastille centrale et salve de confettis. Elle prend le même titre et le même \
+               message, et accepte un emoji au centre.",
+    },
+    Deprecation {
+        id: "CompletionState",
+        subject: Subject::Primitive,
+        since: "9.2.0",
+        replacement: Some("Celebration"),
+        note: "Même remplacement que SuccessState : une seule primitive de confirmation.",
+    },
+];
 
 /// What is deprecated under this identifier, if anything is.
 pub fn find(id: &str) -> Option<&'static Deprecation> {
@@ -73,7 +88,7 @@ pub fn find(id: &str) -> Option<&'static Deprecation> {
 pub fn contract() -> serde_json::Value {
     serde_json::json!({
         "description":
-            "Capabilities, connectors and host ops being withdrawn — advisory, never blocking",
+            "Capabilities, connectors, host ops and primitives being withdrawn — advisory, never blocking",
         "deprecations": DEPRECATIONS,
     })
 }

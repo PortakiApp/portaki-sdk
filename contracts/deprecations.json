@@ -1,4 +1,19 @@
 {
-  "description": "Capabilities, connectors and host ops being withdrawn — advisory, never blocking",
-  "deprecations": []
+  "description": "Capabilities, connectors, host ops and primitives being withdrawn — advisory, never blocking",
+  "deprecations": [
+    {
+      "id": "SuccessState",
+      "subject": "primitive",
+      "since": "9.2.0",
+      "replacement": "Celebration",
+      "note": "Le livret voyageur ne dessine plus qu'une confirmation de succès : Celebration, pastille centrale et salve de confettis. Elle prend le même titre et le même message, et accepte un emoji au centre."
+    },
+    {
+      "id": "CompletionState",
+      "subject": "primitive",
+      "since": "9.2.0",
+      "replacement": "Celebration",
+      "note": "Même remplacement que SuccessState : une seule primitive de confirmation."
+    }
+  ]
 }
