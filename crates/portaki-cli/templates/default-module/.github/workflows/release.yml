@@ -1,15 +1,16 @@
 name: release
 
-# Publie ce module quand un tag `v*` est poussé, en deux jobs.
+# Publishes this module when a `v*` tag is pushed, in two jobs.
 #
-# `build` exécute le code du module — tests, batterie de conformité, `build.rs`, build wasm32 —
-# sans aucun droit. `release` détient les droits de publication et n'exécute rien du module, pas
-# même cargo : il audite `Cargo.lock` (`cargo audit`), pousse l'artefact de `build` dans le dépôt
-# OCI de Portaki avec un droit de push court que le registre lui délivre, le signe sans clé avec
-# la provenance de ce workflow et le rapport d'audit, et annonce la version.
+# `build` runs the module's code — tests, conformance suite, `build.rs`, wasm32 build — with no
+# permissions at all. `release` holds the publishing permissions and runs none of the module's
+# code, not even cargo: it audits `Cargo.lock` (`cargo audit`), pushes `build`'s artefact to
+# Portaki's OCI repository with a short-lived push grant the registry issues it, signs it
+# keylessly with this workflow's provenance and the audit report, and announces the version.
 #
-# La production Portaki n'exécute qu'un artefact signé par le workflow lié à ce module : ce
-# fichier, dans ce dépôt. Aucun secret à ranger : le jeton OIDC du job remplace tout.
+# Portaki production only runs an artefact signed by the workflow bound to this module: this
+# file, in this repository. No secret to store: the job's OIDC token takes the place of all of
+# them.
 
 on:
   push:
@@ -28,37 +29,37 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
-          # La porte de `portaki release` joue `cargo fmt --check` et `cargo clippy` : sans ces
-          # composants, elle refuse avant même les tests.
+          # The `portaki release` gate runs `cargo fmt --check` and `cargo clippy`: without
+          # these components it refuses before it even gets to the tests.
           components: rustfmt, clippy
 
-      # La porte (format, clippy, tests, build --release, manifeste, textes), puis l'emballage ;
-      # l'artefact part au job suivant.
+      # The gate (formatting, clippy, tests, build --release, manifest, texts), then packaging;
+      # the artefact goes on to the next job.
       - uses: PortakiApp/portaki-release-action/build@v2
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    # La stable se publie depuis l'environnement GitHub `release`, que la liaison au registre
-    # exige : c'est lui qui porte les relecteurs obligatoires. Sans lui l'échange est refusé —
-    # `environment_required`. Créez-le dans Settings → Environments, puis liez ce module à ce
-    # dépôt depuis l'espace développeur.
+    # Stable is published from the GitHub `release` environment, which the registry binding
+    # requires: it is what carries the mandatory reviewers. Without it the exchange is refused —
+    # `environment_required`. Create it under Settings → Environments, then bind this module to
+    # this repository from the developer space.
     environment: release
     permissions:
       contents: read
-      # Sans ce droit, GitHub n'émet aucun jeton OIDC : rien à échanger contre un droit de push,
-      # et aucune identité pour signer.
+      # Without this permission, GitHub issues no OIDC token: nothing to exchange for a push
+      # grant, and no identity to sign with.
       id-token: write
-    # Une publication à la fois : deux jobs qui poussent la même version se disputeraient son tag.
+    # One publication at a time: two jobs pushing the same version would fight over its tag.
     concurrency:
       group: portaki-release
       cancel-in-progress: false
     steps:
-      # Les sources sont lues (Cargo.lock, CHANGELOG, listing.json), jamais compilées.
+      # The sources are read (Cargo.lock, CHANGELOG, listing.json), never compiled.
       - uses: actions/checkout@v6
 
       - uses: PortakiApp/portaki-release-action@v2
         with:
-          # Une vulnérabilité de cette gravité (CVSS) arrête la release ; en dessous, et pour un
-          # avis informationnel (crate non maintenue), un avertissement seulement.
+          # A vulnerability of this severity (CVSS) stops the release; below it, and for an
+          # informational advisory (unmaintained crate), a warning only.
           audit-fail-on: critical

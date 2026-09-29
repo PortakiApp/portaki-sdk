@@ -9,9 +9,9 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Une feature par permission : `kv`, `email`, `repo`… quand le module s'en sert. Les réglages
-# n'en demandent aucune : la plateforme les garde (`#[portaki_sdk::config]`). `platform` laisse
-# le SDK lire l'état du module (inactif, à compléter) avant chaque surface voyageur.
+# One feature per permission: `kv`, `email`, `repo`… when the module uses them. Settings need
+# none of them: the platform guards those (`#[portaki_sdk::config]`). `platform` lets the SDK
+# read the module's state (inactive, incomplete) before every guest surface.
 portaki-sdk = { version = "{{SDK_VERSION}}", features = ["platform"] }
 portaki-connectors = "{{SDK_VERSION}}"
 portaki-sdk-macros = "{{SDK_VERSION}}"

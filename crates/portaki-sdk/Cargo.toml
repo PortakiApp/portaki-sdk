@@ -17,18 +17,18 @@ keywords = ["portaki", "wasm", "extism", "sdui", "module"]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
-# Une feature par permission du manifeste : l'API hôte qu'elle garde n'existe qu'avec elle, et
-# `portaki build` lit les features activées pour écrire `permissions` — le compilateur garantit
-# que la liste dit vrai. `connectors:<id>` n'en a pas : les macros de connecteur le déclarent.
+# One feature per manifest permission: the host API it guards only exists with it, and
+# `portaki build` reads the enabled features to write `permissions` — the compiler is what
+# guarantees the list tells the truth. `connectors:<id>` has none: the connector macros declare it.
 [features]
 kv = []
 repo = []
 email = []
 events = []
 platform = []
-# Ces deux-là ne gardent aucune API : elles déclarent seulement la permission. `FileRef` sert aussi
-# aux photos que l'hôte joint (checklist) ; la plateforme refuse l'upload voyageur sans
-# `guest:files`, et laisse StayContext::guest_email / guest_phone vides sans la seconde.
+# These two guard no API: they only declare the permission. `FileRef` also serves the photos the
+# host attaches (checklist); the platform refuses a guest upload without `guest:files`, and leaves
+# StayContext::guest_email / guest_phone empty without the second one.
 guest-files = []
 stay-guest-contact = []
 
@@ -51,11 +51,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-# Les tests du SDK exercent toute l'API hôte, quelle que soit la feature demandée.
+# The SDK's tests exercise the whole host API, whichever feature is asked for.
 portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files"] }
 serde_json = { workspace = true }
 trybuild = "1.0.120"
-# Lit `sdui/common.rs` et `sdui/action.rs` pour en dériver `contracts/sdui_types.json`.
-# Dev uniquement : rien de tout ceci n'entre dans le Wasm d'un module.
+# Reads `sdui/common.rs` and `sdui/action.rs` to derive `contracts/sdui_types.json` from them.
+# Dev only: none of this ends up in a module's Wasm.
 syn = { version = "2", features = ["full", "parsing", "printing", "extra-traits"] }
 quote = "1"

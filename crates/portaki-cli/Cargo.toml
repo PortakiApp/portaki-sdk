@@ -24,8 +24,8 @@ doc = false
 
 [dependencies]
 portaki-sdk = { workspace = true }
-# `portaki lint` valide le manifeste publié contre le schéma embarqué par la batterie de
-# conformité — le même contrôle, pas une copie de plus du schéma.
+# `portaki lint` validates the published manifest against the schema embedded by the conformance
+# suite — the same check, not one more copy of the schema.
 portaki-test-utils = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
