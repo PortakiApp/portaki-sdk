@@ -1,11 +1,11 @@
-//! L'enveloppe que la plateforme met autour de chaque réponse `/api/v1`.
+//! The envelope the platform wraps around every `/api/v1` response.
 //!
-//! Toute réponse de l'orchestrator arrive sous la forme `{"success": …, "data": …}`, et une
-//! erreur ajoute `error_code`. Ce n'est pas une décoration : lire directement le corps donne un
-//! objet dont aucun champ attendu n'existe, et l'échec ressemble alors à un problème de réseau
-//! alors qu'il est de forme.
+//! Every answer from the orchestrator arrives in the form `{"success": …, "data": …}`, and an
+//! error adds `error_code`. This is not decoration: reading the body directly gives an object in
+//! which none of the expected fields exist, and the failure then looks like a network problem
+//! when it is really one of shape.
 //!
-//! devapi ne passe pas par là — ses routes sont sous `/dev/v1` et répondent l'objet nu.
+//! devapi does not go through this — its routes are under `/dev/v1` and answer the bare object.
 
 use anyhow::{bail, Result};
 use serde::de::DeserializeOwned;
@@ -14,8 +14,8 @@ use serde::de::DeserializeOwned;
 struct Envelope<T> {
     #[serde(default)]
     success: bool,
-    // `default` explicite plutôt que dérivé : le dérivé exigerait `T: Default` de chaque type
-    // transporté, alors que l'absence de `data` se représente déjà par `None`.
+    // An explicit `default` rather than a derived one: the derived one would require `T: Default`
+    // of every type carried, whereas the absence of `data` is already represented by `None`.
     #[serde(default = "no_data")]
     data: Option<T>,
     #[serde(default)]
@@ -26,7 +26,7 @@ fn no_data<T>() -> Option<T> {
     None
 }
 
-/// Sort le corps utile d'une réponse annoncée comme réussie.
+/// Pulls the useful body out of a response announced as successful.
 pub fn unwrap<T: DeserializeOwned>(body: &str) -> Result<T> {
     let envelope: Envelope<T> = serde_json::from_str(body)
         .map_err(|failure| anyhow::anyhow!("unexpected answer ({failure}): {body}"))?;
@@ -39,9 +39,9 @@ pub fn unwrap<T: DeserializeOwned>(body: &str) -> Result<T> {
     }
 }
 
-/// Le code d'erreur, quand la réponse en porte un. Absent, l'appelant décide quoi en dire.
+/// The error code, when the response carries one. Absent, the caller decides what to say about it.
 ///
-/// L'enveloppe `/api/v1` le porte en `error_code` ; devapi et le registre, en `code`.
+/// The `/api/v1` envelope carries it as `error_code`; devapi and the registry, as `code`.
 pub fn error_code(body: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     ["error_code", "code"]
@@ -49,16 +49,16 @@ pub fn error_code(body: &str) -> Option<String> {
         .find_map(|key| value[key].as_str().map(str::to_string))
 }
 
-/// Une session auprès de la plateforme, pour lire ses routes JSON nues (`/dev/v1`, `/registry/v1`).
+/// A session with the platform, to read its bare JSON routes (`/dev/v1`, `/registry/v1`).
 ///
-/// Un 401 renouvelle le jeton une fois ; un 404 se lit « rien », pas « panne ».
+/// A 401 renews the token once; a 404 reads as "nothing", not as "breakdown".
 pub struct Platform {
     pub base: String,
     token: String,
 }
 
 impl Platform {
-    /// La session de `base`, ou [`crate::auth::NotSignedIn`].
+    /// The session for `base`, or [`crate::auth::NotSignedIn`].
     pub fn open(base: &str) -> Result<Self> {
         Ok(Self {
             base: base.trim_end_matches('/').to_string(),
@@ -70,7 +70,7 @@ impl Platform {
         &self.token
     }
 
-    /// `GET {base}{path}` : le corps, `None` sur un 404.
+    /// `GET {base}{path}`: the body, `None` on a 404.
     pub async fn get(&mut self, path: &str) -> Result<Option<serde_json::Value>> {
         let (status, body) = self.send(reqwest::Method::GET, path, None).await?;
         if status == 404 {
@@ -79,8 +79,8 @@ impl Platform {
         self.accept(path, status, body).map(Some)
     }
 
-    /// `POST`, `PUT`, `PATCH` : le corps de la réponse, ou le refus — un 404 compris, puisqu'on
-    /// écrivait quelque chose.
+    /// `POST`, `PUT`, `PATCH`: the body of the response, or the refusal — a 404 included, since
+    /// we were writing something.
     pub async fn call(
         &mut self,
         method: reqwest::Method,
@@ -112,11 +112,11 @@ impl Platform {
         }
     }
 
-    /// La requête, renouvelée une fois sur un 401 : le statut et le corps lu en JSON (`Null`
-    /// quand il est vide, la chaîne brute quand il n'est pas du JSON).
+    /// The request, renewed once on a 401: the status and the body read as JSON (`Null` when it
+    /// is empty, the raw string when it is not JSON).
     ///
-    /// Patient hors `GET` : un dispatch, un rendu ou une grille de scénarios exécutent le module
-    /// avant de répondre.
+    /// Patient outside `GET`: a dispatch, a render or a grid of scenarios run the module before
+    /// answering.
     pub async fn send(
         &mut self,
         method: reqwest::Method,
@@ -179,7 +179,7 @@ mod tests {
         assert_eq!(parsed.access_token, "abc");
     }
 
-    /// Le défaut que ce module corrige : lu à plat, ce corps ne donne aucun champ attendu.
+    /// The defect this module fixes: read flat, this body gives none of the expected fields.
     #[test]
     fn a_flat_read_of_the_same_body_would_have_failed() {
         assert!(

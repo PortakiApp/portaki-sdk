@@ -1,4 +1,4 @@
-//! Retrouver le manifeste d'un module, construit ou non.
+//! Find a module's manifest, built or not.
 
 use std::path::{Path, PathBuf};
 
@@ -7,22 +7,22 @@ use portaki_sdk::manifest::ModuleManifest;
 
 use super::{collect_emissions, find_emissions_dir, generate_manifest};
 
-/// Là où `portaki build` dépose le manifeste fusionné.
+/// Where `portaki build` drops the merged manifest.
 pub const BUILT_MANIFEST: &str = "target/portaki/manifest.json";
 
-/// D'où vient le manifeste qu'on vient de lire.
+/// Where the manifest we have just read comes from.
 ///
-/// L'appelant le dit à l'utilisateur : « ce que je te montre vient d'un build » et « ce que je
-/// te montre vient des sources, il n'y a pas encore de build » ne se valent pas — la seconde
-/// peut décrire un module qui ne compile pas.
+/// The caller tells the user which one it is: "what I am showing you comes from a build" and
+/// "what I am showing you comes from the sources, there is no build yet" are not worth the same
+/// — the second one may describe a module that does not compile.
 pub enum Source {
-    /// Le fichier écrit par le dernier build.
+    /// The file written by the last build.
     Built(PathBuf),
-    /// Les émissions du proc-macro, sans passer par un build.
+    /// The proc-macro emissions, without going through a build.
     Emissions,
 }
 
-/// Lit le manifeste du module, du build s'il existe, des émissions sinon.
+/// Reads the module's manifest, from the build if there is one, from the emissions otherwise.
 pub fn load(module_root: &Path, explicit: Option<PathBuf>) -> Result<(ModuleManifest, Source)> {
     let path = explicit.unwrap_or_else(|| module_root.join(BUILT_MANIFEST));
 

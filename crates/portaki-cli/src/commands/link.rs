@@ -1,10 +1,10 @@
-//! `portaki link` — lie le module à son dépôt, ou ouvre la page qui le fait.
+//! `portaki link` — links the module to its repository, or opens the page that does it.
 //!
-//! La première liaison exige de choisir une installation GitHub, ce qui ne se fait que dans le
-//! dashboard : sans `--all`, le CLI ouvre la page Dépôt, avec les autres modules du monorepo en
-//! `?also=`. Une fois le module courant lié, `--all` lie les autres modules du monorepo au même
-//! dépôt, avec les mêmes règles, par `POST /dev/v1/module-links` — le registre refuse un nom pris
-//! et le dit par module.
+//! The first link requires choosing a GitHub installation, which can only be done in the
+//! dashboard: without `--all`, the CLI opens the Repository page, with the monorepo's other
+//! modules in `?also=`. Once the current module is linked, `--all` links the monorepo's other
+//! modules to the same repository, with the same rules, through `POST /dev/v1/module-links` — the
+//! registry refuses a name already taken, and says so module by module.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -80,8 +80,8 @@ pub async fn run(args: LinkArgs) -> Result<()> {
     Ok(())
 }
 
-/// Lie `others` au dépôt de `anchor`. `false` quand `anchor` n'est lié à rien : il n'y a alors
-/// ni dépôt ni règles à reprendre.
+/// Links `others` to `anchor`'s repository. `false` when `anchor` is linked to nothing: there is
+/// then neither a repository nor rules to carry over.
 async fn link_all(args: &LinkArgs, anchor: &str, others: &[String]) -> Result<bool> {
     let base = crate::profile::api_url(args.url.as_deref());
     let mut token = auth::access_token(&base)?;
@@ -142,7 +142,7 @@ async fn link_all(args: &LinkArgs, anchor: &str, others: &[String]) -> Result<bo
     Ok(true)
 }
 
-/// La liaison d'un module, `None` s'il n'en a pas.
+/// A module's link, `None` when it has none.
 async fn read_link(base: &str, module_id: &str, token: &str) -> Result<Option<serde_json::Value>> {
     let response = crate::http::client()
         .get(format!("{base}/dev/v1/modules/{module_id}/link"))
@@ -157,10 +157,10 @@ async fn read_link(base: &str, module_id: &str, token: &str) -> Result<Option<se
     }
 }
 
-/// `{ repositoryId, moduleIds, rules }`, les règles étant celles du module déjà lié.
+/// `{ repositoryId, moduleIds, rules }`, the rules being those of the module already linked.
 ///
-/// Les règles sont aussi posées à plat : c'est la forme que le registre lisait avant `rules`, et
-/// un CLI plus récent que la plateforme ne doit pas se faire refuser pour autant.
+/// The rules are laid out flat as well: that is the shape the registry read before `rules`, and a
+/// CLI newer than the platform must not get refused just for that.
 fn bulk_body(link: &serde_json::Value, others: &[String]) -> serde_json::Value {
     let mut rules = serde_json::Map::new();
     for key in [
@@ -181,13 +181,13 @@ fn bulk_body(link: &serde_json::Value, others: &[String]) -> serde_json::Value {
     body.into()
 }
 
-/// Un module refusé, et pourquoi.
+/// A refused module, and why.
 type Refused = (String, String);
 
-/// Les modules liés, et les refusés avec leur raison.
+/// The linked modules, and the refused ones with their reason.
 ///
-/// `{ linked, refused: [{ moduleId, reason }] }`, ou la liste `[{ moduleId, linked, code,
-/// message }]` d'un registre antérieur.
+/// `{ linked, refused: [{ moduleId, reason }] }`, or the `[{ moduleId, linked, code, message }]`
+/// list of an earlier registry.
 fn outcomes(body: &str) -> Result<(Vec<String>, Vec<Refused>)> {
     #[derive(serde::Deserialize)]
     #[serde(untagged)]
@@ -241,11 +241,11 @@ fn outcomes(body: &str) -> Result<(Vec<String>, Vec<Refused>)> {
     })
 }
 
-/// Ajoute les autres modules à la page Dépôt rendue par le registre, en `?also=`.
+/// Adds the other modules to the Repository page the registry serves, as `?also=`.
 ///
-/// L'adresse de la page vient de l'API (`link-page`, ou `linkUrl` d'un refus) : le CLI ne la
-/// déduit plus du nom de l'API, une règle de nommage qui casse au premier environnement qui ne
-/// la suit pas.
+/// The page's address comes from the API (`link-page`, or the `linkUrl` of a refusal): the CLI no
+/// longer derives it from the API's name, a naming rule that breaks on the first environment that
+/// does not follow it.
 pub fn with_also(page: &str, others: &[String]) -> String {
     if others.is_empty() {
         return page.to_string();
@@ -254,7 +254,7 @@ pub fn with_also(page: &str, others: &[String]) -> String {
     format!("{page}{separator}also={}", others.join(","))
 }
 
-/// La page Dépôt d'un module, telle que le registre la donne.
+/// A module's Repository page, as the registry gives it.
 async fn link_page(api_base: &str, module_id: &str) -> Result<String> {
     let url = format!(
         "{}/registry/v1/modules/{module_id}/link-page",

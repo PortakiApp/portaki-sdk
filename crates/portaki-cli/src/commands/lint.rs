@@ -25,7 +25,7 @@ pub struct LintArgs {
     #[command(flatten)]
     pub modules: crate::workspace::ModuleArgs,
 
-    /// `check` enchaîne sur `lint` : un second en-tête ferait croire à deux commandes.
+    /// `check` chains straight on to `lint`: a second header would look like two commands.
     #[arg(skip)]
     pub nested: bool,
 }
@@ -46,7 +46,7 @@ pub fn run(args: LintArgs) -> Result<()> {
     args.modules.for_each(|_| lint_here(&args))
 }
 
-/// `portaki lint` pour le module du dossier courant.
+/// `portaki lint` for the module in the current directory.
 fn lint_here(args: &LintArgs) -> Result<()> {
     let module_root = std::env::current_dir().context("current_dir")?;
     let manifest_path = args
@@ -89,8 +89,8 @@ fn lint_here(args: &LintArgs) -> Result<()> {
         checking.abandon();
         failure
     })?;
-    // Le manifeste que `release` enverra, écrit du code par `portaki build` : le registre le
-    // refuserait hors schéma, autant le dire ici.
+    // The manifest `release` will send, written from the code by `portaki build`: the registry
+    // would refuse it off-schema, so it may as well be said here.
     portaki_test_utils::conformance::Module::at(&module_root)
         .check_manifest()
         .map_err(|findings| {
@@ -230,7 +230,7 @@ fn unknown_permissions(declared: &[String]) -> Vec<String> {
 
 /// `feeds` — the modules this one supplies — must name another module and say what, in fr and en.
 ///
-/// The catalogue turns it into a sentence (« Nuki fournit le code clavier au module Accès ») :
+/// The catalogue turns it into a sentence (« Nuki fournit le code clavier au module Accès »):
 /// a missing locale or a typo'd id would print a hole or a dead link on the public sheet.
 fn assert_feeds_valid(module_root: &std::path::Path) -> Result<()> {
     let Some(manifest) = std::fs::read_to_string(module_root.join("portaki.module.json"))
@@ -285,15 +285,15 @@ fn feeds_problems(manifest: &serde_json::Value) -> Vec<String> {
     problems
 }
 
-/// La crate et le manifeste doivent annoncer la même version.
+/// The crate and the manifest must announce the same version.
 ///
-/// `release-please` incrémente les deux ; si l'un des deux passe à travers, un artefact part
-/// sous un numéro que rien d'autre ne porte, et la version publiée cesse de désigner le code
-/// qu'elle contient. Le contrôle vivait dans le script bash d'un dépôt — il appartient au lint.
+/// `release-please` bumps both; if one of them slips through, an artifact goes out under a number
+/// nothing else carries, and the published version stops designating the code it holds. The check
+/// used to live in one repository's bash script — it belongs in the lint.
 fn assert_versions_agree(module_root: &std::path::Path, manifest: &ModuleManifest) -> Result<()> {
     let cargo = module_root.join("Cargo.toml");
     let Ok(text) = std::fs::read_to_string(&cargo) else {
-        // Pas de crate ici : un manifeste peut être linté seul.
+        // No crate here: a manifest can be linted on its own.
         return Ok(());
     };
     let Some(declared) = crate_version(&text) else {
@@ -309,11 +309,11 @@ fn assert_versions_agree(module_root: &std::path::Path, manifest: &ModuleManifes
     )
 }
 
-/// La version de `[package]`, sans analyseur TOML pour un champ.
+/// The `[package]` version, without a TOML parser for a single field.
 ///
-/// Lue dans sa seule section : une `version` de dépendance ne doit pas passer pour celle de la
-/// crate. Une version héritée de l'espace de travail n'est pas lisible ici, et se lit comme
-/// absente plutôt que comme un désaccord.
+/// Read in that section alone: a dependency's `version` must not pass for the crate's. A version
+/// inherited from the workspace cannot be read here, and reads as absent rather than as a
+/// disagreement.
 fn crate_version(cargo: &str) -> Option<String> {
     let mut in_package = false;
     for line in cargo.lines() {
@@ -389,7 +389,7 @@ serde = { version = "1", features = ["derive"] }
         assert_eq!(crate_version(cargo).as_deref(), Some("0.3.24"));
     }
 
-    /// Une `version` de dépendance ne doit pas passer pour celle de la crate.
+    /// A dependency's `version` must not pass for the crate's.
     #[test]
     fn a_dependency_version_is_not_mistaken_for_the_crate() {
         let cargo = "[dependencies]\nserde = { version = \"1\" }\n";
@@ -408,7 +408,7 @@ serde = { version = "1", features = ["derive"] }
         assert!(unknown_permissions(&declared).is_empty());
     }
 
-    /// `stay:read` est un scope de jeton, pas une permission de manifeste : le séjour se lit sans.
+    /// `stay:read` is a token scope, not a manifest permission: the stay is read without it.
     #[test]
     fn an_unknown_or_misspelt_permission_is_named() {
         let declared = vec![

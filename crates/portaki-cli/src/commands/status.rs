@@ -1,11 +1,11 @@
-//! `portaki status` — l'écran d'accueil de l'espace développeur, dans le terminal.
+//! `portaki status` — the developer space's home screen, in the terminal.
 //!
-//! Les cinq étapes du parcours (`GET /dev/v1/onboarding`), puis pour chaque module : la liaison
-//! au dépôt (`…/link`), la sandbox (`…/status`), les erreurs sur 24 h et les rapports ouverts
-//! (`/dev/v1/nav-counts`), la dernière version (`/registry/v1/publications/mine`, puis sa page
-//! `…/release` pour les manques et la signature) — et la commande suivante.
+//! The journey's five steps (`GET /dev/v1/onboarding`), then, for each module: the link to the
+//! repository (`…/link`), the sandbox (`…/status`), the errors over 24 h and the open reports
+//! (`/dev/v1/nav-counts`), the latest version (`/registry/v1/publications/mine`, then its
+//! `…/release` page for what is missing and for the signature) — and the next command.
 //!
-//! Aucune route nouvelle : ce sont celles que lit l'espace développeur.
+//! No new route: these are the ones the developer space reads.
 
 use anyhow::Result;
 use clap::Parser;
@@ -22,7 +22,7 @@ pub struct StatusArgs {
     pub modules: ModuleArgs,
 }
 
-/// Les cinq étapes, dans l'ordre et avec les mots de l'espace développeur.
+/// The five steps, in order and in the developer space's own words.
 const JOURNEY: [(&str, &str, &str); 5] = [
     ("cliConnected", "Connect the CLI", "Connecter la CLI"),
     ("deployed", "Deploy to the sandbox", "Déployer en sandbox"),
@@ -35,12 +35,12 @@ const JOURNEY: [(&str, &str, &str); 5] = [
     ("published", "Publish", "Publier"),
 ];
 
-/// Ce qu'on sait d'un module, tel que `--json` le rend.
+/// What is known about a module, as `--json` renders it.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModuleStatus {
     id: String,
-    /// `owner/repo` quand le module est lié.
+    /// `owner/repo` when the module is linked.
     repository: Option<String>,
     linked: bool,
     sandbox: Option<Value>,
@@ -62,16 +62,16 @@ struct Latest {
     missing: Vec<Value>,
     /// `signed` | `unsigned` | `unverified`
     signature: String,
-    /// `ci` | `author`, absent quand non signée.
+    /// `ci` | `author`, absent when it is not signed.
     signature_source: Option<String>,
-    /// L'état de la revue, tel que le registre le nomme.
+    /// The state of the review, as the registry names it.
     review: String,
     published_at: String,
 }
 
-/// La commande suivante — ou, quand aucune commande n'existe encore, ce qu'il faut faire.
+/// The next command — or, when no command exists yet, what has to be done.
 ///
-/// `reason` part en anglais dans `--json`, quelle que soit la langue ; `said` est ce qu'on lit.
+/// `reason` goes out in English in `--json`, whatever the language; `said` is what one reads.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 struct Next {
     command: Option<String>,
@@ -199,8 +199,8 @@ pub async fn run(args: StatusArgs) -> Result<()> {
     render(&base, Some(&journey), &modules, first)
 }
 
-/// La publication la plus récente de ce module : `mine` les rend de la plus récente à la plus
-/// ancienne.
+/// The most recent publication of this module: `mine` returns them from the most recent to the
+/// oldest.
 fn latest_of(mine: &Value, id: &str) -> Option<Latest> {
     let item = mine["items"]
         .as_array()?
@@ -219,7 +219,7 @@ fn latest_of(mine: &Value, id: &str) -> Option<Latest> {
     })
 }
 
-/// La page de version : ce qui manque à un brouillon, et qui l'a signée.
+/// The release page: what a draft is missing, and who signed it.
 fn read_release(latest: &mut Latest, release: &Value) {
     if let Some(state) = release["releaseState"].as_str() {
         latest.state = state.to_string();
@@ -232,7 +232,7 @@ fn read_release(latest: &mut Latest, release: &Value) {
     latest.signature_source = chain["signatureSource"].as_str().map(str::to_string);
 }
 
-/// La commande suivante, du plus bloquant au plus confortable.
+/// The next command, from the most blocking to the most comfortable.
 fn decide(journey: &Value, module: &ModuleStatus, flag: &str) -> Next {
     let step = |key: &str| journey[key].as_bool().unwrap_or(false);
     let deployed = module
@@ -451,8 +451,8 @@ mod tests {
         })
     }
 
-    /// Le parcours dans l'ordre de l'espace développeur : chaque étape manquante donne sa
-    /// commande, et la première manquante l'emporte.
+    /// The journey in the developer space's own order: each missing step gives its command, and
+    /// the first missing one wins.
     #[test]
     fn the_next_command_follows_the_journey() {
         let mut module = ModuleStatus::default();
@@ -507,7 +507,7 @@ mod tests {
         );
     }
 
-    /// `mine` est trié du plus récent au plus ancien : la première ligne du module est la bonne.
+    /// `mine` is sorted from the most recent to the oldest: the module's first row is the one.
     #[test]
     fn the_latest_version_is_the_first_of_the_module_and_the_release_completes_it() {
         let mine = json!({ "items": [

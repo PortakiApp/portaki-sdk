@@ -12,7 +12,7 @@ pub struct InspectArgs {
 
 /// Runs `portaki inspect`.
 pub async fn run(args: InspectArgs) -> Result<()> {
-    // Patient : un artefact OCI peut peser, mais la connexion doit s'ouvrir vite.
+    // Patient: an OCI artifact can be heavy, but the connection still has to open quickly.
     let client = crate::http::patient_client();
     let response = client
         .get(&args.artifact_url)

@@ -65,10 +65,10 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
     };
     let stamped = stamp_sdk_version(&raw, resolved_sdk_version(module_root)?)?;
 
-    // Ce que le build a émis suit jusqu'au manifeste publié, et plus seulement jusqu'à la
-    // sandbox. La plateforme lit ce manifeste-là : sans les opérations, elle ne peut pas
-    // savoir à quel module demander quoi, et doit les interroger tous en aveugle pour
-    // récolter un `wasm_handler_not_found` de la part de ceux qui se taisent.
+    // What the build emitted travels all the way to the published manifest now, and no longer
+    // only as far as the sandbox. The platform reads that manifest: without the operations it
+    // cannot know which module to ask what, and has to query them all blindly only to collect
+    // a `wasm_handler_not_found` from the ones that have nothing to say.
     //
     let stamped = if !sdk_path.exists() {
         stamped
@@ -82,14 +82,15 @@ pub fn assemble_publish_manifest(module_root: &Path, artifact_dir: &Path) -> Res
     Ok(dest)
 }
 
-/// Version de `portaki-sdk` <strong>réellement liée</strong>, lue dans le graphe résolu par cargo.
+/// The version of `portaki-sdk` <strong>actually linked</strong>, read from the graph cargo
+/// resolved.
 ///
-/// Pas celle déclarée : les modules dépendent du SDK par `workspace = true`, dont la contrainte
-/// vaut `*`. Ce qui compte pour choisir un bundle de contrats est ce contre quoi le binaire a été
-/// compilé, pas ce que quelqu'un a écrit à côté.
+/// Not the declared one: modules depend on the SDK through `workspace = true`, whose constraint
+/// is `*`. What matters when choosing a bundle of contracts is what the binary was compiled
+/// against, not what someone wrote next to it.
 ///
-/// Rend `None` quand cargo ne répond pas ou que le SDK n'est pas dans le graphe — un module qui
-/// n'en dépend pas ne se voit pas inventer une version.
+/// Returns `None` when cargo does not answer or the SDK is not in the graph — a module that does
+/// not depend on it does not get a version invented for it.
 pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>> {
     let output = std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1"])
@@ -113,10 +114,10 @@ pub(crate) fn resolved_sdk_version(module_root: &Path) -> Result<Option<String>>
     Ok(found)
 }
 
-/// Features que le module active sur `portaki-sdk`, lues dans son propre `Cargo.toml` résolu.
+/// The features the module turns on for `portaki-sdk`, read from its own resolved `Cargo.toml`.
 ///
-/// Celles qu'il déclare et non celles que cargo unifie sur un workspace : un module ne réclame
-/// pas `email` parce que son voisin l'envoie.
+/// The ones it declares and not the ones cargo unifies across a workspace: a module does not
+/// claim `email` because its neighbour sends some.
 pub(crate) fn sdk_features(module_root: &Path) -> Result<Vec<String>> {
     let output = std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1", "--no-deps"])
@@ -147,27 +148,27 @@ pub(crate) fn sdk_features(module_root: &Path) -> Result<Vec<String>> {
     Ok(features)
 }
 
-/// Recopie ce que le build a emis dans le manifeste envoye a la sandbox : les surfaces, les
-/// queries, les commands et les entites.
+/// Copies what the build emitted into the manifest sent to the sandbox: the surfaces, the
+/// queries, the commands and the entities.
 ///
-/// Deux manifestes coexistent et ne disent pas la meme chose. `portaki.module.json` decrit la
-/// navigation du dashboard : ses `hostSurfaces` portent un `pathSegment`, qui est un morceau
-/// d'URL. Le manifeste emis par le build decrit ce que le binaire exporte reellement :
-/// `surfaces.host[].id` vaut `main`, et le symbole associe est `render_host_main`.
+/// Two manifests coexist and do not say the same thing. `portaki.module.json` describes the
+/// dashboard's navigation: its `hostSurfaces` carry a `pathSegment`, which is a piece of URL.
+/// The manifest the build emits describes what the binary really exports:
+/// `surfaces.host[].id` is `main`, and the symbol that goes with it is `render_host_main`.
 ///
-/// La sandbox ne recevait que le premier. Il en deduisait un identifiant de surface egal au
-/// `pathSegment` — `access-guide` —, le runtime cherchait `render_host_access_guide`, et aucun
-/// module ne l'exporte : les vingt modules qui declarent une surface hote echouaient sur
-/// `wasm_handler_not_found`. La production, elle, marche parce que le dashboard envoie `main`.
+/// The sandbox only received the first one. It inferred from it a surface id equal to the
+/// `pathSegment` — `access-guide` —, the runtime looked for `render_host_access_guide`, and no
+/// module exports that: the twenty modules that declare a host surface failed on
+/// `wasm_handler_not_found`. Production, for its part, works because the dashboard sends `main`.
 ///
-/// Corriger les vingt manifestes ecrits a la main serait une seconde source de verite pour une
-/// chose que le build sait deja. On transporte donc ce qu'il a emis.
+/// Fixing the twenty hand-written manifests would be a second source of truth for something the
+/// build already knows. So we carry over what it emitted.
 ///
-/// Les operations suivent le meme chemin, pour la meme raison : `#[portaki_sdk::query]` et
-/// `#[portaki_sdk::command]` n'existent que dans le manifeste emis, et un module wasm n'exporte
-/// que `portaki_query` / `portaki_command` — le binaire ne sait pas dire ce qu'il sert. Sans
-/// elles, la sandbox ne pouvait proposer aucune liste d'operations et retombait sur un champ
-/// libre, ou une faute de frappe ne se decouvrait qu'au `handler_not_found`.
+/// The operations follow the same path, for the same reason: `#[portaki_sdk::query]` and
+/// `#[portaki_sdk::command]` only exist in the emitted manifest, and a wasm module exports only
+/// `portaki_query` / `portaki_command` — the binary cannot say what it serves. Without them, the
+/// sandbox could offer no list of operations at all and fell back on a free-text field, where a
+/// typo was only discovered at `handler_not_found`.
 pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<String> {
     let built: serde_json::Value =
         serde_json::from_str(built_manifest).context("parse built manifest")?;
@@ -195,15 +196,15 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
 }
 
-/// Verse les `#[email]` du build dans `emails[]`, par `id`, et accorde la permission `email`.
+/// Pours the build's `#[email]`s into `emails[]`, by `id`, and grants the `email` permission.
 ///
-/// Fusion et non remplacement : un e-mail que le code ne décrit pas encore — `ical-sync` émet
-/// les siens pendant une query, pas une commande — reste tel que le manifeste l'écrit. Pour un
-/// `id` présent des deux côtés, le build l'emporte champ par champ ; ce qu'il ne dit pas, une
-/// `description` par exemple, est gardé.
+/// A merge and not a replacement: an email the code does not describe yet — `ical-sync` emits
+/// its own during a query, not a command — stays as the manifest writes it. For an `id` present
+/// on both sides, the build wins field by field; what it does not say, a `description` for
+/// instance, is kept.
 ///
-/// La permission suit : un module qui déclare un envoi doit pouvoir le faire, et c'est elle
-/// que la conformité lit pour exiger qu'un `email.send` ait été observé.
+/// The permission follows: a module that declares a send must be able to perform one, and the
+/// permission is what compliance reads to require that an `email.send` has been observed.
 fn merge_emails(
     manifest: &mut serde_json::Map<String, serde_json::Value>,
     built: &[serde_json::Value],
@@ -239,14 +240,14 @@ fn merge_emails(
     }
 }
 
-/// Ce que seul le build sait dire, et que la sandbox doit donc recevoir de lui.
+/// What only the build can say, and which the sandbox must therefore receive from it.
 ///
-/// `entities` aussi : `repo.find` verifie que l'entite est declaree dans le manifeste, et le
-/// runtime de la sandbox n'a que celui-ci. Sans elles, tout module a stockage type echouait en
-/// sandbox alors que son image publiee, qui porte le manifeste du build, marchait.
+/// `entities` too: `repo.find` checks that the entity is declared in the manifest, and the
+/// sandbox runtime has only this one. Without them, every module with typed storage failed in
+/// the sandbox while its published image, which carries the build's manifest, worked.
 ///
-/// `dispatchExamples` pour la même raison : `example(…)` n'existe que dans ce que le build émet, et
-/// l'onglet Exécuter de la sandbox les lit dans ce manifeste-ci.
+/// `dispatchExamples` for the same reason: `example(…)` only exists in what the build emits, and
+/// the sandbox's "Exécuter" tab reads them from this manifest.
 const BUILT_DECLARATIONS: [&str; 5] = [
     "surfaces",
     "queries",
@@ -255,17 +256,17 @@ const BUILT_DECLARATIONS: [&str; 5] = [
     "dispatchExamples",
 ];
 
-/// Inscrit `requiresModuleSdk` dans le manifeste, ou refuse si l'auteur en annonce un autre.
+/// Writes `requiresModuleSdk` into the manifest, or refuses if the author announces another one.
 ///
-/// Le champ existe au schéma depuis longtemps et <strong>aucun module ne le remplissait</strong> :
-/// la plateforme n'avait donc rien pour choisir le bon jeu de contrats. L'inscrire au build le
-/// rend exact par construction plutôt que par discipline.
+/// The field has been in the schema for a long time and <strong>no module was filling it
+/// in</strong>: the platform therefore had nothing to choose the right set of contracts with.
+/// Writing it at build time makes it exact by construction rather than by discipline.
 ///
-/// Le déclarer reste préférable quand on le peut, et le refus ne dit plus « retirez le champ ».
-/// Les vingt et un modules du catalogue l'écrivent : release-please n'attribue les commits que
-/// par chemin, donc une montée de SDK qui ne touchait qu'un manifeste de workspace ne publiait
-/// aucun d'entre eux. Un auteur qui tombe sur ce refus a deux issues, et les deux sont légitimes
-/// — aligner le manifeste, ou épingler l'autre version du crate.
+/// Declaring it is still preferable where one can, and the refusal no longer says "remove the
+/// field". The twenty-one modules of the catalogue write it: release-please only attributes
+/// commits by path, so an SDK bump that touched only a workspace manifest published none of
+/// them. An author who runs into this refusal has two ways out, and both are legitimate — align
+/// the manifest, or pin the other version of the crate.
 pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> {
     let Some(resolved) = resolved else {
         return Ok(raw.to_string());
@@ -281,8 +282,8 @@ pub fn stamp_sdk_version(raw: &str, resolved: Option<String>) -> Result<String> 
         _ => {}
     }
     if let Some(object) = manifest.as_object_mut() {
-        // `sdkVersion` est ce que devapi et le registre lisent pour dire « SDK trop ancien » ;
-        // `requiresModuleSdk` reste pour les lecteurs qui l'ont toujours lu. Même valeur.
+        // `sdkVersion` is what devapi and the registry read in order to say "SDK too old";
+        // `requiresModuleSdk` stays for the readers that have always read it. Same value.
         object.insert("sdkVersion".to_string(), resolved.clone().into());
         object.insert("requiresModuleSdk".to_string(), resolved.into());
     }
@@ -305,10 +306,10 @@ pub fn read_module_coordinates(
     })
 }
 
-/// Lit id/version dans les sources — `portaki.module.json` ou le crate —, sans passer par un build.
+/// Reads id/version from the sources — `portaki.module.json` or the crate —, without a build.
 ///
-/// C'est ce que le job de publication confronte à l'artefact qu'un autre job a construit : les
-/// sources nomment le module, pas le code qui l'a compilé.
+/// This is what the publication job checks against the artifact another job built: the sources
+/// name the module, not the code that compiled it.
 pub fn read_source_coordinates(module_root: &Path) -> Result<ModuleCoordinates> {
     let (id, version) = crate::manifest::source::coordinates(module_root).with_context(|| {
         format!(
@@ -479,8 +480,8 @@ pub(crate) fn find_wasm_artifact_in(
 
 #[cfg(test)]
 mod tests {
-    /// Reprendre un catalogue déjà publié suppose de lire id/version sans build : le
-    /// publish-manifest n'existe pas tant que rien n'a été compilé.
+    /// Picking up an already published catalogue means reading id/version without a build: the
+    /// publish-manifest does not exist until something has been compiled.
     #[test]
     fn the_linked_sdk_version_is_stamped_into_the_manifest() {
         let stamped = stamp_sdk_version(
@@ -495,7 +496,7 @@ mod tests {
         assert_eq!(parsed["id"], "weather");
     }
 
-    /// Un manifeste qui annonce une autre version ment sur ce qui a été compilé.
+    /// A manifest that announces another version lies about what was compiled.
     #[test]
     fn a_declared_version_that_disagrees_is_refused() {
         let err = stamp_sdk_version(
@@ -508,7 +509,7 @@ mod tests {
         assert!(err.to_string().contains("2.1.1"));
     }
 
-    /// Déclarée et liée d'accord : rien à signaler.
+    /// Declared and linked in agreement: nothing to report.
     #[test]
     fn a_declared_version_that_agrees_passes() {
         stamp_sdk_version(
@@ -518,7 +519,7 @@ mod tests {
         .unwrap();
     }
 
-    /// Un module qui ne dépend pas du SDK ne se voit pas inventer une version.
+    /// A module that does not depend on the SDK does not get a version invented for it.
     #[test]
     fn without_a_resolved_sdk_the_manifest_is_untouched() {
         let raw = r#"{"id":"weather","version":"0.3.24"}"#;
@@ -526,12 +527,12 @@ mod tests {
         assert_eq!(stamp_sdk_version(raw, None).unwrap(), raw);
     }
 
-    /// La sandbox reçoit le manifeste tamponné, comme la publication.
+    /// The sandbox receives the stamped manifest, just as publication does.
     ///
-    /// Sans ce tampon, `requiresModuleSdk` manquait dans tout module déployé par `portaki dev`,
-    /// et l'inspecteur SDUI refusait de typer — pour tous les modules, toujours. Le message
-    /// conseillait alors « reconstruisez avec portaki build », qui écrit ailleurs et n'y
-    /// changeait rien.
+    /// Without that stamp, `requiresModuleSdk` was missing from every module deployed by
+    /// `portaki dev`, and the SDUI inspector refused to type — for every module, always. The
+    /// message then advised "rebuild with portaki build", which writes elsewhere and changed
+    /// nothing there.
     #[test]
     fn the_sandbox_manifest_carries_the_linked_sdk_version() {
         let raw = r#"{"id":"access-guide","version":"0.3.2"}"#;
@@ -684,9 +685,9 @@ mod tests {
         assert_eq!(previews.path, root.path().join(PREVIEWS));
     }
 
-    /// Cargo nomme l'artefact d'après la cible : `access-guide` produit `access_guide.wasm`.
-    /// `portaki dev` lisait le nom du paquet tel quel et échouait sur tout module au nom
-    /// composé, alors que `publish` s'en sortait par son balayage de répertoire.
+    /// Cargo names the artifact after the target: `access-guide` produces `access_guide.wasm`.
+    /// `portaki dev` read the package name as it stood and failed on every module with a
+    /// hyphenated name, while `publish` got by thanks to its directory scan.
     #[test]
     fn find_wasm_artifact_accepts_the_underscored_target_name() {
         let root = tempdir().unwrap();
@@ -698,8 +699,8 @@ mod tests {
         assert_eq!(found, wasm_dir.join("access_guide.wasm"));
     }
 
-    /// Le nom exact l'emporte sur la normalisation : un répertoire qui porte les deux ne doit
-    /// pas dépendre de l'ordre de lecture.
+    /// The exact name wins over the normalised one: a directory holding both must not depend
+    /// on the order the entries are read in.
     #[test]
     fn find_wasm_artifact_prefers_the_exact_name() {
         let root = tempdir().unwrap();
@@ -805,7 +806,7 @@ mod tests {
             .all(|layer| layer.media_type != SDK_MANIFEST_MEDIA));
     }
 
-    /// Un texte lié ailleurs ne part pas dans une couche publique — ni un dossier `i18n/` lié.
+    /// A text linked elsewhere does not go out in a public layer — nor does a linked `i18n/` dir.
     #[cfg(unix)]
     #[test]
     fn collect_push_layers_refuses_what_links_outside_the_module() {
@@ -849,7 +850,7 @@ mod stamp_built_declarations_tests {
 
     const BUILT: &str = r#"{"id":"access-guide","surfaces":{"host":[{"id":"main","render_fn":"render_host_main"}],"guest":[]}}"#;
 
-    /// Le manifeste ecrit a la main ne dit pas quel symbole appeler ; le build, si.
+    /// The hand-written manifest does not say which symbol to call; the build does.
     #[test]
     fn carries_the_built_surfaces_into_the_uploaded_manifest() {
         let raw = r#"{"id":"access-guide","hostSurfaces":[{"pathSegment":"access-guide"}]}"#;
@@ -858,12 +859,12 @@ mod stamp_built_declarations_tests {
         let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
 
         assert_eq!(value["surfaces"]["host"][0]["id"], "main");
-        // Ce que le manifeste disait deja n'est pas efface : le pathSegment reste une donnee
-        // de navigation, utile au dashboard.
+        // What the manifest already said is not erased: the pathSegment stays a piece of
+        // navigation data, useful to the dashboard.
         assert_eq!(value["hostSurfaces"][0]["pathSegment"], "access-guide");
     }
 
-    /// Le stockage type de la sandbox lit les entites dans ce manifeste, et nulle part ailleurs.
+    /// The sandbox's typed storage reads the entities from this manifest, and nowhere else.
     #[test]
     fn carries_the_built_entities_into_the_uploaded_manifest() {
         let raw = r#"{"id":"issue-report"}"#;
@@ -876,7 +877,7 @@ mod stamp_built_declarations_tests {
         assert_eq!(value["entities"][0]["name"], "IssueReport");
     }
 
-    /// Le code déclare ses e-mails ; le manifeste écrit à la main garde les siens et ses textes.
+    /// The code declares its emails; the hand-written manifest keeps its own and their texts.
     #[test]
     fn merges_the_built_emails_by_id_and_grants_the_permission() {
         let raw = r#"{"id":"issue-report","permissions":["repo"],"emails":[
@@ -898,12 +899,12 @@ mod stamp_built_declarations_tests {
         assert_eq!(emails[2]["id"], "resolved");
         assert_eq!(value["permissions"], serde_json::json!(["repo", "email"]));
 
-        // Tamponné deux fois, rien ne double.
+        // Stamped twice, nothing is duplicated.
         let again = stamp_surfaces(&stamped, built).expect("stamp");
         assert_eq!(again, stamped);
     }
 
-    /// Un build sans emission ne doit pas empecher un deploiement.
+    /// A build that emits nothing must not prevent a deployment.
     #[test]
     fn leaves_the_manifest_alone_when_the_build_declares_no_surface() {
         let raw = r#"{"id":"access-guide"}"#;
@@ -913,8 +914,8 @@ mod stamp_built_declarations_tests {
         assert_eq!(stamped, raw);
     }
 
-    /// Les operations n'existent que dans le manifeste emis : sans elles, la sandbox ne peut
-    /// proposer que la saisie libre d'un nom d'operation.
+    /// The operations only exist in the emitted manifest: without them, the sandbox can offer
+    /// nothing but free-text entry of an operation name.
     #[test]
     fn carries_the_built_operations_into_the_uploaded_manifest() {
         let raw = r#"{"id":"ical-sync"}"#;
@@ -925,11 +926,11 @@ mod stamp_built_declarations_tests {
 
         assert_eq!(value["queries"][0]["name"], "listSources");
         assert_eq!(value["commands"][0]["fn"], "sync_now");
-        // Une cle que le build n'a pas emise n'est pas inventee.
+        // A key the build did not emit is not invented.
         assert!(value.get("surfaces").is_none());
     }
 
-    /// Une liste vide est une reponse : elle dit que le build n'expose rien, et elle voyage.
+    /// An empty list is an answer: it says the build exposes nothing, and it travels.
     #[test]
     fn carries_an_empty_operation_list_as_such() {
         let stamped = stamp_surfaces(r#"{"id":"m"}"#, r#"{"id":"m","queries":[],"commands":[]}"#)
@@ -940,7 +941,7 @@ mod stamp_built_declarations_tests {
         assert_eq!(value["commands"], serde_json::json!([]));
     }
 
-    /// Les surfaces emises font foi : elles decrivent les octets qui vont tourner.
+    /// The emitted surfaces are authoritative: they describe the bytes that are going to run.
     #[test]
     fn built_surfaces_win_over_anything_already_declared() {
         let raw = r#"{"surfaces":{"host":[{"id":"stale"}]}}"#;
@@ -968,9 +969,9 @@ mod assemble_publish_manifest_tests {
         module
     }
 
-    /// Le manifeste publié est celui que la plateforme lit. Les opérations n'existent que
-    /// dans la sortie du build — un module wasm n'exporte que `portaki_query` et ne sait pas
-    /// dire ce qu'il sert. Sans ce report, la plateforme doit les interroger tous en aveugle.
+    /// The published manifest is the one the platform reads. The operations only exist in the
+    /// build's output — a wasm module exports only `portaki_query` and cannot say what it
+    /// serves. Without carrying them over, the platform has to query them all blindly.
     #[test]
     fn the_published_manifest_carries_the_built_operations() {
         let module = module_with(
@@ -986,14 +987,14 @@ mod assemble_publish_manifest_tests {
         let raw = fs::read_to_string(publish_manifest_path(&artifacts)).expect("read");
         let value: serde_json::Value = serde_json::from_str(&raw).expect("parse");
         assert_eq!(value["queries"][0]["name"], "mapMarkers");
-        // Une liste vide est une réponse : le module ne mute rien, et il le dit.
+        // An empty list is an answer: the module mutates nothing, and it says so.
         assert_eq!(value["commands"], serde_json::json!([]));
-        // Ce que le manifeste catalogue portait déjà survit : le pathSegment reste une
-        // donnée de navigation du dashboard.
+        // What the catalogue manifest already carried survives: the pathSegment stays a
+        // piece of the dashboard's navigation data.
         assert_eq!(value["hostSurfaces"][0]["pathSegment"], "local-guide");
     }
 
-    /// Un module sans sortie de build reste publiable : rien n'est inventé.
+    /// A module with no build output stays publishable: nothing is invented.
     #[test]
     fn a_module_without_build_output_publishes_unchanged() {
         let module = module_with(r#"{"id":"m"}"#, None);

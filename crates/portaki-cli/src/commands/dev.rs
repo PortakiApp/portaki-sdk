@@ -18,10 +18,10 @@ use crate::ui;
 /// How long to wait for the editor to finish writing before rebuilding.
 const DEBOUNCE: Duration = Duration::from_millis(300);
 
-/// Le manifeste du module — lu à chaque cycle, et désormais surveillé comme les sources.
+/// The module manifest — read on every cycle, and now watched just like the sources.
 use crate::manifest::source::MODULE_MANIFEST as MANIFEST;
 
-/// Les migrations de la base du module, rejouées à chaque push.
+/// The module's database migrations, replayed on every push.
 const MIGRATIONS: &str = "db/migrations";
 
 #[derive(Debug, Parser)]
@@ -41,8 +41,8 @@ pub struct DevArgs {
     pub forget: bool,
 
     /// Former way to run an operation after each deploy — now `portaki run <operation>`.
-    // `num_args = 0..=1` : sans valeur, `clap` refusait avec « a value is required » et
-    // laissait chercher les noms ailleurs. C'est pourtant le moment où on ne les connaît pas.
+    // `num_args = 0..=1`: with no value, `clap` used to refuse with "a value is required" and
+    // left you to look the names up elsewhere. That is precisely the moment you don't know them.
     #[arg(long, num_args = 0..=1, default_missing_value = "", hide = true)]
     pub dispatch: Option<String>,
 
@@ -68,11 +68,11 @@ pub async fn run(args: DevArgs) -> Result<()> {
         ),
     );
 
-    // Un seul module à la fois : le bac à sable et son bail se tiennent par module.
+    // One module at a time: the sandbox and its lease are held per module.
     crate::workspace::enter(&args.modules.one("dev")?)?;
     let module_root = std::env::current_dir().context("current_dir")?;
 
-    // Ancien nom, gardé caché le temps de deux mineures : il marche, et dit le nouveau.
+    // Old name, kept hidden for two minor releases: it works, and it names the new one.
     if let Some(operation) = args.dispatch.as_deref() {
         ui::warn(crate::tr!(
             "portaki dev --dispatch is now portaki run {} — use that name from now on",
@@ -84,8 +84,8 @@ pub async fn run(args: DevArgs) -> Result<()> {
             }
         ));
     }
-    // `--dispatch` nu ne demande pas un déploiement : il demande les noms. On les montre et on
-    // s'arrête — compiler et pousser pour finir sur « laquelle ? » serait une minute perdue.
+    // A bare `--dispatch` is not asking for a deployment: it is asking for the names. We show
+    // them and stop — compiling and pushing only to end on "which one?" would be a minute lost.
     if args.dispatch.as_deref() == Some("") {
         return list_operations(&module_root);
     }
@@ -94,27 +94,27 @@ pub async fn run(args: DevArgs) -> Result<()> {
     let mut token = crate::auth::access_token(&base_url)?;
     let module_id = read_module_id(&module_root)?;
 
-    // Avant le bail : oublier n'est pas déployer, et prendre la place pour la rendre aussitôt
-    // ferait attendre une autre session pour rien.
+    // Before the lease: forgetting is not deploying, and taking the slot only to hand it straight
+    // back would make another session wait for nothing.
     if args.forget {
         return forget(&base_url, &module_id, &token).await;
     }
 
-    // Prise pour tout déploiement, `--watch` ou non. Un `portaki dev` seul écrase le bac à
-    // sable exactement comme une session qui boucle — une fois au lieu de sans fin, ce qui ne
-    // le rend pas moins surprenant pour celui dont le module vient de disparaître.
+    // Taken for any deployment, `--watch` or not. A one-shot `portaki dev` overwrites the
+    // sandbox exactly as a looping session does — once instead of endlessly, which makes it no
+    // less surprising for whoever's module has just vanished.
     //
-    // Avant le premier build, pas après : refuser une fois compilé et déployé aurait déjà
-    // écrasé ce que l'autre session tenait.
+    // Before the first build, not after: refusing once compiled and deployed would already have
+    // overwritten what the other session was holding.
     let auth_url = crate::profile::api_url(args.url.as_deref());
     let session = crate::dev_session::start(&base_url, &auth_url, &module_id, &token).await?;
 
-    // Ctrl-c ne déroule rien : sans ceci, le bail resterait pris jusqu'à son échéance et le
-    // verrou local jusqu'au prochain lancement. Ni l'un ni l'autre n'est grave — les deux se
-    // reprennent seuls — mais rendre la place tout de suite évite une attente pour rien.
+    // Ctrl-c unwinds nothing: without this, the lease would stay taken until it expires and the
+    // local lock until the next run. Neither is serious — both recover on their own — but giving
+    // the slot back right away avoids a pointless wait.
     {
-        // Une poignée, pas la session : une tâche qui la retiendrait empêcherait son `Drop` de
-        // s'exécuter au retour normal, et le verrou local survivrait à chaque échec.
+        // A handle, not the session: a task holding the session would keep its `Drop` from
+        // running on the normal return, and the local lock would outlive every failure.
         let release = session.release();
         tokio::spawn(async move {
             if tokio::signal::ctrl_c().await.is_ok() {
@@ -125,8 +125,8 @@ pub async fn run(args: DevArgs) -> Result<()> {
         });
     }
 
-    // Ouvert avant le premier déploiement : ce que le module journalise en démarrant compte aussi.
-    // Le flux suit la session jusqu'à ctrl-c ; c'est aussi ce qui dit « connecté » au dock.
+    // Opened before the first deployment: what the module logs while starting up counts too.
+    // The stream follows the session until ctrl-c; it is also what tells the dock "connected".
     if args.watch {
         tokio::spawn(crate::commands::logs::follow_forever(
             base_url.clone(),
@@ -148,10 +148,10 @@ pub async fn run(args: DevArgs) -> Result<()> {
     )
     .await;
 
-    // Rendue dès qu'on n'en a plus besoin : un déploiement ponctuel a fini, et un échec ne
-    // gardera rien. Le `Drop` de la session ne peut pas s'en charger — rendre un bail distant
-    // demande d'attendre une réponse, ce qu'un `Drop` ne sait pas faire — donc sans ceci un
-    // build raté interdirait le suivant pendant une minute et demie.
+    // Handed back as soon as it is no longer needed: a one-off deployment is done, and a failure
+    // will hold nothing. The session's `Drop` cannot take care of it — releasing a remote lease
+    // means waiting for an answer, which a `Drop` cannot do — so without this a failed build
+    // would lock out the next one for a minute and a half.
     if first.is_err() || !args.watch {
         session.release().now().await;
     }
@@ -187,9 +187,9 @@ pub async fn run(args: DevArgs) -> Result<()> {
 
     let src = module_root.join("src");
     let manifest = module_root.join(MANIFEST);
-    // Les chemins sont dits depuis la racine du module, pas depuis celle du disque : un chemin
-    // absolu de soixante-dix caractères repousse son explication à la ligne suivante, et la
-    // liste cesse de se lire en colonnes.
+    // Paths are given from the module root, not from the root of the disk: a seventy-character
+    // absolute path pushes its explanation onto the next line, and the list stops reading as
+    // columns.
     ui::list(
         &crate::tr!("watching", "surveillé"),
         &[
@@ -238,15 +238,15 @@ pub async fn run(args: DevArgs) -> Result<()> {
     watcher
         .watch(&src, RecursiveMode::Recursive)
         .with_context(|| format!("watch {}", src.display()))?;
-    // Le manifeste aussi : chaque cycle le relit et l'envoie, mais rien ne déclenchait de cycle
-    // quand il changeait. Ajouter une surface ou une permission restait donc sans effet visible
-    // jusqu'à la prochaine sauvegarde d'un fichier Rust — de quoi croire qu'il n'est pas lu.
+    // The manifest too: every cycle re-reads it and sends it, but nothing used to trigger a cycle
+    // when it changed. Adding a surface or a permission therefore had no visible effect until the
+    // next save of a Rust file — enough to make you believe it is never read.
     //
-    // `NonRecursive` sur le fichier lui-même : surveiller la racine du module ferait entrer
-    // `target/`, que chaque build réécrit — la boucle se relancerait elle-même sans fin.
+    // `NonRecursive` on the file itself: watching the module root would pull in `target/`, which
+    // every build rewrites — the loop would keep restarting itself for ever.
     //
-    // Le manifeste n'existe plus forcément : ce qu'il disait vient du code, de `Cargo.toml`
-    // (les features, donc les permissions) et d'`i18n/` (noms et libellés).
+    // The manifest no longer necessarily exists: what it used to say now comes from the code, from
+    // `Cargo.toml` (the features, hence the permissions) and from `i18n/` (names and labels).
     for watched in [manifest, module_root.join("Cargo.toml")] {
         if watched.is_file() {
             watcher
@@ -260,7 +260,7 @@ pub async fn run(args: DevArgs) -> Result<()> {
             .watch(&i18n_dir, RecursiveMode::Recursive)
             .with_context(|| format!("watch {}", i18n_dir.display()))?;
     }
-    // Une migration éditée se rejoue depuis zéro dans la sandbox : encore faut-il qu'un cycle parte.
+    // An edited migration replays from zero in the sandbox: that still takes a cycle to start.
     let migrations_dir = module_root.join(MIGRATIONS);
     if migrations_dir.is_dir() {
         watcher
@@ -269,11 +269,11 @@ pub async fn run(args: DevArgs) -> Result<()> {
     }
 
     loop {
-        // Bloque jusqu'à la première sauvegarde…
+        // Block until the first save…
         if rx.recv().is_err() {
             return Ok(());
         }
-        // …puis absorbe la rafale qu'un éditeur produit en écrivant un fichier.
+        // …then soak up the burst an editor produces while writing a file.
         while rx.recv_timeout(DEBOUNCE).is_ok() {}
 
         ui::blank();
@@ -290,16 +290,16 @@ pub async fn run(args: DevArgs) -> Result<()> {
         )
         .await
         {
-            // Une erreur de compilation ne doit pas arrêter la boucle : c'est le cas courant.
+            // A compilation error must not stop the loop: it is the common case.
             ui::report(&failure);
         }
     }
 }
 
-/// Ce que ce module expose, et comment l'appeler.
+/// What this module exposes, and how to call it.
 ///
-/// Lu du manifeste, pas de la sandbox : la question se pose avant le premier déploiement, et
-/// souvent sans réseau.
+/// Read from the manifest, not from the sandbox: the question comes up before the first
+/// deployment, and often with no network.
 pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
     let (manifest, source) = crate::manifest::load_manifest(module_root, None)?;
 
@@ -343,8 +343,8 @@ pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
             .map(|command| (command.name.as_str(), command.r#fn.as_str())),
     );
 
-    // L'exemple porte un vrai nom du module : une syntaxe illustrée sur `<operation>` se recopie
-    // mal, et le `--kind` qui va avec se devine encore moins.
+    // The example carries a real name from the module: a syntax illustrated on `<operation>`
+    // copies across badly, and the `--kind` that goes with it is harder still to guess.
     let sample = manifest
         .queries
         .first()
@@ -365,8 +365,8 @@ pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
         ),
     )]);
     ui::blank();
-    // `--kind query` est le défaut : le rappeler n'apprendrait rien. C'est `command` qu'il faut
-    // penser à poser, et c'est justement celui qu'on oublie.
+    // `--kind query` is the default: repeating it would teach nothing. `command` is the one you
+    // have to remember to pass, and it is precisely the one people forget.
     ui::advice(crate::tr!(
         "--params '{{…}}' passes arguments · the kind is read from the manifest",
         "--params '{{…}}' passe des arguments · le genre se lit dans le manifeste"
@@ -375,10 +375,11 @@ pub(crate) fn list_operations(module_root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Un groupe d'opérations : le nom qu'on appelle, puis la fonction qui le sert.
+/// A group of operations: the name you call, then the function that serves it.
 ///
-/// Le symbole Rust est la seconde colonne parce que c'est lui qu'on cherche ensuite dans les
-/// sources ; répéter « read-only » à chaque ligne n'aurait rien appris que le titre ne dise.
+/// The Rust symbol is the second column because it is what you go looking for in the sources
+/// afterwards; repeating "read-only" on every line would have taught nothing the title does not
+/// already say.
 fn show<'a>(title: &str, operations: impl Iterator<Item = (&'a str, &'a str)>) {
     let rows: Vec<(&str, &str)> = operations.collect();
     if rows.is_empty() {
@@ -398,13 +399,13 @@ async fn cycle(
     session: Option<&str>,
 ) -> Result<()> {
     build(module_root)?;
-    // Ce que `portaki build` fait après la compilation, et que `dev` sautait : régénérer le
-    // manifeste depuis les émissions. Sans ça, la sandbox recevait celui du dernier `build`
-    // lancé à la main — une requête ajoutée restait invisible jusqu'à ce qu'on y pense.
+    // What `portaki build` does after compiling, and what `dev` used to skip: regenerating the
+    // manifest from the emissions. Without it, the sandbox received the one from the last `build`
+    // run by hand — a newly added query stayed invisible until you thought of it.
     crate::commands::build::refresh_outputs(module_root)?;
 
-    // Le même résolveur que `publish`, et pas un chemin deviné : cargo nomme l'artefact
-    // d'après la cible, donc `access-guide` produit `access_guide.wasm`.
+    // The same resolver as `publish`, and not a guessed path: cargo names the artifact after the
+    // target, so `access-guide` produces `access_guide.wasm`.
     let wasm_path = crate::oci::pack::find_wasm_artifact(module_root, module_id)?;
     let wasm = std::fs::read(&wasm_path)
         .with_context(|| format!("read {} — did the build produce it?", wasm_path.display()))?;
@@ -412,10 +413,10 @@ async fn cycle(
     let manifest = sandbox_manifest(module_root)?;
     let migrations = migrations_bundle(module_root)?;
 
-    // L'empreinte porte sur le Wasm, le manifeste ET les migrations. Sur le seul Wasm, un
-    // `--watch` qui relisait `portaki.module.json` modifié répondait « unchanged » et ne l'envoyait
-    // jamais : le fichier était surveillé pour rien. Une migration éditée, pareil. Elle reste
-    // locale — le digest serveur, lui, est celui du Wasm.
+    // The fingerprint covers the Wasm, the manifest AND the migrations. On the Wasm alone, a
+    // `--watch` that re-read a modified `portaki.module.json` answered "unchanged" and never sent
+    // it: the file was watched for nothing. Same for an edited migration. It stays local — the
+    // server-side digest, for its part, is the Wasm's.
     let fingerprint =
         upload_fingerprint(&wasm, &manifest, migrations.as_deref().unwrap_or_default());
     if fingerprint == *last_digest {
@@ -427,8 +428,8 @@ async fn cycle(
         return Ok(());
     }
 
-    // Le résultat est lié avant le match : garder l'appel comme sujet du match retiendrait
-    // l'emprunt du jeton pendant qu'on cherche à le remplacer.
+    // The result is bound before the match: keeping the call as the match subject would hold the
+    // borrow on the token while we are trying to replace it.
     let uploading = ui::step(crate::tr!(
         "deploying {module_id} to the sandbox",
         "déploiement de {module_id} en sandbox"
@@ -505,12 +506,12 @@ async fn cycle(
     Ok(())
 }
 
-/// Une case de la grille Scénarios : une surface sur un cas pathologique.
+/// One cell of the Scenarios grid: one surface against one pathological case.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct ScenarioCell {
     pub(crate) surface: String,
     pub(crate) case: String,
-    /// `ok`, `watch` ou `fail`.
+    /// `ok`, `watch` or `fail`.
     pub(crate) status: String,
     #[serde(default)]
     pub(crate) code: Option<String>,
@@ -518,10 +519,10 @@ pub(crate) struct ScenarioCell {
     pub(crate) message: Option<String>,
 }
 
-/// Rejoue les sept cas sur ce qui vient d'être déployé, et affiche la grille.
+/// Replays the seven cases against what has just been deployed, and prints the grid.
 ///
-/// Jamais fatal : un cas en échec est ce qu'on vient chercher, pas une raison d'arrêter la
-/// boucle — et une plateforme qui ne sait pas les jouer n'empêche pas de développer.
+/// Never fatal: a failing case is what you came here for, not a reason to stop the loop — and a
+/// platform that cannot replay them is no reason to stop developing.
 async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &mut String) {
     let running = ui::step(crate::tr!(
         "replaying the 7 scenarios",
@@ -552,7 +553,7 @@ async fn run_scenarios(args: &DevArgs, base_url: &str, module_id: &str, token: &
     print_grid(&cells);
 }
 
-/// « scenarios — 12 of 14 ok ».
+/// "scenarios — 12 of 14 ok".
 pub(crate) fn scenarios_line(cells: &[ScenarioCell]) -> String {
     let failing = cells.iter().filter(|cell| cell.status != "ok").count();
     crate::tr!(
@@ -563,7 +564,7 @@ pub(crate) fn scenarios_line(cells: &[ScenarioCell]) -> String {
     )
 }
 
-/// La grille, puis une ligne par case qui n'est pas verte, avec son code et son message.
+/// The grid, then one line per cell that is not green, with its code and its message.
 pub(crate) fn print_grid(cells: &[ScenarioCell]) {
     for row in matrix(cells) {
         ui::detail(row);
@@ -584,7 +585,7 @@ pub(crate) fn print_grid(cells: &[ScenarioCell]) {
 }
 
 async fn post_scenarios(base_url: &str, module_id: &str, token: &str) -> Result<Vec<ScenarioCell>> {
-    // Patient : la plateforme rend chaque surface sur chaque cas avant de répondre.
+    // Patient: the platform renders every surface on every case before answering.
     let response = crate::http::patient_client()
         .post(format!(
             "{base_url}/dev/v1/modules/{module_id}/scenarios/run"
@@ -596,10 +597,10 @@ async fn post_scenarios(base_url: &str, module_id: &str, token: &str) -> Result<
     read_json(response).await
 }
 
-/// La grille, une ligne par surface et une colonne par cas, dans l'ordre du dock.
+/// The grid, one row per surface and one column per case, in the dock's order.
 fn matrix(cells: &[ScenarioCell]) -> Vec<String> {
     let cases = portaki_test_utils::scenarios::CASES;
-    // Dans l'ordre d'arrivée, quel que soit celui de la réponse.
+    // In the order they first turn up, whatever order the answer came in.
     let mut surfaces: Vec<&str> = Vec::new();
     for cell in cells {
         if !surfaces.contains(&cell.surface.as_str()) {
@@ -634,11 +635,10 @@ fn matrix(cells: &[ScenarioCell]) -> Vec<String> {
     rows
 }
 
-/// Un jeton d'accès vit quinze minutes ; une session `--watch` bien plus longtemps.
+/// An access token lives fifteen minutes; a `--watch` session lives far longer.
 ///
-/// Le renouvellement est tenté une fois, pas en boucle : si le jeton de rafraîchissement est
-/// lui aussi hors d'usage, réessayer ne ferait que masquer la seule chose à dire — il faut se
-/// reconnecter.
+/// The renewal is attempted once, not in a loop: if the refresh token is out of use too, retrying
+/// would only hide the one thing worth saying — you have to log in again.
 async fn reauthenticate(args: &DevArgs, stale: &str) -> Result<String> {
     renew(&crate::profile::api_url(args.url.as_deref()), stale).await
 }
@@ -650,8 +650,8 @@ pub(crate) async fn renew(auth_url: &str, stale: &str) -> Result<String> {
 }
 
 pub(crate) fn build(module_root: &Path) -> Result<()> {
-    // Release, pas debug : un build debug pèse dix fois plus et se fait refuser par le plafond
-    // d'ingestion de 5 Mo. Mieux vaut compiler plus longtemps que découvrir le refus au push.
+    // Release, not debug: a debug build weighs ten times as much and gets turned away by the 5 MB
+    // ingestion cap. Better to compile for longer than to discover the refusal at push time.
     let mut cmd = std::process::Command::new("cargo");
     cmd.current_dir(module_root)
         .args(["build", "--release", "--target", "wasm32-unknown-unknown"]);
@@ -665,20 +665,20 @@ pub(crate) fn build(module_root: &Path) -> Result<()> {
     .context("cargo build wasm32")
 }
 
-/// devapi rend du camelCase, comme toutes les API Portaki. Sans ce rename, `size_bytes` ne
-/// trouvait rien et le déploiement échouait à la lecture de sa propre réponse — alors qu'il
-/// avait réussi côté serveur.
+/// devapi answers in camelCase, like every Portaki API. Without this rename, `size_bytes` found
+/// nothing and the deployment failed while reading its own answer — even though it had succeeded
+/// server-side.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DeployResponse {
     pub(crate) digest: String,
     pub(crate) size_bytes: u64,
-    /// L'installation rejouée dans la sandbox. Absente d'une plateforme qui ne la rejoue pas.
+    /// The installation replayed in the sandbox. Absent from a platform that does not replay it.
     #[serde(default)]
     pub(crate) install: Option<InstallCheck>,
 }
 
-/// La case `install` de la checklist, telle que devapi la rend : `PASS`, `FAIL` ou `BLOCKED`.
+/// The checklist's `install` cell, as devapi renders it: `PASS`, `FAIL` or `BLOCKED`.
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct InstallCheck {
     pub(crate) status: String,
@@ -686,8 +686,8 @@ pub(crate) struct InstallCheck {
     pub(crate) detail: String,
 }
 
-/// Ce qu'un hôte verrait en installant : migrations, isolation par logement, réinstallation,
-/// deux installations à la fois. Rouge n'arrête pas la boucle — la checklist le retiendra.
+/// What a host would see when installing: migrations, per-property isolation, reinstallation, two
+/// installations at once. Red does not stop the loop — the checklist is what will hold it back.
 pub(crate) fn print_install(install: &InstallCheck) {
     let line = format!("installation  {}", install.detail);
     match install.status.as_str() {
@@ -697,10 +697,10 @@ pub(crate) fn print_install(install: &InstallCheck) {
     }
 }
 
-/// Le `migrations.bundle.json` que `refresh_outputs` vient d'écrire, s'il y en a un.
+/// The `migrations.bundle.json` that `refresh_outputs` has just written, if there is one.
 ///
-/// Sans lui, la sandbox n'installait jamais les tables du module : une migration cassée ne se
-/// découvrait qu'à l'installation chez un hôte.
+/// Without it, the sandbox never installed the module's tables: a broken migration was only
+/// discovered when a host installed the module.
 pub(crate) fn migrations_bundle(module_root: &Path) -> Result<Option<Vec<u8>>> {
     let path = module_root.join("target/portaki/migrations.bundle.json");
     match std::fs::read(&path) {
@@ -710,11 +710,11 @@ pub(crate) fn migrations_bundle(module_root: &Path) -> Result<Option<Vec<u8>>> {
     }
 }
 
-/// `session` est celle du bail, quand nous l'avons obtenu.
+/// `session` is the lease's session, when we obtained the lease.
 ///
-/// Elle dit au serveur que ce push est celui du détenteur. Sans elle — bail non obtenu — il
-/// n'admet le push que si personne d'autre ne tient la place, ce qui est exactement la garantie
-/// que le verrou local ne peut pas donner.
+/// It tells the server that this push is the holder's. Without it — lease not obtained — the
+/// server only accepts the push if nobody else holds the slot, which is exactly the guarantee the
+/// local lock cannot give.
 pub(crate) async fn deploy(
     base_url: &str,
     module_id: &str,
@@ -741,8 +741,8 @@ pub(crate) async fn deploy(
         form = form.text("sessionId", session.to_owned());
     }
 
-    // Patient : un `.wasm` de plusieurs mégaoctets part d'ici, et le couper au bout de quinze
-    // secondes casserait le déploiement normal. L'échéance de connexion, elle, reste courte.
+    // Patient: a `.wasm` of several megabytes goes out from here, and cutting it off after fifteen
+    // seconds would break an ordinary deployment. The connect timeout, for its part, stays short.
     let response = crate::http::patient_client()
         .post(format!(
             "{}/dev/v1/modules/{module_id}/dev-deploy",
@@ -757,11 +757,11 @@ pub(crate) async fn deploy(
     read_json(response).await
 }
 
-/// Retire ce module du bac à sable.
+/// Removes this module from the sandbox.
 ///
-/// Un déploiement dev s'écrase à chaque push mais ne s'efface jamais : un module essayé une fois
-/// restait dans l'inventaire, à côté de ceux sur lesquels on travaille. Rien n'est recompilé ici
-/// — c'est une ligne qu'on retire, pas un artefact qu'on remplace.
+/// A dev deployment is overwritten on every push but never deleted: a module tried once stayed in
+/// the inventory, next to the ones actually being worked on. Nothing is recompiled here — it is a
+/// row being removed, not an artifact being replaced.
 async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
     let forgetting = ui::step(crate::tr!(
         "forgetting {module_id}",
@@ -796,9 +796,9 @@ async fn forget(base_url: &str, module_id: &str, token: &str) -> Result<()> {
     Ok(())
 }
 
-/// Même remarque, en pire : les `serde(default)` ci-dessous avalaient la non-correspondance en
-/// silence. `--dispatch` affichait un résultat vide, une durée nulle et aucun host call sur une
-/// invocation qui avait parfaitement tourné.
+/// Same remark, only worse: the `serde(default)`s below swallowed the mismatch in silence.
+/// `--dispatch` printed an empty result, a zero duration and no host call at all for an invocation
+/// that had run perfectly.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DispatchResponse {
@@ -806,7 +806,7 @@ pub(crate) struct DispatchResponse {
     result_json: String,
     #[serde(default)]
     pub(crate) duration_ms: u64,
-    /// Ce que le runtime a refusé ; absent quand le passage a abouti.
+    /// What the runtime refused; absent when the call went through.
     #[serde(default)]
     pub(crate) error_code: Option<String>,
     #[serde(default)]
@@ -824,8 +824,8 @@ struct HostCall {
     duration_micros: u64,
     #[serde(default)]
     error_code: String,
-    /// Ce que le module a demandé. La sandbox garde les valeurs, la production ne les garde pas :
-    /// absent veut dire « le runtime ne les a pas transmises », pas « le module n'a rien passé ».
+    /// What the module asked for. The sandbox keeps the values, production does not: absent means
+    /// "the runtime did not pass them on", not "the module passed nothing".
     #[serde(default)]
     args_json: Option<String>,
     #[serde(default)]
@@ -851,7 +851,7 @@ async fn dispatch(
         "kind": args.kind,
         "paramsJson": args.params,
     });
-    // Patient aussi : la plateforme exécute l'opération avant de répondre.
+    // Patient too: the platform runs the operation before answering.
     let response = crate::http::patient_client()
         .post(format!("{}/dev/v1/modules/{module_id}/dispatch", base_url))
         .bearer_auth(token)
@@ -872,8 +872,8 @@ pub(crate) fn print_trace(trace: &DispatchResponse) {
         ));
     }
     for call in &trace.host_calls {
-        // Dans l'ordre des appels, la voix du module au milieu de ce qu'il a demandé : un `log`
-        // sorti de la liste dirait tout sauf entre quels appels il a été écrit.
+        // In call order, the module's own voice in among what it asked for: a `log` lifted out of
+        // the list would say everything except which calls it was written between.
         if let Some(line) = log_line(call) {
             ui::detail(line);
             continue;
@@ -902,8 +902,8 @@ pub(crate) fn print_trace(trace: &DispatchResponse) {
     for event in &trace.published_events {
         ui::detail(format!("would publish  {event}"));
     }
-    // « captured » et « would publish » se ressemblent assez pour qu'on les prenne pour des
-    // choses faites. Elles ne le sont pas : la sandbox les note et les retient.
+    // "captured" and "would publish" look alike enough to be taken for things actually done.
+    // They are not: the sandbox records them and holds them back.
     if !trace.captured_effects.is_empty() || !trace.published_events.is_empty() {
         ui::detail(crate::tr!(
             "captured and would-publish lines were held, not performed",
@@ -915,13 +915,13 @@ pub(crate) fn print_trace(trace: &DispatchResponse) {
     }
 }
 
-/// Au-delà, une valeur noie la trace — le détail entier se lit dans l'espace développeur.
+/// Beyond that, a value drowns the trace — the whole detail can be read in the developer space.
 const VALUE_WIDTH: usize = 160;
 
-/// Une ligne écrite par le module lui-même, ou `None` si cet appel n'est pas un `host::log`.
+/// A line written by the module itself, or `None` if this call is not a `host::log`.
 ///
-/// Un `log` passe par le même canal que `kv.get` : sans lire ses arguments, la trace affichait
-/// « 41 µs  log », et le message que le développeur venait d'écrire restait invisible.
+/// A `log` goes through the same channel as `kv.get`: without reading its arguments, the trace
+/// printed "41 µs  log", and the message the developer had just written stayed invisible.
 fn log_line(call: &HostCall) -> Option<String> {
     if call.op != "log" {
         return None;
@@ -938,12 +938,12 @@ fn log_line(call: &HostCall) -> Option<String> {
         .filter(|fields| !fields.is_empty() && *fields != "{}")
         .map(|fields| format!("  {}", truncate(fields)))
         .unwrap_or_default();
-    // Cinq espaces, pas deux : le message se pose sous la colonne des opérations, là où « µs »
-    // décale les autres lignes.
+    // Five spaces, not two: the message lands under the operations column, where "µs" shifts the
+    // other lines across.
     Some(format!("{level:>7}     {message}{fields}"))
 }
 
-/// Ce qu'un appel a demandé ou reçu, sous sa ligne. Rien quand le runtime ne l'a pas transmis.
+/// What a call asked for or received, under its line. Nothing when the runtime did not pass it on.
 fn value_line(label: &str, value: Option<&str>) -> Option<String> {
     let value = value?.trim();
     if value.is_empty() {
@@ -960,8 +960,8 @@ fn truncate(value: &str) -> String {
     format!("{kept}…")
 }
 
-/// Le seul échec dont on sait quoi faire : renouveler et rejouer. Il porte un type pour que
-/// l'appelant le distingue d'un 500, qu'il serait absurde de rejouer avec un autre jeton.
+/// The one failure we know what to do with: renew and replay. It carries a type so the caller can
+/// tell it apart from a 500, which it would be absurd to replay with a different token.
 #[derive(Debug)]
 pub(crate) struct Unauthorized;
 
@@ -987,7 +987,7 @@ pub(crate) async fn read_json<T: serde::de::DeserializeOwned>(
     serde_json::from_str(&body).with_context(|| format!("unexpected answer: {body}"))
 }
 
-/// La base unique de la CLI — `--url` n'en est plus qu'un alias caché de `--api`.
+/// The CLI's single base URL — `--url` is now no more than a hidden alias of `--api`.
 fn base_url(args: &DevArgs) -> String {
     crate::profile::api_url(args.url.as_deref())
 }
@@ -1001,41 +1001,43 @@ pub(crate) fn read_module_id(module_root: &Path) -> Result<String> {
     })
 }
 
-/// Le manifeste que la sandbox reçoit : celui écrit à la main s'il existe, `{ id, version }` du
-/// crate sinon, tamponné de la version du SDK résolue par cargo et de ce que le build a émis.
+/// The manifest the sandbox receives: the hand-written one if it exists, the crate's
+/// `{ id, version }` otherwise, stamped with the SDK version cargo resolved and with what the
+/// build emitted.
 ///
-/// Partagé avec `portaki sdk upgrade`, qui déploie deux fois — avant et après la montée de
-/// version — et doit envoyer exactement ce que `dev` enverrait.
+/// Shared with `portaki sdk upgrade`, which deploys twice — before and after the version bump —
+/// and must send exactly what `dev` would send.
 pub(crate) fn sandbox_manifest(module_root: &Path) -> Result<String> {
     let raw_manifest = crate::manifest::source::source_manifest(module_root)?;
-    // Ce que le code dit du module — nom, icône, maturité… — comble ce que le manifeste tait.
+    // What the code says about the module — name, icon, maturity… — fills in what the manifest
+    // leaves unsaid.
     let raw_manifest =
         match std::fs::read_to_string(module_root.join(crate::manifest::catalog::BUILT_CATALOG)) {
             Ok(catalog) => crate::manifest::catalog::fill_catalog(&raw_manifest, &catalog)?,
             Err(_) => raw_manifest,
         };
-    // Le même tampon que `publish`, et pour la même raison : `requiresModuleSdk` désigne le jeu
-    // de contrats contre lequel typer un arbre SDUI, et il ne peut être exact que s'il vient du
-    // graphe résolu par cargo. Sans lui, la sandbox recevait un manifeste muet et
-    // l'inspecteur refusait de typer — pour tous les modules, toujours.
+    // The same stamp as `publish`, and for the same reason: `requiresModuleSdk` names the set of
+    // contracts an SDUI tree is to be typed against, and it can only be right if it comes from the
+    // graph cargo resolved. Without it, the sandbox received a mute manifest and the inspector
+    // refused to type — for every module, always.
     let manifest = crate::oci::pack::stamp_sdk_version(
         &raw_manifest,
         crate::oci::pack::resolved_sdk_version(module_root)?,
     )?;
-    // Et ce que le build a emis — surfaces, queries, commands. Sans les surfaces, la sandbox
-    // prend le `pathSegment` pour un identifiant et demande un symbole qui n'existe pas ; sans
-    // les operations, elle ne peut proposer qu'une saisie libre du nom a dispatcher.
+    // And what the build emitted — surfaces, queries, commands. Without the surfaces, the sandbox
+    // takes the `pathSegment` for an identifier and asks for a symbol that does not exist; without
+    // the operations, all it can offer is free-text entry of the name to dispatch.
     let manifest =
         match std::fs::read_to_string(module_root.join(crate::manifest::loader::BUILT_MANIFEST)) {
             Ok(built) => crate::oci::pack::stamp_built_declarations(&manifest, &built)?,
-            // Pas de manifeste de build : on envoie ce qu'on a, comme avant.
+            // No build manifest: we send what we have, as before.
             Err(_) => manifest,
         };
     Ok(manifest)
 }
 
-/// Ce qui décide qu'un cycle a quelque chose à envoyer : le binaire, le manifeste et les
-/// migrations ensemble.
+/// What decides whether a cycle has something to send: the binary, the manifest and the
+/// migrations together.
 fn upload_fingerprint(wasm: &[u8], manifest: &str, migrations: &[u8]) -> String {
     sha256(&[wasm, b"\0", manifest.as_bytes(), b"\0", migrations].concat())
 }
@@ -1085,7 +1087,7 @@ mod tests {
         assert!(rows[1].trim_end().ends_with('✗'), "{}", rows[1]);
     }
 
-    /// Oublier n'est pas déployer : les deux drapeaux qui poussent sont refusés avec lui.
+    /// Forgetting is not deploying: the two flags that push are refused alongside it.
     #[test]
     fn forget_does_not_go_with_the_flags_that_deploy() {
         let forgetting = DevArgs::try_parse_from(["dev", "--forget"]).expect("forget alone");
@@ -1100,7 +1102,8 @@ mod tests {
         }
     }
 
-    /// Un manifeste modifié sans toucher au code doit repartir : c'est ce que `--watch` surveille.
+    /// A manifest changed without touching the code must go out again: that is what `--watch`
+    /// is watching for.
     #[test]
     fn a_manifest_change_alone_is_something_to_upload() {
         let wasm = b"\0asm same bytes";
@@ -1114,7 +1117,7 @@ mod tests {
         );
     }
 
-    /// Une migration éditée, sans toucher au code ni au manifeste, doit repartir aussi.
+    /// An edited migration, without touching the code or the manifest, must go out again too.
     #[test]
     fn a_migration_change_alone_is_something_to_upload() {
         let wasm = b"\0asm same bytes";
@@ -1150,7 +1153,8 @@ mod tests {
         );
     }
 
-    /// Une plateforme qui ne rejoue pas l'installation n'en dit rien : la réponse reste lisible.
+    /// A platform that does not replay the installation says nothing about it: the answer stays
+    /// readable.
     #[test]
     fn a_deploy_response_reads_the_install_outcome_when_there_is_one() {
         let body = r#"{"digest":"sha256:ab","sizeBytes":1,
@@ -1166,7 +1170,7 @@ mod tests {
 
     use super::*;
 
-    /// Valeur obtenue par `printf '\0asm' | shasum -a 256`, pas recopiée de la sortie du test.
+    /// Value obtained with `printf '\0asm' | shasum -a 256`, not copied back from the test output.
     #[test]
     fn a_digest_is_computed_on_the_bytes() {
         assert_eq!(
@@ -1192,10 +1196,10 @@ mod tests {
         assert_eq!(read_module_id(dir.path()).unwrap(), "nuki");
     }
 
-    /// La charge exacte que devapi renvoie, recopiée d'un déploiement réel.
+    /// The exact payload devapi returns, copied from a real deployment.
     ///
-    /// C'est le test qui manquait : la structure attendait `size_bytes`, la réponse portait
-    /// `sizeBytes`, et le déploiement échouait à lire sa propre réussite.
+    /// This is the test that was missing: the struct expected `size_bytes`, the answer carried
+    /// `sizeBytes`, and the deployment failed to read its own success.
     #[test]
     fn a_deploy_response_is_read_as_devapi_writes_it() {
         let body = r#"{"moduleId":"access-guide","version":"0.3.2",
@@ -1213,8 +1217,8 @@ mod tests {
         );
     }
 
-    /// Les `serde(default)` d'une réponse de dispatch avalent une non-correspondance en silence :
-    /// sans assertion sur les valeurs, un test de désérialisation passerait sur du vide.
+    /// The `serde(default)`s of a dispatch answer swallow a mismatch in silence: without
+    /// assertions on the values, a deserialisation test would pass on nothing at all.
     #[test]
     fn a_dispatch_response_carries_its_values_not_defaults() {
         let body = r#"{"runId":"4d7a","hasResult":true,"resultJson":"{\"ok\":true}",
@@ -1231,8 +1235,8 @@ mod tests {
         assert_eq!(parsed.captured_effects[0].detail_json, "{}");
     }
 
-    /// La sandbox transmet les valeurs ; la CLI les ignorait, et c'est par là que passent les
-    /// lignes de journal du module.
+    /// The sandbox passes the values on; the CLI used to ignore them, and that is the channel the
+    /// module's log lines travel through.
     #[test]
     fn a_host_call_keeps_the_values_the_sandbox_sent() {
         let body = r#"{"runId":"4d7a","hasResult":false,"resultJson":"","durationMs":3,
@@ -1252,7 +1256,7 @@ mod tests {
         );
     }
 
-    /// « 41 µs  log » ne disait pas ce que le module avait écrit — c'est tout l'intérêt d'un log.
+    /// "41 µs  log" did not say what the module had written — which is the whole point of a log.
     #[test]
     fn a_log_call_reads_as_the_line_the_module_wrote() {
         let call = HostCall {
@@ -1273,7 +1277,7 @@ mod tests {
         assert!(line.contains(r#"{"key":"wifi"}"#), "{line}");
     }
 
-    /// Des champs vides ajouteraient « {} » au bout de chaque ligne, pour rien.
+    /// Empty fields would add "{}" at the end of every line, for nothing.
     #[test]
     fn a_log_line_drops_empty_fields() {
         let call = HostCall {
@@ -1287,8 +1291,8 @@ mod tests {
         assert_eq!(log_line(&call).unwrap().trim_end(), "   info     prêt");
     }
 
-    /// Hors sandbox, le runtime ne transmet pas les valeurs : la ligne de journal est alors
-    /// indisponible, et l'appel doit rester affiché comme un appel hôte ordinaire.
+    /// Outside the sandbox, the runtime does not pass the values on: the log line is then
+    /// unavailable, and the call must still be shown as an ordinary host call.
     #[test]
     fn a_call_without_values_is_not_a_log_line() {
         let without_values = HostCall {

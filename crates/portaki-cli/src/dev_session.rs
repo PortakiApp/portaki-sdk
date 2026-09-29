@@ -1,37 +1,38 @@
-//! Une seule session `portaki dev` par compte, tenue auprès de devapi.
+//! One `portaki dev` session per account, held at devapi.
 //!
-//! # Pourquoi côté plateforme
+//! # Why on the platform side
 //!
-//! Le verrou de [`crate::watch_lock`] ne voit que sa machine. Deux portables, un seul compte,
-//! une seule sandbox : les deux sessions poussent tour à tour des modules différents et
-//! chacune défait ce que l'autre vient de faire. Seul le serveur voit les deux.
+//! The [`crate::watch_lock`] lock only sees its own machine. Two laptops, one account, one
+//! sandbox: the two sessions push different modules in turn and each undoes what the other has
+//! just done. Only the server sees both.
 //!
-//! # Pourquoi devapi et non le registre
+//! # Why devapi and not the registry
 //!
-//! Le bail a d'abord vécu chez le registre, où il ne pouvait qu'être demandé poliment : le
-//! `dev-deploy` qu'il protège a lieu chez devapi, qui ne le voyait pas. Un client qui l'ignorait
-//! — ou qui avait perdu le registre à la prise — écrasait quand même la sandbox de l'autre.
-//! Depuis devapi, le refus est opposé à l'écriture elle-même.
+//! The lease first lived at the registry, where it could only be asked for politely: the
+//! `dev-deploy` it protects happens at devapi, which did not see it. A client that ignored it —
+//! or that had lost the registry when taking it — overwrote the other one's sandbox all the same.
+//! From devapi, the refusal is raised against the write itself.
 //!
-//! # Un bail, pas un verrou
+//! # A lease, not a lock
 //!
-//! Rien ici ne peut interroger un processus distant. Un portable qu'on ferme, un réseau qu'on
-//! coupe, un `kill -9` : le détenteur disparaît sans rien rendre, et le compte resterait pris
-//! jusqu'à intervention humaine. Le serveur donne donc un bail à échéance, que cette session
-//! repousse tant qu'elle vit — et qui libère le compte tout seul quand elle cesse.
+//! Nothing here can interrogate a remote process. A laptop that gets closed, a network that gets
+//! cut, a `kill -9`: the holder disappears without handing anything back, and the account would
+//! stay taken until a human stepped in. The server therefore grants a lease with an expiry, which
+//! this session pushes back as long as it lives — and which frees the account on its own when it
+//! stops.
 //!
-//! # Ce que fait un réseau qui tombe
+//! # What a network outage does
 //!
-//! **À la prise** : on prévient et on continue sans bail. Refuser de développer parce qu'un
-//! service de verrouillage ne répond pas coûterait plus que la gêne qu'il évite — et le verrou
-//! local couvre encore cette machine.
+//! **When taking it**: we warn and carry on without a lease. Refusing to develop because a
+//! locking service does not answer would cost more than the annoyance it avoids — and the local
+//! lock still covers this machine.
 //!
-//! **Au renouvellement** : on réessaie en silence. Le bail dure plusieurs fois l'intervalle,
-//! donc une coupure passagère ne coûte rien. Passé l'échéance, on le dit — le compte est
-//! peut-être déjà repris ailleurs.
+//! **When renewing**: we retry silently. The lease lasts several times the interval, so a passing
+//! outage costs nothing. Past the expiry, we say so — the account may already have been taken
+//! over elsewhere.
 //!
-//! **Repris par quelqu'un d'autre** : là on s'arrête. Continuer serait exactement l'écrasement
-//! mutuel que ce bail existe pour empêcher.
+//! **Taken over by someone else**: there we stop. Carrying on would be exactly the mutual
+//! overwriting this lease exists to prevent.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,17 +41,17 @@ use anyhow::{Context, Result};
 
 use crate::ui;
 
-/// Ce que le serveur rend quand il accorde le bail.
+/// What the server returns when it grants the lease.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Lease {
-    /// Ce que le serveur veut qu'on attende avant de repousser. Rendu par lui plutôt que deviné
-    /// ici : le TTL lui appartient, et un client qui le devine mal perdrait sa session sans
-    /// avoir rien fait de mal.
+    /// How long the server wants us to wait before pushing the lease back. Returned by it rather
+    /// than guessed here: the TTL belongs to it, and a client that guessed it wrong would lose
+    /// its session without having done anything wrong.
     renew_after_seconds: u64,
 }
 
-/// Ce qu'il rend quand il le refuse.
+/// What it returns when it refuses it.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Held {
@@ -58,17 +59,16 @@ struct Held {
     machine: String,
 }
 
-/// La session en cours : le verrou local, et le bail de compte s'il a pu être pris.
+/// The session under way: the local lock, and the account lease if it could be taken.
 pub struct DevSession {
     local: crate::watch_lock::WatchLock,
     lease: Option<Arc<LeaseHolder>>,
 }
 
-/// De quoi rendre la place depuis ailleurs — la tâche qui guette ctrl-c, notamment.
+/// What it takes to give the place back from elsewhere — the task watching for ctrl-c, notably.
 ///
-/// Une poignée légère, et non la session elle-même : une tâche qui retiendrait la session
-/// empêcherait son `Drop` de s'exécuter au retour normal, et le verrou local survivrait à
-/// chaque échec.
+/// A light handle, and not the session itself: a task that held on to the session would keep its
+/// `Drop` from running on the normal return, and the local lock would outlive every failure.
 #[derive(Clone)]
 pub struct Release {
     lock: std::path::PathBuf,
@@ -76,7 +76,7 @@ pub struct Release {
 }
 
 impl Release {
-    /// Rend le verrou local puis le bail. Au mieux : on part de toute façon.
+    /// Gives back the local lock, then the lease. Best effort: we are leaving either way.
     pub async fn now(&self) {
         let _ = std::fs::remove_file(&self.lock);
         let Some(holder) = &self.lease else {
@@ -94,11 +94,11 @@ impl Release {
 
 struct LeaseHolder {
     base_url: String,
-    /// Où renouveler le jeton — la plateforme d'authentification, pas forcément devapi.
+    /// Where to renew the token — the authentication platform, not necessarily devapi.
     auth_url: String,
     session_id: String,
-    /// Renouvelé sur place : le bail vit bien plus que les quinze minutes d'un jeton, et celui
-    /// du démarrage faisait échouer chaque renouvellement passé ce délai — en silence.
+    /// Renewed in place: the lease lives far longer than a token's fifteen minutes, and the one
+    /// from start-up made every renewal past that delay fail — silently.
     token: std::sync::Mutex<String>,
 }
 
@@ -111,10 +111,10 @@ impl LeaseHolder {
     }
 }
 
-/// Prend la place — localement d'abord, puis auprès de devapi.
+/// Takes the place — locally first, then at devapi.
 ///
-/// Le verrou local en premier parce qu'il est immédiat et sans réseau : inutile d'aller
-/// interroger le serveur pour se faire refuser par sa propre machine.
+/// The local lock first because it is immediate and needs no network: no point going to ask the
+/// server only to be refused by one's own machine.
 pub async fn start(
     base_url: &str,
     auth_url: &str,
@@ -146,12 +146,12 @@ pub async fn start(
             held.machine
         ),
         Err(unreachable) => {
-            // devapi ne répond pas. On le dit et on continue : le verrou local couvre encore
-            // cette machine, et refuser de travailler pour cette raison coûterait plus que la
-            // gêne qu'on évite. Le serveur refusera de toute façon le déploiement si quelqu'un
-            // d'autre tient la place — c'est lui qui garde la sandbox, pas nous.
+            // devapi is not answering. We say so and carry on: the local lock still covers this
+            // machine, and refusing to work for that reason would cost more than the annoyance
+            // it avoids. The server will refuse the deploy anyway if someone else holds the
+            // place — it is the one guarding the sandbox, not us.
             ui::warn("could not reach the dev platform — this session is not held account-wide");
-            // La chaîne entière : le contexte seul dit ce qu'on tentait, pas ce qui a échoué.
+            // The whole chain: the context alone says what was attempted, not what failed.
             ui::detail(format!("{unreachable:#}"));
             ui::advice("another machine on this account could start one too");
             Ok(DevSession { local, lease: None })
@@ -160,16 +160,16 @@ pub async fn start(
 }
 
 impl DevSession {
-    /// La session telle que le bail la connaît, si nous l'avons obtenu.
+    /// The session as the lease knows it, if we obtained it.
     ///
-    /// `None` quand la prise a échoué : nous poussons alors sans rien pouvoir prouver, et c'est
-    /// le serveur qui tranche — il n'admet un push anonyme que si personne d'autre ne tient la
-    /// place. Envoyer un identifiant inventé serait pire, il ressemblerait à un détenteur.
+    /// `None` when taking it failed: we then push with nothing to prove, and it is the server
+    /// that decides — it only admits an anonymous push if nobody else holds the place. Sending a
+    /// made-up id would be worse, it would look like a holder.
     pub fn session_id(&self) -> Option<&str> {
         self.lease.as_ref().map(|holder| holder.session_id.as_str())
     }
 
-    /// De quoi rendre la place depuis une autre tâche.
+    /// What it takes to give the place back from another task.
     pub fn release(&self) -> Release {
         Release {
             lock: self.local.path().to_path_buf(),
@@ -183,8 +183,8 @@ enum Kept {
     Theirs(Held),
 }
 
-/// Un 401 n'est pas un refus : le jeton a expiré. On le renouvelle une fois et on redemande —
-/// sans quoi un jeton périmé au lancement se lisait « plateforme injoignable ».
+/// A 401 is not a refusal: the token has expired. We renew it once and ask again — without which
+/// a token that was already stale at start-up read as "platform unreachable".
 async fn hold(holder: &LeaseHolder, module_id: &str) -> Result<Kept> {
     let stale = holder.token();
     let mut response = request_hold(holder, module_id, &stale).await?;
@@ -231,20 +231,20 @@ async fn request_hold(
         .context("ask the dev platform for the watch session")
 }
 
-/// Repousse le bail tant que la session vit.
+/// Pushes the lease back as long as the session lives.
 fn spawn_renewal(holder: Arc<LeaseHolder>, module_id: String, first: Lease) {
     tokio::spawn(async move {
         let every = Duration::from_secs(first.renew_after_seconds.clamp(5, 600));
-        // Le bail dure plusieurs fois cet intervalle : quelques échecs d'affilée ne mettent
-        // rien en danger, et se taire évite d'inquiéter pour une coupure d'une seconde.
+        // The lease lasts several times this interval: a few failures in a row put nothing at
+        // risk, and keeping quiet avoids worrying anyone over a one-second outage.
         let mut missed = 0_u32;
         loop {
             tokio::time::sleep(every).await;
             match hold(&holder, &module_id).await {
                 Ok(Kept::Ours(_)) => missed = 0,
                 Ok(Kept::Theirs(held)) => {
-                    // Le bail a été repris. Continuer, c'est écraser le travail de l'autre
-                    // session — précisément ce que tout ceci existe pour empêcher.
+                    // The lease has been taken over. Carrying on means overwriting the other
+                    // session's work — precisely what all of this exists to prevent.
                     ui::blank();
                     ui::failure(format!(
                         "this account's portaki dev session was taken over by {} ({})",
@@ -255,8 +255,8 @@ fn spawn_renewal(holder: Arc<LeaseHolder>, module_id: String, first: Lease) {
                 }
                 Err(_) => {
                     missed += 1;
-                    // Trois échecs : on a dépassé l'échéance, le compte est peut-être libre —
-                    // ou déjà repris ailleurs.
+                    // Three failures: we are past the expiry, the account may be free — or
+                    // already taken over elsewhere.
                     if missed == 3 {
                         ui::blank();
                         ui::warn("the dev platform has not answered for a while");
@@ -268,7 +268,7 @@ fn spawn_renewal(holder: Arc<LeaseHolder>, module_id: String, first: Lease) {
     });
 }
 
-/// Le nom de la machine, pour situer une session tenue ailleurs.
+/// The machine's name, to place a session held elsewhere.
 fn machine() -> String {
     for variable in ["HOSTNAME", "HOST", "COMPUTERNAME"] {
         if let Ok(name) = std::env::var(variable) {
@@ -290,14 +290,14 @@ fn machine() -> String {
 mod tests {
     use super::*;
 
-    /// Le nom sert à situer une session tenue ailleurs : il doit toujours dire quelque chose.
+    /// The name serves to place a session held elsewhere: it must always say something.
     #[test]
     fn the_machine_always_has_a_name() {
         assert!(!machine().is_empty());
     }
 
-    /// Le serveur dicte le rythme, mais une valeur absurde ne doit pas produire une boucle
-    /// serrée ni un renouvellement qui n'arrive jamais.
+    /// The server sets the pace, but an absurd value must produce neither a tight loop nor a
+    /// renewal that never comes.
     #[test]
     fn a_nonsensical_interval_is_brought_back_to_reason() {
         assert_eq!(0_u64.clamp(5, 600), 5);

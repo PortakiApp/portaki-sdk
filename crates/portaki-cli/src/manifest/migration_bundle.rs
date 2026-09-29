@@ -68,8 +68,8 @@ pub fn write_migration_bundle(
     Ok(Some(dest))
 }
 
-/// Un bundle d'un build précédent survivrait à la dernière migration supprimée : `dev` et `publish`
-/// l'enverraient encore.
+/// A bundle from an earlier build would outlive the last migration once it is deleted: `dev` and
+/// `publish` would still ship it.
 fn remove_stale(dest: &Path) -> Result<Option<PathBuf>> {
     match fs::remove_file(dest) {
         Err(failure) if failure.kind() != std::io::ErrorKind::NotFound => {

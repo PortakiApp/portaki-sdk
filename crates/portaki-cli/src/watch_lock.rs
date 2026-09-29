@@ -1,30 +1,30 @@
-//! Une seule session `--watch` à la fois.
+//! One `--watch` session at a time.
 //!
-//! # Pourquoi
+//! # Why
 //!
-//! Une session `--watch` compile, déploie et redéploie sans fin. Deux qui tournent ensemble se
-//! marchent dessus : elles poussent tour à tour deux modules différents dans le même bac à
-//! sable, et chacune défait ce que l'autre vient de faire. On la lance rarement en connaissance
-//! de cause — on l'oublie dans un onglet, et on en relance une ailleurs.
+//! A `--watch` session compiles, deploys and redeploys endlessly. Two of them running together
+//! tread on each other: they push two different modules into the same sandbox in turn, and each
+//! undoes what the other has just done. One is rarely started knowingly — it gets forgotten in a
+//! tab, and another one gets started elsewhere.
 //!
-//! # Ce qui rendrait ce verrou pire que le problème
+//! # What would make this lock worse than the problem
 //!
-//! Un verrou qu'on ne peut plus reprendre. `--watch` se termine à coups de ctrl-c, et rien ne
-//! s'exécute alors — le fichier survit au processus. Sans reprise, la première interruption
-//! condamnerait la commande jusqu'à ce que quelqu'un devine qu'il faut effacer un fichier.
+//! A lock that can no longer be taken over. `--watch` is ended with ctrl-c, and nothing runs
+//! then — the file outlives the process. Without a takeover, the first interruption would condemn
+//! the command until someone guessed that a file has to be deleted.
 //!
-//! Le verrou dit donc **qui** le tient, et la reprise est automatique dès que ce processus
-//! n'existe plus.
+//! The lock therefore says **who** holds it, and the takeover is automatic as soon as that
+//! process no longer exists.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-/// Le nom du fichier, à côté des identifiants : le verrou vaut pour cette personne sur cette
-/// machine, pas pour un dépôt.
+/// The file name, next to the credentials: the lock holds for this person on this machine, not
+/// for a repository.
 const LOCK_FILE: &str = "watch.lock";
 
-/// Ce qu'un verrou dit de son détenteur.
+/// What a lock says about its holder.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Holder {
@@ -32,16 +32,16 @@ struct Holder {
     module: String,
 }
 
-/// Le verrou tenu, rendu à la fin de la session.
+/// The lock while it is held, handed back when the session ends.
 pub struct WatchLock {
     path: PathBuf,
 }
 
 impl WatchLock {
-    /// Où il vit, pour qui doit le rendre depuis ailleurs.
+    /// Where it lives, for whoever has to hand it back from elsewhere.
     ///
-    /// Ctrl-c ne déroule rien : sans un rendu explicite, le fichier survivrait jusqu'à ce que
-    /// le lancement suivant le constate périmé. Sans gravité, mais inutilement obscur.
+    /// Ctrl-c unwinds nothing: without an explicit hand-back, the file would outlive the session
+    /// until the next run found it stale. Harmless, but needlessly obscure.
     pub fn path(&self) -> &std::path::Path {
         &self.path
     }
@@ -49,13 +49,13 @@ impl WatchLock {
 
 impl Drop for WatchLock {
     fn drop(&mut self) {
-        // Un verrou qu'on n'arrive pas à effacer sera repris comme périmé au prochain
-        // lancement : rien à signaler ici, et surtout rien à faire échouer.
+        // A lock we fail to delete will be taken over as stale on the next run: nothing to
+        // report here, and above all nothing to fail on.
         let _ = std::fs::remove_file(&self.path);
     }
 }
 
-/// Prend le verrou, ou dit qui le tient.
+/// Takes the lock, or says who holds it.
 pub fn acquire(module: &str) -> Result<WatchLock> {
     let directory = crate::auth::config_dir()?;
     std::fs::create_dir_all(&directory)
@@ -70,14 +70,14 @@ pub fn acquire(module: &str) -> Result<WatchLock> {
         );
     }
 
-    // Le fichier peut rester d'une session interrompue : un `create_new` seul échouerait alors
-    // pour toujours. On ne l'efface qu'après avoir établi que personne ne le tient.
+    // The file may be left over from an interrupted session: a `create_new` on its own would
+    // then fail forever. We only delete it once we have established that nobody holds it.
     let _ = std::fs::remove_file(&path);
     write(&path, module)?;
     Ok(WatchLock { path })
 }
 
-/// `create_new` : deux lancements simultanés ne peuvent pas réussir tous les deux.
+/// `create_new`: two simultaneous runs cannot both succeed.
 fn write(path: &std::path::Path, module: &str) -> Result<()> {
     use std::io::Write as _;
     let holder = Holder {
@@ -99,32 +99,32 @@ fn write(path: &std::path::Path, module: &str) -> Result<()> {
     Ok(())
 }
 
-/// Le détenteur du verrou, s'il existe encore.
+/// The lock's holder, if it still exists.
 ///
-/// Un fichier illisible se lit comme une absence : mieux vaut reprendre un verrou qu'on ne
-/// comprend pas que refuser la commande pour un fichier abîmé.
+/// An unreadable file reads as no lock at all: better to take over a lock we do not understand
+/// than to refuse the command over a damaged file.
 fn live_holder(path: &std::path::Path) -> Option<Holder> {
     let raw = std::fs::read_to_string(path).ok()?;
     let holder: Holder = serde_json::from_str(&raw).ok()?;
     alive(holder.pid).then_some(holder)
 }
 
-/// Ce processus tourne-t-il encore, et est-ce bien un `portaki` ?
+/// Is that process still running, and is it really a `portaki`?
 ///
-/// Les deux questions en un seul appel : un PID est réattribué, et un verrou oublié finirait
-/// par en désigner un qui appartient à un autre programme. Vérifier la seule existence ferait
-/// alors refuser la commande au nom d'un processus qui n'a jamais rien verrouillé.
+/// Both questions in a single call: a PID gets recycled, and a forgotten lock would end up
+/// naming one that belongs to another program. Checking existence alone would then have the
+/// command refused in the name of a process that never locked anything.
 ///
-/// `ps` plutôt qu'un appel système : il rend le nom en même temps que l'existence, et cette
-/// vérification n'a lieu que lorsqu'un fichier de verrou existe — jamais sur le chemin normal.
+/// `ps` rather than a system call: it gives the name at the same time as the existence, and this
+/// check only happens when a lock file exists — never on the normal path.
 fn alive(pid: u32) -> bool {
     let Ok(output) = std::process::Command::new("ps")
         .args(["-p", &pid.to_string(), "-o", "comm="])
         .output()
     else {
-        // Sans `ps`, on ne peut rien affirmer. Tenir le verrou pour vivant est le choix sûr :
-        // refuser une seconde session coûte un message, en laisser tourner deux coûte un
-        // déploiement qui en écrase un autre.
+        // Without `ps`, nothing can be asserted. Treating the lock as live is the safe choice:
+        // refusing a second session costs a message, letting two of them run costs a deploy
+        // that overwrites another.
         return true;
     };
     if !output.status.success() {
@@ -141,25 +141,25 @@ fn alive(pid: u32) -> bool {
 mod tests {
     use super::*;
 
-    /// Le processus courant est vivant, et c'est bien un `portaki` — le binaire de test porte
-    /// le nom de la crate.
+    /// The current process is alive, and it really is a `portaki` — the test binary is named
+    /// after the crate.
     #[test]
     fn a_running_process_holds_its_lock() {
         assert!(alive(std::process::id()));
     }
 
-    /// Un PID qui n'existe pas ne tient rien : sans quoi une session interrompue condamnerait
-    /// la commande jusqu'à ce que quelqu'un devine qu'il faut effacer un fichier.
+    /// A PID that does not exist holds nothing: without that, an interrupted session would
+    /// condemn the command until someone guessed that a file has to be deleted.
     #[test]
     fn a_dead_process_holds_nothing() {
-        // PID 0 n'est jamais un processus ordinaire ; `ps -p 0` échoue partout.
+        // PID 0 is never an ordinary process; `ps -p 0` fails everywhere.
         assert!(!alive(0));
     }
 
-    /// Un PID réattribué à un autre programme ne doit pas tenir notre verrou.
+    /// A PID recycled by another program must not hold our lock.
     #[test]
     fn a_recycled_pid_belonging_to_another_program_holds_nothing() {
-        // 1 est `init`/`launchd` : vivant, et jamais `portaki`.
+        // 1 is `init`/`launchd`: alive, and never `portaki`.
         assert!(!alive(1));
     }
 
@@ -181,7 +181,7 @@ mod tests {
         assert!(live_holder(&path).is_none());
     }
 
-    /// Le verrou nomme le module et le PID : c'est ce que la seconde session affichera.
+    /// The lock names the module and the PID: that is what the second session will display.
     #[test]
     fn a_held_lock_names_who_holds_it() {
         let directory = tempfile::tempdir().unwrap();
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(holder.pid, std::process::id());
     }
 
-    /// `create_new` : le second lancement ne peut pas écraser le premier.
+    /// `create_new`: the second run cannot overwrite the first.
     #[test]
     fn two_writers_cannot_both_take_it() {
         let directory = tempfile::tempdir().unwrap();

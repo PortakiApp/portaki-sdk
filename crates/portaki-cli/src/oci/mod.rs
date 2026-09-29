@@ -1,9 +1,9 @@
 //! OCI artifact packaging and push to Portaki's OCI repository (ORAS-compatible layout).
 //!
-//! Le dépôt est celui de la plateforme, et lui seul : le registre Portaki délivre un droit de
-//! push court, limité au module et à la version (`POST /registry/v1/publications/push-token`),
-//! et nomme l'hôte OCI dans sa réponse. Aucun hôte n'est écrit ici, aucun identifiant n'est lu
-//! sur la machine.
+//! The repository is the platform's, and only that one: the Portaki registry issues a short push
+//! grant, scoped to the module and the version (`POST /registry/v1/publications/push-token`), and
+//! names the OCI host in its answer. No host is written down here, and no credential is read from
+//! the machine.
 
 pub mod pack;
 
@@ -14,14 +14,14 @@ use oci_distribution::client::{Client, ClientConfig, ClientProtocol, Config};
 use oci_distribution::secrets::RegistryAuth;
 use oci_distribution::Reference;
 
-/// Le droit de pousser une version, tel que le registre Portaki le rend.
+/// The right to push one version, as the Portaki registry hands it out.
 ///
-/// `password` est un secret de quinze minutes : il ne s'affiche pas, ne s'écrit que dans le
-/// `DOCKER_CONFIG` éphémère que cosign lit, et ne sort jamais sur la ligne de commande.
+/// `password` is a fifteen-minute secret: it is never displayed, it is only written into the
+/// ephemeral `DOCKER_CONFIG` that cosign reads, and it never appears on the command line.
 #[derive(Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PushGrant {
-    /// `oci.portaki.app` — l'hôte OCI, jamais deviné par la CLI.
+    /// `oci.portaki.app` — the OCI host, never guessed by the CLI.
     pub registry: String,
     /// `modules/<id>`
     pub repository: String,
@@ -41,8 +41,8 @@ impl std::fmt::Debug for PushGrant {
 }
 
 impl PushGrant {
-    /// Refuse un droit qui ne nomme pas ce module et cette version : la CLI ne pousse pas sous
-    /// un autre nom que celui qu'elle a demandé, même si on le lui propose.
+    /// Refuses a grant that does not name this module and this version: the CLI does not push
+    /// under any name other than the one it asked for, even when it is offered one.
     pub fn check(&self, coords: &pack::ModuleCoordinates) -> Result<()> {
         let repository = format!("modules/{}", coords.id);
         let reference = format!("{}/{repository}:{}", self.registry, coords.version);
@@ -60,10 +60,10 @@ impl PushGrant {
     }
 }
 
-/// Ce qu'une poussée laisse derrière elle.
+/// What a push leaves behind.
 ///
-/// Le digest est relu chez le dépôt OCI plutôt que déduit de l'URL du manifeste : c'est lui
-/// qui identifie une publication chez le registre Portaki (ADR-0005).
+/// The digest is read back from the OCI repository rather than inferred from the manifest URL:
+/// it is what identifies a publication at the Portaki registry (ADR-0005).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PushedArtifact {
     /// `oci.portaki.app`
@@ -75,18 +75,18 @@ pub struct PushedArtifact {
 }
 
 impl PushedArtifact {
-    /// `oci.portaki.app/modules/nuki@sha256:…` — ce que cosign signe : le digest, jamais le tag.
+    /// `oci.portaki.app/modules/nuki@sha256:…` — what cosign signs: the digest, never the tag.
     pub fn subject(&self) -> String {
         format!("{}/{}@{}", self.registry, self.repository, self.digest)
     }
 
-    /// La forme que `POST /registry/v1/publications` exige.
+    /// The shape `POST /registry/v1/publications` requires.
     pub fn artifact_ref(&self) -> String {
         format!("oci://{}", self.subject())
     }
 }
 
-/// Un dépôt de développement (compose local) se parle en HTTP ; tous les autres en HTTPS.
+/// A development repository (local compose) is spoken to over HTTP; every other one over HTTPS.
 pub fn is_local(registry: &str) -> bool {
     let host = registry.rsplit_once(':').map_or(registry, |(host, _)| host);
     host == "localhost" || host == "127.0.0.1" || host.ends_with(".localhost")
@@ -125,7 +125,7 @@ pub async fn push_artifact(
         .await
         .with_context(|| format!("push to {}", grant.reference))?;
 
-    // Le tag, relu : c'est ce que le registre relira à l'annonce, et ce que cosign signera.
+    // The tag, read back: what the registry re-reads at announcement, and what cosign will sign.
     let digest = client
         .fetch_manifest_digest(&reference, &auth)
         .await

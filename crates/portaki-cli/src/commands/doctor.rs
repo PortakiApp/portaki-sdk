@@ -1,7 +1,7 @@
-//! `portaki doctor` — ce qui, sur cette machine, empêcherait de développer ou de publier.
+//! `portaki doctor` — what, on this machine, would stop you from developing or publishing.
 //!
-//! Une ligne par contrôle, chacune avec sa correction. Rien n'est poussé ni signé : le registre
-//! est interrogé pour un jeton de poussée, la toolchain pour sa cible, cosign pour sa version.
+//! One line per control, each with its fix. Nothing is pushed and nothing is signed: the registry
+//! is asked for a push token, the toolchain for its target, cosign for its version.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -28,10 +28,10 @@ pub struct DoctorArgs {
 #[serde(rename_all = "lowercase")]
 enum Status {
     Ok,
-    /// Un signal : rien n'est bloqué aujourd'hui.
+    /// A signal: nothing is blocked today.
     Warn,
     Fail,
-    /// Pas vérifiable ici — la correction dit comment le vérifier.
+    /// Not checkable here — the fix says how to check it.
     Skip,
 }
 
@@ -138,7 +138,7 @@ fn render(base: &str, checks: &[Check]) {
     ui::blank();
 }
 
-/// Une session pour l'origine visée, et qu'elle ouvre bien quelque chose.
+/// A session for the origin being aimed at, and that it really opens something.
 async fn session(base: &str) -> (Check, Option<Platform>) {
     let login = crate::profile::login_command(base);
     let mut platform = match Platform::open(base) {
@@ -188,10 +188,10 @@ async fn cli_version(offline: bool) -> Check {
     }
 }
 
-/// La toolchain que `cargo` prendra dans ce dossier, et sa cible wasm32.
+/// The toolchain `cargo` will pick in this directory, and its wasm32 target.
 ///
-/// Par le sysroot et non par `rustup` : une toolchain installée sans rustup a aussi sa cible,
-/// et c'est le `rustc` de ce dossier — `rust-toolchain.toml` compris — qui compte.
+/// Through the sysroot rather than through `rustup`: a toolchain installed without rustup has its
+/// target too, and it is this directory's `rustc` — `rust-toolchain.toml` included — that counts.
 fn toolchain(dir: &Path) -> Check {
     let run = |args: &[&str]| {
         Command::new("rustc")
@@ -243,15 +243,15 @@ fn cosign() -> Check {
             Status::Ok,
             format!("cosign {}", version.unwrap_or_default()),
         ),
-        // `release` signe par défaut : sans cosign, il faut `--no-sign`, et la version ne
-        // tournera qu'en sandbox. Un signal, pas un blocage.
+        // `release` signs by default: without cosign you need `--no-sign`, and the version
+        // will only ever run in the sandbox. A signal, not a blocker.
         Err(failure) => check("cosign", Status::Warn, format!("{failure:#}"))
             .fix("brew install cosign — portaki release signs with it"),
     }
 }
 
-/// L'adresse que Sigstore certifiera doit être l'adresse Portaki vérifiée : le registre refuse
-/// sinon la signature d'auteur, après la poussée.
+/// The address Sigstore will certify has to be the verified Portaki address: otherwise the
+/// registry refuses the author signature, after the push.
 fn signing_identity(platform: Option<&Platform>) -> Check {
     if sign::in_ci() {
         return check(
@@ -296,8 +296,8 @@ fn signing_identity(platform: Option<&Platform>) -> Check {
     }
 }
 
-/// `verified_email` du jeton d'accès — la claim même que le registre compare. Lue sans
-/// vérifier la signature : c'est un diagnostic, le registre revérifie tout.
+/// `verified_email` from the access token — the very claim the registry compares. Read without
+/// verifying the signature: this is a diagnostic, the registry checks it all again anyway.
 fn verified_email(token: &str) -> Option<String> {
     use base64::Engine as _;
     let payload = token.split('.').nth(1)?;
@@ -311,8 +311,8 @@ fn verified_email(token: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// L'adresse que Sigstore verra, lue par `gh` : l'adresse publique du profil, sinon la
-/// principale vérifiée — la règle du connecteur GitHub de Sigstore.
+/// The address Sigstore will see, read through `gh`: the profile's public address, otherwise the
+/// primary verified one — the rule of Sigstore's GitHub connector.
 fn github_email() -> Option<String> {
     let gh = std::env::var_os("PORTAKI_GH")
         .map(PathBuf::from)
@@ -336,7 +336,7 @@ fn github_email() -> Option<String> {
     })
 }
 
-/// La CLI, le SDK que le lock résout, et le dernier SDK publié.
+/// The CLI, the SDK the lock resolves, and the latest published SDK.
 async fn sdk_versions(root: &Path, offline: bool) -> Check {
     use crate::commands::ci::{find_lockfile, read_locked_sdk};
     let cli = env!("CARGO_PKG_VERSION");
@@ -387,7 +387,7 @@ async fn sdk_versions(root: &Path, offline: bool) -> Check {
     }
 }
 
-/// L'environnement GitHub qui porte les relecteurs de la stable — décision du 28 sept.
+/// The GitHub environment that carries the stable channel's reviewers — decision of 28 Sept.
 const STABLE_ENVIRONMENT: &str = "release";
 
 async fn link(platform: Option<&mut Platform>, id: &str) -> Check {
@@ -426,10 +426,10 @@ async fn link(platform: Option<&mut Platform>, id: &str) -> Check {
     }
 }
 
-/// Ce qui ferait prendre à `cargo` une autre toolchain ou d'autres options que celles du CLI.
+/// What would make `cargo` take a toolchain, or options, other than the CLI's.
 ///
-/// Un signal, pas un blocage : ces fichiers sont souvent voulus. Mais un module qui en porte
-/// un décide de ce que `cargo` exécute — le job de publication doit le savoir.
+/// A signal, not a blocker: these files are often intended. But a module that carries one decides
+/// what `cargo` runs — the publication job has to know about it.
 fn cargo_overrides(root: &Path) -> Check {
     let found = overrides(root);
     if found.is_empty() {
@@ -451,7 +451,7 @@ fn cargo_overrides(root: &Path) -> Check {
     .fix("make sure they are intended — they choose the toolchain and flags cargo runs with")
 }
 
-/// Du module jusqu'à la racine du dépôt (le dossier qui porte `.git`), inclus.
+/// From the module up to the repository root (the directory that carries `.git`), included.
 fn overrides(root: &Path) -> Vec<PathBuf> {
     const FILES: [&str; 4] = [
         ".cargo/config.toml",

@@ -1,12 +1,12 @@
-//! Tout ce que la CLI montre passe par ici.
+//! Everything the CLI shows goes through here.
 //!
-//! Une commande ne fait pas de `println!`. Elle décrit ce qu'elle est en train de faire — une
-//! étape, un champ, un échec — et cette couche décide de la forme. C'est ce qui garde la sortie
-//! cohérente d'une commande à l'autre, et surtout ce qui permet de l'éteindre : redirigée dans
-//! un fichier ou lue par une CI, la même commande écrit du texte nu, sans couleur ni animation.
+//! A command does not `println!`. It states what it is busy doing — a step, a field, a failure —
+//! and this layer decides on the form. That is what keeps the output consistent from one command
+//! to the next, and above all what makes it possible to turn off: redirected into a file or read
+//! by a CI, the same command writes bare text, with no colour and no animation.
 //!
-//! Rien n'est laissé à `NO_COLOR` seul : `--no-color` force l'extinction, `--verbose` remplace
-//! les indicateurs par la sortie brute des outils pilotés.
+//! Nothing is left to `NO_COLOR` alone: `--no-color` forces it off, `--verbose` replaces the
+//! spinners with the raw output of the tools being driven.
 
 use std::fmt::Display;
 use std::process::Command;
@@ -17,11 +17,11 @@ use anyhow::{bail, Context, Result};
 use console::{style, Emoji, Term};
 use indicatif::{ProgressBar, ProgressStyle};
 
-/// La marge de gauche commune à toutes les lignes : la sortie respire, et un bloc de texte se
-/// distingue de ce qu'un outil appelé écrit sans marge.
+/// The left margin common to every line: the output breathes, and a block of text stands out
+/// from what a tool the CLI calls writes with no margin.
 const MARGIN: &str = "  ";
 
-/// Repli ASCII compris : sortie redirigée, terminal Windows ancien, `TERM=dumb`.
+/// ASCII fallback included: redirected output, an old Windows terminal, `TERM=dumb`.
 static TICK: Emoji<'_, '_> = Emoji("✔", "+");
 static CROSS: Emoji<'_, '_> = Emoji("✖", "x");
 static BANG: Emoji<'_, '_> = Emoji("▲", "!");
@@ -30,39 +30,40 @@ static ARROW: Emoji<'_, '_> = Emoji("→", "->");
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
-/// La sortie est dépouillée : ni logo, ni en-tête, ni glyphes, ni marge, ni conseils.
+/// The output is bare: no logo, no header, no glyphs, no margin, no advice.
 ///
-/// Ce qui reste est ce qu'un autre programme viendrait lire — les étapes, les champs, les
-/// résultats. Le reste s'adresse à un humain qui découvre la commande, et n'a rien à faire dans
-/// un journal de CI ni dans un `grep`.
+/// What is left is what another program would come and read — the steps, the fields, the
+/// results. The rest addresses a human discovering the command, and has no business in a CI log
+/// or in a `grep`.
 static PLAIN: AtomicBool = AtomicBool::new(false);
 
-/// `--json` : stdout ne porte que le document JSON de la commande ; tout le reste — étapes,
-/// champs, conseils, et la sortie des outils pilotés — part sur stderr.
+/// `--json`: stdout carries only the command's JSON document; everything else — steps, fields,
+/// advice, and the output of the tools being driven — goes out on stderr.
 static JSON: AtomicBool = AtomicBool::new(false);
 
-/// Rien n'a encore été écrit depuis l'en-tête.
+/// Nothing has been written yet since the header.
 ///
-/// Une section pose une ligne vide devant elle pour se détacher de ce qui précède. Juste après
-/// l'en-tête, qui en pose déjà une, ça en faisait deux — un trou qui se lit comme un oubli.
+/// A section puts a blank line in front of itself to stand apart from what precedes it. Right
+/// after the header, which already puts one there, that made two — a gap that reads like an
+/// oversight.
 static FRESH: AtomicBool = AtomicBool::new(false);
 
-/// Fixe le mode de rendu pour tout le processus, avant la première ligne écrite.
+/// Fixes the rendering mode for the whole process, before the first line is written.
 pub fn init(no_color: bool, verbose: bool, plain: bool) {
     set_plain(plain);
     set_colors(!no_color && !plain);
     VERBOSE.store(verbose, Ordering::Relaxed);
 }
 
-/// Passe en sortie dépouillée, avant que quoi que ce soit ne soit écrit.
+/// Switches to bare output, before anything at all is written.
 ///
-/// Séparé d'[`init`] comme [`set_colors`] : l'aide et `--version` sont rendues par `clap`
-/// pendant l'analyse, donc avant qu'on sache autre chose des arguments.
+/// Kept apart from [`init`] like [`set_colors`]: the help and `--version` are rendered by `clap`
+/// during parsing, hence before anything else is known about the arguments.
 pub fn set_plain(plain: bool) {
     PLAIN.store(plain, Ordering::Relaxed);
 }
 
-/// Passe en `--json`, ce qui implique la sortie dépouillée.
+/// Switches to `--json`, which implies bare output.
 pub fn set_json(json: bool) {
     JSON.store(json, Ordering::Relaxed);
     if json {
@@ -71,31 +72,31 @@ pub fn set_json(json: bool) {
     }
 }
 
-/// stdout est-il réservé au document JSON ?
+/// Is stdout reserved for the JSON document?
 pub fn json() -> bool {
     JSON.load(Ordering::Relaxed)
 }
 
-/// Écrit le document de la commande, sur une ligne : c'est la seule chose qui sorte sur stdout
-/// en `--json`. Une ligne par appel, ce qui fait du NDJSON pour un flux (`portaki logs`).
+/// Writes the command's document, on a single line: it is the only thing that goes out on
+/// stdout under `--json`. One line per call, which makes NDJSON for a stream (`portaki logs`).
 pub fn emit(document: &serde_json::Value) {
     println!("{document}");
 }
 
-/// Un outil piloté dont la sortie passerait en direct : en `--json`, sa sortie standard
-/// rejoint stderr, pour que stdout reste un document.
+/// A driven tool whose output would otherwise go straight through: under `--json`, its standard
+/// output joins stderr, so that stdout stays a document.
 pub fn keep_stdout_clean(cmd: &mut Command) {
     if json() {
         cmd.stdout(std::io::stderr());
     }
 }
 
-/// La sortie est-elle dépouillée ?
+/// Is the output bare?
 pub fn plain() -> bool {
     PLAIN.load(Ordering::Relaxed)
 }
 
-/// Le retrait des lignes de second plan — précisions et champs.
+/// The indent of the second-plane lines — details and fields.
 fn indent() -> &'static str {
     if plain() {
         ""
@@ -104,10 +105,10 @@ fn indent() -> &'static str {
     }
 }
 
-/// Une ligne à glyphe : le glyphe disparaît avec la marge quand la sortie est dépouillée.
+/// A line with a glyph: the glyph goes away along with the margin when the output is bare.
 ///
-/// Le glyphe dit « fait », « ignoré », « attention » à un œil qui balaie. Un programme, lui,
-/// lit le texte — et devrait sinon apprendre à découper des symboles avant chaque message.
+/// The glyph says "done", "skipped", "careful" to a scanning eye. A program, for its part, reads
+/// the text — and would otherwise have to learn to cut symbols off the front of every message.
 fn glyphed(painted: String, message: impl Display) -> String {
     if plain() {
         format!("{message}")
@@ -116,20 +117,20 @@ fn glyphed(painted: String, message: impl Display) -> String {
     }
 }
 
-/// L'utilisateur veut voir la sortie brute des outils pilotés.
+/// The user wants to see the raw output of the tools being driven.
 pub fn verbose() -> bool {
     VERBOSE.load(Ordering::Relaxed)
 }
 
-/// Quelqu'un regarde-t-il vraiment ? Sinon : pas d'animation, pas de réécriture de ligne.
+/// Is anyone actually watching? If not: no animation, no rewriting of a line.
 fn attended() -> bool {
     console::user_attended() && !verbose()
 }
 
-/// Le logo, en bas de casse comme la marque.
+/// The logo, in lower case like the brand.
 ///
-/// Écrit ici plutôt que généré : une police de blocs se lit à l'œil, pas à l'exécution, et un
-/// générateur ferait dépendre l'identité de la marque d'une dépendance de plus.
+/// Written out here rather than generated: a block font is read by eye, not at runtime, and a
+/// generator would make the brand's identity depend on one more dependency.
 const LOGO: [&str; 7] = [
     "                              ██                          ██",
     "                              ██              ██",
@@ -140,23 +141,23 @@ const LOGO: [&str; 7] = [
     "██",
 ];
 
-/// La ligne sur laquelle le point de la marque se pose — la ligne de base.
+/// The row the wordmark's dot sits on — the baseline.
 const DOT_ROW: usize = 5;
 
-/// Le point porte le vert de `portaki dev`, et c'est exactement celui des coches de succès.
+/// The dot carries the green of `portaki dev`, and it is exactly the green of the success ticks.
 ///
-/// Une seule teinte de vert dans toute la CLI : le point de la marque et la coche qui dit
-/// « fait » sont la même couleur, pas deux verts qui se ressemblent sans se répondre. En vert
-/// ANSI de base plutôt qu'en 256 couleurs, le logo tient aussi sur un terminal à seize couleurs.
+/// A single shade of green in the whole CLI: the wordmark's dot and the tick that says "done"
+/// are the same colour, not two greens that look alike without answering each other. In basic
+/// ANSI green rather than 256 colours, the logo holds up on a sixteen-colour terminal too.
 ///
-/// Le mot, lui, garde la couleur d'avant-plan du terminal : un blanc écrit en dur disparaîtrait
-/// sur un thème clair, alors que la marque veut seulement « la couleur du texte ».
+/// The word itself keeps the terminal's foreground colour: a hard-coded white would disappear on
+/// a light theme, whereas the brand only asks for "the colour of the text".
 const WORDMARK_DOT: &str = "██";
 
-/// Le logo peint, prêt à être posé en tête d'un écran d'aide.
+/// The painted logo, ready to be put at the top of a help screen.
 ///
-/// Rendu en `String` plutôt qu'imprimé : `clap` le veut comme en-tête de son aide, et le même
-/// texte sert à `--version`.
+/// Returned as a `String` rather than printed: `clap` wants it as the header of its help, and the
+/// same text serves `--version`.
 pub fn banner() -> String {
     let mut out = String::new();
     for (row, line) in LOGO.iter().enumerate() {
@@ -181,10 +182,10 @@ pub fn banner() -> String {
     out
 }
 
-/// Ce qui protège le projet et ceux qui s'en servent, en pied d'aide.
+/// What protects the project and those who use it, in the help footer.
 ///
-/// La licence et le détenteur du copyright ne sont pas de la décoration : ils voyagent avec le
-/// binaire, qui circule souvent sans son dépôt. Les lire coûte deux lignes.
+/// The licence and the copyright holder are not decoration: they travel with the binary, which
+/// often circulates without its repository. Reading them costs two lines.
 pub fn legal() -> String {
     format!(
         "{MARGIN}{}\n{MARGIN}{}",
@@ -202,10 +203,10 @@ pub fn legal() -> String {
     )
 }
 
-/// Ce que `--version` raconte, par opposition au `-V` que lit un script.
+/// What `--version` tells, as opposed to the `-V` a script reads.
 ///
-/// Un `-V` doit rester une ligne analysable ; c'est la forme longue qui porte la licence, la
-/// clause de non-garantie et où retrouver la source.
+/// A `-V` has to stay one parseable line; it is the long form that carries the licence, the
+/// no-warranty clause and where to find the source again.
 pub fn long_version() -> String {
     let rows = [
         ("license", env!("CARGO_PKG_LICENSE")),
@@ -229,10 +230,10 @@ pub fn long_version() -> String {
     out
 }
 
-/// Éteint la couleur avant que quoi que ce soit ne soit peint.
+/// Turns colour off before anything at all is painted.
 ///
-/// Séparé d'[`init`] parce que l'aide et `--version` sont rendues par `clap` pendant l'analyse,
-/// donc avant qu'on sache autre chose des arguments.
+/// Kept apart from [`init`] because the help and `--version` are rendered by `clap` during
+/// parsing, hence before anything else is known about the arguments.
 pub fn set_colors(enabled: bool) {
     if !enabled {
         console::set_colors_enabled(false);
@@ -240,16 +241,17 @@ pub fn set_colors(enabled: bool) {
     }
 }
 
-/// Une ligne vide — aucune quand la sortie est dépouillée : elles n'aèrent que pour un œil.
+/// A blank line — none when the output is bare: they only give air to an eye.
 pub fn blank() {
     if !plain() {
         println!();
     }
 }
 
-/// Une ligne de sortie, et la trace qu'il s'en est écrit une.
+/// A line of output, and the record that one has been written.
 ///
-/// Toute écriture passe par ici ou par [`eline`] : une seule qui y échappe, et le drapeau ment.
+/// Every write goes through here or through [`eline`]: let a single one slip past, and the flag
+/// lies.
 fn line(text: String) {
     FRESH.store(false, Ordering::Relaxed);
     if json() {
@@ -259,17 +261,17 @@ fn line(text: String) {
     }
 }
 
-/// La même chose sur la sortie d'erreur.
+/// The same thing on the error output.
 fn eline(text: String) {
     FRESH.store(false, Ordering::Relaxed);
     eprintln!("{text}");
 }
 
-/// Le titre de la commande, et en une ligne ce qu'elle fait.
+/// The command's title, and in one line what it does.
 ///
-/// La ligne de propos n'est pas de la décoration : `build`, `dev` et `publish` ne font pas ce
-/// que leur nom laisse supposer — `dev` ne monte pas de passerelle locale, `publish` ne se
-/// limite pas à pousser. Le dire en tête coûte une ligne et évite de le découvrir autrement.
+/// The purpose line is not decoration: `build`, `dev` and `publish` do not do what their names
+/// would suggest — `dev` does not bring up a local gateway, `publish` does not stop at pushing.
+/// Saying it up front costs one line and saves finding it out some other way.
 pub fn header(command: &str, purpose: &str) {
     if plain() {
         return;
@@ -285,35 +287,35 @@ pub fn header(command: &str, purpose: &str) {
     FRESH.store(true, Ordering::Relaxed);
 }
 
-/// La largeur au-delà de laquelle une colonne de noms repousse trop loin les explications.
+/// The width beyond which a column of names pushes the explanations too far out.
 const COLUMN_CAP: usize = 32;
 
-/// En deçà, la colonne se serre au point que les deux moitiés se touchent.
+/// Below it, the column tightens to the point where the two halves touch.
 const COLUMN_FLOOR: usize = 16;
 
-/// Un intertitre discret, qui ouvre une liste : « next », « what you got ».
+/// A discreet subheading that opens a list: "next", "what you got".
 pub fn section(title: &str) {
     if plain() {
-        // Le titre reste : pour `queries · read-only` contre `commands · mutating`, c'est lui
-        // qui porte l'information, pas la décoration.
+        // The title stays: for `queries · read-only` against `commands · mutating`, it is the
+        // title that carries the information, not the decoration.
         line(title.to_string());
         return;
     }
-    // Juste après l'en-tête, la ligne vide est déjà là.
+    // Right after the header, the blank line is already there.
     if !FRESH.swap(false, Ordering::Relaxed) {
         blank();
     }
     line(format!("{MARGIN}{}", style(title).dim()));
 }
 
-/// Une liste sous son intertitre : chaque nom, puis à quoi il sert.
+/// A list under its subheading: each name, then what it is for.
 ///
-/// Sans la seconde colonne, une liste de chemins ou de commandes suppose qu'on sache déjà les
-/// lire — c'est-à-dire qu'on n'en ait pas besoin.
+/// Without the second column, a list of paths or of commands assumes one already knows how to
+/// read them — that is, that one does not need it.
 ///
-/// La colonne se règle sur le groupe, pas sur une constante : une liste de chemins courts se
-/// serre, une liste de commandes longues respire. Passé [`COLUMN_CAP`], l'explication passe à la
-/// ligne plutôt que de partir chercher le bord droit du terminal.
+/// The column settles on the group, not on a constant: a list of short paths tightens up, a list
+/// of long commands breathes. Past [`COLUMN_CAP`], the explanation wraps to the next line rather
+/// than heading off towards the right edge of the terminal.
 pub fn list(title: &str, rows: &[(&str, &str)]) {
     section(title);
 
@@ -338,37 +340,37 @@ pub fn list(title: &str, rows: &[(&str, &str)]) {
     }
 }
 
-/// La largeur de la colonne de gauche, ou `None` s'il faut passer à deux lignes.
+/// The width of the left column, or `None` if it has to go to two lines.
 ///
-/// Isolée de l'écriture pour être décidable sans terminal : c'est la seule partie de la mise en
-/// page dont on puisse dire qu'elle a tort ou raison.
+/// Kept apart from the writing so that it can be decided without a terminal: it is the only part
+/// of the layout that can be said to be right or wrong.
 fn column_width(rows: &[(&str, &str)]) -> Option<usize> {
     let widest = rows.iter().map(|(name, _)| name.chars().count()).max()?;
     (widest <= COLUMN_CAP).then(|| widest.max(COLUMN_FLOOR))
 }
 
-/// Une chose faite.
+/// Something done.
 pub fn success(message: impl Display) {
     line(glyphed(style(TICK).green().bold().to_string(), message));
 }
 
-/// Une chose qui n'avait pas lieu d'être faite.
+/// Something there was no reason to do.
 pub fn skipped(message: impl Display) {
     line(glyphed(style(DOT).dim().to_string(), style(message).dim()));
 }
 
-/// Un échec sans chaîne de causes — celui que `clap` rend, par exemple.
+/// A failure with no chain of causes — the one `clap` renders, for instance.
 pub fn failure(message: impl Display) {
     if plain() {
-        // Le préfixe remplace la croix : sans lui, un échec dépouillé ne se distingue plus
-        // d'une ligne de résultat dans un journal.
+        // The prefix stands in for the cross: without it, a bare failure can no longer be told
+        // apart from a result line in a log.
         eline(format!("error: {message}"));
         return;
     }
     eline(format!("{MARGIN}{} {message}", style(CROSS).red().bold()));
 }
 
-/// Une chose à savoir, qui n'empêche rien — sur stderr : stdout reste à ce qu'un script lit.
+/// Something to know that prevents nothing — on stderr: stdout is left to what a script reads.
 pub fn warn(message: impl Display) {
     eline(glyphed(
         style(BANG).yellow().bold().for_stderr().to_string(),
@@ -376,26 +378,26 @@ pub fn warn(message: impl Display) {
     ));
 }
 
-/// Un avertissement que des scripts lisent sur stdout — sur stderr en `--json`.
+/// A warning that scripts read on stdout — on stderr under `--json`.
 ///
-/// Seul usage : « already in the registry », que `portaki-release-action` v1 et le workflow de
-/// `portaki-modules` cherchent par `grep` sur la sortie standard. À retirer quand l'action
-/// lira la sortie `--json`.
+/// Only use: "already in the registry", which `portaki-release-action` v1 and the
+/// `portaki-modules` workflow look for with `grep` on standard output. To be dropped once the
+/// action reads the `--json` output.
 pub fn warn_on_stdout(message: impl Display) {
     line(glyphed(style(BANG).yellow().bold().to_string(), message));
 }
 
-/// Un résultat renvoyé par ailleurs — la réponse d'une opération, un corps de trace.
+/// A result handed back from elsewhere — an operation's response, a log body.
 pub fn result(message: impl Display) {
     line(glyphed(style(ARROW).cyan().to_string(), message));
 }
 
-/// Un conseil sur la suite — taisé quand la sortie est dépouillée.
+/// A piece of advice on what comes next — kept quiet when the output is bare.
 ///
-/// Ignoré, quand la sortie est dépouillée.
+/// Ignored, when the output is bare.
 ///
-/// La différence avec [`detail`] est celle du destinataire : une précision informe sur ce qui
-/// vient de se passer, un conseil s'adresse à quelqu'un qui apprend la commande.
+/// The difference with [`detail`] is one of addressee: a detail informs about what has just
+/// happened, a piece of advice addresses someone who is learning the command.
 pub fn advice(message: impl Display) {
     if plain() {
         return;
@@ -403,12 +405,12 @@ pub fn advice(message: impl Display) {
     detail(message);
 }
 
-/// Une précision sous la ligne qui précède.
+/// A detail under the line above it.
 pub fn detail(message: impl Display) {
     line(format!("{}{}", indent(), style(message).dim()));
 }
 
-/// Un fichier produit : ce que c'est, puis où il est.
+/// A file produced: what it is, then where it is.
 pub fn wrote(kind: &str, where_: impl Display) {
     if plain() {
         line(format!("{kind:<10}  {where_}"));
@@ -422,7 +424,7 @@ pub fn wrote(kind: &str, where_: impl Display) {
     ));
 }
 
-/// Un couple étiquette / valeur, aligné avec ses voisins.
+/// A label / value pair, aligned with its neighbours.
 pub fn field(label: &str, value: impl Display) {
     line(format!(
         "{}{} {value}",
@@ -431,17 +433,17 @@ pub fn field(label: &str, value: impl Display) {
     ));
 }
 
-/// La suite : ce que l'utilisateur tapera après, et ce que ça lui donnera.
+/// What comes next: what the user will type after this, and what it will give them.
 pub fn next(steps: &[(&str, &str)]) {
-    // Ce bloc s'adresse à quelqu'un qui découvre la commande. Un script n'a que faire de la
-    // suite : il l'a déjà écrite.
+    // This block addresses someone discovering the command. A script has no use for what comes
+    // next: it has already written it.
     if plain() {
         return;
     }
     list(&crate::tr!("next", "ensuite"), steps);
 }
 
-/// Un trait de séparation, pour marquer une reprise dans une session qui dure.
+/// A separating rule, to mark a fresh start in a session that goes on.
 pub fn rule(label: &str) {
     let width = Term::stdout().size().1.clamp(20, 100) as usize;
     let filler = width.saturating_sub(label.chars().count() + MARGIN.len() + 4);
@@ -454,7 +456,7 @@ pub fn rule(label: &str) {
     ));
 }
 
-/// Une taille d'octets telle qu'on la lit.
+/// A size in bytes as one reads it.
 pub fn bytes(count: u64) -> String {
     const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
     let mut size = count as f64;
@@ -470,7 +472,7 @@ pub fn bytes(count: u64) -> String {
     }
 }
 
-/// Un code court, mis en évidence pour être recopié sans erreur.
+/// A short code, set apart so that it can be copied out without error.
 pub fn code_block(code: &str) {
     let width = code.chars().count() + 4;
     let (tl, tr, bl, br, h, v) = if Term::stdout().is_term() {
@@ -496,13 +498,14 @@ pub fn code_block(code: &str) {
     ));
 }
 
-/// L'échec, en dernier mot du processus : le message, puis la chaîne des causes.
+/// The failure, as the process's last word: the message, then the chain of causes.
 ///
-/// Sans ligne vide devant : ce qui précède en a déjà posé une — l'en-tête de la commande, le
-/// résultat de l'étape qui vient d'échouer, ou le bloc de sortie capturée de l'outil piloté.
+/// With no blank line in front: what precedes it has already put one there — the command's
+/// header, the result of the step that has just failed, or the block of captured output from the
+/// driven tool.
 ///
-/// `anyhow` empile le contexte du plus proche de l'appelant au plus profond. Déplié plutôt
-/// qu'affiché en `{:#}`, on lit d'abord ce qui a échoué, puis pourquoi.
+/// `anyhow` stacks the context from the closest to the caller down to the deepest. Unfolded
+/// rather than printed with `{:#}`, one reads first what failed, then why.
 pub fn report(failure: &anyhow::Error) {
     if plain() {
         eline(format!("error: {failure}"));
@@ -522,16 +525,16 @@ pub fn report(failure: &anyhow::Error) {
     blank();
 }
 
-/// Une étape en cours, qui deviendra une ligne de résultat.
+/// A step under way, which will become a result line.
 ///
-/// L'indicateur ne survit pas à l'étape : `done`, `skip` et `fail` l'effacent avant d'écrire, si
-/// bien qu'une sortie relue ne contient jamais une image d'animation figée.
+/// The spinner does not outlive the step: `done`, `skip` and `fail` clear it before writing, so
+/// that output read back never holds a frozen frame of the animation.
 pub struct Step {
     bar: ProgressBar,
     started: Instant,
 }
 
-/// Ouvre une étape.
+/// Opens a step.
 pub fn step(label: impl Into<String>) -> Step {
     let label = label.into();
     let bar = if attended() {
@@ -555,12 +558,12 @@ pub fn step(label: impl Into<String>) -> Step {
 }
 
 impl Step {
-    /// Change ce que l'étape dit d'elle-même sans la clore.
+    /// Changes what the step says of itself without closing it.
     pub fn say(&self, message: impl Into<String>) {
         self.bar.set_message(message.into());
     }
 
-    /// Clôt l'étape sur un succès, suivi du temps qu'elle a pris.
+    /// Closes the step on a success, followed by the time it took.
     pub fn done(&self, message: impl Display) {
         let elapsed = self.close();
         line(format!(
@@ -570,16 +573,17 @@ impl Step {
         ));
     }
 
-    /// Clôt l'étape sans succès ni échec : il n'y avait rien à faire.
+    /// Closes the step on neither success nor failure: there was nothing to do.
     pub fn skip(&self, message: impl Display) {
         self.close();
         skipped(message);
     }
 
-    /// Abandonne l'étape sans rien dire.
+    /// Gives the step up without saying anything.
     ///
-    /// Le pourquoi est déjà dans l'erreur qui remonte, et [`report`] l'écrira en fin de course.
-    /// Une ligne d'échec ici la répéterait à un mot près — deux croix pour un seul problème.
+    /// The why is already in the error on its way up, and [`report`] will write it at the end of
+    /// the run. A failure line here would repeat it almost word for word — two crosses for a
+    /// single problem.
     pub fn abandon(&self) {
         self.close();
     }
@@ -590,11 +594,11 @@ impl Step {
     }
 }
 
-/// Lance un outil derrière un indicateur ; sa sortie ne remonte que s'il échoue.
+/// Runs a tool behind a spinner; its output only comes back up if it fails.
 ///
-/// Un `cargo build` qui réussit n'apprend rien — et ses centaines de lignes noient le peu que la
-/// CLI a à dire. Qu'il échoue, et c'est l'inverse : tout ce qu'il a écrit est ce qu'on cherche.
-/// `--verbose` rend la sortie en direct, pour les compilations longues qu'on veut voir avancer.
+/// A `cargo build` that succeeds teaches nothing — and its hundreds of lines drown the little the
+/// CLI has to say. Let it fail, and it is the other way round: everything it wrote is what one is
+/// after. `--verbose` streams the output live, for long builds one wants to watch make progress.
 pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
     let step = step(label.to_owned());
 
@@ -620,7 +624,7 @@ pub fn command(label: &str, cmd: &mut Command) -> Result<()> {
     Ok(())
 }
 
-/// Rend la sortie d'un outil sans la maquiller : c'est elle qu'on lit pour corriger.
+/// Renders a tool's output without dressing it up: it is what one reads in order to fix things.
 pub(crate) fn emit_captured(bytes: &[u8]) {
     let text = String::from_utf8_lossy(bytes);
     let text = text.trim_end();
@@ -633,7 +637,7 @@ pub(crate) fn emit_captured(bytes: &[u8]) {
     blank();
 }
 
-/// Une durée telle qu'on la lit, pas telle qu'elle est mesurée.
+/// A duration as one reads it, not as it is measured.
 pub fn elapsed(duration: Duration) -> String {
     let seconds = duration.as_secs_f64();
     if seconds < 1.0 {
@@ -649,17 +653,17 @@ pub fn elapsed(duration: Duration) -> String {
     }
 }
 
-/// Un compte à rebours, pour un délai que le serveur impose.
+/// A countdown, for a delay the server imposes.
 pub fn countdown(remaining: Duration) -> String {
     let seconds = remaining.as_secs();
     format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
-/// Ouvre une URL dans le navigateur de l'utilisateur.
+/// Opens a URL in the user's browser.
 ///
-/// Détaché : `open` rend la main tout de suite au lieu d'attendre la fermeture du navigateur, ce
-/// qui bloquerait le sondage juste après. Un échec n'en est pas vraiment un — il reste l'URL
-/// affichée, à ouvrir à la main.
+/// Detached: `open` hands control back straight away instead of waiting for the browser to close,
+/// which would block the polling right after it. A failure is not really one — the URL stays on
+/// screen, to be opened by hand.
 ///
 /// `https` only (plain `http` to this machine for a local platform): the URL comes from the
 /// server, and `open` hands anything else — `file:`, a custom scheme — to whatever handles it.
@@ -671,11 +675,11 @@ pub fn open_browser(url: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// En sortie dépouillée, rien de ce qui s'adresse à l'œil ne subsiste : ni marge, ni
-    /// glyphe. C'est la promesse du mode, et elle se vérifie sur les fonctions qui décident.
+    /// In bare output, nothing that addresses the eye survives: no margin, no glyph. That is
+    /// the mode's promise, and it is checked on the functions that decide.
     ///
-    /// Le drapeau est global au processus : remis à sa valeur d'origine avant de sortir, sans
-    /// quoi ce test dicterait le rendu de tous les suivants.
+    /// The flag is global to the process: it is put back to its original value before leaving,
+    /// without which this test would dictate the rendering of every test after it.
     #[test]
     fn plain_output_drops_what_only_an_eye_reads() {
         set_plain(true);
@@ -697,17 +701,17 @@ mod tests {
         assert_eq!(elapsed(Duration::from_millis(12_400)), "12.4s");
     }
 
-    /// Au-delà de la minute, une durée en secondes ne se lit plus.
+    /// Past the minute, a duration in seconds no longer reads.
     #[test]
     fn a_long_build_reads_in_minutes() {
         assert_eq!(elapsed(Duration::from_secs(124)), "2m 04s");
     }
 
-    /// Une colonne réglée sur le groupe : des noms courts se serrent au plancher, des noms
-    /// moyens l'écartent juste ce qu'il faut.
-    /// La licence, le détenteur du copyright et la clause de non-garantie voyagent avec le
-    /// binaire, qui circule souvent sans son dépôt. Un champ de `Cargo.toml` renommé les ferait
-    /// disparaître sans rien casser — d'où l'assertion.
+    /// A column settled on the group: short names tighten to the floor, middling ones push it
+    /// out just as far as needed.
+    /// The licence, the copyright holder and the no-warranty clause travel with the binary,
+    /// which often circulates without its repository. A renamed `Cargo.toml` field would make
+    /// them disappear without breaking anything — hence the assertion.
     #[test]
     fn the_version_screen_carries_what_protects_the_project() {
         let screen = long_version();
@@ -727,7 +731,7 @@ mod tests {
         assert!(footer.contains(env!("CARGO_PKG_HOMEPAGE")));
     }
 
-    /// Le point de la marque est la seule couleur du logo, et il se pose sur la ligne de base.
+    /// The wordmark's dot is the logo's only colour, and it sits on the baseline.
     #[test]
     fn the_wordmark_carries_its_dot() {
         assert!(DOT_ROW < LOGO.len());
@@ -744,8 +748,8 @@ mod tests {
         );
     }
 
-    /// Passé le plafond, la seconde colonne partirait chercher le bord droit : on passe à la
-    /// ligne plutôt que de compter sur la largeur du terminal.
+    /// Past the cap, the second column would head off towards the right edge: it wraps to the
+    /// next line rather than counting on the terminal's width.
     #[test]
     fn an_overlong_name_gives_up_the_column() {
         assert_eq!(

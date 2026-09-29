@@ -176,7 +176,7 @@ pub fn lines(
         }
         let markdown =
             std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        // Généré le plus souvent : une ligne de commit y est retirée, jamais bloquante.
+        // Generated most of the time: a commit line is dropped from it, never a blocker.
         let (commits, kept): (Vec<String>, Vec<String>) = section(&markdown, version)
             .into_iter()
             .partition(|line| looks_like_commit(line));

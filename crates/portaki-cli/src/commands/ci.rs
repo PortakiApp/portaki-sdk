@@ -1,12 +1,12 @@
-//! `portaki ci` — ce qu'un workflow avait jusqu'ici à faire en bash.
+//! `portaki ci` — what a workflow has had to do in bash until now.
 //!
-//! Un dépôt de modules pilotait sa CI avec deux cents lignes de `bash`, `jq` et `curl` :
-//! découvrir les modules changés, résoudre le CLI à installer, annoncer un run. Ces trois
-//! choses sont des questions sur un module — le CLI en sait plus qu'un script, et il est déjà
-//! installé sur le runner.
+//! A module repository used to drive its CI with two hundred lines of `bash`, `jq` and `curl`:
+//! discovering the changed modules, resolving which CLI to install, announcing a run. All three
+//! are questions about a module — the CLI knows more about them than a script does, and it is
+//! already installed on the runner.
 //!
-//! Chaque sous-commande écrit sur la sortie standard **et** dans `GITHUB_OUTPUT` quand il
-//! existe : lisible à la main, consommable par une étape suivante, sans deuxième forme à tenir.
+//! Every subcommand writes to standard output **and** to `GITHUB_OUTPUT` when it exists: readable
+//! by hand, consumable by a following step, with no second form to keep up to date.
 
 use std::path::{Path, PathBuf};
 
@@ -19,13 +19,13 @@ use crate::manifest::generator::{MANIFEST_VERSION, SDUI_SCHEMA_VERSION};
 use crate::ui;
 use crate::update::outdated;
 
-/// Le manifeste qui fait d'un dossier un module.
+/// The manifest that makes a directory a module.
 use crate::manifest::source::{self, MODULE_MANIFEST};
 
-/// Le dossier où un dépôt multi-modules les range.
+/// The directory where a multi-module repository keeps them.
 const MODULES_DIR: &str = "modules";
 
-/// Ce qui, changé, oblige à tout reconstruire : le socle commun à tous les modules.
+/// What, once changed, forces a full rebuild: the foundation shared by every module.
 const SHARED_PATHS: [&str; 5] = [
     "Cargo.toml",
     "Cargo.lock",
@@ -42,7 +42,7 @@ pub struct CiArgs {
 }
 
 #[derive(Debug, Subcommand)]
-/// Les questions qu'un workflow pose sur un dépôt de modules.
+/// The questions a workflow asks about a module repository.
 pub enum CiCommand {
     /// List the modules to build — all of them, or only those a change touched.
     Modules(ModulesArgs),
@@ -74,7 +74,7 @@ pub struct CiReleaseArgs {
     pub audit: Option<PathBuf>,
 }
 
-/// `--root` (caché, ancien) ou `--module` / `--all` : les racines des modules visés.
+/// `--root` (hidden, legacy) or `--module` / `--all`: the roots of the modules being aimed at.
 fn roots(root: &Option<PathBuf>, modules: &crate::workspace::ModuleArgs) -> Result<Vec<PathBuf>> {
     if let Some(root) = root {
         return Ok(vec![root.clone()]);
@@ -123,17 +123,16 @@ pub struct ReportArgs {
     pub url: Option<String>,
 }
 
-/// Dit à Portaki comment ce run s'est terminé.
+/// Tells Portaki how this run ended.
 ///
-/// Rien n'est stocké côté module : Portaki n'a aucun droit de lecture sur vos runs. C'est le
-/// jeton OIDC — émis par GitHub pour la durée du job — qui prouve d'où vient le rapport.
+/// Nothing is stored on the module side: Portaki has no right to read your runs. It is the OIDC
+/// token — issued by GitHub for the lifetime of the job — that proves where the report comes from.
 ///
-/// À appeler sur *tous* les dénouements, pas seulement les échecs : conditionné à l'échec, ce
-/// rapport ne pourrait jamais éteindre une alerte, et un module réparé garderait la sienne
-/// indéfiniment.
+/// To be called on *every* outcome, not only failures: made conditional on failure, this report
+/// could never clear an alert, and a module that had been repaired would keep its own for ever.
 ///
-/// Un rapport qui échoue n'échoue pas le run. Il vient après la publication, qui a déjà eu
-/// lieu ; faire rougir un job pour un compte rendu inverserait l'importance des deux.
+/// A report that fails does not fail the run. It comes after the publication, which has already
+/// happened; turning a job red over a status report would invert the importance of the two.
 async fn report(args: ReportArgs) -> Result<()> {
     let base = crate::profile::api_url(args.url.as_deref());
     let run_url = args.run_url.clone().or_else(github_run_url);
@@ -187,7 +186,7 @@ async fn deliver(base: &str, module_id: &str, outcome: &str, run_url: Option<&st
     Ok(())
 }
 
-/// L'adresse de ce run, reconstruite depuis ce que GitHub Actions pose dans l'environnement.
+/// This run's address, rebuilt from what GitHub Actions puts in the environment.
 fn github_run_url() -> Option<String> {
     let server = std::env::var("GITHUB_SERVER_URL").ok()?;
     let repository = std::env::var("GITHUB_REPOSITORY").ok()?;
@@ -195,10 +194,11 @@ fn github_run_url() -> Option<String> {
     Some(format!("{server}/{repository}/actions/runs/{run}"))
 }
 
-/// L'identifiant du module, lu là où il est déclaré.
+/// The module's identifier, read where it is declared.
 ///
-/// Le template le tirait du nom du dépôt — faux dès qu'un dépôt en porte plusieurs, et fragile
-/// même seul : rien n'oblige un dépôt à porter le nom de son module.
+/// The template used to take it from the repository name — wrong as soon as one repository holds
+/// several, and fragile even with a single one: nothing obliges a repository to carry the name of
+/// its module.
 fn read_module_id(root: &Path) -> Result<String> {
     source::module_id(root).with_context(|| {
         format!(
@@ -218,10 +218,10 @@ pub struct InfoArgs {
     pub modules: crate::workspace::ModuleArgs,
 }
 
-/// L'identité du module, pour un workflow qui doit la nommer.
+/// The module's identity, for a workflow that has to name it.
 ///
-/// Sans elle, une action composite en était réduite à extraire la version du manifeste avec
-/// `python3` ou `jq` — une dépendance de plus sur le runner, pour un champ que le CLI lit déjà.
+/// Without it, a composite action was reduced to extracting the version from the manifest with
+/// `python3` or `jq` — one more dependency on the runner, for a field the CLI already reads.
 fn info(args: InfoArgs) -> Result<()> {
     let mut found = Vec::new();
     for root in roots(&args.root, &args.modules)? {
@@ -253,7 +253,7 @@ fn info_one(id: &str, version: &str) -> Result<()> {
     emit_outputs(&[("id", id), ("version", version)])?;
 
     if ui::plain() {
-        // Deux lignes, dans un ordre fixe : `read id version < <(portaki --plain ci info)`.
+        // Two lines, in a fixed order: `read id version < <(portaki --plain ci info)`.
         println!("{id}");
         println!("{version}");
         return Ok(());
@@ -281,10 +281,10 @@ pub struct ModulesArgs {
     pub only: Vec<String>,
 }
 
-/// Ce qu'on a trouvé, et pourquoi.
+/// What was found, and why.
 ///
-/// La raison n'est pas de la décoration : « rien n'a changé » et « je n'ai pas su comparer »
-/// produisent la même liste vide et n'appellent pas la même réaction.
+/// The reason is not decoration: "nothing changed" and "I could not compare" produce the same
+/// empty list and do not call for the same reaction.
 struct Selection {
     modules: Vec<String>,
     reason: &'static str,
@@ -319,8 +319,8 @@ fn modules(args: ModulesArgs) -> Result<()> {
     };
     let json = serde_json::to_string(&selection.modules)?;
 
-    // Le workflow lit `modules` pour sa matrice et `any` pour sauter les jobs : sans `any`, une
-    // matrice vide fait échouer le job au lieu de le passer.
+    // The workflow reads `modules` for its matrix and `any` to skip the jobs: without `any`, an
+    // empty matrix fails the job instead of skipping it.
     emit_outputs(&[
         ("modules", &json),
         ("any", &(!selection.modules.is_empty()).to_string()),
@@ -349,9 +349,9 @@ fn modules(args: ModulesArgs) -> Result<()> {
         ui::skipped(format!("nothing to build ({})", selection.reason));
     } else {
         ui::detail(selection.reason);
-        // La colonne dit la version déclarée plutôt que la raison : celle-ci vaut pour toute la
-        // liste, la répéter vingt fois n'apprend rien, et c'est la version qu'on cherche des
-        // yeux quand on relit une release.
+        // The column gives the declared version rather than the reason: the reason holds for the
+        // whole list, repeating it twenty times teaches nothing, and the version is what the eye
+        // goes looking for when re-reading a release.
         let versions: Vec<String> = selection
             .modules
             .iter()
@@ -369,7 +369,7 @@ fn modules(args: ModulesArgs) -> Result<()> {
     Ok(())
 }
 
-/// La version qu'un module déclare, pour la montrer en regard de son nom.
+/// The version a module declares, to show it opposite its name.
 fn declared_version(root: &Path, name: &str) -> Option<String> {
     [root.join(MODULES_DIR).join(name), root.to_path_buf()]
         .iter()
@@ -378,10 +378,10 @@ fn declared_version(root: &Path, name: &str) -> Option<String> {
         .map(|(_, version)| version)
 }
 
-/// Les modules du dépôt : `modules/*` s'il y en a, sinon le dossier courant lui-même.
+/// The repository's modules: `modules/*` if there are any, otherwise the current directory itself.
 ///
-/// Les deux dispositions coexistent — un dépôt par module, ou un dépôt qui les rassemble — et
-/// aucune n'est déclarée nulle part. C'est un crate sur `portaki-sdk` — ou un manifeste — qui tranche.
+/// The two layouts coexist — one repository per module, or one repository gathering them — and
+/// neither is declared anywhere. A crate on `portaki-sdk` — or a manifest — is what settles it.
 fn discover(root: &Path) -> Result<Vec<String>> {
     let nested = root.join(MODULES_DIR);
     if nested.is_dir() {
@@ -435,9 +435,9 @@ fn select(root: &Path, known: &[String], args: &ModulesArgs) -> Result<Selection
         });
     };
 
-    // Une base absente ou nulle veut dire « première poussée », « force-push » ou « clone
-    // superficiel ». Tout reconstruire y coûte des minutes ; ne rien reconstruire y perdrait
-    // une publication, ce qui coûte davantage.
+    // A base that is missing or all zeros means "first push", "force-push" or "shallow clone".
+    // Rebuilding everything costs minutes there; rebuilding nothing would lose a publication,
+    // which costs more.
     if base.trim().is_empty() || base.chars().all(|character| character == '0') {
         return Ok(Selection {
             modules: known.to_vec(),
@@ -489,7 +489,7 @@ fn select(root: &Path, known: &[String], args: &ModulesArgs) -> Result<Selection
     })
 }
 
-/// Les chemins modifiés depuis `base`, ou `None` si git ne sait pas comparer.
+/// The paths changed since `base`, or `None` if git cannot make the comparison.
 fn changed_paths(root: &Path, base: &str) -> Option<Vec<String>> {
     let output = std::process::Command::new("git")
         .current_dir(root)
@@ -508,10 +508,10 @@ fn changed_paths(root: &Path, base: &str) -> Option<Vec<String>> {
     )
 }
 
-/// Ce chemin appartient-il au socle commun ?
+/// Does this path belong to the shared foundation?
 ///
-/// Comparé sur des préfixes, pas sur une expression : `.github/workflows/ci.yml` ne doit pas
-/// déclencher la matrice entière, et une expression un peu large le ferait sans qu'on le voie.
+/// Matched on prefixes, not on a pattern: `.github/workflows/ci.yml` must not set off the whole
+/// matrix, and a slightly too broad pattern would do exactly that without anyone seeing it.
 fn touches_shared(path: &str) -> bool {
     SHARED_PATHS.iter().any(|shared| {
         if let Some(directory) = shared.strip_suffix('/') {
@@ -532,18 +532,18 @@ pub struct SdkVersionArgs {
     pub modules: crate::workspace::ModuleArgs,
 }
 
-/// Le SDK auquel ce checkout se résout, et la version de CLI à installer avec.
+/// The SDK this checkout resolves to, and the CLI version to install alongside it.
 ///
-/// Lu de `Cargo.lock`, pas de `Cargo.toml` : un module peut déclarer le SDK par semver, par
-/// branche git ou par chemin, et seul le lock dit ce qui sera réellement compilé.
+/// Read from `Cargo.lock`, not from `Cargo.toml`: a module may declare the SDK by semver, by git
+/// branch or by path, and only the lock says what will actually be compiled.
 ///
-/// La clé rendue est la version seule, parce que le CLI s'installe depuis crates.io —
-/// `cargo install portaki-cli@<version>`. Cloner le dépôt du SDK pour l'y compiler coûtait une
-/// résolution de branche à chaque run, un cache invalidé à chaque commit du SDK, et un binaire
-/// qui n'était celui d'aucune version publiée. La révision reste rendue à titre indicatif :
-/// elle dit que le checkout suit une branche, pas une release.
+/// The key returned is the version alone, because the CLI is installed from crates.io —
+/// `cargo install portaki-cli@<version>`. Cloning the SDK repository to compile it there cost a
+/// branch resolution on every run, a cache invalidated on every SDK commit, and a binary that was
+/// no published version's. The revision is still returned for information: it says the checkout
+/// follows a branch, not a release.
 fn sdk_version(args: SdkVersionArgs) -> Result<()> {
-    // Un monorepo partage son lock : le premier module suffit.
+    // A monorepo shares its lock: the first module is enough.
     let root = roots(&args.root, &args.modules)?
         .into_iter()
         .next()
@@ -591,23 +591,23 @@ fn sdk_version(args: SdkVersionArgs) -> Result<()> {
     Ok(())
 }
 
-/// Le SDK résolu par le lock.
+/// The SDK the lock resolves to.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct LockedSdk {
     pub(crate) version: String,
-    /// La révision exacte, quand le SDK vient d'un dépôt git plutôt que de crates.io.
+    /// The exact revision, when the SDK comes from a git repository rather than from crates.io.
     rev: Option<String>,
 }
 
 impl LockedSdk {
-    /// La version à installer, et la clé de cache qui va avec — les deux sont la même chose.
+    /// The version to install, and the cache key that goes with it — the two are the same thing.
     fn cache_key(&self) -> &str {
         &self.version
     }
 }
 
-/// Le `Cargo.lock` le plus proche, en remontant : un module d'un dépôt multi-modules partage
-/// celui de la racine.
+/// The nearest `Cargo.lock`, walking upwards: a module of a multi-module repository shares the
+/// one at the root.
 pub(crate) fn find_lockfile(start: &Path) -> Option<PathBuf> {
     start
         .ancestors()
@@ -615,10 +615,10 @@ pub(crate) fn find_lockfile(start: &Path) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// Extrait `portaki-sdk` du lock, sans dépendance de plus.
+/// Extracts `portaki-sdk` from the lock, with no extra dependency.
 ///
-/// Le format est stable et trivial — des blocs `[[package]]` de lignes `clé = "valeur"`. Ajouter
-/// un analyseur TOML complet au CLI pour deux champs coûterait plus qu'il ne protège.
+/// The format is stable and trivial — `[[package]]` blocks of `key = "value"` lines. Adding a
+/// full TOML parser to the CLI for two fields would cost more than it protects.
 pub(crate) fn read_locked_sdk(lock: &str) -> Option<LockedSdk> {
     let mut in_sdk = false;
     let mut version = None;
@@ -659,7 +659,7 @@ pub(crate) fn read_locked_sdk(lock: &str) -> Option<LockedSdk> {
     Some(LockedSdk { version, rev })
 }
 
-/// `clé = "valeur"` → `valeur`.
+/// `key = "value"` → `value`.
 fn quoted<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     let rest = line.strip_prefix(key)?.trim_start();
     let rest = rest.strip_prefix('=')?.trim();
@@ -679,7 +679,7 @@ pub struct CheckArgs {
     pub offline: bool,
 }
 
-/// Ce qui n'empêche rien aujourd'hui et coûtera cher plus tard.
+/// What gets in nobody's way today and will cost dearly later.
 async fn check(args: CheckArgs) -> Result<()> {
     if !ui::plain() {
         ui::header(
@@ -701,7 +701,7 @@ async fn check(args: CheckArgs) -> Result<()> {
     Ok(())
 }
 
-/// `ci check` pour un module : ce qui vieillit, dit à mesure et rendu pour `--json`.
+/// `ci check` for one module: what is ageing, said as it goes and returned for `--json`.
 async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json::Value>)> {
     let root = root.to_path_buf();
     warnings().clear();
@@ -753,14 +753,14 @@ async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json
                     );
                 }
                 Ok(_) => {}
-                // Un registre injoignable n'est pas un défaut du module : le dire, et continuer.
+                // An unreachable registry is not a defect of the module: say so, and carry on.
                 Err(failure) => ui::skipped(format!("could not reach crates.io: {failure}")),
             }
 
             match withdrawn(&resolved.version).await {
                 Ok(catalogue) => found += warn_about_withdrawn(&manifest, &catalogue),
-                // Le registre est la source, mais son indisponibilité n'est pas un défaut du
-                // module : un build ne doit pas échouer parce qu'une plateforme répond mal.
+                // The registry is the source, but its being unavailable is not a defect of the
+                // module: a build must not fail because a platform is answering badly.
                 Err(failure) => ui::skipped(format!("could not read the deprecations: {failure}")),
             }
         }
@@ -773,8 +773,8 @@ async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json
     Ok((manifest.id.clone(), said))
 }
 
-/// Ce que `annotate` a dit pendant le `check_one` en cours, pour `--json`. Un verrou et non un
-/// `thread_local` : la tâche change de fil à chaque `await`.
+/// What `annotate` said during the `check_one` currently running, for `--json`. A lock and not a
+/// `thread_local`: the task moves from thread to thread at every `await`.
 static WARNINGS: std::sync::Mutex<Vec<serde_json::Value>> = std::sync::Mutex::new(Vec::new());
 
 fn warnings() -> std::sync::MutexGuard<'static, Vec<serde_json::Value>> {
@@ -783,11 +783,11 @@ fn warnings() -> std::sync::MutexGuard<'static, Vec<serde_json::Value>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Écrit l'avertissement là où il sera vu.
+/// Writes the warning where it will be seen.
 ///
-/// Sous GitHub Actions, la syntaxe `::warning::` l'épingle sur le fichier concerné, dans la vue
-/// des changements. Ailleurs, c'est une ligne comme une autre — la même information, sans
-/// l'encodage qui ne servirait à personne.
+/// Under GitHub Actions, the `::warning::` syntax pins it onto the file concerned, in the diff
+/// view. Elsewhere it is a line like any other — the same information, without the encoding that
+/// would be of use to nobody.
 fn annotate(file: Option<&str>, message: impl std::fmt::Display) {
     warnings().push(serde_json::json!({ "file": file, "message": message.to_string() }));
     if ui::json() {
@@ -804,11 +804,11 @@ fn annotate(file: Option<&str>, message: impl std::fmt::Display) {
     ui::warn(message);
 }
 
-/// Ce que le manifeste déclare et que la plateforme retire.
+/// What the manifest declares and the platform is withdrawing.
 ///
-/// Les identifiants sont comparés à ceux du contrat, jamais interprétés : le CLI ne sait pas ce
-/// qu'est `core.storage`, il sait seulement que le module le nomme et que le registre l'annonce
-/// partant. C'est ce qui permet à une dépréciation de circuler sans nouvelle version du CLI.
+/// The identifiers are compared with the contract's, never interpreted: the CLI does not know what
+/// `core.storage` is, it only knows that the module names it and that the registry announces it as
+/// going away. That is what lets a deprecation travel without a new version of the CLI.
 fn warn_about_withdrawn(manifest: &ModuleManifest, catalogue: &[Withdrawn]) -> usize {
     let declared = declared_ids(manifest);
 
@@ -833,10 +833,11 @@ fn warn_about_withdrawn(manifest: &ModuleManifest, catalogue: &[Withdrawn]) -> u
     found
 }
 
-/// Tout ce que le manifeste nomme et que la plateforme pourrait retirer sous ses pieds.
+/// Everything the manifest names that the platform could withdraw from under its feet.
 ///
-/// Séparé du rendu pour être vérifiable : c'est la liste qui décide si un module est concerné,
-/// et l'oublier d'une seule catégorie rendrait l'avertissement muet là où il compte.
+/// Kept apart from the rendering so that it can be checked: this list is what decides whether a
+/// module is affected, and leaving a single category out of it would make the warning silent
+/// exactly where it counts.
 fn declared_ids(manifest: &ModuleManifest) -> Vec<String> {
     manifest
         .capabilities
@@ -855,7 +856,7 @@ fn declared_ids(manifest: &ModuleManifest) -> Vec<String> {
         .collect()
 }
 
-/// Une entrée du contrat des dépréciations, telle que le registre la rend.
+/// One entry of the deprecations contract, as the registry renders it.
 #[derive(Debug, serde::Deserialize)]
 struct Withdrawn {
     id: String,
@@ -867,14 +868,14 @@ struct Withdrawn {
     note: String,
 }
 
-/// Le contrat des dépréciations de cette version du SDK.
+/// The deprecations contract for this version of the SDK.
 ///
-/// Sur sa route dédiée plutôt qu'en lisant tous les contrats de la version : `ci check` tourne à
-/// chaque build, et télécharger le schéma de manifeste et les primitives SDUI pour lire une
-/// liste souvent vide serait payer cher une question bon marché.
+/// On its own dedicated route rather than by reading all of the version's contracts: `ci check`
+/// runs on every build, and downloading the manifest schema and the SDUI primitives to read an
+/// often empty list would be paying a lot for a cheap question.
 ///
-/// Une version que le registre ne connaît pas — un SDK compilé depuis une branche, jamais
-/// publié — rend un 404. Ce n'est pas un défaut du module : il n'y a rien à dire, et on se tait.
+/// A version the registry does not know — an SDK compiled from a branch, never published —
+/// returns a 404. That is not a defect of the module: there is nothing to say, so we stay quiet.
 async fn withdrawn(sdk_version: &str) -> Result<Vec<Withdrawn>> {
     let base = crate::profile::api_url(None);
     let response = crate::http::client()
@@ -914,8 +915,8 @@ pub(crate) fn emit_outputs(pairs: &[(&str, &str)]) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// Le lock d'un dépôt qui suit une branche : la version est celle du crate, la révision
-    /// celle du commit compilé.
+    /// The lock of a repository that follows a branch: the version is the crate's, the revision
+    /// is that of the commit being compiled.
     const GIT_LOCK: &str = r#"
 [[package]]
 name = "serde"
@@ -946,7 +947,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
             resolved.rev.as_deref(),
             Some("28d522da69b70627f78123d9c42475cb7c595c46")
         );
-        // La clé sert à `cargo install portaki-cli@<clé>` : elle ne porte que la version.
+        // The key feeds `cargo install portaki-cli@<key>`: it carries nothing but the version.
         assert_eq!(resolved.cache_key(), "2.2.0");
     }
 
@@ -963,9 +964,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         assert!(read_locked_sdk("[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\n").is_none());
     }
 
-    /// Comparées en nombres : lexicographiquement, `2.9.0` passerait pour postérieur à `2.10.0`.
-    /// Le socle commun fait tout reconstruire — mais un fichier de CI n'en fait pas partie,
-    /// sinon la moindre retouche de workflow déclencherait vingt et une publications.
+    /// Compared as numbers: lexicographically, `2.9.0` would pass for later than `2.10.0`.
+    /// The shared foundation forces a full rebuild — but a CI file is not part of it, otherwise
+    /// the slightest touch-up to a workflow would set off twenty-one publications.
     #[test]
     fn only_the_shared_workspace_fans_out() {
         assert!(touches_shared("Cargo.lock"));
@@ -978,7 +979,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         assert!(!touches_shared("README.md"));
     }
 
-    /// Une disposition n'est déclarée nulle part : c'est le manifeste qui la révèle.
+    /// A layout is declared nowhere: the manifest is what reveals it.
     #[test]
     fn both_repository_layouts_are_recognised() {
         let single = tempfile::tempdir().unwrap();
@@ -994,7 +995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         assert_eq!(discover(many.path()).unwrap(), vec!["nuki", "weather"]);
     }
 
-    /// Le contrat vient du registre : sa forme est un contrat, pas un détail.
+    /// The document comes from the registry: its shape is a contract, not a detail.
     #[test]
     fn the_registry_document_reads_as_the_cli_expects() {
         let document = serde_json::json!([
@@ -1012,13 +1013,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].replacement.as_deref(), Some("core.kv"));
-        // Sans remplaçant, la clé est absente du document — elle ne doit pas faire échouer la
-        // lecture, sans quoi un avertissement disparaîtrait au lieu de s'afficher.
+        // With no replacement, the key is absent from the document — it must not make the read
+        // fail, or a warning would disappear instead of being shown.
         assert!(parsed[1].replacement.is_none());
         assert_eq!(parsed[1].since, "2.4.0");
     }
 
-    /// Une catégorie oubliée ici rendrait l'avertissement muet là où il compte.
+    /// A category forgotten here would make the warning silent exactly where it counts.
     #[test]
     fn every_kind_of_declaration_is_looked_at() {
         let raw = serde_json::json!({
@@ -1061,8 +1062,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         }
     }
 
-    /// Le template tirait l'id du nom du dépôt : faux dès qu'un dépôt en porte plusieurs, et
-    /// fragile même seul. Il est déclaré, donc il se lit.
+    /// The template used to take the id from the repository name: wrong as soon as one repository
+    /// holds several, and fragile even with a single one. It is declared, so it is read.
     #[test]
     fn the_module_id_comes_from_the_manifest_not_the_directory() {
         let root = tempfile::tempdir().unwrap();
@@ -1083,7 +1084,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         assert!(read_module_id(root.path()).is_err());
     }
 
-    /// Un dossier sous `modules/` sans manifeste n'est pas un module — `target/`, par exemple.
+    /// A directory under `modules/` with no manifest is not a module — `target/`, for instance.
     #[test]
     fn a_directory_without_a_manifest_is_not_a_module() {
         let root = tempfile::tempdir().unwrap();

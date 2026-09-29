@@ -1,29 +1,30 @@
 //! Where the CLI keeps its credentials.
 //!
-//! Dans un fichier, `~/.config/portaki/credentials.json`, en `0600` — et non plus dans le
-//! trousseau du système.
+//! In a file, `~/.config/portaki/credentials.json`, mode `0600` — and no longer in the system
+//! keychain.
 //!
-//! Le trousseau était le bon choix sur le papier : chiffré au repos, verrouillé avec la session.
-//! Il l'est resté jusqu'à ce qu'on constate son coût réel sur macOS — il attache son
-//! autorisation à l'identité de code du binaire, et un binaire recompilé est un inconnu. Une
-//! boucle de développement qui recompile redemande donc le mot de passe de session à chaque
-//! passage. Un garde-fou qu'on affronte cent fois par jour finit par être contourné ; celui-ci
-//! l'était déjà, par la variable d'environnement.
+//! The keychain was the right choice on paper: encrypted at rest, locked along with the session.
+//! It stayed the right choice until we measured what it really costs on macOS — it ties its
+//! authorisation to the binary's code identity, and a recompiled binary is a stranger. So a
+//! development loop that recompiles asks for the session password again on every pass. A
+//! safeguard you run into a hundred times a day ends up being worked around; this one already
+//! was, through the environment variable.
 //!
-//! Ce que le fichier garde :
+//! What the file keeps:
 //!
-//! - `0600` sur le fichier, `0700` sur son dossier — sur une machine mono-utilisateur, c'est la
-//!   protection qui compte réellement ;
-//! - hors du dépôt, sous `$XDG_CONFIG_HOME`, donc jamais commité ni pris dans un `git add -A` ;
-//! - écrit par renommage atomique : une interruption ne laisse pas un fichier tronqué ;
-//! - jamais affiché, et `portaki logout` l'efface.
+//! - `0600` on the file, `0700` on its directory — on a single-user machine, that is the
+//!   protection that actually counts;
+//! - outside the repository, under `$XDG_CONFIG_HOME`, so never committed nor caught by a
+//!   `git add -A`;
+//! - written by atomic rename: an interruption never leaves a truncated file;
+//! - never displayed, and `portaki logout` erases it.
 //!
-//! Ce qu'il ne garde pas : le chiffrement au repos. **Hacher est impossible** — un jeton doit
-//! être rejoué tel quel, et un condensat ne se rejoue pas. Chiffrer demanderait une clé, qu'il
-//! faudrait ranger… dans le trousseau qu'on vient de quitter. Le dire vaut mieux que de brouiller
-//! le contenu pour s'en donner l'air.
+//! What it does not keep: encryption at rest. **Hashing is impossible** — a token has to be
+//! replayed as it is, and a digest cannot be replayed. Encrypting would need a key, which would
+//! have to be kept… in the keychain we have just left. Saying so is better than scrambling the
+//! contents to look the part.
 //!
-//! `PORTAKI_CREDENTIALS=keychain` restaure l'ancien comportement, pour qui le préfère.
+//! `PORTAKI_CREDENTIALS=keychain` restores the old behaviour, for whoever prefers it.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -33,17 +34,17 @@ use anyhow::{bail, Context, Result};
 const SERVICE: &str = "app.portaki.cli";
 const ACCESS_ENTRY: &str = "access-token";
 const REFRESH_ENTRY: &str = "refresh-token";
-/// L'origine d'une session rangée avant qu'elles soient rangées par origine.
+/// The origin of a session stored back when sessions were not stored per origin.
 const ORIGIN_ENTRY: &str = "origin";
 
-/// Une session rangée avant qu'on retienne son origine : la production, la seule par défaut.
+/// A session stored before we recorded its origin: production, the only one there was by default.
 const LEGACY_ORIGIN: &str = "https://api.portaki.app";
 
-/// Le jeton posé explicitement dans l'environnement, s'il y en a un.
+/// The token set explicitly in the environment, if there is one.
 ///
-/// Il gagne sur tout le reste, y compris sur l'OIDC d'une CI : un choix explicite doit primer
-/// sur un mécanisme qui s'active tout seul, sans quoi poser cette variable n'aurait plus d'effet
-/// visible et le débogage deviendrait un jeu de devinettes.
+/// It wins over everything else, including a CI's OIDC: an explicit choice must outrank a
+/// mechanism that switches itself on, otherwise setting this variable would no longer have any
+/// visible effect and debugging would turn into a guessing game.
 pub fn explicit_token() -> Option<String> {
     std::env::var("PORTAKI_DEV_TOKEN")
         .ok()
@@ -51,7 +52,7 @@ pub fn explicit_token() -> Option<String> {
         .filter(|token| !token.is_empty())
 }
 
-/// Pas de session pour cette origine — et la commande qui en ouvre une.
+/// No session for this origin — and the command that opens one.
 #[derive(Debug)]
 pub struct NotSignedIn {
     pub origin: String,
@@ -131,29 +132,29 @@ pub fn origin_of(url: &str) -> Option<String> {
         .filter(|origin| origin != "null")
 }
 
-/// Renouvelle le jeton d'accès et range la paire tournée.
+/// Renews the access token and stores the rotated pair.
 ///
-/// Le jeton d'accès vit quinze minutes, une session `--watch` bien plus. Sans ceci, elle
-/// s'arrêterait au milieu sur un 401, et la seule issue serait de relancer `portaki login`.
+/// The access token lives fifteen minutes, a `--watch` session far longer. Without this, that
+/// session would stop halfway through on a 401, and the only way out would be `portaki login`.
 ///
-/// La plateforme se souvient désormais du client et des scopes attachés au jeton de
-/// rafraîchissement, donc le jeton renouvelé ouvre les mêmes portes que le premier — sans cette
-/// mémoire, il repartait avec la seule audience `portaki-api`.
+/// The platform now remembers the client and the scopes attached to the refresh token, so the
+/// renewed token opens the same doors as the first one — without that memory, it came back with
+/// the `portaki-api` audience and nothing else.
 ///
-/// # Un renouvellement à la fois
+/// # One renewal at a time
 ///
-/// Chaque renouvellement révoque le jeton de rafraîchissement présenté, et la plateforme prend
-/// la présentation d'un jeton déjà tourné pour un vol : elle révoque alors toutes les sessions
-/// du compte. Deux `portaki` lancés ensemble — un `dev --watch` et un `sdk upgrade`, deux
-/// worktrees — expirent à la même minute et renouvellent ensemble : le second présentait le
-/// jeton que le premier venait de tourner, et tout le monde se retrouvait déconnecté.
+/// Every renewal revokes the refresh token that was presented, and the platform takes the
+/// presentation of an already-rotated token for a theft: it then revokes every session of the
+/// account. Two `portaki` started together — a `dev --watch` and an `sdk upgrade`, two
+/// worktrees — expire in the same minute and renew together: the second was presenting the token
+/// the first had just rotated, and everybody ended up signed out.
 ///
-/// D'où le verrou, puis la relecture : `stale` est le jeton qui vient d'essuyer le 401. Si le
-/// jeton rangé n'est plus celui-là, un autre processus a renouvelé pendant qu'on attendait, et
-/// sa paire est aussi la nôtre.
+/// Hence the lock, then the re-read: `stale` is the token that has just taken the 401. If the
+/// stored token is no longer that one, another process renewed while we were waiting, and its
+/// pair is ours too.
 ///
-/// `auth_url` est la plateforme de la commande en cours : c'est la session de son origine qui
-/// est renouvelée, jamais celle d'une autre.
+/// `auth_url` is the platform of the command in progress: it is the session of its origin that
+/// gets renewed, never another origin's.
 pub async fn refresh(auth_url: &str, stale: &str) -> Result<String> {
     ensure_transport(auth_url)?;
     let origin = origin_of(auth_url).with_context(|| format!("{auth_url} is not a URL"))?;
@@ -182,24 +183,24 @@ pub async fn refresh(auth_url: &str, stale: &str) -> Result<String> {
     let body = response.text().await.unwrap_or_default();
     let renewed: RenewedTokens = crate::api::unwrap(&body)?;
 
-    // La rotation invalide l'ancien jeton de rafraîchissement : ne pas ranger le nouveau
-    // reviendrait à se déconnecter au renouvellement suivant.
+    // Rotation invalidates the old refresh token: not storing the new one would amount to
+    // signing ourselves out at the next renewal.
     store(&origin, &renewed.access_token, &renewed.refresh_token)?;
     Ok(renewed.access_token)
 }
 
 const REFRESH_LOCK: &str = "refresh.lock";
 
-/// Au-delà, le détenteur est mort sans rendre le verrou. Plus long que l'échéance d'une requête
-/// ([`crate::http::REQUEST`]) : un renouvellement vivant ne dure jamais autant.
+/// Past this, the holder died without giving the lock back. Longer than a request's deadline
+/// ([`crate::http::REQUEST`]): a renewal that is still alive never lasts that long.
 const ABANDONED: Duration = Duration::from_secs(20);
 
-/// Plus long que [`ABANDONED`] : un verrou laissé par un processus tué se libère pendant
-/// l'attente, au lieu de faire échouer celui qui attend.
+/// Longer than [`ABANDONED`]: a lock left behind by a killed process frees itself during the
+/// wait, instead of failing whoever is waiting.
 const LOCK_WAIT: Duration = Duration::from_secs(30);
 
-/// Un fichier créé en exclusif, et non `File::lock` : celui-ci demande Rust 1.89, au-delà de la
-/// version minimale déclarée.
+/// A file created exclusively, and not `File::lock`: that one requires Rust 1.89, beyond the
+/// declared minimum version.
 struct RefreshLock(PathBuf);
 
 impl RefreshLock {
@@ -217,9 +218,9 @@ impl RefreshLock {
             {
                 Ok(_) => return Ok(Self(path.to_path_buf())),
                 Err(taken) if taken.kind() == std::io::ErrorKind::AlreadyExists => {
-                    // ponytail: deux processus peuvent déclarer le même verrou abandonné et le
-                    // reprendre ensemble — il faut un crash puis deux renouvellements à la
-                    // même seconde ; un `File::lock` le réglera quand la MSRV le permettra.
+                    // ponytail: two processes can declare the same lock abandoned and take it
+                    // over together — that takes a crash and then two renewals in the same
+                    // second; a `File::lock` will settle it once the MSRV allows for one.
                     if is_abandoned(path) {
                         let _ = std::fs::remove_file(path);
                         continue;
@@ -263,8 +264,8 @@ fn store(origin: &str, access_token: &str, refresh_token: &str) -> Result<()> {
     write(REFRESH_ENTRY, origin, refresh_token)
 }
 
-/// Range la session que la plateforme `issuer` vient d'émettre : c'est la seule où elle
-/// repartira, et elle ne touche à la session d'aucune autre origine.
+/// Stores the session the platform `issuer` has just issued: that is the only place it will go
+/// back to, and it touches no other origin's session.
 pub fn store_issued_by(issuer: &str, access_token: &str, refresh_token: &str) -> Result<()> {
     let origin = origin_of(issuer).with_context(|| format!("{issuer} is not a URL"))?;
     store(&origin, access_token, refresh_token)
@@ -280,15 +281,15 @@ pub fn storage_label() -> String {
         .unwrap_or_else(|_| "the credentials file".to_string())
 }
 
-/// Le jeton de rafraîchissement rangé pour cette origine, s'il y en a un.
+/// The refresh token stored for this origin, if there is one.
 ///
-/// Rendu pour que `logout` puisse le présenter au serveur : l'effacer d'ici ne le révoque pas,
-/// et une session qu'on croit fermée resterait ouverte jusqu'à son expiration.
+/// Returned so that `logout` can present it to the server: erasing it from here does not revoke
+/// it, and a session you believe closed would stay open until it expires.
 pub fn refresh_token(origin: &str) -> Option<String> {
     read(REFRESH_ENTRY, origin).ok().flatten()
 }
 
-/// Oublie la session de cette origine — et elle seule.
+/// Forgets this origin's session — and only that one.
 pub fn forget(origin: &str) -> Result<()> {
     if !uses_keychain() {
         let mut stored = load()?;
@@ -303,10 +304,10 @@ pub fn forget(origin: &str) -> Result<()> {
     delete(REFRESH_ENTRY, origin)
 }
 
-/// Les origines où une session est rangée — pour dire « tu es connecté ailleurs ».
+/// The origins where a session is stored — so we can say "you are signed in elsewhere".
 pub fn signed_in_origins() -> Vec<String> {
     if uses_keychain() {
-        // Le trousseau ne s'énumère pas : on ne sait répondre que pour une origine donnée.
+        // The keychain cannot be enumerated: we can only answer for a given origin.
         return Vec::new();
     }
     load()
@@ -314,17 +315,17 @@ pub fn signed_in_origins() -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Le trousseau reste accessible pour qui le préfère.
+/// The keychain stays available for whoever prefers it.
 fn uses_keychain() -> bool {
     std::env::var("PORTAKI_CREDENTIALS")
         .map(|choice| choice.trim().eq_ignore_ascii_case("keychain"))
         .unwrap_or(false)
 }
 
-/// `$XDG_CONFIG_HOME/portaki/credentials.json`, ou `~/.config/…` à défaut.
+/// `$XDG_CONFIG_HOME/portaki/credentials.json`, or `~/.config/…` failing that.
 ///
-/// Hors du dépôt, toujours : un fichier de secrets dans un arbre de travail finit par être
-/// commité, ou balayé par un `git add -A`.
+/// Outside the repository, always: a secrets file inside a working tree ends up being committed,
+/// or swept up by a `git add -A`.
 fn credentials_path() -> Result<PathBuf> {
     if let Ok(explicit) = std::env::var("PORTAKI_CREDENTIALS_FILE") {
         if !explicit.trim().is_empty() {
@@ -334,10 +335,10 @@ fn credentials_path() -> Result<PathBuf> {
     Ok(config_dir()?.join("credentials.json"))
 }
 
-/// Le dossier où la CLI range ce qui appartient à cette personne sur cette machine.
+/// The directory where the CLI stores what belongs to this person on this machine.
 ///
-/// Hors du dépôt, toujours : ce qui vit ici traverse les projets, et n'a rien à faire dans un
-/// arbre de travail.
+/// Outside the repository, always: what lives here travels across projects, and has no business
+/// in a working tree.
 pub fn config_dir() -> Result<PathBuf> {
     let base = match std::env::var("XDG_CONFIG_HOME") {
         Ok(xdg) if !xdg.trim().is_empty() => PathBuf::from(xdg),
@@ -349,7 +350,7 @@ pub fn config_dir() -> Result<PathBuf> {
     Ok(base.join("portaki"))
 }
 
-/// Une session : la paire de jetons qu'une origine a émise.
+/// A session: the pair of tokens one origin issued.
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Session {
@@ -359,10 +360,10 @@ struct Session {
     refresh_token: String,
 }
 
-/// Le fichier : une session par origine.
+/// The file: one session per origin.
 ///
-/// Les champs à plat sont ceux d'avant — une seule session, et son origine. Ils sont relus
-/// comme la session de cette origine, et ne sont plus jamais écrits.
+/// The flat fields are the older ones — a single session, and its origin. They are read back as
+/// the session of that origin, and they are never written again.
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredCredentials {
@@ -377,7 +378,7 @@ struct StoredCredentials {
 }
 
 impl StoredCredentials {
-    /// Replie l'ancienne forme dans la nouvelle.
+    /// Folds the old shape into the new one.
     fn migrated(mut self) -> Self {
         if !self.access_token.trim().is_empty() {
             let origin = if self.origin.trim().is_empty() {
@@ -398,8 +399,8 @@ fn load() -> Result<StoredCredentials> {
     load_from(&credentials_path()?)
 }
 
-/// Le chemin en paramètre, pour que l'éprouver ne dépende pas de l'environnement du processus —
-/// partagé par tous les tests, donc source de vraies intermittences.
+/// The path is a parameter so that testing this does not depend on the process environment —
+/// shared by every test, and therefore a source of genuine intermittent failures.
 fn load_from(path: &std::path::Path) -> Result<StoredCredentials> {
     match std::fs::read_to_string(path) {
         Ok(raw) => serde_json::from_str::<StoredCredentials>(&raw)
@@ -417,8 +418,8 @@ fn load_from(path: &std::path::Path) -> Result<StoredCredentials> {
     }
 }
 
-/// Écrit par renommage : une interruption ne laisse pas un fichier de secrets tronqué, ce qui
-/// obligerait à se reconnecter pour une raison qui n'a rien à voir.
+/// Written by rename: an interruption never leaves a truncated secrets file, which would force a
+/// fresh sign-in for an entirely unrelated reason.
 fn save(credentials: &StoredCredentials) -> Result<()> {
     save_to(&credentials_path()?, credentials)
 }
@@ -430,8 +431,8 @@ fn save_to(path: &std::path::Path, credentials: &StoredCredentials) -> Result<()
 
     let temporary = path.with_extension("json.tmp");
     let body = serde_json::to_string_pretty(credentials).context("serialise credentials")?;
-    // Créé en 0600, pas écrit puis restreint : entre les deux, le fichier existait en 0644. Un
-    // reste d'une écriture interrompue est retiré d'abord, ses droits ne sont pas les nôtres.
+    // Created as 0600, not written and then restricted: in between, the file existed as 0644. A
+    // leftover from an interrupted write is removed first, its permissions are not ours.
     let _ = std::fs::remove_file(&temporary);
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -462,7 +463,7 @@ fn restrict(path: &std::path::Path, mode: u32) -> Result<()> {
         .with_context(|| format!("restrict {}", path.display()))
 }
 
-/// Ailleurs, les ACL par défaut d'un profil utilisateur font le travail.
+/// Elsewhere, the default ACLs of a user profile do the job.
 #[cfg(not(unix))]
 fn restrict(_path: &std::path::Path, _mode: u32) -> Result<()> {
     Ok(())
@@ -472,7 +473,7 @@ fn entry(name: &str) -> Result<keyring::Entry> {
     keyring::Entry::new(SERVICE, name).context("open the system keychain")
 }
 
-/// `access-token@https://api.portaki.app` : une entrée de trousseau par origine.
+/// `access-token@https://api.portaki.app`: one keychain entry per origin.
 fn keyed(name: &str, origin: &str) -> String {
     format!("{name}@{origin}")
 }
@@ -497,7 +498,7 @@ fn read(name: &str, origin: &str) -> Result<Option<String>> {
     if let Some(value) = keychain_get(&keyed(name, origin))? {
         return Ok(Some(value));
     }
-    // Une entrée d'avant, sans origine dans son nom : elle vaut pour l'origine rangée à côté.
+    // An older entry, with no origin in its name: it counts for the origin stored alongside it.
     let legacy = keychain_get(ORIGIN_ENTRY)?.unwrap_or_else(|| LEGACY_ORIGIN.to_string());
     if legacy == origin {
         return keychain_get(name);
@@ -541,9 +542,9 @@ mod tests {
 
     const PROD: &str = "https://api.portaki.app";
 
-    /// Une action de CI qui passe une entrée facultative non renseignée exporte une variable
-    /// vide. Lue comme une URL, chaque appel partait vers `/registry/v1/...` — que reqwest
-    /// refuse de construire, avec un « builder error » qui ne désigne rien.
+    /// A CI action that passes an optional input left unfilled exports an empty variable. Read
+    /// as a URL, every call went off to `/registry/v1/...` — which reqwest refuses to build,
+    /// with a "builder error" that points at nothing.
     #[tokio::test]
     async fn a_second_refresh_waits_for_the_first() {
         let directory = tempfile::tempdir().expect("tempdir");
@@ -579,17 +580,17 @@ mod tests {
             .expect("taken back");
     }
 
-    /// Le stockage, éprouvé sans toucher l'environnement du processus.
+    /// Storage, put to the test without touching the process environment.
     ///
-    /// Les chemins sont passés en paramètre : deux tests qui se règlent par variable
-    /// d'environnement courent en parallèle dans le même processus et s'écrasent l'un l'autre,
-    /// ce qui produit des échecs qui n'ont rien à voir avec le code.
+    /// The paths are passed as parameters: two tests that are configured through an environment
+    /// variable run in parallel inside the same process and overwrite each other, which produces
+    /// failures that have nothing to do with the code.
     #[test]
     fn credentials_round_trip_through_the_file() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("portaki").join("credentials.json");
 
-        // Rien de stocké : ce n'est pas une panne, c'est « pas connecté ».
+        // Nothing stored: that is not a breakdown, that is "not signed in".
         let empty = load_from(&path).unwrap();
         assert!(empty.sessions.is_empty());
 
@@ -607,8 +608,8 @@ mod tests {
         assert_eq!(stored.sessions[PROD].access_token, "acces");
         assert_eq!(stored.sessions[PROD].refresh_token, "renouvellement");
 
-        // Le fichier n'est lisible que par son propriétaire — sur une machine
-        // mono-utilisateur, c'est la seule protection réelle, donc celle qu'il faut vérifier.
+        // The file is readable by its owner only — on a single-user machine that is the one
+        // real protection, so it is the one that has to be checked.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -619,8 +620,8 @@ mod tests {
         }
     }
 
-    /// Le fichier d'avant — une session, et son origine — se relit comme la session de cette
-    /// origine, et d'aucune autre.
+    /// The older file — one session, and its origin — is read back as the session of that
+    /// origin, and of no other.
     #[test]
     fn a_legacy_file_is_read_as_the_session_of_its_origin() {
         let directory = tempfile::tempdir().unwrap();
@@ -638,7 +639,7 @@ mod tests {
         );
         assert!(!stored.sessions.contains_key(PROD));
 
-        // Réécrit, il ne garde que la forme par origine.
+        // Rewritten, it keeps only the per-origin shape.
         save_to(&path, &stored).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(
@@ -647,7 +648,7 @@ mod tests {
         );
     }
 
-    /// Sans origine, l'ancienne session était celle de la production.
+    /// With no origin, the old session was production's.
     #[test]
     fn a_legacy_session_without_origin_is_production() {
         let stored =
@@ -657,8 +658,8 @@ mod tests {
         assert_eq!(stored.sessions[PROD].refresh_token, "r");
     }
 
-    /// Un `.envrc` qui pointe `PORTAKI_API_URL` ailleurs ne reçoit pas la session : on cherche
-    /// par origine exacte, schéma et port compris.
+    /// An `.envrc` that points `PORTAKI_API_URL` elsewhere does not receive the session: we look
+    /// up by exact origin, scheme and port included.
     #[test]
     fn a_session_only_goes_back_to_its_origin() {
         assert_eq!(
@@ -697,16 +698,16 @@ mod tests {
         }
     }
 
-    /// Un fichier illisible se dit, il ne se devine pas : le message doit nommer la sortie,
-    /// sinon on cherche une panne de réseau.
+    /// An unreadable file has to say so, it must not be left to be guessed at: the message has
+    /// to name the way out, otherwise you go looking for a network failure.
     #[test]
     fn a_corrupt_file_says_what_to_do() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("credentials.json");
         std::fs::write(&path, "{ pas du json").unwrap();
 
-        // `unwrap_err` exigerait `Debug` sur `StoredCredentials`, donc un jeton imprimable dans
-        // un message de panique ou une trace. On lit l'erreur sans le demander.
+        // `unwrap_err` would require `Debug` on `StoredCredentials`, and so a printable token in
+        // a panic message or a backtrace. We read the error without asking for that.
         let failure = match load_from(&path) {
             Ok(_) => panic!("un fichier illisible ne doit pas passer pour vide"),
             Err(failure) => failure.to_string(),
@@ -714,8 +715,8 @@ mod tests {
         assert!(failure.contains("portaki login"), "{failure}");
     }
 
-    /// Le chemin par défaut vit hors du dépôt : un fichier de secrets dans un arbre de travail
-    /// finit par être commité, ou balayé par un `git add -A`.
+    /// The default path lives outside the repository: a secrets file inside a working tree ends
+    /// up being committed, or swept up by a `git add -A`.
     #[test]
     fn the_default_path_is_outside_any_repository() {
         let resolved = credentials_path().unwrap();
@@ -727,22 +728,22 @@ mod tests {
         assert!(resolved.is_absolute(), "{resolved:?}");
     }
 
-    /// Un seul test pour les deux cas : ils partagent une variable d'environnement, et les
-    /// séparer les ferait courir en parallèle dans le même processus — donc s'écraser l'un
-    /// l'autre au hasard de l'ordonnancement.
+    /// A single test for both cases: they share an environment variable, and splitting them
+    /// would make them run in parallel inside the same process — and so overwrite each other at
+    /// the whim of the scheduler.
     #[test]
     fn the_environment_is_the_way_in_when_there_is_no_keychain() {
-        // Un agent de CI n'a pas de trousseau : l'injection doit rester une porte d'entrée.
+        // A CI agent has no keychain: injection has to stay a way in.
         std::env::set_var("PORTAKI_DEV_TOKEN", "injected");
         assert_eq!(access_token(PROD).unwrap(), "injected");
 
-        // Une variable vide n'est pas un jeton — sinon on part avec une chaîne blanche.
+        // An empty variable is not a token — otherwise we set off with a blank string.
         //
-        // On n'exige pas d'échec : sur une machine où `portaki login` est passé, le trousseau
-        // répond, et c'est le comportement voulu. Ce test affirmait le contraire et devenait
-        // rouge dès la première connexion — un test dont le résultat dépend de l'historique de
-        // la machine ne garde rien. L'invariant réel est qu'une variable blanche ne devient
-        // jamais un jeton.
+        // We do not require a failure: on a machine where `portaki login` has been run, the
+        // keychain answers, and that is the intended behaviour. This test used to assert the
+        // opposite and turned red from the very first sign-in — a test whose result depends on
+        // the machine's history guards nothing. The real invariant is that a blank variable
+        // never becomes a token.
         std::env::set_var("PORTAKI_DEV_TOKEN", "   ");
         match access_token(PROD) {
             Ok(from_keychain) => assert!(

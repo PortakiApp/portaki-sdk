@@ -1,9 +1,9 @@
-//! Les métadonnées de catalogue que le code sait déjà dire.
+//! The catalogue metadata the code already knows how to state.
 //!
-//! `portaki.module.json` répétait l'id, la version, l'auteur, le nom et la description : autant
-//! de choses que `portaki_module!(…)`, `Cargo.toml` et les bundles i18n portent déjà. Le build
-//! les en tire et comble ce que le manifeste écrit à la main ne dit pas ; ce qu'il dit l'emporte,
-//! le temps que les modules s'en délestent.
+//! `portaki.module.json` used to repeat the id, the version, the author, the name and the
+//! description: all things that `portaki_module!(…)`, `Cargo.toml` and the i18n bundles already
+//! carry. The build pulls them from there and fills in what the hand-written manifest does not
+//! say; what it does say wins, for as long as it takes the modules to shed it.
 
 use std::path::Path;
 
@@ -14,13 +14,14 @@ use portaki_sdk::permission;
 
 use super::generator::EmissionFile;
 
-/// Là où `portaki build` dépose le catalogue déduit.
+/// Where `portaki build` drops the inferred catalogue.
 pub const BUILT_CATALOG: &str = "target/portaki/catalog.json";
 
-/// Le catalogue déduit de l'émission `module` et des bundles i18n.
+/// The catalogue inferred from the `module` emission and the i18n bundles.
 ///
-/// Le nom et la description sont les traductions de leurs clés, par langue courte (`fr-FR` →
-/// `fr`) ; une langue sans la clé est omise plutôt que remplie de la clé brute.
+/// The name and the description are the translations of their keys, keyed by short language
+/// (`fr-FR` → `fr`); a language that lacks the key is left out rather than filled with the raw
+/// key.
 pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[String]) -> Value {
     let Some(module) = emissions.iter().find(|e| e.kind == "module") else {
         return Value::Object(Map::new());
@@ -73,7 +74,7 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
             catalog[key] = value.clone();
         }
     }
-    // Ce que le module fournit à un autre : le texte vit dans i18n, sous `feeds.<module>`.
+    // What the module feeds to another one: the text lives in i18n, under `feeds.<module>`.
     if let Some(feeds) = extra.get("feeds").and_then(Value::as_array) {
         catalog["feeds"] = feeds
             .iter()
@@ -83,7 +84,7 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
             })
             .collect();
     }
-    // Les descriptions d'e-mails, traduites ; le reste de l'entrée vient du manifeste du build.
+    // The e-mail descriptions, translated; the rest of the entry comes from the built manifest.
     let emails: Vec<Value> = emissions
         .iter()
         .filter(|e| e.kind == "email")
@@ -96,7 +97,7 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["emails"] = Value::Array(emails);
     }
 
-    // `#[email_vars]` : par modèle, les variables que le module fournit.
+    // `#[email_vars]`: per template, the variables the module supplies.
     if let Some(declared) = emissions
         .iter()
         .find(|e| e.kind == "email_vars")
@@ -132,10 +133,11 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
     catalog
 }
 
-/// Les champs de `#[portaki_sdk::config]`, libellés traduits : la macro ne porte que des clés.
+/// The fields of `#[portaki_sdk::config]`, with their labels translated: the macro only carries
+/// keys.
 ///
-/// Une option de `select` se libelle par la clé `<label>.<valeur>`. Une liste de lignes reçoit son
-/// `item` (sous-clés traduites, identifiant) de la forme `#[params]` du type de ligne.
+/// A `select` option is labelled by the key `<label>.<value>`. A list of rows gets its `item`
+/// (translated sub-keys, identifier) from the `#[params]` shape of the row type.
 fn config_fields(
     emissions: &[EmissionFile],
     translated: &dyn Fn(&Value) -> Value,
@@ -180,11 +182,12 @@ fn option_label_key(field: &Value, value: &Value) -> String {
     )
 }
 
-/// Les entrées de navigation que les `#[surface]` décrivent, triées pour un manifeste stable.
+/// The navigation entries the `#[surface]`s describe, sorted so the manifest stays stable.
 ///
-/// Côté hôte, une entrée par `placement` ; le `pathSegment` est l'id du module pour la surface
-/// `main` — l'onglet ou la fiche du module —, l'id de la surface sinon, sauf `path` explicite.
-/// Côté invité, une entrée par surface qui a une `path` : les autres se rendent sans lien.
+/// On the host side, one entry per `placement`; the `pathSegment` is the module id for the `main`
+/// surface — the module's tab or card — and the surface id otherwise, unless an explicit `path`
+/// overrides it. On the guest side, one entry per surface that has a `path`: the others render
+/// without a link.
 fn surfaces(
     emissions: &[EmissionFile],
     module_id: &str,
@@ -235,7 +238,7 @@ fn surfaces(
             guest.push(entry);
         }
     }
-    // Les entrées que le tableau de bord dessine sans surface.
+    // The entries the dashboard draws without a surface.
     for nav in emissions.iter().filter(|e| e.kind == "nav") {
         let data = &nav.data;
         let mut entry = json!({ "type": data["placement"], "pathSegment": data["path"] });
@@ -251,16 +254,16 @@ fn surfaces(
         host.push(entry);
     }
     host.sort_by_key(|e| (e["pathSegment"].to_string(), e["type"].to_string()));
-    // Par route : la page du module avant ses sous-pages (`issue-report` avant `issue-report/form`).
+    // By route: the module's page before its sub-pages (`issue-report` before `issue-report/form`).
     guest.sort_by_key(|e| (e["path"].to_string(), e["surfaceId"].to_string()));
     (host, guest)
 }
 
-/// Ce que les macros nomment sans pouvoir le vérifier : des clés i18n, des queries.
+/// What the macros name without being able to check it: i18n keys, queries.
 ///
-/// Une macro ne voit ni les bundles ni les autres attributs du module. Le build, lui, a tout : une
-/// clé absente d'une langue ou une query mal orthographiée s'arrête ici, pas dans le dashboard
-/// d'un hôte.
+/// A macro sees neither the bundles nor the module's other attributes. The build, on the other
+/// hand, has everything: a key missing from one language, or a misspelled query, stops here rather
+/// than in a host's dashboard.
 pub fn check_references(
     emissions: &[EmissionFile],
     i18n_dir: &Path,
@@ -359,7 +362,7 @@ pub fn check_references(
     Ok(())
 }
 
-/// Chaque feature de `portaki-sdk` et la permission qu'elle déclare.
+/// Every `portaki-sdk` feature and the permission it declares.
 pub(crate) const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
     ("kv", permission::KV),
     ("repo", permission::REPO),
@@ -370,8 +373,8 @@ pub(crate) const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
     ("stay-guest-contact", permission::STAY_GUEST_CONTACT_READ),
 ];
 
-/// Les permissions que le code réclame : une par feature de `portaki-sdk` activée — l'API
-/// qu'elle garde n'existe pas sans elle —, et `connectors:<id>` pour chaque connecteur déclaré.
+/// The permissions the code claims: one per enabled `portaki-sdk` feature — the API it guards
+/// does not exist without it — and `connectors:<id>` for each declared connector.
 pub fn permissions(emissions: &[EmissionFile], sdk_features: &[String]) -> Vec<String> {
     let mut found: Vec<String> = FEATURE_PERMISSIONS
         .iter()
@@ -390,7 +393,7 @@ pub fn permissions(emissions: &[EmissionFile], sdk_features: &[String]) -> Vec<S
     found
 }
 
-/// Comble les clés que le manifeste écrit à la main ne porte pas. Ce qu'il porte l'emporte.
+/// Fills in the keys the hand-written manifest does not carry. What it does carry wins.
 pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
     let catalog: Value = serde_json::from_str(catalog).context("parse built catalog")?;
     let Some(defaults) = catalog.as_object().filter(|c| !c.is_empty()) else {
@@ -409,7 +412,7 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
             (None, _) => {
                 object.insert(key.clone(), value.clone());
             }
-            // Une permission que le code réclame s'ajoute ; celles écrites à la main restent.
+            // A permission the code claims is added; the hand-written ones stay.
             (Some(Value::Array(declared)), None) if key == "permissions" => {
                 for permission in value.as_array().into_iter().flatten() {
                     if !declared.contains(permission) {
@@ -417,8 +420,8 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
                     }
                 }
             }
-            // `config` : ce que le manifeste écrit à la main l'emporte clé par clé — ses `fields`
-            // entiers s'il en a, ceux du code sinon, à côté de son `globalAlert`.
+            // `config`: what the hand-written manifest says wins key by key — its whole
+            // `fields` if it has one, the code's otherwise, next to its `globalAlert`.
             (Some(Value::Object(declared)), None) if key == "config" => {
                 for (field, built) in value.as_object().into_iter().flatten() {
                     declared
@@ -440,16 +443,16 @@ pub fn fill_catalog(raw: &str, catalog: &str) -> Result<String> {
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
 }
 
-/// Les listes fusionnées entrée par entrée, et les champs qui identifient une entrée.
+/// The lists that are merged entry by entry, and the fields that identify an entry.
 const IDENTITY: [(&str, &[&str]); 3] = [
     ("hostSurfaces", &["type", "pathSegment"]),
     ("guestSurfaces", &["surfaceId"]),
     ("emails", &["id"]),
 ];
 
-/// Ajoute les entrées du code que le manifeste n'a pas, et comble les champs qu'il tait sur
-/// celles qu'il a. Une entrée écrite à la main que le code ignore — la tâche de frise de
-/// `checklist`, qui n'a pas de surface — reste telle quelle.
+/// Adds the entries from the code that the manifest does not have, and fills in the fields it
+/// leaves unsaid on the ones it does have. A hand-written entry the code knows nothing about —
+/// `checklist`'s timeline task, which has no surface — is left exactly as it stands.
 fn merge_entries(declared: &mut Vec<Value>, built: &[Value], identity: &[&str]) {
     let same = |a: &Value, b: &Value| identity.iter().all(|field| a.get(*field) == b.get(*field));
     for entry in built {
@@ -469,7 +472,7 @@ fn merge_entries(declared: &mut Vec<Value>, built: &[Value], identity: &[&str]) 
     }
 }
 
-/// Un nom sans aucune traduction n'apprend rien au catalogue.
+/// A name without a single translation teaches the catalogue nothing.
 fn is_empty(value: &Value) -> bool {
     value.is_null() || value.as_object().is_some_and(Map::is_empty)
 }

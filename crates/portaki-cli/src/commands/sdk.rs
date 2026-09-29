@@ -12,8 +12,8 @@ use toml_edit::{DocumentMut, Item, Value};
 use crate::commands::dev;
 use crate::{ui, workspace};
 
-/// Les crates qui montent ensemble. Le SDK les publie à la même version, et en mélanger deux
-/// ferait compiler un module contre des macros d'une génération et un runtime d'une autre.
+/// The crates that move up together. The SDK publishes them at the same version, and mixing two
+/// would compile a module against the macros of one generation and the runtime of another.
 const SDK_FAMILY: [&str; 4] = [
     "portaki-sdk",
     "portaki-sdk-macros",
@@ -68,13 +68,13 @@ pub async fn run(args: SdkArgs) -> Result<()> {
 
 /// Runs `portaki upgrade`.
 pub async fn upgrade(upgrade: UpgradeArgs) -> Result<()> {
-    // Sans drapeau, le dossier courant décide, comme avant : depuis la racine d'un
-    // monorepo, tous les modules bougent ensemble quand le workspace fixe la version.
+    // With no flag, the current directory decides, as before: from the root of a
+    // monorepo, every module moves together when the workspace fixes the version.
     if upgrade.modules.module.is_none() && !upgrade.modules.all {
         return run_upgrade(&upgrade).await;
     }
-    // Un module après l'autre : quand la version est héritée du workspace, le premier
-    // fait bouger tout le monde et les suivants disent « already resolves ».
+    // One module after another: when the version is inherited from the workspace, the
+    // first moves everyone and the ones after it say "already resolves".
     for member in upgrade.modules.resolve()? {
         workspace::enter(&member)?;
         run_upgrade(&upgrade)
@@ -84,14 +84,15 @@ pub async fn upgrade(upgrade: UpgradeArgs) -> Result<()> {
     Ok(())
 }
 
-// ─── Où la version est déclarée ──────────────────────────────────────────────
+// ─── Where the version is declared ───────────────────────────────────────────
 
-/// Les fichiers qui portent l'exigence de version, et ce qu'y changer touche.
+/// The files that carry the version requirement, and what changing it there touches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declaration {
     pub files: Vec<PathBuf>,
-    /// Le workspace fixe la version pour tous : hérité (`workspace = true`), ou épinglé à la
-    /// racine et recopié dans chaque module. Monter l'un sans les autres casserait le dépôt.
+    /// The workspace fixes the version for everyone: inherited (`workspace = true`), or pinned
+    /// at the root and copied into each module. Moving one without the others would break the
+    /// repository.
     pub workspace_wide: bool,
 }
 
@@ -140,7 +141,7 @@ pub fn locate_declaration(
     })
 }
 
-/// La racine épingle-t-elle un membre de la famille dans `[workspace.dependencies]` ?
+/// Does the root pin a member of the family in `[workspace.dependencies]`?
 fn pins_the_family(workspace_toml: &str) -> bool {
     let Ok(doc) = workspace_toml.parse::<DocumentMut>() else {
         return false;
@@ -151,7 +152,7 @@ fn pins_the_family(workspace_toml: &str) -> bool {
         .is_some_and(|deps| SDK_FAMILY.iter().any(|name| deps.contains_key(name)))
 }
 
-/// Un membre qui écrit lui-même un numéro pour la famille — pas `workspace = true`.
+/// A member that writes a number for the family itself — not `workspace = true`.
 fn declares_a_number(member_toml: &str) -> bool {
     bump_requirements(member_toml, "0.0.0").is_ok_and(|(_, changed)| !changed.is_empty())
 }
@@ -286,7 +287,7 @@ pub fn resolution_note(target: &str, resolved: &str) -> Option<String> {
     })
 }
 
-// ─── Rendus ──────────────────────────────────────────────────────────────────
+// ─── Renders ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -304,23 +305,23 @@ pub struct Rendered {
     pub error_code: String,
 }
 
-/// Ce qu'une montée de version a fait à une surface.
+/// What a version upgrade did to a surface.
 #[derive(Debug, PartialEq, Eq)]
 pub enum RenderOutcome {
     Same,
-    /// Elle rend toujours, autrement — pas forcément une faute : une primitive peut avoir
-    /// gagné un champ. `--strict` en fait une.
+    /// It still renders, differently — not necessarily a fault: a primitive may have gained a
+    /// field. `--strict` makes it one.
     Changed {
         before: usize,
         after: usize,
     },
-    /// Elle rendait, elle ne rend plus. C'est la casse que la commande existe pour trouver.
+    /// It used to render, it does not any more. This is the breakage the command exists to find.
     Broke {
         error: String,
     },
-    /// Elle ne rendait déjà pas — la montée n'y est pour rien.
+    /// It was not rendering before either — the upgrade has nothing to do with it.
     StillFailing,
-    /// Elle ne rendait pas, elle rend — rare, et bon à savoir.
+    /// It was not rendering, now it does — rare, and worth knowing.
     Fixed,
 }
 
@@ -338,8 +339,8 @@ pub fn compare_render(before: &Rendered, after: &Rendered) -> RenderOutcome {
         (true, true) => {
             let parse = |raw: &str| serde_json::from_str::<serde_json::Value>(raw).ok();
             match (parse(&before.tree), parse(&after.tree)) {
-                // L'égalité de serde_json ignore l'ordre des clés : un objet réordonné n'a pas
-                // changé de rendu.
+                // serde_json equality ignores key order: a reordered object has not changed
+                // its render.
                 (Some(a), Some(b)) if a == b => RenderOutcome::Same,
                 (Some(a), Some(b)) => RenderOutcome::Changed {
                     before: nodes(&a),
@@ -366,26 +367,26 @@ fn nodes(value: &serde_json::Value) -> usize {
     }
 }
 
-/// Un contrôle de conformité en échec.
+/// A failing conformance check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FailingCheck {
     pub id: String,
     pub detail: String,
 }
 
-/// Ce que la sandbox disait du module avant la montée.
+/// What the sandbox said about the module before the upgrade.
 struct Baseline {
     renders: BTreeMap<String, Rendered>,
-    /// Les contrôles déjà en échec — la montée n'y est pour rien.
+    /// The checks that were already failing — the upgrade has nothing to do with them.
     failing: std::collections::BTreeSet<String>,
 }
 
-/// Les échecs de conformité d'après la montée : ceux qu'elle a causés, et ceux d'avant.
+/// The conformance failures after the upgrade: the ones it caused, and the ones from before.
 ///
-/// Même règle que pour les rendus ([`RenderOutcome::StillFailing`]) : un contrôle qui échouait
-/// déjà n'est pas une régression. Sans elle, un module qui déclare un e-mail sans commande
-/// ne pouvait tout simplement plus monter de SDK — la commande restaurait Cargo.toml en
-/// accusant la montée d'une faute qu'elle n'avait pas commise.
+/// Same rule as for the renders ([`RenderOutcome::StillFailing`]): a check that was already
+/// failing is not a regression. Without it, a module that declares an e-mail without a command
+/// simply could not move to a newer SDK any more — the command restored Cargo.toml, blaming the
+/// upgrade for a fault it had not committed.
 pub fn split_failures(
     before: &std::collections::BTreeSet<String>,
     after: Vec<FailingCheck>,
@@ -395,7 +396,7 @@ pub fn split_failures(
         .partition(|check| !before.contains(&check.id))
 }
 
-// ─── L'enchaînement ──────────────────────────────────────────────────────────
+// ─── The sequence ────────────────────────────────────────────────────────────
 
 struct Backup {
     files: Vec<(PathBuf, Option<String>)>,
@@ -456,9 +457,9 @@ impl Sandbox {
         .await
         {
             Ok(deployed) => deployed,
-            // Sur un 401 seulement : renouveler sur n'importe quel échec faisait tourner le
-            // jeton pour rien, et chaque rotation de trop est une course de plus avec les autres
-            // `portaki` du compte.
+            // On a 401 only: renewing on any failure at all rotated the token for nothing, and
+            // every rotation too many is one more race with the account's other `portaki`
+            // processes.
             Err(failure) if failure.is::<dev::Unauthorized>() => {
                 self.token = dev::renew(&self.auth_url, &self.token).await?;
                 dev::deploy(
@@ -520,7 +521,7 @@ impl Sandbox {
         Ok(rendered)
     }
 
-    /// Les contrôles de conformité en échec — ceux qui verrouilleraient une publication stable.
+    /// The failing conformance checks — the ones that would lock a stable publication.
     async fn failing_checks(&self) -> Result<Vec<FailingCheck>> {
         #[derive(Deserialize)]
         struct Report {
@@ -560,7 +561,7 @@ impl Sandbox {
 #[derive(Debug, Deserialize)]
 struct Metadata {
     workspace_root: PathBuf,
-    /// Où `cargo` écrit, selon la configuration vue depuis le dossier courant.
+    /// Where `cargo` writes, according to the configuration seen from the current directory.
     target_directory: PathBuf,
     packages: Vec<MetadataPackage>,
     workspace_members: Vec<String>,
@@ -704,9 +705,9 @@ async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
     let baseline = match sandbox.as_mut() {
         Some(sandbox) => {
             ui::section(&format!("before — portaki-sdk {current}"));
-            // Une version actuelle qui ne compile plus est justement une raison de monter :
-            // souvent le code attend déjà la suivante. On perd la comparaison des rendus, pas
-            // la montée — build, tests et lint la jugent toujours.
+            // A current version that no longer builds is precisely a reason to upgrade: often
+            // the code is already waiting for the next one. What is lost is the render
+            // comparison, not the upgrade — build, tests and lint still judge it.
             match take_baseline(sandbox, &module_root).await {
                 Ok(baseline) => Some(baseline),
                 Err(failure) => {
@@ -745,7 +746,7 @@ async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
         baseline.as_ref(),
     )
     .await;
-    // La vérification entre dans chaque module : on revient d'où l'on est parti.
+    // The verification steps into each module: come back to where we started from.
     std::env::set_current_dir(&cwd).context("return to the starting directory")?;
     let subject = subject(&module_id, members.len());
 
@@ -769,12 +770,13 @@ async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
         }
         Ok(resolved) => {
             ui::blank();
-            // La version résolue, pas la cible : `"3.0.1"` est un caret, et résout 3.1.0 dès
-            // que 3.1.0 existe. Annoncer la cible aurait fait committer un message faux.
+            // The resolved version, not the target: `"3.0.1"` is a caret, and resolves 3.1.0
+            // as soon as 3.1.0 exists. Announcing the target would have committed a false
+            // message.
             let verb = if members.len() > 1 { "are" } else { "is" };
             ui::success(format!("{subject} {verb} on portaki-sdk {resolved}"));
-            // Hérité, le changement est à la racine : un `git diff` lancé depuis le module ne
-            // montrerait que son propre manifeste, pas ceux des autres membres.
+            // When inherited, the change is at the root: a `git diff` run from the module would
+            // only show its own manifest, not those of the other members.
             let review = if declaration.workspace_wide {
                 format!("git -C {} diff", metadata.workspace_root.display())
             } else {
@@ -803,27 +805,27 @@ async fn run_upgrade(args: &UpgradeArgs) -> Result<()> {
     }
 }
 
-/// Pourquoi la sandbox n'est pas touchée, ou `None` pour comparer les rendus.
+/// Why the sandbox is left untouched, or `None` to compare the renders.
 ///
-/// `--dry-run` n'y déploie rien et n'en prend pas le bail : un essai qui écrase la sandbox de
-/// quelqu'un d'autre n'est pas un essai.
+/// `--dry-run` deploys nothing there and takes no lease on it: a trial run that overwrites
+/// someone else's sandbox is not a trial run.
 fn no_sandbox(args: &UpgradeArgs, from_repository_root: bool) -> Option<&'static str> {
     if args.dry_run {
         Some("render comparison skipped (--dry-run) — the sandbox is left untouched")
     } else if args.no_render {
         Some("render comparison skipped (--no-render)")
     } else if from_repository_root {
-        // Une session de sandbox vise un module : depuis la racine, aucun ne s'impose.
+        // A sandbox session targets one module: from the root, none of them stands out.
         Some("render comparison skipped — run from a module directory to compare its renders")
     } else {
         None
     }
 }
 
-/// Le module d'où partir, et si l'on est à la racine d'un monorepo.
+/// The module to start from, and whether we are at the root of a monorepo.
 ///
-/// Depuis la racine, le premier module fait l'affaire : la version y est héritée du workspace,
-/// donc c'est la même pour tous, et c'est tout ce que ce module sert à trouver.
+/// From the root, the first module will do: the version there is inherited from the workspace, so
+/// it is the same for everyone, and that is all this module is there to find.
 fn anchor(cwd: &Path) -> Result<(PathBuf, bool)> {
     if crate::manifest::source::is_module(cwd) {
         return Ok((cwd.to_path_buf(), false));
@@ -837,8 +839,8 @@ fn anchor(cwd: &Path) -> Result<(PathBuf, bool)> {
     }
 }
 
-/// Les modules à assembler et linter : tous ceux du dépôt quand la version est héritée du
-/// workspace, le seul module sinon.
+/// The modules to build and lint: every module of the repository when the version is inherited
+/// from the workspace, the single module otherwise.
 fn verified_members(
     declaration: &Declaration,
     workspace_root: &Path,
@@ -860,7 +862,7 @@ fn verified_members(
     }
 }
 
-/// « weather » ou « 21 modules » — la phrase dit combien ont bougé.
+/// "weather" or "21 modules" — the sentence says how many moved.
 fn subject(module_id: &str, count: usize) -> String {
     if count > 1 {
         format!("{count} modules")
@@ -869,8 +871,8 @@ fn subject(module_id: &str, count: usize) -> String {
     }
 }
 
-/// Les `portaki.module.json` que la montée concerne : ceux de tous les membres quand la version
-/// vient du workspace, celui du module sinon.
+/// The `portaki.module.json` files the upgrade concerns: every member's when the version comes
+/// from the workspace, the module's own otherwise.
 fn module_manifests(
     metadata: &Metadata,
     declaration: &Declaration,
@@ -893,9 +895,9 @@ fn module_manifests(
         .collect()
 }
 
-/// Remplace la valeur de `requiresModuleSdk` sans toucher au reste du fichier — relu et
-/// réécrit par serde, un manifeste perdrait son ordre et sa mise en forme dans le diff.
-/// `None` quand le champ n'y est pas : le build l'inscrit alors lui-même.
+/// Replaces the value of `requiresModuleSdk` without touching the rest of the file — read back
+/// and rewritten by serde, a manifest would lose its ordering and its formatting in the diff.
+/// `None` when the field is not there: the build then writes it itself.
 pub fn set_required_sdk(raw: &str, version: &str) -> Option<String> {
     const KEY: &str = "\"requiresModuleSdk\"";
     let after_key = raw.find(KEY)? + KEY.len();
@@ -922,8 +924,8 @@ async fn take_baseline(sandbox: &mut Sandbox, module_root: &Path) -> Result<Base
     })
 }
 
-// Chaque argument est une décision déjà prise par l'appelant (déclaration, membres, sandbox) :
-// les regrouper ne ferait que déplacer la liste dans une structure lue à un seul endroit.
+// Every argument is a decision the caller has already taken (declaration, members, sandbox):
+// grouping them would only move the list into a struct read in a single place.
 #[allow(clippy::too_many_arguments)]
 async fn upgrade_and_verify(
     args: &UpgradeArgs,
@@ -960,7 +962,7 @@ async fn upgrade_and_verify(
         format!("{} → {target} in {touched} Cargo.toml", changed.join(", ")),
     );
 
-    // Seulement les crates que le graphe résout : `cargo update -p` refuse un nom inconnu.
+    // Only the crates the graph resolves: `cargo update -p` refuses an unknown name.
     let resolved: Vec<&str> = SDK_FAMILY
         .into_iter()
         .filter(|name| {
@@ -987,8 +989,8 @@ async fn upgrade_and_verify(
         ui::warn(note);
     }
 
-    // Le build refuse un manifeste qui annonce une autre version que celle liée : sans ceci,
-    // toute montée échouait au premier module, avec pour seul conseil d'éditer vingt fichiers.
+    // The build refuses a manifest announcing a version other than the one linked: without this,
+    // every upgrade failed on the first module, with no advice but to edit twenty files.
     let mut aligned = 0;
     for path in &module_manifests(metadata, declaration, module_root) {
         let raw =
@@ -1024,14 +1026,14 @@ async fn upgrade_and_verify(
     )?;
     let test: Vec<&str> = ["test"].into_iter().chain(scope.iter().copied()).collect();
     cargo(module_root, "running the tests", &test)?;
-    // Sorties et lint pour chaque module qui a bougé, pas seulement celui d'où l'on part : sinon
-    // la sortie ne nommait que lui, et l'on croyait qu'il avait monté seul.
+    // Outputs and lint for every module that moved, not only the one we start from: otherwise
+    // the output named only it, and one believed it had moved on its own.
     for member in members {
         if members.len() > 1 {
             ui::rule(&member.id);
         }
-        // Les émissions sont là où le build du workspace a écrit — pas forcément sous le
-        // `target/` du membre, qu'un `.cargo/config.toml` peut fixer ailleurs.
+        // The emissions are where the workspace build wrote them — not necessarily under the
+        // member's `target/`, which a `.cargo/config.toml` can point elsewhere.
         crate::commands::build::refresh_outputs_from(&member.root, &metadata.target_directory)?;
         workspace::enter(member)?;
         crate::commands::lint::run(crate::commands::lint::LintArgs {
@@ -1116,8 +1118,8 @@ mod tests {
         dir
     }
 
-    /// Depuis la racine d'un monorepo, un module sert d'ancre : la version héritée est la même
-    /// pour tous.
+    /// From the root of a monorepo, one module serves as the anchor: the inherited version is
+    /// the same for everyone.
     #[test]
     fn the_repository_root_anchors_on_a_module() {
         let repo = monorepo(&["weather", "nuki"]);
@@ -1132,7 +1134,7 @@ mod tests {
         assert!(anchor(tempfile::tempdir().unwrap().path()).is_err());
     }
 
-    /// Hérité du workspace, tous les modules sont vérifiés — pas seulement celui d'où l'on part.
+    /// Inherited from the workspace, every module is verified — not only the one we start from.
     #[test]
     fn an_inherited_sdk_verifies_every_module() {
         let repo = monorepo(&["weather", "nuki", "wifi-guest"]);
@@ -1250,7 +1252,7 @@ mod tests {
         assert_eq!(changed, vec!["portaki-sdk"]);
     }
 
-    /// Hors workspace, ou sans épinglage à la racine, un module ne fait monter que lui-même.
+    /// Outside a workspace, or without a pin at the root, a module moves only itself.
     #[test]
     fn a_root_without_the_family_leaves_the_module_alone() {
         let root =
@@ -1336,7 +1338,7 @@ mod tests {
         assert_eq!(resolution_note("3.1.0", "3.1.0"), None);
     }
 
-    /// `--dry-run` ne déploie rien et ne prend pas le bail `dev-watch`.
+    /// `--dry-run` deploys nothing and does not take the `dev-watch` lease.
     #[test]
     fn a_dry_run_leaves_the_sandbox_alone() {
         let args = |flags: &[&str]| {

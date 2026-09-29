@@ -1,11 +1,11 @@
-//! `portaki run`, `portaki scenarios`, `portaki preview` — la page Sandbox de l'espace
-//! développeur, dans le terminal.
+//! `portaki run`, `portaki scenarios`, `portaki preview` — the developer space's Sandbox page,
+//! in the terminal.
 //!
-//! Toutes trois agissent sur le dernier build que `portaki dev` a poussé, par les routes que
-//! l'espace développeur appelle déjà : `POST /dev/v1/modules/{id}/dispatch`,
+//! All three act on the last build `portaki dev` pushed, through the routes the developer space
+//! already calls: `POST /dev/v1/modules/{id}/dispatch`,
 //! `GET|POST /dev/v1/modules/{id}/scenarios[/run]`, `POST /dev/v1/sandbox/fixtures/reset`,
-//! `GET /dev/v1/modules/{id}/surfaces` et `POST …/surfaces/{surface}/render`. Aucune ne compile
-//! ni ne déploie : c'est `portaki dev` qui le fait.
+//! `GET /dev/v1/modules/{id}/surfaces` and `POST …/surfaces/{surface}/render`. None of them
+//! compiles and none of them deploys: `portaki dev` is what does that.
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -17,8 +17,8 @@ use crate::commands::dev::{self, DispatchResponse, ScenarioCell};
 use crate::ui;
 use crate::workspace::ModuleArgs;
 
-/// Ce que devient un build de sandbox hors d'elle : rien. Dit à chaque rendu, parce qu'un aperçu
-/// réussi ressemble à s'y méprendre à une version prête.
+/// What a sandbox build amounts to outside the sandbox: nothing. Said on every render, because a
+/// preview that worked looks exactly like a version that is ready.
 pub fn sandbox_only() -> String {
     crate::tr!(
         "sandbox build, unsigned — it will never run in production; portaki release publishes a signed version",
@@ -196,8 +196,8 @@ pub async fn run(args: RunArgs) -> Result<()> {
     }
 }
 
-/// `command` quand le manifeste range l'opération parmi les commandes, `query` sinon — le défaut
-/// de la plateforme.
+/// `command` when the manifest files the operation under the commands, `query` otherwise — the
+/// platform's default.
 fn kind_of(module_root: &std::path::Path, operation: &str) -> String {
     let command = crate::manifest::load_manifest(module_root, None)
         .map(|(manifest, _)| manifest.commands.iter().any(|c| c.name == operation))
@@ -205,7 +205,7 @@ fn kind_of(module_root: &std::path::Path, operation: &str) -> String {
     if command { "command" } else { "query" }.to_string()
 }
 
-/// `--module <id>` à reporter dans la commande suivante, quand il a été donné.
+/// `--module <id>` to carry over into the next command, when it was given.
 fn flag(modules: &ModuleArgs) -> String {
     modules
         .module
@@ -349,8 +349,8 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
             ))
         })?;
     }
-    // Avant le rendu, sur stderr : un script qui lit `--json` n'en est pas gêné, et personne ne
-    // prend un aperçu réussi pour une version prête.
+    // Before the render, on stderr: a script reading `--json` is not bothered by it, and nobody
+    // takes a preview that worked for a version that is ready.
     ui::warn(sandbox_only());
     let rendering = ui::step(crate::tr!("rendering {surface}", "rendu de {surface}"));
     let body = json!({
@@ -414,7 +414,7 @@ pub async fn preview(args: PreviewArgs) -> Result<()> {
     }
 }
 
-/// Les surfaces que le build déclare, et comment en rendre une.
+/// The surfaces the build declares, and how to render one.
 async fn surfaces(platform: &mut Platform, id: &str, modules: &ModuleArgs) -> Result<()> {
     let declared = platform
         .get(&format!("/dev/v1/modules/{id}/surfaces"))

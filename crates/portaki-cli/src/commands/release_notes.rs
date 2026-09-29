@@ -1,9 +1,9 @@
-//! `portaki release status <v>` et `portaki release notes <v>` — une version publiée, telle que
-//! la page Versions de l'espace développeur la montre, et le tiroir « Compléter la version ».
+//! `portaki release status <v>` and `portaki release notes <v>` — a published version, as the
+//! developer space's Versions page shows it, and as its « Compléter la version » drawer does.
 //!
-//! Routes : `GET /dev/v1/modules/{id}/versions` pour trouver le digest de la version, puis
-//! `GET|PUT /dev/v1/publications/{digest}/release`. Le registre revalide tout au `PUT` : ce qui
-//! manque encore revient en 409, rien n'est écrit.
+//! Routes: `GET /dev/v1/modules/{id}/versions` to find the version's digest, then
+//! `GET|PUT /dev/v1/publications/{digest}/release`. The registry revalidates everything on the
+//! `PUT`: whatever is still missing comes back as a 409, and nothing is written.
 
 use std::collections::BTreeMap;
 
@@ -180,7 +180,8 @@ async fn notes(args: NotesArgs) -> Result<()> {
             }
             409 => {
                 sending.abandon();
-                // Refusé sans rien écrire : ce qui manque est dans le refus, à dire tel quel.
+                // Refused without writing anything: what is missing is in the refusal, to be
+                // passed on as it stands.
                 print_missing(&answer["missing"]);
                 anyhow::bail!(crate::tr!(
                     "the registry kept {} as a draft — {}",
@@ -287,7 +288,7 @@ fn text(value: &Value) -> String {
     value.as_str().unwrap_or_default().to_string()
 }
 
-/// L'entrée de la liste des versions, et sa page de release.
+/// The entry in the list of versions, and its release page.
 async fn find(
     platform: &mut Platform,
     id: &str,
@@ -312,7 +313,7 @@ async fn find(
     Ok((entry, release))
 }
 
-/// La version demandée ; la stable d'abord quand elle existe sur les deux canaux.
+/// The requested version; the stable one first when it exists on both channels.
 fn pick(versions: &Value, version: &str, channel: Option<&str>) -> Option<Value> {
     let matching: Vec<&Value> = versions
         .as_array()?
@@ -327,8 +328,8 @@ fn pick(versions: &Value, version: &str, channel: Option<&str>) -> Option<Value>
         .map(|entry| (*entry).clone())
 }
 
-/// Les notes à envoyer : celles du registre, complétées de ce que disent les drapeaux et les
-/// `CHANGELOG*.md` de la version.
+/// The notes to send: the registry's, completed with what the flags and the version's
+/// `CHANGELOG*.md` files say.
 fn merged_notes(current: &Value, args: &NotesArgs, module_root: &std::path::Path) -> Result<Value> {
     let lang = changelog::default_lang(module_root);
     let extra = changelog::release_notes(
@@ -346,7 +347,7 @@ fn merged_notes(current: &Value, args: &NotesArgs, module_root: &std::path::Path
                 .push(text.as_str().unwrap_or_default().to_string());
         }
     }
-    // Une langue que `--notes` ou un fichier dit est remplacée entière ; les autres restent.
+    // A language given by `--notes` or by a file is replaced whole; the others stay put.
     let mut fresh: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for line in changelog::lines(&args.notes, &lang, module_root, &args.version)? {
         for (lang, text) in line {
@@ -393,7 +394,7 @@ fn merged_notes(current: &Value, args: &NotesArgs, module_root: &std::path::Path
     }))
 }
 
-/// Ce qui manque, avec les mots de l'espace développeur.
+/// What is missing, in the developer space's own words.
 fn print_missing(missing: &Value) {
     let items = missing.as_array().cloned().unwrap_or_default();
     if items.is_empty() {
@@ -452,8 +453,8 @@ fn signature_line(chain: &Value) -> String {
     }
 }
 
-/// La commande suivante pour cette version.
-/// La commande suivante, la raison en anglais (celle de `--json`) et en français.
+/// The next command for this version.
+/// The next command, the reason in English (the one `--json` carries) and in French.
 fn next_for(
     release: &Value,
     version: &str,
@@ -528,7 +529,8 @@ mod tests {
         assert!(pick(&versions, "2.0.0", None).is_none());
     }
 
-    /// Une langue que `--notes` dit est remplacée ; celle qu'il ne dit pas reste celle du registre.
+    /// A language given by `--notes` is replaced; one it does not give stays as the registry has
+    /// it.
     #[test]
     fn completing_replaces_only_the_languages_given() {
         let dir = tempfile::tempdir().unwrap();

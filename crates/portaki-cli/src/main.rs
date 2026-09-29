@@ -61,8 +61,8 @@ use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
-/// L'aide de `clap` peinte comme le reste de la sortie : un seul vocabulaire visuel, que la
-/// ligne vienne de `--help` ou d'une commande.
+/// `clap`'s help painted like the rest of the output: a single visual vocabulary, whether a
+/// line comes from `--help` or from a command.
 const HELP_STYLES: Styles = Styles::styled()
     .header(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
     .usage(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
@@ -174,7 +174,7 @@ enum Command {
     Inspect(commands::inspect::InspectArgs),
 }
 
-/// `release` publie ; `release status <v>` et `release notes <v>` lisent une version publiée.
+/// `release` publishes; `release status <v>` and `release notes <v>` read a published version.
 #[derive(Debug, clap::Args)]
 #[command(args_conflicts_with_subcommands = true)]
 struct ReleaseCommand {
@@ -194,8 +194,8 @@ async fn main() {
     ui::init(cli.no_color, cli.verbose, cli.plain);
     ui::set_json(cli.json);
 
-    // L'échec est rendu ici, une fois, au lieu du `Debug` que `main() -> Result` imprime : la
-    // chaîne des causes se lit, et la sortie d'erreur ressemble au reste de la CLI.
+    // The failure is rendered here, once, instead of the `Debug` that `main() -> Result` prints:
+    // the chain of causes reads, and the error output looks like the rest of the CLI.
     let ran = match profile::select(cli.api.as_deref(), cli.env.as_deref()) {
         Ok(()) => dispatch(cli.command).await,
         Err(failure) => Err(failure),
@@ -205,17 +205,18 @@ async fn main() {
         std::process::exit(exit::code(&failure));
     }
 
-    // Après la commande, jamais avant : l'avis ne retarde rien de ce qu'on attendait, et
-    // n'éloigne pas du regard la ligne qu'on est venu lire.
+    // After the command, never before: the notice delays nothing of what was being waited for,
+    // and does not push the line one came to read out of sight.
     update::notify().await;
     std::process::exit(exit::success_code());
 }
 
-/// Analyse les arguments, en habillant l'aide et `--version` de ce que `clap` ne sait pas seul.
+/// Parses the arguments, dressing the help and `--version` in what `clap` does not know on its
+/// own.
 ///
-/// `clap` rend ces deux écrans pendant l'analyse, donc avant qu'on ait lu le moindre argument :
-/// `--no-color` est cherché à la main d'abord, sans quoi un logo en couleurs partirait dans un
-/// fichier de sortie qu'on avait justement demandé nu.
+/// `clap` renders those two screens during parsing, hence before a single argument has been read:
+/// `--no-color` is looked for by hand first, without which a coloured logo would land in an
+/// output file that had been asked for bare precisely to avoid that.
 fn parse() -> Cli {
     let raw: Vec<String> = std::env::args().collect();
     let bare = raw
@@ -224,11 +225,11 @@ fn parse() -> Cli {
     ui::set_plain(bare);
     ui::set_colors(!bare && !raw.iter().any(|argument| argument == "--no-color"));
 
-    // Le logo et le pied de licence sont ce que `--plain` retire en premier : une aide lue par
-    // un script n'a que faire d'une signature de six lignes.
+    // The logo and the licence footer are the first things `--plain` takes away: help read by a
+    // script has no use for a six-line signature.
     let mut command = Cli::command().long_version(
-        // `clap` veut une chaîne qui vit aussi longtemps que le programme ; celle-ci est
-        // construite une fois, au démarrage, et l'écran de version en est le seul lecteur.
+        // `clap` wants a string that lives as long as the program; this one is built once, at
+        // startup, and the version screen is its only reader.
         Box::leak(ui::long_version().into_boxed_str()) as &'static str,
     );
     if !bare {
@@ -247,18 +248,18 @@ fn parse() -> Cli {
     Cli::from_arg_matches(&matches).unwrap_or_else(|failure| failure.exit())
 }
 
-/// Rend le refus de `clap` comme le reste de la CLI, et dit où chercher.
+/// Renders `clap`'s refusal like the rest of the CLI, and says where to look.
 ///
-/// « a value is required for '--dispatch <DISPATCH>' » est exact et n'aide pas : il manque ce
-/// qu'on aurait pu écrire. Quand le refus porte sur la commande elle-même, la liste des
-/// commandes suit — c'est la seule réponse à « laquelle ? ».
+/// "a value is required for '--dispatch <DISPATCH>'" is exact and does not help: what one could
+/// have written is missing from it. When the refusal is about the command itself, the list of
+/// commands follows — it is the only answer to "which one?".
 fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     use clap::error::ErrorKind;
 
-    // `--help` et `--version` ne sont pas des échecs : `clap` les rend lui-même et sort en 0.
+    // `--help` and `--version` are not failures: `clap` renders them itself and exits with 0.
     if is_a_screen(refusal.kind()) {
-        // `clap` rogne l'espace en tête de `before_help` : la ligne qui décolle le logo de
-        // l'invite se pose donc ici, sur le flux que `clap` s'apprête à écrire.
+        // `clap` trims the whitespace at the head of `before_help`: the line that lifts the
+        // logo off the prompt is therefore put here, on the stream `clap` is about to write to.
         if wants_room() && !ui::plain() {
             if refusal.use_stderr() {
                 eprintln!();
@@ -276,14 +277,14 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     ui::blank();
     let (headline, precisions) = refusal_lines(&rendered);
     ui::failure(headline);
-    // « the following required arguments were not provided: » sans la liste qui suit ne dit
-    // rien. Le paragraphe entier part, pas sa première ligne.
+    // "the following required arguments were not provided:" without the list that follows says
+    // nothing. The whole paragraph goes out, not just its first line.
     for precision in precisions {
         ui::detail(precision);
     }
 
-    // `clap` sait souvent proposer le nom qu'on visait ; le perdre serait retirer la seule
-    // chose vraiment utile de son message.
+    // `clap` can often suggest the name that was aimed at; losing it would mean taking the one
+    // really useful thing out of its message.
     for tip in rendered
         .lines()
         .filter_map(|line| line.trim().strip_prefix("tip: "))
@@ -291,14 +292,14 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
         ui::detail(tip);
     }
 
-    // La liste des commandes ne répond qu'à « laquelle ? ». Sur un flag inconnu, on est déjà
-    // dans une commande : la dérouler entière serait du bruit devant la vraie question.
+    // The list of commands only answers "which one?". On an unknown flag, one is already inside
+    // a command: unrolling the whole of it would be noise in front of the real question.
     if matches!(
         refusal.kind(),
         ErrorKind::InvalidSubcommand | ErrorKind::MissingSubcommand
     ) {
-        // `get_about` rend un `StyledStr` : il faut le matérialiser avant d'en prêter des
-        // tranches à la liste.
+        // `get_about` returns a `StyledStr`: it has to be materialised before slices of it can
+        // be lent to the list.
         let arguments: Vec<String> = std::env::args().skip(1).collect();
         let (_, reached) = descend(command, &arguments);
         let commands: Vec<(String, String)> = reached
@@ -333,12 +334,12 @@ fn refuse(refusal: clap::Error, command: &clap::Command) -> ! {
     std::process::exit(2);
 }
 
-/// `clap` rend-il un écran plutôt qu'un refus ?
+/// Is `clap` rendering a screen rather than a refusal?
 ///
-/// Classé sur le type, et non sur le flux de sortie : `portaki` nu lève
-/// `DisplayHelpOnMissingArgumentOrSubcommand`, que `clap` écrit sur stderr. Pris pour un refus,
-/// son aide passait dans [`headline`], qui en retenait la première ligne — le logo — et
-/// l'affichait derrière une croix.
+/// Classified on the kind, and not on the output stream: bare `portaki` raises
+/// `DisplayHelpOnMissingArgumentOrSubcommand`, which `clap` writes to stderr. Taken for a
+/// refusal, its help went through [`headline`], which kept its first line — the logo — and
+/// displayed it behind a cross.
 fn is_a_screen(kind: clap::error::ErrorKind) -> bool {
     use clap::error::ErrorKind;
     matches!(
@@ -349,28 +350,28 @@ fn is_a_screen(kind: clap::error::ErrorKind) -> bool {
     )
 }
 
-/// Cet écran mérite-t-il qu'on l'aère ?
+/// Does this screen deserve some air?
 ///
-/// Tous sauf `-V` : sa sortie tient en une ligne que des scripts lisent, et une ligne vide
-/// devant ferait rendre un vide à `portaki -V | head -1`. `--version` est la forme longue,
-/// destinée à un lecteur.
+/// All of them except `-V`: its output fits on one line that scripts read, and a blank line in
+/// front of it would make `portaki -V | head -1` return an empty one. `--version` is the long
+/// form, meant for a reader.
 fn wants_room() -> bool {
     room_for(std::env::args().skip(1))
 }
 
-/// La décision seule, séparée de l'environnement pour être vérifiable.
+/// The decision alone, separated from the environment so that it can be checked.
 fn room_for(mut arguments: impl Iterator<Item = String>) -> bool {
     !arguments.any(|argument| argument == "-V")
 }
 
-/// Le refus, coupé en ce qui l'annonce et ce qui le précise.
+/// The refusal, cut into what announces it and what spells it out.
 ///
-/// `clap` rend un paragraphe, puis une ligne vide, puis l'usage et un renvoi à l'aide — que
-/// cette CLI redit elle-même. Ne garder que la première ligne perdait la seule information
-/// utile : « the following required arguments were not provided: » ne nomme pas l'argument,
-/// ce sont les lignes suivantes qui le font.
+/// `clap` renders a paragraph, then a blank line, then the usage and a pointer to the help —
+/// which this CLI says again itself. Keeping only the first line lost the one useful piece of
+/// information: "the following required arguments were not provided:" does not name the
+/// argument, it is the lines that follow that do.
 ///
-/// Le « error: » que `clap` préfixe part avec : la croix le dit déjà.
+/// The "error: " that `clap` prefixes goes with it: the cross says so already.
 fn refusal_lines(rendered: &str) -> (String, Vec<String>) {
     let mut paragraph = rendered
         .lines()
@@ -385,32 +386,32 @@ fn refusal_lines(rendered: &str) -> (String, Vec<String>) {
     (headline, paragraph.collect())
 }
 
-/// La sous-commande que la ligne de commande nommait, aussi profond qu'elle aille.
+/// The subcommand the command line named, however deep it goes.
 ///
-/// Lue des arguments bruts : le refus est arrivé avant qu'aucune analyse n'aboutisse, il n'y a
-/// donc rien d'autre à interroger.
+/// Read off the raw arguments: the refusal came before any parsing went through, so there is
+/// nothing else to ask.
 ///
-/// En descendant l'arbre, et non en s'arrêtant au premier niveau : `portaki ci report`
-/// renvoyait à `portaki ci --help`, qui ne dit rien des drapeaux de `report` — la page
-/// manquée était justement celle qu'on venait chercher.
+/// By walking down the tree, and not by stopping at the first level: `portaki ci report` used to
+/// point at `portaki ci --help`, which says nothing about `report`'s flags — the page that was
+/// missed was precisely the one being looked for.
 fn invoked_command(command: &clap::Command) -> Option<String> {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     let (path, _) = descend(command, &arguments);
     (!path.is_empty()).then(|| path.join(" "))
 }
 
-/// Le chemin parcouru et la commande atteinte.
+/// The path walked and the command reached.
 ///
-/// Séparé des arguments du processus pour être vérifiable, et rendant les deux parce que les
-/// deux servent : le chemin nomme la page d'aide, la commande atteinte porte les
-/// sous-commandes à proposer. `portaki ci nope` déroulait les commandes racines, qui ne
-/// répondent pas à la question posée.
+/// Separated from the process's arguments so that it can be checked, and returning both because
+/// both are used: the path names the help page, the command reached carries the subcommands to
+/// suggest. `portaki ci nope` used to unroll the root commands, which do not answer the question
+/// being asked.
 fn descend<'a>(root: &'a clap::Command, arguments: &[String]) -> (Vec<String>, &'a clap::Command) {
     let mut node = root;
     let mut path = Vec::new();
     for argument in arguments {
-        // Un argument qui n'est pas une sous-commande n'interrompt pas la descente : les
-        // drapeaux globaux peuvent précéder la commande.
+        // An argument that is not a subcommand does not interrupt the descent: global flags may
+        // come before the command.
         if let Some(next) = node
             .get_subcommands()
             .find(|sub| sub.get_name() == argument.as_str())
@@ -466,7 +467,7 @@ async fn dispatch(command: Command) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// La croix dit déjà que c'est un échec ; « error: » une seconde fois serait du bégaiement.
+    /// The cross already says it is a failure; "error: " a second time would be a stutter.
     #[test]
     fn the_headline_drops_the_prefix_clap_adds() {
         let (headline, _) = refusal_lines("error: unrecognized subcommand 'buidl'\n\n  tip: ...");
@@ -474,8 +475,8 @@ mod tests {
         assert_eq!(headline, "unrecognized subcommand 'buidl'");
     }
 
-    /// « the following required arguments were not provided: » ne nomme pas l'argument : ce
-    /// sont les lignes suivantes qui le font, et les perdre laissait un refus qui ne dit rien.
+    /// "the following required arguments were not provided:" does not name the argument: it is
+    /// the lines that follow that do, and losing them left a refusal that says nothing.
     #[test]
     fn the_precisions_that_name_the_argument_survive() {
         let rendered = concat!(
@@ -496,8 +497,8 @@ mod tests {
         assert_eq!(precisions, vec!["--outcome <OUTCOME>"]);
     }
 
-    /// L'usage et le renvoi à l'aide sont après la ligne vide : cette CLI les redit elle-même,
-    /// les recopier ferait doublon.
+    /// The usage and the pointer to the help come after the blank line: this CLI says them
+    /// again itself, so copying them out would duplicate them.
     #[test]
     fn what_follows_the_blank_line_is_left_to_clap() {
         let (_, precisions) = refusal_lines("error: nope\n\nUsage: portaki\n");
@@ -505,8 +506,8 @@ mod tests {
         assert!(precisions.is_empty());
     }
 
-    /// `portaki ci report` renvoyait à `portaki ci --help`, qui ne dit rien des drapeaux de
-    /// `report` — la page manquée était justement celle qu'on venait chercher.
+    /// `portaki ci report` used to point at `portaki ci --help`, which says nothing about
+    /// `report`'s flags — the page that was missed was precisely the one being looked for.
     #[test]
     fn the_help_pointer_reaches_the_deepest_command() {
         let root = Cli::command();
@@ -516,12 +517,12 @@ mod tests {
         assert_eq!(path, vec!["ci", "report"]);
         assert_eq!(reached.get_name(), "report");
 
-        // Les drapeaux globaux peuvent précéder la commande sans interrompre la descente.
+        // Global flags may come before the command without interrupting the descent.
         let (path, _) = descend(&root, &args(&["--plain", "ci", "modules"]));
         assert_eq!(path, vec!["ci", "modules"]);
 
-        // Une sous-commande inconnue laisse le noeud atteint sur son parent : ce sont ses
-        // sous-commandes qu'il faut proposer, pas celles de la racine.
+        // An unknown subcommand leaves the node reached on its parent: it is the parent's
+        // subcommands that should be suggested, not the root's.
         let (path, reached) = descend(&root, &args(&["ci", "nope"]));
         assert_eq!(path, vec!["ci"]);
         assert_eq!(reached.get_name(), "ci");
@@ -538,7 +539,8 @@ mod tests {
             .into_iter()
     }
 
-    /// `-V` tient en une ligne que des scripts lisent : une ligne vide devant la rendrait vide.
+    /// `-V` fits on one line that scripts read: a blank line in front would make it come back
+    /// empty.
     #[test]
     fn the_short_version_stays_a_single_parseable_line() {
         assert!(!room_for(args(&["-V"])));
@@ -547,7 +549,7 @@ mod tests {
         assert!(room_for(args(&[])));
     }
 
-    /// `portaki` nu doit ouvrir l'aide, pas une croix suivie du logo.
+    /// Bare `portaki` must open the help, not a cross followed by the logo.
     #[test]
     fn a_help_screen_is_never_taken_for_a_refusal() {
         use clap::error::ErrorKind;
@@ -561,7 +563,7 @@ mod tests {
         assert!(!is_a_screen(ErrorKind::UnknownArgument));
     }
 
-    /// L'aide dit ce que la commande fait : pas de Scaleway, pas de passerelle locale.
+    /// The help says what the command does: no Scaleway, no local gateway.
     #[test]
     fn the_help_describes_what_the_commands_do() {
         let root = Cli::command();
@@ -577,13 +579,13 @@ mod tests {
         assert!(!about("inspect").contains("OCI artifact"));
     }
 
-    /// Deux arguments du même nom, un groupe en double : `clap` ne le dit qu'à l'exécution.
+    /// Two arguments with the same name, a duplicated group: `clap` only says so at runtime.
     #[test]
     fn the_command_tree_is_valid() {
         Cli::command().debug_assert();
     }
 
-    /// Un refus dont on ne saurait rien dire reste un refus : la sortie ne doit pas être vide.
+    /// A refusal nothing could be said about is still a refusal: the output must not be empty.
     #[test]
     fn an_unreadable_refusal_still_says_something() {
         let (headline, precisions) = refusal_lines("   \n\n");
