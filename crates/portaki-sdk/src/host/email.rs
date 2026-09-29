@@ -975,8 +975,8 @@ impl LocalizedEmailText {
         max: usize,
     ) -> std::result::Result<(), EmailError> {
         for (locale, text) in self.entries() {
-            // En caractères, pas en octets : la plateforme compte ainsi, et un texte accentué
-            // ne doit pas atteindre le plafond avant son équivalent ASCII.
+            // In characters, not in bytes: that is how the platform counts, and a text with
+            // accents must not hit the cap before its ASCII equivalent does.
             let actual = text.chars().count();
             if actual > max {
                 return Err(EmailError::FieldTooLong {
@@ -1093,8 +1093,8 @@ pub fn send(args: &SendEmailArgs) -> Result<()> {
         .ok()
         .and_then(|ctx| args.invocation_stay_checkout(&ctx))
     {
-        // L'horloge n'est demandée à l'hôte que si la règle peut s'appliquer. Un backend sans
-        // horloge (mock minimal) ne bloque pas l'envoi : la plateforme refuse de toute façon.
+        // The clock is only asked of the host when the rule can apply. A backend without a
+        // clock (a minimal mock) does not block the send: the platform refuses anyway.
         if let Ok(now) = crate::host::time::now() {
             if checkout + Duration::days(limits::GUEST_EMAIL_DAYS_AFTER_CHECKOUT) < now {
                 return Err(EmailError::StayEnded.into());

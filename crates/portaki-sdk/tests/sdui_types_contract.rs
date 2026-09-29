@@ -1,14 +1,14 @@
-//! Dérive `contracts/sdui_types.json` depuis le Rust, et le fige.
+//! Derives `contracts/sdui_types.json` from the Rust, and freezes it.
 //!
-//! `sdui_primitives.json` nomme les types de ses champs — `"action": "Action"` — sans jamais les
-//! décrire. Un consommateur du contrat peut donc afficher un primitif mais pas éditer une `Action`
-//! autrement qu'en JSON brut : il ignore ses variantes. Ce document comble ce trou.
+//! `sdui_primitives.json` names the types of its fields — `"action": "Action"` — without ever
+//! describing them. A consumer of the contract can therefore render a primitive but cannot edit an
+//! `Action` other than as raw JSON: it does not know its variants. This document fills that gap.
 //!
-//! Il est **dérivé, pas écrit** : les définitions vivent dans `sdui/common.rs` et `sdui/action.rs`,
-//! et c'est de là qu'on les lit. Une copie tenue à la main aurait dérivé — le dashboard l'a déjà
-//! payé sur ses six champs communs.
+//! It is **derived, not written**: the definitions live in `sdui/common.rs` and `sdui/action.rs`,
+//! and that is where they are read from. A copy kept by hand would have drifted — the dashboard
+//! has already paid for that on its six common fields.
 //!
-//! Regénérer après avoir touché un type : `BLESS=1 cargo test -p portaki-sdk --test
+//! Regenerate after touching a type: `BLESS=1 cargo test -p portaki-sdk --test
 //! sdui_types_contract`.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,13 +18,13 @@ use std::path::PathBuf;
 use serde_json::{json, Map, Value};
 use syn::{Attribute, Expr, Fields, Item, Lit, Type};
 
-/// Les fichiers où vivent les types nommés par le contrat.
+/// The files where the types the contract names live.
 const SOURCES: [&str; 2] = ["src/sdui/common.rs", "src/sdui/action.rs"];
 
-/// Ce que `build.rs` pose sur chaque primitive sans que le contrat le dise.
+/// What `build.rs` puts on every primitive without the contract saying so.
 ///
-/// Leur type est référencé par tous les primitifs et par aucun champ déclaré : sans cette racine,
-/// la fermeture transitive les manquerait et un consommateur n'aurait pas de quoi éditer `tone`.
+/// Their type is referenced by every primitive and by no declared field: without this root, the
+/// transitive closure would miss them and a consumer would have nothing to edit `tone` with.
 const COMMON_FIELD_TYPES: [&str; 5] = [
     "Tone",
     "Emphasis",
@@ -33,7 +33,7 @@ const COMMON_FIELD_TYPES: [&str; 5] = [
     "Visibility",
 ];
 
-/// Les types que le contrat traite comme des scalaires : ils n'ont rien à décrire.
+/// The types the contract treats as scalars: they have nothing to describe.
 fn is_scalar(ty: &str) -> bool {
     matches!(
         ty,
@@ -45,19 +45,19 @@ fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-// ── Lecture des attributs serde ──────────────────────────────────────────────
+// ── Reading the serde attributes ─────────────────────────────────────────────
 
-/// `#[serde(rename = "…")]` porté par une variante ou un champ.
+/// `#[serde(rename = "…")]` carried by a variant or a field.
 fn serde_rename(attrs: &[Attribute]) -> Option<String> {
     serde_string_attr(attrs, "rename")
 }
 
-/// `#[serde(rename_all = "…")]` porté par le conteneur.
+/// `#[serde(rename_all = "…")]` carried by the container.
 fn serde_rename_all(attrs: &[Attribute]) -> Option<String> {
     serde_string_attr(attrs, "rename_all")
 }
 
-/// `#[serde(tag = "…")]` — une énumération taguée en interne est plate sur le fil.
+/// `#[serde(tag = "…")]` — an internally tagged enum is flat on the wire.
 fn serde_tag(attrs: &[Attribute]) -> Option<String> {
     serde_string_attr(attrs, "tag")
 }
@@ -75,8 +75,8 @@ fn serde_string_attr(attrs: &[Attribute], key: &str) -> Option<String> {
                     }
                 }
             } else {
-                // `alias`, `skip_serializing_if`, `default`… : consommer la valeur éventuelle
-                // pour que l'analyse ne s'arrête pas au premier voisin.
+                // `alias`, `skip_serializing_if`, `default`…: consume the value if there is
+                // one, so that the parse does not stop at the first neighbour.
                 let _ = meta.value().and_then(|v| v.parse::<Expr>());
             }
             Ok(())
@@ -88,11 +88,11 @@ fn serde_string_attr(attrs: &[Attribute], key: &str) -> Option<String> {
     found
 }
 
-/// Vrai quand `#[portaki_sdk_macros::wire]` couvre l'item.
+/// True when `#[portaki_sdk_macros::wire]` covers the item.
 ///
-/// Le macro ajoute `rename_all = "camelCase"` **quand le conteneur n'en porte pas déjà un**. Son
-/// effet est donc invisible dans le source, et l'ignorer donnerait des noms de champs en
-/// `snake_case` que personne n'émet.
+/// The macro adds `rename_all = "camelCase"` **when the container does not already carry one**.
+/// Its effect is therefore invisible in the source, and ignoring it would give `snake_case` field
+/// names that nobody emits.
 fn has_wire(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
         let path = attr.path();
@@ -103,20 +103,20 @@ fn has_wire(attrs: &[Attribute]) -> bool {
     })
 }
 
-/// La convention effective du conteneur, macro comprise.
+/// The container's effective convention, the macro included.
 ///
-/// Sur une énumération, elle nomme les **variantes** — pas les champs de leurs variantes. Cette
-/// distinction est celle de serde, et elle se voit à l'œil nu sur `Action` : la variante s'écrit
-/// `openOverlay`, son champ reste `surface_render`.
+/// On an enum it names the **variants** — not the fields those variants carry. The distinction is
+/// serde's own, and it is plain to see on `Action`: the variant is written `openOverlay`, its
+/// field stays `surface_render`.
 fn effective_rename_all(attrs: &[Attribute]) -> Option<String> {
     serde_rename_all(attrs).or_else(|| has_wire(attrs).then(|| "camelCase".to_string()))
 }
 
-/// La convention des champs **portés par une variante**.
+/// The convention for the fields **carried by a variant**.
 ///
-/// Renommer les variantes ne renomme pas leurs champs : il faut `rename_all_fields` sur
-/// l'énumération, ou `rename_all` sur la variante. Sans l'un des deux, serde écrit l'identifiant
-/// Rust tel quel — et `wire` n'y change rien, puisqu'il ne pose que `rename_all`.
+/// Renaming the variants does not rename their fields: that takes `rename_all_fields` on the enum,
+/// or `rename_all` on the variant. Without one of the two, serde writes the Rust identifier as it
+/// stands — and `wire` changes nothing there, since all it puts on is `rename_all`.
 fn variant_field_rename_all(container: &[Attribute], variant: &[Attribute]) -> Option<String> {
     serde_string_attr(container, "rename_all_fields").or_else(|| serde_rename_all(variant))
 }
@@ -128,7 +128,7 @@ fn apply_case(name: &str, convention: Option<&str>) -> String {
         Some("kebab-case") => to_snake(name).replace('_', "-"),
         Some("SCREAMING_SNAKE_CASE") => to_snake(name).to_uppercase(),
         Some("lowercase") => name.to_lowercase(),
-        // Sans convention, serde écrit l'identifiant tel quel.
+        // With no convention, serde writes the identifier as it stands.
         _ => name.to_string(),
     }
 }
@@ -162,12 +162,12 @@ fn to_camel(name: &str) -> String {
     out
 }
 
-// ── Lecture des types ────────────────────────────────────────────────────────
+// ── Reading the types ────────────────────────────────────────────────────────
 
-/// Le nom du type porté par un champ, `Option` et `Vec` retirés.
+/// The name of the type a field carries, with `Option` and `Vec` stripped off.
 ///
-/// Retourne aussi si le champ est facultatif : c'est ce qui distingue un champ qu'un éditeur peut
-/// omettre d'un champ qu'il doit demander.
+/// Also returns whether the field is optional: that is what tells a field an editor may leave out
+/// apart from a field it has to ask for.
 fn field_type(ty: &Type) -> (String, bool, bool) {
     let rendered = quote_type(ty);
     let (inner, optional) = match strip_wrapper(&rendered, "Option") {
@@ -178,7 +178,7 @@ fn field_type(ty: &Type) -> (String, bool, bool) {
         Some(item) => (item, true),
         None => (inner, false),
     };
-    // `Option<Box<Component>>` : le `Box` se trouve sous l'enveloppe, pas devant elle.
+    // `Option<Box<Component>>`: the `Box` sits under the wrapper, not in front of it.
     let inner = strip_wrapper(&inner, "Box").unwrap_or(inner);
     (inner, optional, repeated)
 }
@@ -191,10 +191,10 @@ fn strip_wrapper(rendered: &str, wrapper: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Le type rendu sans espaces, sans `Box`, et réduit à son dernier segment de chemin.
+/// The type rendered without spaces, without `Box`, and reduced to its last path segment.
 ///
-/// `Box` n'existe que pour donner une taille finie à un primitif qui en contient un autre
-/// (`build.rs` l'ajoute) : il ne dit rien du fil, et le contrat ne le nomme pas.
+/// `Box` exists only to give a finite size to a primitive that holds another one (`build.rs` adds
+/// it): it says nothing about the wire, and the contract does not name it.
 fn quote_type(ty: &Type) -> String {
     use quote::ToTokens;
     let compact: String = ty
@@ -207,7 +207,7 @@ fn quote_type(ty: &Type) -> String {
     last_segment(&unboxed)
 }
 
-/// `crate::sdui::common::Tone` → `Tone`, en laissant intacts les paramètres génériques.
+/// `crate::sdui::common::Tone` → `Tone`, leaving the generic parameters intact.
 fn last_segment(rendered: &str) -> String {
     match rendered.split_once('<') {
         Some((head, tail)) => {
@@ -228,7 +228,7 @@ fn last_segment_tail(tail: &str) -> String {
 #[derive(Default)]
 struct Catalog {
     types: BTreeMap<String, Value>,
-    /// Les types nommés par un champ mais jamais définis — attendus scalaires, sinon c'est un trou.
+    /// The types a field names but that nothing defines — expected to be scalars, otherwise a gap.
     referenced: BTreeSet<String>,
 }
 
@@ -270,9 +270,9 @@ fn read_sources() -> Catalog {
                         .insert(item.ident.to_string(), Value::Object(definition));
                 }
                 Item::Struct(item) => {
-                    // `pub struct VisibilityExpr(pub String);` — serde le sérialise de façon
-                    // transparente, donc sur le fil c'est une chaîne. Le dire évite qu'un
-                    // consommateur cherche une structure qui n'apparaît jamais.
+                    // `pub struct VisibilityExpr(pub String);` — serde serialises it
+                    // transparently, so on the wire it is a string. Saying so keeps a consumer
+                    // from hunting for a structure that never shows up.
                     if let Fields::Unnamed(unnamed) = &item.fields {
                         if unnamed.unnamed.len() == 1 {
                             let (inner, _, repeated) = field_type(&unnamed.unnamed[0].ty);
@@ -307,8 +307,9 @@ fn read_sources() -> Catalog {
             }
         }
     }
-    // Les icônes : une liste fermée tenue dans `vocab.rs` par une macro que syn ne déplie pas.
-    // Le contrat la lit donc sur le type lui-même — c'est ce que chaque shell doit savoir dessiner.
+    // The icons: a closed list held in `vocab.rs` by a macro that syn does not expand. The
+    // contract therefore reads it off the type itself — this is what every shell must know how to
+    // draw.
     catalog.types.insert(
         "IconName".into(),
         vocabulary::<portaki_sdk::vocab::IconName>(),
@@ -316,7 +317,7 @@ fn read_sources() -> Catalog {
     catalog
 }
 
-/// Une énumération de `vocab`, décrite comme serde l'écrit : une chaîne par variante.
+/// An enum from `vocab`, described the way serde writes it: one string per variant.
 fn vocabulary<V: portaki_sdk::vocab::Vocabulary>() -> Value {
     let variants: Vec<Value> = V::ALL.iter().map(|v| json!({ "name": v.wire() })).collect();
     json!({ "kind": "enum", "variants": variants })
@@ -349,13 +350,13 @@ fn read_named_fields(
     fields
 }
 
-// ── Fermeture transitive depuis les primitives ───────────────────────────────
+// ── Transitive closure from the primitives ───────────────────────────────────
 
-/// Les types qu'un consommateur du contrat peut rencontrer, et eux seuls.
+/// The types a consumer of the contract may run into, and only those.
 ///
-/// Part des champs déclarés par `sdui_primitives.json` et des champs communs, puis suit les
-/// références. `Action` seule tire `OverlayPresentation` et `OverlayArgs` : publier la racine sans
-/// sa descendance laisserait l'éditeur à mi-chemin.
+/// Starts from the fields `sdui_primitives.json` declares and from the common fields, then follows
+/// the references. `Action` on its own pulls in `OverlayPresentation` and `OverlayArgs`: publishing
+/// the root without its descendants would leave the editor half-way.
 fn reachable_types(catalog: &Catalog) -> BTreeSet<String> {
     let primitives_path = manifest_dir().join("sdui_primitives.json");
     let raw = fs::read_to_string(&primitives_path).expect("lecture de sdui_primitives.json");
@@ -391,7 +392,7 @@ fn reachable_types(catalog: &Catalog) -> BTreeSet<String> {
                     }
                 }
             }
-            // Un newtype porte son type au même niveau que son `kind`.
+            // A newtype carries its type at the same level as its `kind`.
             if let Some(next) = entry.get("type").and_then(Value::as_str) {
                 queue.push(next.to_string());
             }
@@ -445,10 +446,10 @@ fn le_document_des_types_est_a_jour() {
     );
 }
 
-/// Ce que le générateur affirme du fil doit être ce que serde en fait.
+/// What the generator claims about the wire must be what serde actually does.
 ///
-/// La convention de nommage est **rejouée** ici à partir des attributs, `wire` compris ; sans ce
-/// test elle serait une croyance. On sérialise donc de vraies valeurs et on compare.
+/// The naming convention is **replayed** here from the attributes, `wire` included; without this
+/// test it would be an article of faith. So real values are serialised, and compared.
 #[test]
 fn les_noms_sur_le_fil_sont_ceux_que_serde_emet() {
     use portaki_sdk::sdui::action::Action;
@@ -468,10 +469,9 @@ fn les_noms_sur_le_fil_sont_ceux_que_serde_emet() {
     );
     assert_eq!(types["Action"]["tag"], json!("type"));
 
-    // Le piège que ce test existe pour attraper : `rename_all` sur une énumération nomme ses
-    // variantes et **pas** les champs qu'elles portent. `command` est en camelCase, `module_id`
-    // reste en snake_case. Un contrat qui annoncerait `moduleId` ferait écrire aux consommateurs
-    // un champ que le Rust ne relit pas.
+    // The trap this test exists to catch: `rename_all` on an enum names its variants and **not**
+    // the fields they carry. `command` is in camelCase, `module_id` stays in snake_case. A contract
+    // announcing `moduleId` would have consumers write a field the Rust never reads back.
     let command = serde_json::to_value(Action::Command {
         module_id: "weather".into(),
         name: "refresh".into(),
@@ -488,7 +488,7 @@ fn les_noms_sur_le_fil_sont_ceux_que_serde_emet() {
     assert!(command_variant["fields"].get("moduleId").is_none());
     assert_eq!(command_variant["fields"]["args"]["optional"], json!(true));
 
-    // Les deux enums qui renomment à la main, et celui qui suit la convention.
+    // The two enums that rename by hand, and the one that follows the convention.
     assert_eq!(
         serde_json::to_value(TemperatureUnit::Celsius).unwrap(),
         json!("C")

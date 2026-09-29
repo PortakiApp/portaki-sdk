@@ -204,7 +204,7 @@ fn the_contract_grew_no_synonyms() {
         ("FormStepper", "current"),
         ("Map", "static"),
         ("ColorDotItem", "colorRole"),
-        ("DotIndicator", "active"), // → `index`, qui est le même nombre
+        ("DotIndicator", "active"), // → `index`, which is the same number
         ("EmptyState", "message"),  // → `description`
     ];
 

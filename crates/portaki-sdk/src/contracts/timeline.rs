@@ -1,8 +1,8 @@
 //! Dated host tasks — the `workspace-timeline-task` surface.
 //!
 //! A module declaring that surface serves [`TIMELINE_TASKS`]: the platform hands it the stays of
-//! the window ([`TimelineTasksArgs::stays`], sorted, one stay past each end so « before the next
-//! arrival » can be computed) and places the returned tasks between them. Tasks are computed,
+//! the window ([`TimelineTasksArgs::stays`], sorted, one stay past each end so "before the next
+//! arrival" can be computed) and places the returned tasks between them. Tasks are computed,
 //! not stored; only what was ticked is. The module then serves [`TASK_TOGGLE`] and
 //! [`TASK_COMPLETE`], refuses them with [`PHOTO_REQUIRED`] when an item needs a photo it did not
 //! get, and emits [`TASK_UPDATED`] with a [`TaskUpdated`] payload. Schema:

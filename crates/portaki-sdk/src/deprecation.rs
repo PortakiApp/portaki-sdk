@@ -1,75 +1,75 @@
-//! Ce que la plateforme retire, depuis quand, et par quoi le remplacer.
+//! What the platform is withdrawing, since when, and what to use instead.
 //!
-//! # Pourquoi ici plutôt que dans un fichier
+//! # Why here rather than in a file
 //!
-//! Une capacité est déclarée en Rust ; sa dépréciation l'est au même endroit, sinon les deux
-//! divergent le jour où l'une bouge sans l'autre. Le document JSON que le registre distribue
-//! est **produit** à partir de cette table, et un test vérifie que celui qui est versionné n'a
-//! pas dérivé — c'est ce qui rend la duplication sûre.
+//! A capability is declared in Rust; its deprecation is declared in the same place, otherwise
+//! the two drift apart the day one moves without the other. The JSON document the registry
+//! distributes is **produced** from this table, and a test checks that the checked-in one has
+//! not drifted — that is what makes the duplication safe.
 //!
-//! # Comment il voyage
+//! # How it travels
 //!
-//! La CI du SDK publie `deprecations.json` avec les autres contrats d'une version, sur
-//! `/registry/v1/sdk-releases`. `portaki ci check` le relit et avertit un module qui s'appuie
-//! encore sur ce qui part. Rien n'échoue jamais pour cette raison : une dépréciation prévient,
-//! elle n'interdit pas.
+//! The SDK's CI publishes `deprecations.json` along with the other contracts of a release, on
+//! `/registry/v1/sdk-releases`. `portaki ci check` reads it back and warns a module that still
+//! relies on something on its way out. Nothing ever fails because of this: a deprecation warns,
+//! it does not forbid.
 //!
-//! # Exemples
+//! # Examples
 //!
 //! ```
 //! use portaki_sdk::deprecation;
 //!
-//! // Rien n'est déprécié aujourd'hui ; le mécanisme, lui, répond.
+//! // Nothing is deprecated today; the mechanism itself still answers.
 //! assert!(deprecation::find("core.storage").is_none());
 //! ```
 
 use serde::{Deserialize, Serialize};
 
-/// Ce à quoi un identifiant déprécié se rapporte.
+/// What a deprecated identifier refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Subject {
-    /// Une capacité de [`crate::capability`].
+    /// A capability from [`crate::capability`].
     Capability,
-    /// Un connecteur déclaré par un module.
+    /// A connector declared by a module.
     Connector,
-    /// Une opération hôte de `host-ops.json`.
+    /// A host operation from `host-ops.json`.
     HostOp,
 }
 
-/// Un retrait annoncé.
+/// An announced withdrawal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Deprecation {
-    /// L'identifiant qui part — `core.storage`, `nuki`, `kv.list`.
+    /// The identifier on its way out — `core.storage`, `nuki`, `kv.list`.
     pub id: &'static str,
-    /// Ce dont il s'agit.
+    /// What it is.
     pub subject: Subject,
-    /// La version du SDK à partir de laquelle il est déprécié.
+    /// The SDK version from which it is deprecated.
     pub since: &'static str,
-    /// Par quoi le remplacer, quand un remplaçant existe.
+    /// What to replace it with, when a replacement exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replacement: Option<&'static str>,
-    /// Ce qu'un auteur de module a besoin de savoir pour agir.
+    /// What a module author needs to know in order to act.
     pub note: &'static str,
 }
 
-/// Tout ce qui est déprécié à ce jour.
+/// Everything deprecated to date.
 ///
-/// Vide, et c'est exact : rien n'a encore été retiré. La table existe pour que la première
-/// dépréciation soit une ligne à ajouter, pas un dispositif à concevoir dans l'urgence — au
-/// moment précis où l'on veut prévenir les auteurs, pas construire.
+/// Empty, and rightly so: nothing has been withdrawn yet. The table exists so that the first
+/// deprecation is a line to add, not a mechanism to design in a hurry — at the exact moment
+/// when what you want is to warn the authors, not to build.
 pub const DEPRECATIONS: &[Deprecation] = &[];
 
-/// Ce qui est déprécié sous cet identifiant, s'il l'est.
+/// What is deprecated under this identifier, if anything is.
 pub fn find(id: &str) -> Option<&'static Deprecation> {
     DEPRECATIONS.iter().find(|entry| entry.id == id)
 }
 
-/// Le document que la CI publie au registre, tel qu'il doit être versionné.
+/// The document the CI publishes to the registry, in the form it must be checked in.
 ///
-/// Une fonction plutôt qu'un fichier de référence : le contenu vient de [`DEPRECATIONS`], et
-/// le JSON du dépôt n'en est qu'une empreinte, vérifiée par les tests.
+/// A function rather than a reference file: the content comes from [`DEPRECATIONS`], and the
+/// JSON in the repository is only a fingerprint of it, verified by the tests.
 pub fn contract() -> serde_json::Value {
     serde_json::json!({
         "description":
@@ -82,17 +82,18 @@ pub fn contract() -> serde_json::Value {
 mod tests {
     use super::*;
 
-    /// Le JSON versionné est une empreinte de la table, pas une seconde source.
+    /// The checked-in JSON is a fingerprint of the table, not a second source.
     ///
-    /// Sans ce test, ajouter une dépréciation en Rust sans régénérer le fichier publierait un
-    /// contrat qui ne décrit pas le SDK — l'exacte erreur que la table est censée empêcher.
+    /// Without this test, adding a deprecation in Rust without regenerating the file would
+    /// publish a contract that does not describe the SDK — the very mistake the table is
+    /// meant to prevent.
     #[test]
     fn the_checked_in_contract_matches_the_table() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../contracts/deprecations.json");
         let Ok(raw) = std::fs::read_to_string(&path) else {
-            // Le crate empaqueté n'emporte pas le dossier du dépôt ; il n'y a alors rien à
-            // comparer, et rien à signaler.
+            // The packaged crate does not carry the repository's folder along; there is then
+            // nothing to compare, and nothing to report.
             return;
         };
         let versioned: serde_json::Value =
@@ -111,7 +112,7 @@ mod tests {
         assert!(find("nothing.at.all").is_none());
     }
 
-    /// La forme du document compte autant que son contenu : c'est elle que le CLI relit.
+    /// The document's shape matters as much as its content: the shape is what the CLI reads.
     #[test]
     fn a_deprecation_serialises_as_the_cli_reads_it() {
         let entry = Deprecation {
@@ -130,8 +131,8 @@ mod tests {
         assert_eq!(rendered["replacement"], "core.kv");
     }
 
-    /// Sans remplaçant, la clé disparaît au lieu d'apparaître nulle : un lecteur distingue
-    /// « pas de remplaçant » de « remplaçant inconnu » sans convention supplémentaire.
+    /// With no replacement, the key disappears instead of showing up null: a reader tells
+    /// "no replacement" apart from "unknown replacement" with no extra convention.
     #[test]
     fn a_deprecation_without_a_replacement_omits_the_field() {
         let entry = Deprecation {

@@ -108,7 +108,7 @@ impl RevealPolicy {
     }
 
     /// When the secret becomes visible for a check-in at `checkin_at`; `None` for
-    /// [`Self::Always`]. `tz` places « 16:00 the day before »; without one, that is 16:00 UTC.
+    /// [`Self::Always`]. `tz` places "16:00 the day before"; without one, that is 16:00 UTC.
     pub fn reveal_at(
         self,
         checkin_at: DateTime<Utc>,

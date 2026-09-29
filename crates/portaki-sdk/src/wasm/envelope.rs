@@ -150,8 +150,8 @@ impl WasmRequestEnvelope {
             party_size: ctx.guest_party_size.filter(|size| *size > 0),
             arrival_time_estimated: parse_local_time_opt(ctx.arrival_time_estimated.as_deref()),
             guest_locale: non_blank(ctx.guest_locale.as_deref()),
-            // Le runtime ne sérialise ces deux champs que pour un module qui déclare
-            // `stay:guest_contact:read` ; le SDK ne refait pas ce contrôle, il n'a pas le manifeste.
+            // The runtime only serialises these two fields for a module that declares
+            // `stay:guest_contact:read`; the SDK does not redo that check, it has no manifest.
             guest_email: non_blank(ctx.guest_email.as_deref()),
             guest_phone: non_blank(ctx.guest_phone.as_deref()),
         });
@@ -189,15 +189,15 @@ impl WasmRequestEnvelope {
     }
 }
 
-/// Une clé présente vaut `Some`, même à `null` : seule son absence dit que la plateforme ne
-/// tient pas encore la config (`Option<Value>` seul confondrait les deux).
+/// A key that is present means `Some`, even when set to `null`: only its absence says that the
+/// platform does not hold the config yet (`Option<Value>` on its own would conflate the two).
 fn present<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> std::result::Result<Option<Value>, D::Error> {
     Value::deserialize(deserializer).map(Some)
 }
 
-/// `HH:mm` comme le runtime l'envoie, `HH:mm:ss` par tolérance ; illisible vaut absent.
+/// `HH:mm` as the runtime sends it, `HH:mm:ss` out of tolerance; unreadable counts as absent.
 fn parse_local_time_opt(raw: Option<&str>) -> Option<NaiveTime> {
     let value = raw?.trim();
     NaiveTime::parse_from_str(value, "%H:%M")
@@ -242,8 +242,8 @@ fn property_from_config_json(
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    // Le runtime omet lat / lng tant que le logement n'est pas géocodé : pas de position alors,
-    // plutôt qu'une position inventée (Paris, avant) où la météo s'affichait.
+    // The runtime omits lat / lng for as long as the property is not geocoded: no position then,
+    // rather than a made-up one (Paris, as it used to be) where the weather would show.
     let coordinate = |key: &str| parsed.get(key).and_then(Value::as_f64);
     let coordinates = match (coordinate("lat"), coordinate("lng")) {
         (Some(lat), Some(lng))
@@ -282,8 +282,8 @@ mod tests {
         assert_eq!(ctx.module_config, None, "no moduleConfig key");
     }
 
-    /// Le runtime omet lat / lng d'un logement non géocodé ; une moitié ou un nombre hors plage
-    /// ne vaut pas mieux.
+    /// The runtime omits lat / lng for a property that is not geocoded; one half of the pair, or
+    /// a number out of range, is no better.
     #[test]
     fn coordinates_are_there_only_when_the_property_is_geocoded() {
         let coordinates = |config_json: &str| {
@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(lang(""), None);
     }
 
-    /// Présente, même vide ou nulle, la clé dit que la plateforme tient la config.
+    /// Present, even empty or null, the key says that the platform holds the config.
     #[test]
     fn an_empty_or_null_module_config_is_still_present() {
         for (raw, expected) in [
@@ -435,7 +435,7 @@ mod tests {
         );
         assert_eq!(ctx.timezone, "Europe/Paris");
         assert_eq!(ctx.property.timezone, "Europe/Paris");
-        // Un runtime antérieur n'envoie aucun des champs enrichis : tous restent absents.
+        // An earlier runtime sends none of the enriched fields: they all stay absent.
         assert_eq!(stay.party_size, None);
         assert_eq!(stay.arrival_time_estimated, None);
         assert_eq!(stay.guest_locale, None);
@@ -499,7 +499,7 @@ mod tests {
         envelope.to_context("resolve").expect("context")
     }
 
-    /// Le séjour reste là pour tout appelant ; seul un hôte déclaré n'est pas un voyageur.
+    /// The stay stays there for every caller; only a declared host is not a guest.
     #[test]
     fn guest_follows_the_caller_and_the_stay_stays() {
         for (caller, is_guest) in [
@@ -514,8 +514,8 @@ mod tests {
         }
     }
 
-    /// Les valeurs nulles — ce qu'un module non déclarant reçoit pour le contact — et une heure
-    /// illisible se lisent comme absentes, sans faire échouer l'invocation.
+    /// Null values — what a module that does not declare the permission gets for the contact —
+    /// and an unreadable time read as absent, without failing the invocation.
     #[test]
     fn null_contact_and_unreadable_arrival_time_are_absent() {
         let raw = r#"{

@@ -77,9 +77,9 @@ fn dispatch_envelope(input: &str) -> Result<String> {
         .map_err(|e| PortakiError::Host(format!("wasm_envelope_parse_failed: {e}")))?;
     let operation = envelope.operation_name()?.to_string();
     let ctx = envelope.to_context(&operation)?;
-    // `emailContext` rend les codes d'accès d'un e-mail d'arrivée. La plateforme seule l'appelle,
-    // sur un séjour (appelant voyageur) ; un appel hôte, ou sans séjour, est refusé ici, avant
-    // le module — il ne dépend pas de la seule garde de la plateforme.
+    // `emailContext` hands back the access codes of an arrival email. The platform is the only
+    // caller, and it calls on a stay (guest caller); a host call, or one without a stay, is
+    // refused here, before the module — it does not rest on the platform's guard alone.
     if operation == EMAIL_CONTEXT_QUERY && ctx.guest.is_none() {
         return Err(PortakiError::Host(format!(
             "operation_not_host_callable: {EMAIL_CONTEXT_QUERY} is called by the platform for a stay"
@@ -120,7 +120,7 @@ mod tests {
             .to_string()
     }
 
-    /// Hôte ou sans séjour : refusé avant de chercher le handler — donc avant le module.
+    /// Host, or no stay: refused before looking the handler up — so before the module.
     #[test]
     fn email_context_is_refused_outside_the_platform_stay_path() {
         let stay = r#","stayId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890""#;
@@ -134,7 +134,7 @@ mod tests {
                 "{context}"
             );
         }
-        // Le chemin séjour de la plateforme passe la garde (ici, faute de handler enregistré).
+        // The platform's stay path gets past the guard (here, for want of a registered handler).
         assert!(email_context(&format!(r#"{stay},"caller":"guest""#))
             .contains("wasm_handler_not_found"));
     }

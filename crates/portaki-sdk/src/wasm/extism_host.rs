@@ -203,8 +203,8 @@ fn parse_response(response_json: &str) -> Result<Value> {
             .and_then(Value::as_str)
             .unwrap_or("host_dispatch_error");
         let message = root.get("message").and_then(Value::as_str).unwrap_or("");
-        // Les codes connus (`email_stay_ended`, `email_limit_exceeded`, `event_limit_exceeded`)
-        // deviennent des variantes typées : un module les distingue sans parser de chaîne.
+        // The known codes (`email_stay_ended`, `email_limit_exceeded`, `event_limit_exceeded`)
+        // become typed variants: a module tells them apart without parsing a string.
         return Err(PortakiError::from_host_code(code, message));
     }
     Ok(root

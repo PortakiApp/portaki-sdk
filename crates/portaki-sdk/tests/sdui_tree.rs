@@ -1,8 +1,8 @@
-//! Le parcours de l'arbre SDUI (`Component::child_nodes`, `type_name`, `SduiPrimitive`).
+//! Walking the SDUI tree (`Component::child_nodes`, `type_name`, `SduiPrimitive`).
 //!
-//! Tout est généré depuis `sdui_primitives.json` : ces tests relisent le contrat et vérifient que
-//! chaque primitif y est couvert, pour qu'un primitif ajouté au JSON ne puisse pas échapper au
-//! parcours des surfaces dans les tests des modules.
+//! Everything is generated from `sdui_primitives.json`: these tests read the contract back and
+//! check that every primitive in it is covered, so that a primitive added to the JSON cannot slip
+//! past the surface walk in the modules' own tests.
 
 use std::fs;
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ fn contract_json() -> Vec<Value> {
     serde_json::from_str(&raw).expect("JSON du contrat")
 }
 
-/// `(serde_name, has_children)` de chaque primitif, dans l'ordre du contrat.
+/// `(serde_name, has_children)` of each primitive, in contract order.
 fn contract() -> Vec<(String, bool)> {
     contract_json()
         .iter()
@@ -115,8 +115,8 @@ fn sdui_primitive_downcasts_its_own_variant_only() {
     );
 }
 
-/// `build.rs` ne voit pas l'intérieur des types de `common.rs` : il ne suit que le `content` des
-/// types qu'il liste. Un nouveau type qui porte un `Component` doit y être ajouté.
+/// `build.rs` does not see inside the types of `common.rs`: it only follows the `content` of the
+/// types it lists. A new type holding a `Component` has to be added to that list.
 #[test]
 fn every_common_type_holding_a_node_is_walked() {
     let source = fs::read_to_string(manifest_dir().join("src/sdui/common.rs")).expect("common.rs");

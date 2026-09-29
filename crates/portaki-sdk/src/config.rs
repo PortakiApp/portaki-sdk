@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(load_with(None, None).unwrap(), Config::default());
     }
 
-    /// Une config vidée par l'hôte reste vide : l'ancien KV ne revient pas.
+    /// A config the host has emptied stays empty: the old KV does not come back.
     #[test]
     fn an_empty_module_config_is_an_empty_config_and_ignores_kv() {
         let kv = Some(&br#"{"ssid":"old","guests":4}"#[..]);
