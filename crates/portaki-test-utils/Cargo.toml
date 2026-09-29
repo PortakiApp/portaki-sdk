@@ -18,15 +18,15 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-# Toutes les API hôte : le mock les sert toutes, quel que soit le module testé.
+# Every host API: the mock serves them all, whichever module is under test.
 portaki-sdk = { workspace = true, features = ["kv", "repo", "email", "events", "platform", "guest-files"] }
-# La feature `mock` n'est allumée que d'ici : cette crate n'est jamais qu'une
-# dev-dependency d'un module, donc les réponses simulées ne sont pas compilées dans le wasm.
+# The `mock` feature is only ever turned on from here: this crate is never anything but a
+# dev-dependency of a module, so the canned responses are not compiled into the wasm.
 portaki-connectors = { workspace = true, features = ["mock"] }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-# La batterie de conformité valide `portaki.module.json` contre le schéma embarqué : pas de
-# résolution réseau, donc sans les features par défaut (reqwest, rustls).
+# The conformance suite validates `portaki.module.json` against the embedded schema: no network
+# resolution, hence without the default features (reqwest, rustls).
 jsonschema = { version = "0.56", default-features = false }

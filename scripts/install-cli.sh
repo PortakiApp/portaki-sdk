@@ -1,19 +1,19 @@
 #!/usr/bin/env sh
-# Installe `portaki` et le signe avec une identité stable.
+# Installs `portaki` and signs it with a stable identity.
 #
-# Pourquoi signer : le trousseau macOS attache son autorisation à l'IDENTITÉ de signature, pas
-# au contenu du binaire. Sans signature stable, chaque `cargo install` produit aux yeux du
-# système un programme inconnu, et « Toujours autoriser » ne vaut que pour celui-là — d'où le
-# dialogue à chaque rebuild.
+# Why sign: the macOS keychain attaches its authorisation to the signing IDENTITY, not to the
+# binary's contents. Without a stable signature, every `cargo install` produces what the system
+# sees as an unknown program, and "Always Allow" only ever covers that one — hence the dialog on
+# every rebuild.
 #
-# Signé avec la même identité et le même identifiant, chaque build reste le même programme :
-# l'autorisation survit, et le secret reste dans le trousseau plutôt que dans un fichier.
+# Signed with the same identity and the same identifier, every build stays the same program: the
+# authorisation survives, and the secret stays in the keychain rather than in a file.
 #
-# Prérequis, une seule fois — voir docs/cli-keychain-macos.md :
-#   Trousseaux d'accès ▸ Assistant de certification ▸ Créer un certificat…
-#   Nom : Portaki Dev · Type : Signature de code · Auto-signé
+# One-time prerequisite — see docs/cli-keychain-macos.md:
+#   Keychain Access ▸ Certificate Assistant ▸ Create a Certificate…
+#   Name: Portaki Dev · Type: Code Signing · Self signed
 #
-# Ailleurs que sur macOS, `codesign` n'existe pas : le script installe et s'arrête là.
+# Anywhere other than macOS, `codesign` does not exist: the script installs and stops there.
 set -eu
 
 IDENTITY="${PORTAKI_SIGN_IDENTITY:-Portaki Dev}"
@@ -27,17 +27,17 @@ cargo install --path crates/portaki-cli --force
 BINARY="${CARGO_INSTALL_ROOT:-${CARGO_HOME:-$HOME/.cargo}}/bin/portaki"
 
 if ! command -v codesign >/dev/null 2>&1; then
-  echo "codesign introuvable — binaire non signé, le trousseau redemandera à chaque build." >&2
+  echo "codesign not found — binary left unsigned, the keychain will ask again on every build." >&2
   exit 0
 fi
 
-# `-i` fixe l'identifiant : c'est lui, avec l'identité, qui compose l'exigence désignée que le
-# trousseau compare. Le laisser déduire du nom de fichier marcherait aussi, mais l'écrire ici
-# rend la stabilité explicite plutôt qu'accidentelle.
+# `-i` pins the identifier: together with the identity, it is what makes up the designated
+# requirement the keychain compares against. Letting it be inferred from the file name would work
+# too, but writing it here makes the stability explicit rather than accidental.
 if codesign -s "$IDENTITY" -i "$IDENTIFIER" -f "$BINARY" 2>/dev/null; then
-  echo "portaki signé « $IDENTITY » — le trousseau ne redemandera qu'une fois."
+  echo "portaki signed as \"$IDENTITY\" — the keychain will only ask once."
 else
-  echo "Identité « $IDENTITY » introuvable dans le trousseau." >&2
-  echo "Créez-la une fois (docs/cli-keychain-macos.md), ou passez PORTAKI_SIGN_IDENTITY." >&2
+  echo "Identity \"$IDENTITY\" not found in the keychain." >&2
+  echo "Create it once (docs/cli-keychain-macos.md), or pass PORTAKI_SIGN_IDENTITY." >&2
   exit 1
 fi

@@ -14,8 +14,8 @@ categories = ["api-bindings", "wasm"]
 keywords = ["portaki", "connector", "weather", "mapbox", "wasm"]
 
 [features]
-# Les réponses simulées des connecteurs (`mock::ALL`). Jamais par défaut : seul
-# `portaki-test-utils`, une dev-dependency, l'active — le wasm publié ne la voit pas.
+# The connectors' canned responses (`mock::ALL`). Never on by default: only `portaki-test-utils`,
+# a dev-dependency, turns it on — the published wasm never sees it.
 mock = []
 
 [package.metadata.docs.rs]
