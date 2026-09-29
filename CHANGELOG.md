@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.1.0...v9.2.0) (2026-09-29)
+
+
+### Features
+
+* **connectors:** add viator freetext search ([a8344a4](https://github.com/PortakiApp/portaki-sdk/commit/a8344a4bd624d914ff8b95ec61e92485cb9216e7))
+* **sdui:** revise the primitives the booklet draws ([1b4aaaa](https://github.com/PortakiApp/portaki-sdk/commit/1b4aaaa798a9afcc62ef7cffe8a8bfba5440f497))
+
 ## [9.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.0.0...v9.1.0) (2026-09-29)
 
 
