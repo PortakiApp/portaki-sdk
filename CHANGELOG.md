@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.0.0...v9.1.0) (2026-09-29)
+
+
+### Features
+
+* **connectors:** carry mock responses per connector ([ef72f0d](https://github.com/PortakiApp/portaki-sdk/commit/ef72f0d549c763bbbf133ab42d3121e82643f757))
+
 ## [9.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v8.12.0...v9.0.0) (2026-09-29)
 
 
