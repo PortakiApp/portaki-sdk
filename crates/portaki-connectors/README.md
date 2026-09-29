@@ -60,7 +60,14 @@ use portaki_sdk::host;
 let weather = OpenWeather::current(&CurrentArgs { lat: 43.55, lng: 7.01 })?;
 ```
 
-In unit tests, stub JSON with [`portaki-test-utils`](https://crates.io/crates/portaki-test-utils) (`MockContextBuilder::with_connector_response`).
+In unit tests, [`portaki-test-utils`](https://crates.io/crates/portaki-test-utils) mounts
+every connector's canned responses in one call — `MockContextBuilder::with_builtin_connectors()`
+— or a single JSON stub with `with_connector_response`.
+
+Those responses live in this crate behind the `mock` feature, **off by default**: only
+`portaki-test-utils` turns it on, and a module declares that crate as a dev-dependency, so
+not a byte of them is compiled into the published Wasm. `scripts/check-mock-boundary.sh`
+builds a module both ways and checks the artifact.
 
 ## Credentials
 

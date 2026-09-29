@@ -206,6 +206,57 @@ impl MockContextBuilder {
         self
     }
 
+    /// Registers every canned response a connector carries, as `(operation, json)` pairs.
+    ///
+    /// This is what a custom connector uses: put its table next to its
+    /// `#[custom_connector]` type under `#[cfg(test)]` — so it is compiled out of the
+    /// published Wasm exactly as the built-in ones are — and hand it over here.
+    ///
+    /// ```
+    /// use portaki_test_utils::MockContext;
+    ///
+    /// const ACME_PMS_MOCKS: &[(&str, &str)] =
+    ///     &[("reservations", r#"{"portakiMock":true,"rows":[]}"#)];
+    ///
+    /// MockContext::host()
+    ///     .with_connector_mocks("acme-pms", ACME_PMS_MOCKS)
+    ///     .run(|_ctx| { /* module under test */ });
+    /// ```
+    ///
+    /// Never overwrites a response set by [`Self::with_connector_response`], whichever
+    /// call came first — a test that pins one operation keeps its own value.
+    pub fn with_connector_mocks(mut self, connector_id: &str, responses: &[(&str, &str)]) -> Self {
+        for (operation, json) in responses {
+            self.connector_responses
+                .entry((connector_id.to_string(), (*operation).to_string()))
+                .or_insert_with(|| (*json).to_string());
+        }
+        self
+    }
+
+    /// Registers the mock responses of every built-in connector — the one line that
+    /// replaces a hand-written stub per operation.
+    ///
+    /// Values are constants: same call, same answer, on every run. They are visibly
+    /// simulated (`"MOCK Cannes"`, `"portakiMock": true`) so nothing rendered from them
+    /// can be mistaken for a real provider's data.
+    ///
+    /// ```
+    /// use portaki_connectors::open_weather::{CurrentArgs, OpenWeather};
+    /// use portaki_test_utils::MockContext;
+    ///
+    /// MockContext::guest().with_builtin_connectors().run(|_ctx| {
+    ///     let now = OpenWeather::current(&CurrentArgs { lat: 43.55, lng: 7.01 }).expect("mock");
+    ///     assert_eq!(now.city_name.as_deref(), Some("MOCK Cannes"));
+    /// });
+    /// ```
+    pub fn with_builtin_connectors(mut self) -> Self {
+        for (connector_id, responses) in portaki_connectors::mock::ALL {
+            self = self.with_connector_mocks(connector_id, responses);
+        }
+        self
+    }
+
     /// Makes `host::connectors::call(connector_id, operation, _)` fail.
     ///
     /// `reason` is the gateway's own wording — `connector_credential_missing`,

@@ -53,8 +53,15 @@
 //! # Ok::<(), PortakiError>(())
 //! ```
 //!
-//! In unit tests, pair this crate with `portaki-test-utils` to stub connector
-//! JSON responses via `MockContextBuilder::with_connector_response`.
+//! # Testing
+//!
+//! Each connector carries canned responses for its operations ([`open_weather::MOCK_RESPONSES`],
+//! …), aggregated by [`mod@mock`]. `portaki-test-utils` mounts them all with
+//! `MockContextBuilder::with_builtin_connectors()`; `with_connector_response` still overrides
+//! any single operation.
+//!
+//! They are behind the `mock` feature, off by default, so they are compiled out of a module's
+//! published Wasm rather than merely unused — see [`mod@mock`] for the boundary and its proof.
 //!
 //! # Errors
 //!
@@ -66,6 +73,8 @@
 
 pub mod google_places;
 pub mod mapbox;
+#[cfg(feature = "mock")]
+pub mod mock;
 pub mod nuki;
 pub mod open_agenda;
 pub mod open_weather;

@@ -109,6 +109,44 @@ Only providers with `CredentialProvider.clientExposable == true` are allowed. Op
 
 Legacy alias (deprecated): `GET /api/v1/workspace/mapbox-access-token` → same Mapbox resolution.
 
+## Testing a connector without a provider
+
+The sandbox refuses every credential request by design, so a connector cannot reach a real
+provider from there. Instead, each built-in connector carries canned responses; one line on
+the mock host mounts them all:
+
+```rust,ignore
+portaki_test_utils::MockContext::guest()
+    .with_builtin_connectors()
+    .run(|_ctx| { /* OpenWeather::current answers 21.5 °C in "MOCK Cannes" */ });
+```
+
+A custom connector declares its own table next to its `#[custom_connector]` type, under
+`#[cfg(test)]` so `cargo build` compiles it out of the published Wasm:
+
+```rust,ignore
+#[portaki_sdk::custom_connector(id = "acme-pms", /* … */)]
+pub struct AcmePms;
+
+#[cfg(test)]
+pub const MOCKS: &[(&str, &str)] = &[(
+    "reservations",
+    r#"{"portakiMock":true,"rows":[{"id":"mock-res-1","guest":"MOCK Dupont"}]}"#,
+)];
+```
+
+```rust,ignore
+MockContext::host().with_connector_mocks("acme-pms", MOCKS).run(|_ctx| { /* … */ });
+```
+
+Two rules the built-in tables follow and a custom one should too:
+
+- **Constants, never generated values.** Same call, same bytes, dates included — a test that
+  moves with the clock is a test that fails on a Tuesday.
+- **Plausible, never credible.** Every payload carries `"portakiMock": true`, every readable
+  string starts with `MOCK ` and every id with `mock-`. A screen laid out from a mock looks
+  right and says out loud that it is simulated.
+
 ## Author checklist
 
 - [ ] `credential_provider_id` matches an orchestrator `CredentialProvider` id
