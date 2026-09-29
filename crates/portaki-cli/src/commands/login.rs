@@ -13,17 +13,16 @@ use crate::{auth, http, ui};
 
 const CLIENT_ID: &str = "portaki-cli";
 
-/// Combien d'échecs de transport **consécutifs** le sondage tolère avant d'abandonner.
+/// How many **consecutive** transport failures polling tolerates before giving up.
 ///
-/// La politique tient en deux phrases opposées. Un hoquet — un wifi qui bascule, un proxy qui
-/// recycle une connexion, un 502 le temps d'un déploiement — ne doit pas annuler une connexion
-/// que la personne est peut-être en train d'approuver dans son navigateur : on retente au même
-/// intervalle, sans rien dire. Mais une plateforme devenue injoignable ne doit pas faire tourner
-/// la roulette jusqu'à `expires_in` : au-delà de ce nombre d'échecs d'affilée, on s'arrête et on
-/// dit pourquoi.
+/// The policy comes down to two opposed sentences. A hiccup — wifi switching over, a proxy
+/// recycling a connection, a 502 for the length of a deployment — must not cancel a sign-in that
+/// the person may well be approving in their browser right now: we retry at the same interval,
+/// without saying anything. But a platform that has become unreachable must not keep the wheel
+/// spinning until `expires_in`: past this many failures in a row, we stop and we say why.
 ///
-/// Consécutifs, donc : un sondage qui aboutit remet le compteur à zéro. C'est une série qu'on
-/// compte, pas un total — sur un quart d'heure d'attente, des hoquets isolés sont normaux.
+/// Consecutive, then: a poll that goes through resets the counter to zero. It is a run that is
+/// counted, not a total — over a quarter of an hour of waiting, isolated hiccups are normal.
 const BLIPS_TOLERATED: u32 = 3;
 
 /// What the CLI may ask for. Narrowed server-side to what this client is allowed.
@@ -72,9 +71,10 @@ struct DeviceCode {
     device_code: String,
     user_code: String,
     verification_uri: String,
-    /// L'URL avec le code déjà dedans (RFC 8628 §3.3.1). Le serveur n'est pas tenu de la rendre,
-    /// et la fabriquer soi-même serait deviner la forme d'un paramètre : quand elle est là, il
-    /// n'y a plus rien à recopier ; quand elle manque, on ouvre l'URL nue et le code s'affiche.
+    /// The URL with the code already in it (RFC 8628 §3.3.1). The server is not required to
+    /// return one, and building it ourselves would mean guessing the shape of a parameter: when
+    /// it is there, there is nothing left to copy out; when it is missing, we open the bare URL
+    /// and the code is displayed.
     #[serde(default)]
     verification_uri_complete: Option<String>,
     expires_in: u64,
@@ -101,11 +101,11 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     );
 
     let base = base_url(args.url.as_deref());
-    // Le jeton reviendra par cette connexion : en clair, n'importe quel réseau traversé le lit.
+    // The token will come back over this connection: in clear, any network crossed reads it.
     auth::ensure_transport(&base)?;
-    // Le client par défaut : cinq secondes pour ouvrir la connexion, quinze pour la requête.
-    // La demande de code précède tout le reste, alors elle échoue vite — une adresse fausse ou
-    // une plateforme à terre se voit tout de suite, plutôt qu'au bout d'un spinner sans fin.
+    // The default client: five seconds to open the connection, fifteen for the request. The code
+    // request comes before everything else, so it fails fast — a wrong address or a platform
+    // that is down shows up straight away, rather than at the end of an endless spinner.
     let client = http::client();
     let code_url = format!("{base}/api/v1/auth/device/code");
 
@@ -125,14 +125,14 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         .send()
         .await;
 
-    // Chaque sortie d'ici éteint le spinner avant de remonter : une roue qui continue de tourner
-    // sous un message d'erreur laisse croire que la CLI travaille encore.
+    // Every exit from here puts the spinner out before returning: a wheel that keeps turning
+    // under an error message makes it look as if the CLI were still working.
     let response = match sent {
         Ok(response) => response,
         Err(failure) => {
             asking.abandon();
-            // Pas de `context` par-dessus : « cannot reach the platform at … » est la phrase
-            // qui doit arriver en tête, pas en « caused by » sous un intitulé de tâche.
+            // No `context` on top of it: "cannot reach the platform at …" is the sentence that
+            // has to come first, not as a "caused by" under a task heading.
             return Err(http::unreachable(&code_url, failure));
         }
     };
@@ -150,7 +150,8 @@ pub async fn run(args: LoginArgs) -> Result<()> {
 
     present(&started, args.no_browser);
 
-    // Le serveur dicte l'intervalle : la spec veut qu'il puisse ralentir un client trop pressé.
+    // The server dictates the interval: the spec wants it to be able to slow down a client that
+    // is in too much of a hurry.
     let mut interval = Duration::from_secs(started.interval.max(1));
     let deadline = std::time::Instant::now() + Duration::from_secs(started.expires_in);
     let token_url = format!("{base}/api/v1/auth/device/token");
@@ -172,9 +173,9 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         let sent = client
             .post(&token_url)
             .json(&serde_json::json!({ "deviceCode": started.device_code }))
-            // L'échéance du sondage se règle sur l'intervalle, pas sur celle du client : un
-            // sondage bloqué qui durerait quinze secondes à chaque tour mangerait la vie du
-            // code sans jamais poser la question.
+            // The poll's deadline follows the interval, not the client's: a stuck poll lasting
+            // fifteen seconds every round would eat up the code's lifetime without ever asking
+            // the question.
             .timeout(poll_timeout(interval))
             .send()
             .await;
@@ -235,14 +236,14 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         }
 
         match interpret(status.as_u16(), &body, &token_url) {
-            // Ni l'un ni l'autre n'est un échec : « pas encore » et « moins vite ».
+            // Neither one of these is a failure: "not yet" and "less quickly".
             Pending::KeepWaiting => blips = 0,
             Pending::SlowDown => {
                 blips = 0;
                 interval += Duration::from_secs(5);
             }
-            // La plateforme a répondu, mais rien d'exploitable : même politique que le hoquet
-            // de transport, et même compteur — c'est la série qui décide.
+            // The platform answered, but with nothing usable: same policy as for a transport
+            // hiccup, and the same counter — it is the run that decides.
             Pending::Blip => {
                 blips += 1;
                 if give_up_after(blips) {
@@ -261,44 +262,44 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     }
 }
 
-/// Faut-il abandonner, après `consecutive` sondages d'affilée qui n'ont rien donné ?
+/// Should we give up, after `consecutive` polls in a row that gave nothing?
 ///
-/// Voir [`BLIPS_TOLERATED`] pour le pourquoi de la politique.
+/// See [`BLIPS_TOLERATED`] for the reasoning behind the policy.
 fn give_up_after(consecutive: u32) -> bool {
     consecutive > BLIPS_TOLERATED
 }
 
-/// Combien de temps un sondage a le droit de durer.
+/// How long a poll is allowed to last.
 ///
-/// Assez pour ne pas couper une réponse lente, jamais beaucoup plus qu'un tour d'intervalle : au
-/// delà, un sondage bloqué décale tous les suivants et la roue tourne sans que la question soit
-/// posée. Plancher parce qu'un intervalle d'une seconde ne laisserait pas le temps d'une poignée
-/// de main TLS ; plafond parce qu'un `slow_down` répété fait grimper l'intervalle sans fin.
+/// Long enough not to cut off a slow answer, never much more than one interval's worth: beyond
+/// that, a stuck poll shifts every following one and the wheel turns without the question ever
+/// being asked. A floor, because an interval of one second would leave no time for a TLS
+/// handshake; a ceiling, because a repeated `slow_down` makes the interval climb without end.
 fn poll_timeout(interval: Duration) -> Duration {
     (interval + Duration::from_secs(5)).clamp(Duration::from_secs(8), Duration::from_secs(20))
 }
 
-/// Ce que dit un sondage qui n'a pas rendu de jeton.
+/// What a poll that returned no token is saying.
 #[derive(Debug, PartialEq, Eq)]
 enum Pending {
-    /// Pas encore approuvé : on repasse au même rythme.
+    /// Not approved yet: we come back at the same rate.
     KeepWaiting,
-    /// Le serveur demande qu'on ralentisse (RFC 8628 §3.5).
+    /// The server is asking us to slow down (RFC 8628 §3.5).
     SlowDown,
-    /// Rien d'exploitable, mais rien de définitif non plus : à retenter, dans la limite tolérée.
+    /// Nothing usable, but nothing final either: to be retried, within the tolerated limit.
     Blip,
-    /// Fini, et voici quoi dire.
+    /// Over, and here is what to say.
     GiveUp(String),
 }
 
-/// Lit une réponse de sondage.
+/// Reads a polling response.
 ///
-/// Les codes de la spec arrivent dans le `error_code` de l'enveloppe maison. Lus à plat, ils
-/// ressemblaient à une réponse inconnue et la CLI abandonnait dès le premier sondage.
+/// The spec's codes arrive inside the `error_code` of our own envelope. Read flat, they looked
+/// like an unknown answer and the CLI gave up from the very first poll.
 ///
-/// Trois familles, et elles ne se disent pas pareil : un code OAuth est une réponse du protocole,
-/// un statut sans code est une panne de la route (un 404 ici veut dire « ce n'est pas une
-/// plateforme Portaki »), et une erreur de transport n'arrive même pas jusqu'ici.
+/// Three families, and they are not worded alike: an OAuth code is an answer from the protocol,
+/// a status without a code is a failure of the route (a 404 here means "this is not a Portaki
+/// platform"), and a transport error never even reaches this far.
 fn interpret(status: u16, body: &str, url: &str) -> Pending {
     match crate::api::error_code(body).as_deref() {
         Some("authorization_pending") => Pending::KeepWaiting,
@@ -308,19 +309,19 @@ fn interpret(status: u16, body: &str, url: &str) -> Pending {
             Pending::GiveUp("the code expired — run `portaki login` again".to_owned())
         }
         Some(other) => Pending::GiveUp(format!("the platform answered {other}")),
-        // 5xx sans code OAuth : la plateforme bafouille, elle ne refuse pas. Un redémarrage
-        // derrière un load balancer ne doit pas annuler une approbation en cours.
+        // 5xx with no OAuth code: the platform is stammering, it is not refusing. A restart
+        // behind a load balancer must not cancel an approval in progress.
         None if status >= 500 => Pending::Blip,
         None => Pending::GiveUp(http::refused(url, status, body)),
     }
 }
 
-/// Montre le code, puis emmène l'utilisateur là où il l'approuve.
+/// Shows the code, then takes the user to where they approve it.
 ///
-/// Le navigateur s'ouvre sur l'URL pré-remplie quand le serveur en donne une : il ne reste alors
-/// qu'à confirmer. Le code reste affiché quoi qu'il arrive — c'est le seul recours si l'ouverture
-/// échoue, si la CLI tourne dans un SSH, ou si le navigateur ouvert n'est pas celui où la session
-/// est déjà ouverte.
+/// The browser opens on the pre-filled URL when the server gives one: all that is left then is
+/// to confirm. The code stays on screen whatever happens — it is the only fallback if opening
+/// fails, if the CLI is running inside an SSH session, or if the browser that opened is not the
+/// one where the session is already open.
 fn present(started: &DeviceCode, no_browser: bool) {
     let target = started
         .verification_uri_complete
@@ -359,9 +360,9 @@ pub async fn logout(_args: LogoutArgs) -> Result<()> {
     let origin = auth::origin_of(&issuer).with_context(|| format!("{issuer} is not a URL"))?;
     let stored = auth::refresh_token(&origin);
 
-    // Effacé d'abord, quoi qu'il arrive ensuite : une déconnexion qui laisse les identifiants
-    // en place parce que le réseau a hoqueté serait la pire des deux moitiés — on croit être
-    // sorti, et on ne l'est nulle part.
+    // Erased first, whatever happens next: a sign-out that leaves the credentials in place
+    // because the network hiccuped would be the worse of the two halves — you believe you are
+    // out, and you are out nowhere.
     auth::forget(&origin)?;
 
     let Some(refresh_token) = stored else {
@@ -385,8 +386,8 @@ pub async fn logout(_args: LogoutArgs) -> Result<()> {
     match revoke(&issuer, &refresh_token).await {
         Ok(()) => ui::success("the platform revoked this session"),
         Err(failure) => {
-            // Le dire, parce que c'est la moitié qui protège : un jeton non révoqué reste
-            // utilisable par qui détient une copie du fichier.
+            // Say it, because this is the half that protects: a token that was not revoked
+            // stays usable by whoever holds a copy of the file.
             ui::warn("could not reach the platform — this session is still valid there");
             ui::detail(format!("{failure:#}"));
             ui::advice("run portaki logout again once you are online");
@@ -396,14 +397,14 @@ pub async fn logout(_args: LogoutArgs) -> Result<()> {
     Ok(())
 }
 
-/// Dit à la plateforme d'oublier ce jeton.
+/// Tells the platform to forget this token.
 ///
-/// Sans quoi `portaki logout` n'efface qu'un fichier : le jeton de rafraîchissement reste
-/// valide jusqu'à son expiration, et qui détient une copie du fichier reste connecté.
+/// Without it, `portaki logout` only erases a file: the refresh token stays valid until it
+/// expires, and whoever holds a copy of the file stays signed in.
 async fn revoke(base: &str, refresh_token: &str) -> Result<()> {
     let url = format!("{base}/api/v1/auth/logout");
-    // Dix secondes en tout, mais désormais cinq pour ouvrir la connexion : sans échéance de
-    // connexion, une plateforme injoignable retenait `portaki logout` jusqu'au timeout du noyau.
+    // Ten seconds in all, but now five to open the connection: with no connection deadline, an
+    // unreachable platform held `portaki logout` back until the kernel's timeout.
     let response = http::client()
         .post(&url)
         .json(&serde_json::json!({ "refreshToken": refresh_token }))
@@ -460,13 +461,13 @@ mod tests {
 
     #[test]
     fn the_cli_never_asks_for_a_host_scope() {
-        // Un jeton de CLI ne fait pas d'opérations hôte ; le serveur le raboterait de toute
-        // façon, mais le demander serait déjà une intention de trop. Écrit sur le préfixe et
-        // non sur un scope nommé : `host:billing` ajouté demain doit échouer ici aussi.
+        // A CLI token does not perform host operations; the server would strip it anyway, but
+        // asking for it would already be one intention too many. Written against the prefix and
+        // not against a named scope: a `host:billing` added tomorrow must fail here too.
         assert!(!SCOPES.iter().any(|s| s.starts_with("host:")));
     }
 
-    /// Les séjours de la sandbox et ceux d'un vrai voyageur ne portent pas le même scope.
+    /// Sandbox stays and a real traveller's stays do not carry the same scope.
     #[test]
     fn sandbox_stays_are_asked_for_under_the_dev_domain() {
         assert!(SCOPES.contains(&"dev:stay:read"));
@@ -525,7 +526,7 @@ mod tests {
 
     const TOKEN_URL: &str = "https://api-staging.portaki.app/api/v1/auth/device/token";
 
-    /// Un hoquet isolé ne doit pas annuler une connexion qu'on est en train d'approuver.
+    /// An isolated hiccup must not cancel a sign-in that is being approved right now.
     #[test]
     fn a_blip_does_not_end_the_login() {
         for consecutive in 1..=BLIPS_TOLERATED {
@@ -533,20 +534,20 @@ mod tests {
         }
     }
 
-    /// Mais une plateforme devenue muette ne doit pas faire tourner la roue jusqu'à expiration.
+    /// But a platform gone silent must not keep the wheel spinning until the code expires.
     #[test]
     fn a_run_of_failures_ends_the_login() {
         assert!(give_up_after(BLIPS_TOLERATED + 1));
         assert!(give_up_after(BLIPS_TOLERATED + 9));
     }
 
-    /// La série se compte, pas le total : ce que le compteur remis à zéro doit garantir.
+    /// It is the run that is counted, not the total: what resetting the counter must guarantee.
     #[test]
     fn the_counter_is_a_run_and_not_a_total() {
         let mut blips = 0_u32;
 
-        // Deux hoquets, un sondage qui aboutit, deux hoquets : cinq échecs en tout, jamais
-        // quatre d'affilée — la connexion continue.
+        // Two hiccups, a poll that goes through, two hiccups: five failures in all, never four
+        // in a row — the sign-in carries on.
         for outcome in [false, false, true, false, false] {
             if outcome {
                 blips = 0;
@@ -557,24 +558,24 @@ mod tests {
         }
     }
 
-    /// Un sondage ne doit pas durer plus longtemps que ce qui sépare deux sondages, ou presque :
-    /// sinon ils s'empilent et le code expire sans qu'on ait posé la question.
+    /// A poll must not last longer than what separates two polls, or barely longer: otherwise
+    /// they pile up and the code expires without the question having been asked.
     #[test]
     fn a_poll_never_outlives_the_code_it_asks_about() {
         let expires_in = Duration::from_secs(600);
         let interval = Duration::from_secs(5);
 
         assert!(poll_timeout(interval) < expires_in / 10);
-        // Un intervalle d'une seconde garde quand même de quoi faire une poignée de main TLS.
+        // An interval of one second still keeps enough room for a TLS handshake.
         assert!(poll_timeout(Duration::from_secs(1)) >= Duration::from_secs(8));
-        // Et un `slow_down` répété ne fait pas grimper l'échéance sans fin.
+        // And a repeated `slow_down` does not make the deadline climb without end.
         assert_eq!(
             poll_timeout(Duration::from_secs(600)),
             Duration::from_secs(20)
         );
     }
 
-    /// Les deux réponses qui veulent dire « repasse ».
+    /// The two answers that mean "come back later".
     #[test]
     fn pending_and_slow_down_are_not_failures() {
         assert_eq!(
@@ -587,7 +588,7 @@ mod tests {
         );
     }
 
-    /// Un refus et un code périmé sont définitifs : les retenter ferait tourner la roue pour rien.
+    /// A denial and an expired code are final: retrying them would spin the wheel for nothing.
     #[test]
     fn a_denial_stops_the_login_at_once() {
         let denied = interpret(403, r#"{"error_code":"access_denied"}"#, TOKEN_URL);
@@ -597,8 +598,8 @@ mod tests {
         assert!(matches!(expired, Pending::GiveUp(said) if said.contains("expired")));
     }
 
-    /// Une panne de route n'est pas un code OAuth : elle se dit avec son statut et son URL, de
-    /// sorte qu'un `PORTAKI_API_URL` qui ne pointe pas sur une plateforme Portaki se voie.
+    /// A route failure is not an OAuth code: it is reported with its status and its URL, so that
+    /// a `PORTAKI_API_URL` that does not point at a Portaki platform shows up.
     #[test]
     fn a_status_without_an_oauth_code_names_the_url_that_was_polled() {
         let said = match interpret(404, "<html>not found</html>", TOKEN_URL) {
@@ -610,8 +611,8 @@ mod tests {
         assert!(said.contains(TOKEN_URL), "{said}");
     }
 
-    /// Un 502 le temps d'un redémarrage n'est pas un refus : la personne est peut-être devant
-    /// l'écran d'approbation, et abandonner là lui ferait tout recommencer.
+    /// A 502 for the length of a restart is not a refusal: the person may be standing in front
+    /// of the approval screen, and giving up there would make them start all over again.
     #[test]
     fn a_platform_hiccup_is_retried_rather_than_fatal() {
         assert_eq!(
@@ -621,8 +622,8 @@ mod tests {
         assert_eq!(interpret(503, "", TOKEN_URL), Pending::Blip);
     }
 
-    /// Un code inconnu de la spec reste une fin : on ne sait pas quoi en faire de mieux, et le
-    /// dire vaut mieux que sonder une plateforme qui répond toujours la même chose.
+    /// A code the spec does not know is still an ending: we have nothing better to do with it,
+    /// and saying so is better than polling a platform that always gives the same answer.
     #[test]
     fn an_unknown_oauth_code_is_reported_verbatim() {
         let said = match interpret(400, r#"{"error_code":"invalid_client"}"#, TOKEN_URL) {

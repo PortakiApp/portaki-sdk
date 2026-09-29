@@ -29,7 +29,7 @@ pub struct BuildArgs {
     #[arg(long)]
     pub all: bool,
 
-    /// `release` enchaîne sur `build` : un second en-tête ferait croire à deux commandes.
+    /// `release` chains straight on to `build`: a second header would look like two commands.
     #[arg(skip)]
     pub nested: bool,
 }
@@ -45,7 +45,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             ),
         );
     }
-    // `release` s'est déjà placé dans le module qu'il publie.
+    // `release` has already moved into the module it is publishing.
     if args.nested {
         return build_here(&args).await;
     }
@@ -62,7 +62,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     Ok(())
 }
 
-/// `portaki build` pour le module du dossier courant.
+/// `portaki build` for the module in the current directory.
 async fn build_here(args: &BuildArgs) -> Result<()> {
     let started = std::time::Instant::now();
 
@@ -133,9 +133,9 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
     Ok(())
 }
 
-/// Écrit un `build.rs` minimal quand le module n'en a pas : sans lui Cargo ne donne pas d'`OUT_DIR`,
-/// les macros n'écrivent rien, et le build wasm32 s'arrête sur l'erreur de `portaki_module!`.
-/// Un `[package] build = …` explicite est laissé tel quel.
+/// Writes a minimal `build.rs` when the module has none: without it Cargo gives no `OUT_DIR`, the
+/// macros write nothing, and the wasm32 build stops on `portaki_module!`'s error.
+/// An explicit `[package] build = …` is left exactly as it is.
 fn ensure_build_script(module_root: &std::path::Path) -> Result<Option<&'static str>> {
     let path = module_root.join("build.rs");
     let cargo = std::fs::read_to_string(module_root.join("Cargo.toml")).unwrap_or_default();
@@ -149,17 +149,17 @@ fn ensure_build_script(module_root: &std::path::Path) -> Result<Option<&'static 
     Ok(Some("build.rs"))
 }
 
-/// Ce que `portaki build` écrit : rien à faire, seulement exister.
+/// What `portaki build` writes: nothing to do, only to exist.
 const BUILD_SCRIPT: &str =
     "// Cargo gives the Portaki macros an OUT_DIR only when the crate has a build script.\n\
 fn main() {}\n";
 
-/// Refuse un wasm qui attend `wasm-bindgen`.
+/// Refuses a wasm that expects `wasm-bindgen`.
 ///
-/// L'hôte Extism ne fournit pas ces imports : le module se chargerait puis échouerait à
-/// l'exécution, loin d'ici, avec un message qui ne désigne pas la cause. Une dépendance tirée
-/// sans y penser suffit à les faire apparaître — c'est arrivé, et le contrôle vivait depuis
-/// dans le script bash d'un dépôt. Il appartient au build.
+/// The Extism host provides none of those imports: the module would load and then fail at run
+/// time, far from here, with a message that does not name the cause. A dependency pulled in
+/// without thinking is enough to make them appear — it happened, and the check had lived ever
+/// since in one repository's bash script. It belongs in the build.
 /// Turns the latest SDK emissions into what the host reads: `manifest.json`, migrations,
 /// operations and i18n bundles, and the publish manifest.
 ///
@@ -260,9 +260,9 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
 
 fn reject_wasm_bindgen(wasm: &std::path::Path) -> Result<()> {
     let bytes = std::fs::read(wasm).with_context(|| format!("read {}", wasm.display()))?;
-    // Cherché dans les octets et non dans une table d'imports décodée : le nom apparaît en
-    // clair dans la section des imports, et lire le format complet pour une chaîne coûterait un
-    // analyseur wasm de plus.
+    // Looked for in the raw bytes rather than in a decoded import table: the name appears in
+    // clear in the import section, and reading the whole format just for one string would cost
+    // yet another wasm parser.
     if bytes
         .windows(WBINDGEN.len())
         .any(|window| window == WBINDGEN)
@@ -277,10 +277,10 @@ fn reject_wasm_bindgen(wasm: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// La marque que laisse `wasm-bindgen` dans la section des imports.
+/// The mark `wasm-bindgen` leaves in the import section.
 const WBINDGEN: &[u8] = b"__wbindgen";
 
-/// Le chemin tel qu'on le retaperait : depuis la racine du module, pas depuis la racine du disque.
+/// The path as one would retype it: from the module root, not from the root of the disk.
 fn relative(path: &std::path::Path, root: &std::path::Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -362,8 +362,9 @@ mod tests {
         assert!(!custom.path().join("build.rs").exists());
     }
 
-    /// Le contrôle qui vivait dans un script bash : un wasm qui attend `wasm-bindgen` se charge
-    /// puis échoue à l'exécution, loin du build, avec un message qui ne désigne pas la cause.
+    /// The check that used to live in a bash script: a wasm that expects `wasm-bindgen` loads
+    /// and then fails at run time, far from the build, with a message that does not name the
+    /// cause.
     #[test]
     fn a_wasm_importing_wasm_bindgen_is_refused() {
         let directory = tempfile::tempdir().unwrap();

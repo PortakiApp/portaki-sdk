@@ -1,28 +1,28 @@
-//! Publier depuis une CI sans y stocker de secret.
+//! Publishing from a CI without storing a secret there.
 //!
-//! GitHub Actions donne à chaque job un jeton OIDC signé, valable le temps du job. Le registre
-//! l'échange contre un droit de publier **un** module sur **un** canal, une fois. Rien à ranger
-//! dans les secrets du dépôt, rien à faire tourner : le seul secret est celui que GitHub fabrique
-//! et jette.
+//! GitHub Actions gives every job a signed OIDC token, valid for the length of the job. The
+//! registry exchanges it for the right to publish **one** module on **one** channel, once.
+//! Nothing to keep in the repository's secrets, nothing to rotate: the only secret is the one
+//! GitHub makes and throws away.
 //!
-//! Le jeton prouve d'où il vient, il n'autorise rien : c'est la liaison enregistrée chez le
-//! registre — dépôt, workflow, environment, événement, runner — qui décide.
+//! The token proves where it comes from, it authorises nothing: it is the link registered with
+//! the registry — repository, workflow, environment, event, runner — that decides.
 
 use anyhow::{bail, Context, Result};
 
-/// Les deux variables que GitHub Actions pose quand le job demande `id-token: write`.
+/// The two variables GitHub Actions sets when the job asks for `id-token: write`.
 const REQUEST_URL: &str = "ACTIONS_ID_TOKEN_REQUEST_URL";
 const REQUEST_TOKEN: &str = "ACTIONS_ID_TOKEN_REQUEST_TOKEN";
 
-/// Tourne-t-on dans un job qui peut demander un jeton OIDC ?
+/// Are we running inside a job that can ask for an OIDC token?
 ///
-/// L'absence de ces variables dans un job GitHub Actions veut presque toujours dire une chose :
-/// `permissions: id-token: write` manque au workflow. Le message d'erreur le dit.
+/// The absence of these variables in a GitHub Actions job almost always means one thing:
+/// `permissions: id-token: write` is missing from the workflow. The error message says so.
 pub fn available() -> bool {
     non_empty(REQUEST_URL).is_some() && non_empty(REQUEST_TOKEN).is_some()
 }
 
-/// Sommes-nous chez GitHub Actions, jeton disponible ou non ?
+/// Are we on GitHub Actions, token available or not?
 pub fn inside_github_actions() -> bool {
     non_empty("GITHUB_ACTIONS").is_some()
 }
@@ -34,17 +34,17 @@ fn non_empty(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// L'audience demandée pour le jeton.
+/// The audience requested for the token.
 ///
-/// Elle est choisie par l'appelant : elle lie le jeton à ce service, elle ne prouve rien sur
-/// l'identité. Le registre la vérifie pour refuser un jeton émis pour ailleurs, et autorise sur
-/// `repository_id`.
+/// It is chosen by the caller: it binds the token to this service, it proves nothing about
+/// identity. The registry checks it in order to refuse a token issued for somewhere else, and
+/// authorises on `repository_id`.
 pub fn audience(base: &str) -> String {
     non_empty("PORTAKI_REGISTRY_OIDC_AUDIENCE")
         .unwrap_or_else(|| format!("{}/registry", base.trim_end_matches('/')))
 }
 
-/// Demande à GitHub un jeton pour cette audience.
+/// Asks GitHub for a token for this audience.
 pub async fn request_token(audience: &str) -> Result<String> {
     let url = non_empty(REQUEST_URL).context("ACTIONS_ID_TOKEN_REQUEST_URL absent")?;
     let bearer = non_empty(REQUEST_TOKEN).context("ACTIONS_ID_TOKEN_REQUEST_TOKEN absent")?;
@@ -70,11 +70,11 @@ pub async fn request_token(audience: &str) -> Result<String> {
     }
 }
 
-/// Échange le jeton OIDC contre un credential de publication.
+/// Exchanges the OIDC token for a publication credential.
 ///
-/// Le credential est court et à usage unique : une publication qui échoue le consomme, et il
-/// faut en redemander un. C'est sans conséquence — un job peut redemander un jeton OIDC autant
-/// de fois qu'il veut.
+/// The credential is short-lived and single-use: a publication that fails consumes it, and
+/// another one has to be asked for. That is of no consequence — a job can ask for an OIDC token
+/// as many times as it likes.
 pub async fn exchange(
     base: &str,
     module_id: &str,
@@ -105,13 +105,14 @@ pub async fn exchange(
     }
 }
 
-/// Un échange refusé, avec le code stable du registre : `publish` le lit pour reconnaître
-/// `module_not_linked` sans analyser un message.
+/// A refused exchange, with the registry's stable code: `publish` reads it to recognise
+/// `module_not_linked` without parsing a message.
 #[derive(Debug)]
 pub struct Refused {
     pub status: u16,
     pub code: String,
-    /// La page où corriger le refus, quand le registre la donne (`module_not_linked`).
+    /// The page where the refusal is to be fixed, when the registry gives one
+    /// (`module_not_linked`).
     pub link_url: Option<String>,
     text: String,
 }
@@ -141,10 +142,10 @@ impl std::fmt::Display for Refused {
 
 impl std::error::Error for Refused {}
 
-/// Le refus, traduit en ce qu'il y a à corriger.
+/// The refusal, translated into what there is to fix.
 ///
-/// Un `403` nu laisserait chercher entre cinq causes ; le registre renvoie un code stable pour
-/// chacune, et c'est lui qu'on lit.
+/// A bare `403` would leave you searching among five causes; the registry returns a stable code
+/// for each one, and that is what we read.
 fn refusal(status: u16, body: &str) -> String {
     let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
     let code = parsed
@@ -206,7 +207,7 @@ mod tests {
         );
     }
 
-    /// Chaque code de refus dit quoi corriger : sans ça, cinq causes pour un même 403.
+    /// Every refusal code says what to fix: without that, five causes behind one same 403.
     #[test]
     fn each_refusal_says_what_to_fix() {
         let refused = refusal(403, r#"{"code":"environment_required","message":"aucun"}"#);

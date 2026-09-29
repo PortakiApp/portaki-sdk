@@ -55,7 +55,7 @@ rustup target add wasm32-unknown-unknown
 | `portaki doctor [--offline]` | Check this machine, one line per check with its fix: session for the targeted platform, CLI vs locked SDK vs latest, toolchain and wasm32 target, cosign, the email Sigstore would certify vs your verified Portaki email, the repository link, `.cargo/config.toml` / `rust-toolchain.toml` that redirect `cargo` |
 | `portaki init` | Scaffold a module from a template, `listing.json` included — asks for its name, description, tagline, category and author in a terminal |
 | `portaki login [--no-browser]` / `portaki logout` | Open a developer session with the device grant / end it here and revoke it on the platform that issued it |
-| `portaki build` | Compile Wasm + merge emissions → `manifest.json`, tamponne la version SDK liée |
+| `portaki build` | Compile Wasm + merge emissions → `manifest.json`, stamp the linked SDK version |
 | `portaki check [--fix] [--only fmt,clippy,tests,build,lint,i18n] [--channel preview\|stable]` | The gate `portaki release` applies, the same code: `cargo fmt --check`, `cargo clippy -D warnings`, tests with the conformance battery, the wasm build, the manifest, every text in every language. `--fix` formats and applies clippy's fixes first. `lint` and `i18n check` are hidden aliases |
 | `portaki add permission <perm>` | Turn on the `portaki-sdk` feature that declares the permission (`permissions add` is a hidden alias) |
 | `portaki add connector <id>` | Declare a built-in connector (`open-weather`, `nuki`, …) with its `#[portaki_sdk::connector]` in `src/lib.rs` |
@@ -189,8 +189,8 @@ another program would come to read: the steps, the fields, the results, the erro
 there are prefixed `error:` rather than marked with a cross, so a log stays greppable.
 
 Warnings go to stderr, so stdout keeps what a script reads. One exception, kept for the release
-action v1 and the `portaki-modules` workflow that `grep` stdout for it: the « already in the
-registry » line of `publish` — on stdout without `--json`, on stderr with it.
+action v1 and the `portaki-modules` workflow that `grep` stdout for it: the "already in the
+registry" line of `publish` — on stdout without `--json`, on stderr with it.
 
 ### `--json`
 
@@ -229,7 +229,7 @@ A command that renders no information writes nothing to stdout.
 | 3 | Nothing to do, or already done — `add permission` of a declared permission, `logout` without a session, `publish --json` when every version was already in the registry |
 | 130 | Interrupted (ctrl-c) |
 
-`publish` without `--json` keeps exiting 0 on « already in the registry »: the release action v1
+`publish` without `--json` keeps exiting 0 on "already in the registry": the release action v1
 reads that case from stdout and would take any other code for a failure.
 
 Colour and animation turn themselves off when the output is not a terminal, and `NO_COLOR` is

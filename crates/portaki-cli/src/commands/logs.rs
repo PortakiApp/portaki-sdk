@@ -179,7 +179,7 @@ fn mentions(line: &LogLine, code: &str) -> bool {
 }
 
 pub(crate) fn print(line: &LogLine) {
-    // `--json` : une ligne JSON par événement, telle que devapi l'a émise (NDJSON).
+    // `--json`: one JSON line per event, exactly as devapi emitted it (NDJSON).
     if ui::json() {
         ui::emit(&serde_json::json!({
             "ts": line.ts, "level": line.level, "src": line.src, "msg": line.msg,

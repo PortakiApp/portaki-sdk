@@ -1,27 +1,27 @@
-//! `portaki release` — publier une version au registre Portaki.
+//! `portaki release` — publish a version to the Portaki registry.
 //!
-//! Tests (la batterie de conformité de `portaki_test_utils::conformance!()` comprise) → build
-//! `--release` → emballage → droit de push demandé au registre → poussée dans **son** dépôt OCI
-//! → signature → annonce → fiche publique. Un test qui échoue arrête tout avant le build ; une
-//! signature qui échoue, avant l'annonce.
+//! Tests (the conformance battery of `portaki_test_utils::conformance!()` included) → `--release`
+//! build → packing → right to push asked of the registry → push into **its** OCI repository →
+//! signature → announcement → public listing. A failing test stops everything before the build; a
+//! failing signature, before the announcement.
 //!
-//! Le droit de push vient du registre (`POST /registry/v1/publications/push-token`) : court,
-//! limité à ce module et cette version, pour le seul dépôt `modules/<id>` de l'hôte OCI que la
-//! réponse nomme. Rien d'autre n'autorise une poussée — ni `docker login`, ni jeton GitHub.
+//! The right to push comes from the registry (`POST /registry/v1/publications/push-token`): short,
+//! limited to this module and this version, for the one `modules/<id>` repository of the OCI host
+//! the answer names. Nothing else authorises a push — not `docker login`, not a GitHub token.
 //!
-//! Qui publie : depuis un poste, la session `portaki login` ; dans un job GitHub Actions avec
-//! `id-token: write`, le jeton OIDC du job, échangé contre un credential à usage unique (un par
-//! geste : droit de push, annonce, fiche).
+//! Who publishes: from a workstation, the `portaki login` session; in a GitHub Actions job with
+//! `id-token: write`, the job's OIDC token, exchanged for a single-use credential (one per step:
+//! right to push, announcement, listing).
 //!
-//! La signature est par défaut. Depuis un poste, c'est l'auteur qui atteste (`cosign attest`,
-//! identité GitHub) ; en CI, c'est [`Mode::CiRelease`] qui atteste la provenance du workflow et
-//! l'audit des dépendances. `--no-sign` publie sans signature : la version ne tournera qu'en
-//! sandbox.
+//! The signature is on by default. From a workstation, it is the author who attests (`cosign
+//! attest`, GitHub identity); in CI, it is [`Mode::CiRelease`] that attests the workflow's
+//! provenance and the dependency audit. `--no-sign` publishes without a signature: the version
+//! will then only run in the sandbox.
 //!
-//! En CI, deux jobs : `portaki ci build` exécute le code du module (tests, `build.rs`) sans aucun
-//! droit ; `portaki ci release` pousse ce qu'il a produit, avec les droits, sans rien exécuter du
-//! module — ni cargo : id, version et SDK se lisent dans `publish-manifest.json`, les sources et
-//! `Cargo.lock`.
+//! In CI, two jobs: `portaki ci build` runs the module's code (tests, `build.rs`) with no rights
+//! at all; `portaki ci release` pushes what it produced, with the rights, running nothing of the
+//! module — not even cargo: id, version and SDK are read from `publish-manifest.json`, the sources
+//! and `Cargo.lock`.
 //!
 //! Set `PORTAKI_PUBLISH_VERSION` (e.g. from CI git tag `*-vX.Y.Z`) to fail fast if
 //! `publish-manifest.json` version does not match.
@@ -80,15 +80,15 @@ pub struct ReleaseArgs {
     pub host_action: Vec<String>,
 }
 
-/// Où la publication tourne, et donc ce qu'elle a le droit d'exécuter.
+/// Where the publication runs, and therefore what it is allowed to execute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
-    /// Un poste : tests, build, signature d'auteur.
+    /// A workstation: tests, build, author signature.
     Local,
-    /// `portaki ci build`, le job sans droits : tests, build, emballage — rien n'est poussé.
+    /// `portaki ci build`, the job with no rights: tests, build, packing — nothing is pushed.
     CiBuild,
-    /// `portaki ci release`, le job à droits : l'artefact de `ci build`, poussé, attesté avec la
-    /// provenance du workflow et `audit`, annoncé. Rien du module ne s'exécute.
+    /// `portaki ci release`, the job that holds the rights: the artifact from `ci build`, pushed,
+    /// attested with the workflow's provenance and `audit`, announced. Nothing of the module runs.
     CiRelease { audit: Option<PathBuf> },
 }
 
@@ -111,7 +111,7 @@ pub async fn run(args: ReleaseArgs) -> Result<()> {
     run_as(args, Mode::Local).await
 }
 
-/// `portaki release`, `portaki ci build` ou `portaki ci release`, pour chaque module visé.
+/// `portaki release`, `portaki ci build` or `portaki ci release`, for each module aimed at.
 pub async fn run_as(args: ReleaseArgs, mode: Mode) -> Result<()> {
     match mode {
         Mode::Local => ui::header(
@@ -131,8 +131,8 @@ pub async fn run_as(args: ReleaseArgs, mode: Mode) -> Result<()> {
         ),
     }
 
-    // Un module après l'autre, chacun avec son droit de push et son digest : un refus n'arrête
-    // pas les suivants, et le code de sortie dit s'il y en a eu un.
+    // One module after another, each with its own right to push and its own digest: a refusal
+    // does not stop the ones that follow, and the exit code says whether there was one.
     let chosen = workspace::resolve(args.module.as_deref(), Some(args.all))?;
     let mut outcomes = Vec::with_capacity(chosen.len());
     let mut results = Vec::with_capacity(chosen.len());
@@ -167,8 +167,8 @@ pub async fn run_as(args: ReleaseArgs, mode: Mode) -> Result<()> {
     conclude(outcomes)
 }
 
-/// Ce qu'une étape suivante du workflow lit dans `GITHUB_OUTPUT` : `results` pour tous, et les
-/// champs à plat quand il n'y a qu'un module — le cas de l'action de release.
+/// What a following workflow step reads from `GITHUB_OUTPUT`: `results` for all of them, and the
+/// fields laid out flat when there is only one module — the case of the release action.
 fn ci_outputs(results: &[serde_json::Value]) -> Result<()> {
     let mut pairs = vec![("results".to_string(), serde_json::to_string(results)?)];
     if let [only] = results {
@@ -190,8 +190,8 @@ fn ci_outputs(results: &[serde_json::Value]) -> Result<()> {
     crate::commands::ci::emit_outputs(&pairs)
 }
 
-/// Le résultat du module en cours, pour `--json` : noté là où chaque fait est connu plutôt que
-/// passé d'étape en étape. Les modules se publient un par un, jamais ensemble.
+/// The current module's result, for `--json`: recorded where each fact becomes known rather than
+/// handed on from step to step. Modules are published one at a time, never together.
 static RESULT: std::sync::Mutex<serde_json::Value> = std::sync::Mutex::new(serde_json::Value::Null);
 
 fn result() -> std::sync::MutexGuard<'static, serde_json::Value> {
@@ -206,7 +206,7 @@ fn note(key: &str, value: impl Into<serde_json::Value>) {
     }
 }
 
-/// Le refus `module_not_linked` de l'échange OIDC, s'il est dans la chaîne.
+/// The `module_not_linked` refusal from the OIDC exchange, if it is in the chain.
 fn not_linked(failure: &anyhow::Error) -> Option<&oidc::Refused> {
     failure
         .chain()
@@ -214,10 +214,10 @@ fn not_linked(failure: &anyhow::Error) -> Option<&oidc::Refused> {
         .filter(|refused| refused.code == "module_not_linked")
 }
 
-/// Les modules refusés faute de liaison, dans l'ordre du run.
+/// The modules refused for want of a link, in the run's own order.
 ///
-/// Le CLI ne sait pas lister les liaisons — l'API qui le dit veut un jeton de développeur, et
-/// une CI n'a que son jeton OIDC. Ce sont donc les refus de ce run qui font la liste.
+/// The CLI cannot list the links — the API that gives them wants a developer token, and a CI has
+/// only its OIDC token. So it is this run's refusals that make up the list.
 fn unlinked(outcomes: &[(String, Result<()>)]) -> Vec<String> {
     outcomes
         .iter()
@@ -226,11 +226,11 @@ fn unlinked(outcomes: &[(String, Result<()>)]) -> Vec<String> {
         .collect()
 }
 
-/// Un résultat par module, le lien pour lier d'un coup ceux qui ne le sont pas, et un échec
-/// si un seul module n'est pas passé.
+/// One result per module, the link that links all the unlinked ones in one go, and a failure if
+/// even a single module did not get through.
 fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
     let unlinked = unlinked(&outcomes);
-    // La page Dépôt vient du registre, dans le refus du premier module non lié.
+    // The Dépôt page comes from the registry, in the refusal of the first unlinked module.
     let page = outcomes
         .iter()
         .find_map(|(_, outcome)| outcome.as_ref().err().and_then(not_linked))
@@ -259,7 +259,7 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
                 ));
             }
         } else if total == 1 {
-            // Un module seul : l'échec remonte tel quel, comme avant.
+            // A single module: the failure travels up as it stands, as before.
             return Err(failure);
         } else {
             ui::failure(format!("{id} — {failure:#}"));
@@ -301,13 +301,13 @@ fn conclude(outcomes: Vec<(String, Result<()>)>) -> Result<()> {
     }
 }
 
-/// La fiche publique du module, versionnée à côté de `portaki.module.json`.
+/// The module's public listing, versioned next to `portaki.module.json`.
 const LISTING: &str = "listing.json";
 
-/// La fiche du module, lue et vérifiée avant toute publication : une fiche cassée découverte
-/// après la poussée laisserait un artefact publié et une vitrine en retard.
+/// The module's listing, read and checked before any publication: a broken listing discovered
+/// after the push would leave a published artifact and a storefront lagging behind.
 ///
-/// Le contenu part tel quel — c'est le registre qui en valide les champs.
+/// The content goes out as it stands — it is the registry that validates its fields.
 fn read_listing(module_root: &Path) -> Result<Option<serde_json::Value>> {
     let path = module_root.join(LISTING);
     let raw = match std::fs::read_to_string(&path) {
@@ -323,15 +323,15 @@ fn read_listing(module_root: &Path) -> Result<Option<serde_json::Value>> {
     Ok(Some(listing))
 }
 
-/// Jusqu'où la publication est allée.
+/// How far the publication got.
 #[derive(Debug, PartialEq, Eq)]
 enum Landed {
     DryRun,
-    /// La version est au registre — annoncée à l'instant, ou déjà là.
+    /// The version is in the registry — announced just now, or already there.
     InRegistry(String),
 }
 
-/// La version est déjà au registre : la publication s'arrête avant de pousser (ADR-0005).
+/// The version is already in the registry: the publication stops before pushing (ADR-0005).
 #[derive(Debug)]
 struct AlreadyInRegistry {
     id: String,
@@ -352,7 +352,7 @@ impl std::fmt::Display for AlreadyInRegistry {
 
 impl std::error::Error for AlreadyInRegistry {}
 
-/// Au registre, mais en brouillon, et `--require-available` demandait une version visible.
+/// In the registry, but as a draft, while `--require-available` asked for a visible version.
 #[derive(Debug)]
 struct DraftRefused {
     id: String,
@@ -372,7 +372,7 @@ impl std::fmt::Display for DraftRefused {
 
 impl std::error::Error for DraftRefused {}
 
-/// Ce qu'on fait de la fiche, selon où la publication s'est arrêtée.
+/// What becomes of the listing, depending on where the publication stopped.
 #[derive(Debug, PartialEq, Eq)]
 enum ListingPlan<'a> {
     Send(&'a str),
@@ -380,8 +380,8 @@ enum ListingPlan<'a> {
     Skip,
 }
 
-/// La fiche part dès que la version est au registre — y compris déjà publiée, sans quoi une
-/// fiche corrigée attendrait la release suivante.
+/// The listing goes out as soon as the version is in the registry — including one already
+/// published, otherwise a corrected listing would wait for the next release.
 fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
     match landed {
         Ok(Landed::InRegistry(id)) => ListingPlan::Send(id),
@@ -398,12 +398,12 @@ fn listing_plan(landed: &Result<Landed>) -> ListingPlan<'_> {
     }
 }
 
-/// Une version déjà au registre n'est pas un échec : rien n'est poussé, et la suite — la fiche —
-/// part quand même.
+/// A version already in the registry is not a failure: nothing is pushed, and what comes next —
+/// the listing — goes out all the same.
 ///
-/// C'était une erreur, et c'est ce qui rendait rouge un run relancé seulement pour pousser une
-/// fiche corrigée. L'avertissement part sur stdout, où les workflows de la v1 le cherchaient ;
-/// `ci release` le dit aussi dans `GITHUB_OUTPUT` (`outcome=already-published`).
+/// It used to be an error, and that is what turned red a run replayed only to push a corrected
+/// listing. The warning goes out on stdout, where the v1 workflows looked for it; `ci release`
+/// also says it in `GITHUB_OUTPUT` (`outcome=already-published`).
 fn settle(landed: Result<Landed>) -> Result<Landed> {
     match landed {
         Err(failure) => match failure.downcast_ref::<AlreadyInRegistry>() {
@@ -420,7 +420,7 @@ fn settle(landed: Result<Landed>) -> Result<Landed> {
     }
 }
 
-/// La publication du module de `module_root`, puis sa fiche publique.
+/// The publication of the module at `module_root`, then its public listing.
 async fn run_in(module_root: &Path, args: &ReleaseArgs, mode: &Mode) -> Result<()> {
     let base = crate::profile::api_url(None);
     let Some(listing) = read_listing(module_root)? else {
@@ -442,9 +442,10 @@ async fn run_in(module_root: &Path, args: &ReleaseArgs, mode: &Mode) -> Result<(
     }
 }
 
-/// Envoie la fiche au registre. Elle remplace celle éditée dans le dashboard : le dépôt fait foi.
+/// Sends the listing to the registry. It replaces the one edited in the dashboard: the repository
+/// is what counts.
 ///
-/// Un credential de CI est à usage unique et l'annonce a consommé le sien : on en redemande un.
+/// A CI credential is single-use and the announcement consumed its own: we ask for another.
 async fn send_listing(
     base: &str,
     channel: &str,
@@ -468,8 +469,8 @@ async fn send_listing(
             }
         }
     };
-    // Pas un échec : la publication tient, mais la fiche du dépôt n'a rien changé (elle est gérée
-    // dans la console) — le dire en clair plutôt qu'un « sent » qui ferait croire l'inverse.
+    // Not a failure: the publication stands, but the repository's listing changed nothing (it is
+    // managed in the console) — say so plainly rather than a "sent" that would suggest otherwise.
     if let Outcome::Ignored(message) = &outcome {
         ui::warn(format!("listing not applied — {message}"));
         return Ok(());
@@ -505,7 +506,7 @@ async fn put_listing(
     ))
 }
 
-/// Une fiche refusée n'annule pas la publication : elle fait échouer le run, avec le motif.
+/// A refused listing does not undo the publication: it fails the run, with the reason.
 fn listing_verdict(module_id: &str, outcome: Outcome) -> Result<()> {
     match outcome {
         Outcome::Published | Outcome::Draft { .. } | Outcome::Ignored(_) => Ok(()),
@@ -524,7 +525,7 @@ fn listing_verdict(module_id: &str, outcome: Outcome) -> Result<()> {
     }
 }
 
-/// La publication du module de `module_root`, jusqu'à l'annonce.
+/// The publication of the module at `module_root`, up to the announcement.
 async fn release(
     module_root: &Path,
     args: &ReleaseArgs,
@@ -533,8 +534,8 @@ async fn release(
 ) -> Result<Landed> {
     let artifact_dir = module_root.join("target/portaki");
     let lang = notes_lang(args, module_root);
-    // Lus avant tout build : un drapeau mal formé découvert à l'annonce laisserait un artefact
-    // poussé et une version non annoncée.
+    // Read before any build: a malformed flag discovered at announcement time would leave a
+    // pushed artifact and an unannounced version.
     let notes = crate::changelog::release_notes(
         &args.permission_reasons,
         args.host_action_required,
@@ -542,7 +543,7 @@ async fn release(
         &lang,
     )?;
 
-    // Avant tout build : un refus découvert après la poussée laisserait un artefact non signé.
+    // Before any build: a refusal discovered after the push would leave an unsigned artifact.
     let signs = !args.no_sign && *mode != Mode::CiBuild;
     let cosign = sign::cosign_binary();
     if signs && !args.dry_run {
@@ -558,8 +559,8 @@ async fn release(
     }
 
     if let Mode::CiRelease { audit } = mode {
-        // Le job qui détient les droits n'exécute rien du module : ni ses tests, ni son build, ni
-        // cargo. L'artefact vient de `ci build` ; il ne choisit ni son nom ni son SDK.
+        // The job that holds the rights runs nothing of the module: not its tests, not its build,
+        // not cargo. The artifact comes from `ci build`; it picks neither its name nor its SDK.
         ui::skipped("build and tests skipped — portaki ci build ran them, in a job without rights");
         artifact_matches_sources(module_root, &artifact_dir)?;
         sdk_matches_lock(module_root, &artifact_dir)?;
@@ -571,8 +572,8 @@ async fn release(
             );
         }
     } else {
-        // La porte de `portaki check`, telle quelle : ce qu'elle laisse passer, et seulement ça.
-        // Avant tout droit de push — un refus découvert après laisserait un artefact poussé.
+        // The gate of `portaki check`, exactly as it is: what it lets through, and only that.
+        // Before any right to push — a refusal found afterwards would leave a pushed artifact.
         crate::commands::check::gate(module_root, &args.channel, false, &[])
             .await
             .context(crate::tr!(
@@ -583,7 +584,8 @@ async fn release(
     }
 
     stamp_changelog(module_root, &artifact_dir, args, &lang)?;
-    // Avant la poussée : le registre refuserait l'annonce, mais l'artefact serait déjà poussé.
+    // Before the push: the registry would refuse the announcement, but the artifact would already
+    // have been pushed.
     crate::commands::lint::assert_sdk_version(
         &oci::pack::publish_manifest_path(&artifact_dir),
         &args.channel,
@@ -631,9 +633,9 @@ async fn release(
         return Ok(Landed::DryRun);
     }
 
-    // Demandé avant de pousser, pas découvert après. Une publication est immuable (ADR-0005) :
-    // republier réécrirait le tag OCI, qui ne désignerait plus l'artefact que le catalogue
-    // référence.
+    // Asked before pushing, not discovered afterwards. A publication is immutable (ADR-0005):
+    // republishing would rewrite the OCI tag, which would no longer point at the artifact the
+    // catalogue references.
     refuse_if_already_published(base, &coords).await?;
 
     let pushing = ui::step(crate::tr!(
@@ -667,7 +669,7 @@ async fn release(
     note("digest", pushed.digest.clone());
     note("reference", pushed.artifact_ref());
 
-    // La signature passe avant l'annonce : si elle échoue, rien n'est annoncé.
+    // The signature comes before the announcement: if it fails, nothing is announced.
     match mode {
         _ if !signs => ui::warn(crate::tr!(
             "unsigned — this version will never run in production (a signature is required); it \
@@ -700,16 +702,17 @@ async fn release(
     Ok(Landed::InRegistry(coords.id))
 }
 
-/// La langue des `--notes` et textes non étiquetés.
+/// The language of the untagged `--notes` and texts.
 fn notes_lang(args: &ReleaseArgs, module_root: &Path) -> String {
     args.notes_lang
         .clone()
         .unwrap_or_else(|| crate::changelog::default_lang(module_root))
 }
 
-/// L'artefact vient d'un job qui a exécuté le code du module : il ne choisit pas sous quel nom
-/// il part. Sans ce contrôle, un module piégé produirait un `publish-manifest.json` au nom d'un
-/// autre, et le job de publication le pousserait sous ce nom.
+/// The artifact comes from a job that ran the module's code: it does not get to choose the name
+/// it goes out under. Without this check, a booby-trapped module would produce a
+/// `publish-manifest.json` in another module's name, and the publishing job would push it under
+/// that name.
 fn artifact_matches_sources(module_root: &Path, artifact_dir: &Path) -> Result<()> {
     let sources = oci::pack::read_source_coordinates(module_root)?;
     let artifact = oci::pack::read_module_coordinates(module_root, artifact_dir)?;
@@ -725,8 +728,8 @@ fn artifact_matches_sources(module_root: &Path, artifact_dir: &Path) -> Result<(
     Ok(())
 }
 
-/// Le SDK que l'artefact déclare est celui que `Cargo.lock` résout : lu dans le lock, sans cargo
-/// — un `rust-toolchain.toml` ou un `.cargo/config.toml` du module ne choisit rien ici.
+/// The SDK the artifact declares is the one `Cargo.lock` resolves: read from the lock, without
+/// cargo — a `rust-toolchain.toml` or a `.cargo/config.toml` of the module's decides nothing here.
 fn sdk_matches_lock(module_root: &Path, artifact_dir: &Path) -> Result<()> {
     use crate::commands::ci::{find_lockfile, read_locked_sdk};
     let path = oci::pack::publish_manifest_path(artifact_dir);
@@ -752,9 +755,9 @@ fn sdk_matches_lock(module_root: &Path, artifact_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Inscrit `changelog` dans `publish-manifest.json` : `--notes` par langue, sinon la section de
-/// la version dans `CHANGELOG[.<lang>].md`. Lu dans les sources, jamais dans ce qu'un build a
-/// produit.
+/// Writes `changelog` into `publish-manifest.json`: `--notes` per language, otherwise the
+/// version's section of `CHANGELOG[.<lang>].md`. Read from the sources, never from what a build
+/// produced.
 fn stamp_changelog(
     module_root: &Path,
     artifact_dir: &Path,
@@ -785,12 +788,12 @@ fn stamp_changelog(
     Ok(())
 }
 
-/// Une version publiée ne se republie pas.
+/// A published version is not published again.
 ///
-/// Demandé avant la poussée : l'annonce le refuserait, mais le tag aurait déjà été réécrit.
-/// Le catalogue est public : la question ne coûte ni jeton ni droit.
+/// Asked before the push: the announcement would refuse it, but the tag would already have been
+/// rewritten. The catalogue is public: the question costs neither a token nor a right.
 ///
-/// Injoignable, on continue. Le droit de push refuse de toute façon une version publiée.
+/// If it cannot be reached, we carry on. The right to push refuses a published version anyway.
 async fn refuse_if_already_published(
     base: &str,
     coords: &oci::pack::ModuleCoordinates,
@@ -806,7 +809,7 @@ async fn refuse_if_already_published(
     .into())
 }
 
-/// Une version au catalogue, telle que le registre la rend.
+/// A version in the catalogue, as the registry renders it.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PublishedVersion {
@@ -814,7 +817,7 @@ struct PublishedVersion {
     version: String,
 }
 
-/// Le digest publié pour cette version, s'il y en a un.
+/// The digest published for this version, if there is one.
 async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<String> {
     let response = crate::http::client()
         .get(format!(
@@ -834,7 +837,7 @@ async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<
     )
 }
 
-/// La sélection seule, séparée du réseau pour être vérifiable.
+/// The selection on its own, kept apart from the network so that it can be checked.
 fn digest_of(published: &[PublishedVersion], version: &str) -> Option<String> {
     published
         .iter()
@@ -842,8 +845,8 @@ fn digest_of(published: &[PublishedVersion], version: &str) -> Option<String> {
         .map(|candidate| candidate.digest.clone())
 }
 
-/// Le droit de pousser cette version, demandé au registre (`push-token`) avec le même publieur
-/// que l'annonce : la session, ou un credential échangé contre le jeton OIDC du job.
+/// The right to push this version, asked of the registry (`push-token`) with the same publisher
+/// as the announcement: the session, or a credential exchanged for the job's OIDC token.
 async fn push_grant(
     base: &str,
     coords: &oci::pack::ModuleCoordinates,
@@ -889,7 +892,7 @@ async fn post_push_token(
     ))
 }
 
-/// La réponse du registre : le droit de push, ou le refus avec son code stable.
+/// The registry's answer: the right to push, or the refusal with its stable code.
 fn grant_from(status: u16, body: &str) -> Result<oci::PushGrant> {
     if (200..300).contains(&status) {
         return serde_json::from_str(body)
@@ -908,10 +911,11 @@ fn grant_from(status: u16, body: &str) -> Result<oci::PushGrant> {
     }
 }
 
-/// Annonce la publication au registre, en renouvelant le jeton une fois sur un 401.
+/// Announces the publication to the registry, renewing the token once on a 401.
 ///
-/// L'échec ici laisse l'artefact poussé et signé, mais rien n'est publié : rejouer `release`
-/// (ou le job) redemande un droit de push, repousse, resigne et annonce.
+/// Failing here leaves the artifact pushed and signed, but nothing is published: replaying
+/// `release` (or the job) asks for a right to push again, pushes again, signs again and
+/// announces.
 async fn announce(
     base: &str,
     args: &ReleaseArgs,
@@ -934,8 +938,8 @@ async fn announce(
     });
 
     let outcome = match credential(base, &coords.id, &args.channel).await? {
-        // Une CI : le credential est à usage unique, un 401 veut dire consommé ou expiré. Le
-        // rejouer avec le même n'aurait aucune chance, il faut un nouvel échange.
+        // A CI: the credential is single-use, so a 401 means consumed or expired. Replaying with
+        // the same one would have no chance; a fresh exchange is needed.
         Credential::Ci(token) => post_publication(base, &body, &token).await?,
         Credential::Person(token) => {
             let first = post_publication(base, &body, &token).await?;
@@ -965,8 +969,8 @@ async fn announce(
             ui::field("channel", &args.channel);
             ui::field("reference", pushed.artifact_ref());
             if let Outcome::Draft { missing, url } = &outcome {
-                // Pas un échec par défaut : la version est au registre, elle attend ses notes.
-                // La CI reste verte, l'auteur sait quoi compléter et où.
+                // Not a failure by default: the version is in the registry, waiting for its
+                // notes. The CI stays green, and the author knows what to complete and where.
                 ui::warn(crate::tr!(
                     "draft — invisible to hosts while it misses:",
                     "brouillon — invisible des hôtes tant qu'il manque :"
@@ -1021,8 +1025,9 @@ async fn announce(
         }
         Outcome::AlreadyPublished => {
             note("state", "already-published");
-            // Rejouer une publication n'est pas une erreur d'opérateur : c'est le cas normal
-            // d'une CI relancée. Le catalogue porte déjà cette version, il n'y a rien à faire.
+            // Replaying a publication is not an operator mistake: it is the normal case of a CI
+            // that was restarted. The catalogue already carries this version, so there is nothing
+            // to do.
             announcing.skip(format!(
                 "already in the registry ({} {})",
                 coords.id, coords.version
@@ -1056,20 +1061,20 @@ async fn announce(
     }
 }
 
-/// Ce qui autorise la publication — et les deux façons de l'obtenir.
+/// What authorises the publication — and the two ways of obtaining it.
 enum Credential {
-    /// Obtenu contre le jeton OIDC du job. Aucun secret n'est stocké nulle part.
+    /// Obtained in exchange for the job's OIDC token. No secret is stored anywhere.
     Ci(String),
-    /// Le jeton d'une personne, depuis le trousseau ou l'environnement.
+    /// A person's token, from the keychain or from the environment.
     Person(String),
 }
 
-/// Choisit le chemin d'autorisation.
+/// Chooses the authorisation path.
 ///
-/// Un jeton posé explicitement gagne : un mécanisme qui s'active tout seul ne doit pas rendre
-/// muette une variable qu'on a écrite exprès. Sinon, chez GitHub Actions, l'OIDC — et si le
-/// workflow ne l'a pas demandé, on le dit plutôt que de réclamer un `portaki login` introuvable
-/// sur un runner.
+/// A token set explicitly wins: a mechanism that switches itself on must not silence a variable
+/// somebody wrote on purpose. Otherwise, under GitHub Actions, OIDC — and if the workflow did not
+/// ask for it, we say so rather than demanding a `portaki login` that is nowhere to be found on a
+/// runner.
 async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Credential> {
     auth::ensure_transport(base)?;
     if let Some(token) = auth::explicit_token() {
@@ -1101,15 +1106,16 @@ async fn credential(base: &str, module_id: &str, channel: &str) -> Result<Creden
 #[derive(Debug, PartialEq, Eq)]
 enum Outcome {
     Published,
-    /// Au registre mais invisible des hôtes tant que ses notes de version sont incomplètes :
-    /// ce qui manque, lisible, et la page de la console où le compléter.
+    /// In the registry but invisible to hosts for as long as its release notes are incomplete:
+    /// what is missing, in readable form, and the console page where to complete it.
     Draft {
         missing: Vec<String>,
         url: Option<String>,
     },
-    /// Accepté sans effet : la fiche est gérée dans la console, le registre a gardé la sienne.
+    /// Accepted with no effect: the listing is managed in the console, and the registry kept its
+    /// own.
     Ignored(String),
-    /// Cette version est déjà au catalogue — les publications sont immuables (ADR-0005).
+    /// This version is already in the catalogue — publications are immutable (ADR-0005).
     AlreadyPublished,
     Unauthorized,
     Refused {
@@ -1137,9 +1143,9 @@ async fn post_publication(base: &str, body: &serde_json::Value, token: &str) -> 
     ))
 }
 
-/// Le corps de refus du registre porte un `code` stable — c'est lui qui distingue « déjà publié »
-/// d'un vrai échec, et il vaut mieux que deviner à partir du seul statut : un 409 recouvre aussi
-/// bien une version rejouée qu'un digest déjà ingéré sous un autre nom.
+/// The registry's refusal body carries a stable `code` — that is what tells "already published"
+/// apart from a real failure, and it beats guessing from the status alone: a 409 covers a replayed
+/// version just as well as a digest already ingested under another name.
 fn classify(status: u16, body: &str) -> Outcome {
     let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
     if (200..300).contains(&status) {
@@ -1171,8 +1177,8 @@ fn classify(status: u16, body: &str) -> Outcome {
     }
 }
 
-/// Un 2xx n'est pas toujours « fait » : une fiche peut être ignorée, une version rester en
-/// attente de ses notes.
+/// A 2xx does not always mean "done": a listing may be ignored, and a version may be left waiting
+/// for its notes.
 fn accepted(body: &serde_json::Value) -> Outcome {
     let text = |key: &str| body.get(key).and_then(serde_json::Value::as_str);
     if body.get("ignored").and_then(serde_json::Value::as_bool) == Some(true) {
@@ -1213,8 +1219,8 @@ fn assert_publish_version_matches_env(module_root: &Path, artifact_dir: &Path) -
     assert_publish_version_matches(module_root, artifact_dir, expected.as_deref())
 }
 
-/// La comparaison, sans lire l'environnement : les tests tournent en parallèle dans le même
-/// processus, et deux tests qui posent puis retirent la même variable se marchent dessus.
+/// The comparison, without reading the environment: the tests run in parallel in the same
+/// process, and two tests that set and then unset the same variable tread on each other.
 fn assert_publish_version_matches(
     module_root: &Path,
     artifact_dir: &Path,
@@ -1253,7 +1259,7 @@ mod tests {
         );
     }
 
-    /// Un brouillon refusé par `--require-available` laisse quand même partir la fiche.
+    /// A draft refused by `--require-available` still lets the listing go out.
     #[test]
     fn a_refused_draft_still_sends_the_listing() {
         let draft: Result<Landed> = Err(DraftRefused {
@@ -1279,7 +1285,7 @@ mod tests {
         fs::create_dir_all(dir.path().join("tests")).unwrap();
         fs::write(
             dir.path().join("tests/conformance.rs"),
-            // Formatée comme rustfmt la veut : la porte joue `cargo fmt --check` avant les tests.
+            // Formatted the way rustfmt wants it: the gate runs `cargo fmt --check` before tests.
             "mod portaki_conformance {\n    #[test]\n    fn surfaces() {\n        panic!(\"home.card panicked\")\n    }\n}\n",
         )
         .unwrap();
@@ -1293,8 +1299,8 @@ mod tests {
         )))
     }
 
-    /// Un refus n'arrête pas les suivants ; la liste des non liés et le code de sortie
-    /// viennent du run entier.
+    /// A refusal does not stop the ones that follow; the list of unlinked modules and the exit
+    /// code come from the run as a whole.
     #[test]
     fn every_module_gets_a_result_and_one_failure_fails_the_run() {
         let outcomes = vec![
@@ -1316,7 +1322,7 @@ mod tests {
         assert!(conclude(outcomes).is_ok());
     }
 
-    /// Un module seul qui échoue pour une autre raison garde son erreur d'origine.
+    /// A single module that fails for another reason keeps its own original error.
     #[test]
     fn a_single_module_keeps_its_own_error() {
         let error = conclude(vec![("nuki".to_string(), refused("environment_required"))])
@@ -1350,7 +1356,7 @@ mod tests {
         assert_eq!(listing["tagline"], "Open the door");
     }
 
-    /// Une fiche cassée arrête tout avant la poussée, pas après.
+    /// A broken listing stops everything before the push, not after.
     #[test]
     fn a_broken_listing_fails_before_publishing() {
         let dir = tempdir().unwrap();
@@ -1381,7 +1387,7 @@ mod tests {
         );
     }
 
-    /// Relancé sur une version publiée — pour pousser une fiche corrigée —, le run réussit.
+    /// Replayed on a published version — to push a corrected listing — the run succeeds.
     #[test]
     fn an_already_published_version_settles_as_in_the_registry() {
         let already: Result<Landed> = Err(AlreadyInRegistry {
@@ -1411,7 +1417,7 @@ mod tests {
         assert!(listing_verdict("nuki", classify(204, "")).is_ok());
     }
 
-    /// Publié mais fiche refusée : un échec du run comme un autre, avec son motif.
+    /// Published but the listing refused: a run failure like any other, with its reason.
     #[test]
     fn a_refused_listing_fails_the_run() {
         let listing = listing_verdict(
@@ -1602,8 +1608,8 @@ mod tests {
         assert_eq!(plural(0, "layer"), "0 layers");
     }
 
-    /// Le catalogue rend toutes les versions : c'est la nôtre qu'il faut y trouver, pas la
-    /// première venue — sans quoi une republication serait refusée au nom d'une autre version.
+    /// The catalogue returns every version: ours is the one to find in it, not whichever comes
+    /// first — otherwise a republication would be refused in the name of another version.
     #[test]
     fn the_catalogue_is_searched_for_our_own_version() {
         let published: Vec<PublishedVersion> = serde_json::from_value(serde_json::json!([
@@ -1681,7 +1687,8 @@ mod tests {
         assert_eq!(outcome, Outcome::AlreadyPublished);
     }
 
-    /// Un 409 ne suffit pas : le même statut couvre un refus dont il n'y a rien à conclure.
+    /// A 409 is not enough: the same status also covers a refusal there is nothing to conclude
+    /// from.
     #[test]
     fn another_conflict_is_still_a_refusal() {
         let outcome = classify(409, r#"{"code":"something_else","message":"nope"}"#);
@@ -1702,7 +1709,7 @@ mod tests {
         }
     }
 
-    /// Un corps vide ou illisible ne doit pas faire passer un échec pour un succès.
+    /// An empty or unreadable body must not let a failure pass for a success.
     #[test]
     fn an_unreadable_refusal_is_still_a_refusal() {
         let outcome = classify(500, "<html>oops</html>");

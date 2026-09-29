@@ -1,12 +1,12 @@
-//! Les codes de sortie, tels que le README les documente.
+//! The exit codes, as the README documents them.
 //!
-//! | Code | Sens |
-//! |------|------|
-//! | 0 | fait |
-//! | 1 | échec |
-//! | 2 | usage : argument refusé, module ambigu ou inconnu, profil inconnu |
-//! | 3 | rien à faire, ou déjà fait |
-//! | 130 | interrompu (ctrl-c) |
+//! | Code | Meaning |
+//! |------|---------|
+//! | 0 | done |
+//! | 1 | failure |
+//! | 2 | usage: argument refused, ambiguous or unknown module, unknown profile |
+//! | 3 | nothing to do, or already done |
+//! | 130 | interrupted (ctrl-c) |
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -14,7 +14,7 @@ pub const FAILURE: i32 = 1;
 pub const USAGE: i32 = 2;
 pub const NOTHING_TO_DO: i32 = 3;
 
-/// Une erreur d'usage : la commande n'a rien tenté, c'est la ligne de commande qui est à revoir.
+/// A usage error: the command attempted nothing, it is the command line that needs revisiting.
 #[derive(Debug)]
 pub struct Usage(pub String);
 
@@ -32,12 +32,12 @@ pub fn usage(message: impl Into<String>) -> anyhow::Error {
 
 static NOTHING_DONE: AtomicBool = AtomicBool::new(false);
 
-/// La commande réussit sans avoir rien changé : elle sortira en 3.
+/// The command succeeds without having changed anything: it will exit with 3.
 pub fn nothing_to_do() {
     NOTHING_DONE.store(true, Ordering::Relaxed);
 }
 
-/// Le code d'une commande qui a abouti.
+/// The code of a command that went through.
 pub fn success_code() -> i32 {
     if NOTHING_DONE.load(Ordering::Relaxed) {
         NOTHING_TO_DO
@@ -46,7 +46,7 @@ pub fn success_code() -> i32 {
     }
 }
 
-/// Le code d'une commande qui a échoué.
+/// The code of a command that failed.
 pub fn code(failure: &anyhow::Error) -> i32 {
     if failure.chain().any(|cause| cause.is::<Usage>()) {
         USAGE

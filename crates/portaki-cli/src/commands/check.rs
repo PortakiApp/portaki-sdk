@@ -1,9 +1,10 @@
-//! `portaki check` — la porte de `portaki release`, et rien d'autre.
+//! `portaki check` — the gate of `portaki release`, and nothing else.
 //!
-//! [`gate`] est appelée telle quelle par `release` (et `ci build`) avant toute poussée : ce que
-//! `check` laisse passer, `release` le laisse passer, et inversement. Les contrôles, dans l'ordre
-//! qui échoue le plus vite : format, clippy, tests (batterie de conformité comprise), build wasm
-//! `--release`, manifeste (`lint`), textes de chaque langue (`i18n`).
+//! [`gate`] is called exactly as it stands by `release` (and `ci build`) before anything is
+//! pushed: what `check` lets through, `release` lets through, and the other way round. The
+//! controls, in the order that fails fastest: format, clippy, tests (the conformance battery
+//! included), the wasm `--release` build, the manifest (`lint`), the texts of every language
+//! (`i18n`).
 
 use std::path::Path;
 use std::process::Command;
@@ -15,7 +16,7 @@ use crate::commands::build::{self, BuildArgs};
 use crate::commands::{i18n, lint, test};
 use crate::ui;
 
-/// Un contrôle de la porte, tel que `--only` le nomme.
+/// One control of the gate, as `--only` names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Control {
@@ -33,7 +34,7 @@ pub enum Control {
     I18n,
 }
 
-/// Toute la porte, dans l'ordre.
+/// The whole gate, in order.
 pub const ALL: [Control; 6] = [
     Control::Fmt,
     Control::Clippy,
@@ -82,7 +83,7 @@ pub async fn run(args: CheckArgs) -> Result<()> {
     run_controls(&args, &only).await
 }
 
-/// Les contrôles `only` (tous quand vide), module après module ; le premier échec arrête.
+/// The `only` controls (all of them when empty), module after module; the first failure stops.
 async fn run_controls(args: &CheckArgs, only: &[Control]) -> Result<()> {
     let started = std::time::Instant::now();
     let chosen = args.modules.resolve()?;
@@ -142,9 +143,9 @@ async fn run_controls(args: &CheckArgs, only: &[Control]) -> Result<()> {
     Ok(())
 }
 
-/// La porte de publication, pour le module de `module_root` (le dossier courant).
+/// The publication gate, for the module in `module_root` (the current directory).
 ///
-/// `only` vide : tous les contrôles. `release` l'appelle toujours ainsi, sans `--fix`.
+/// An empty `only`: every control. `release` always calls it that way, without `--fix`.
 pub async fn gate(module_root: &Path, channel: &str, fix: bool, only: &[Control]) -> Result<()> {
     let runs = |control: Control| only.is_empty() || only.contains(&control);
     if runs(Control::Fmt) {

@@ -32,8 +32,8 @@ pub fn run(args: TestArgs) -> Result<()> {
             cmd.arg(arg);
         }
 
-        // La sortie de `cargo test` est le sujet de la commande : elle passe en direct, sans
-        // indicateur pour la masquer — sur stderr en `--json`.
+        // The output of `cargo test` is the point of the command: it goes through live, with
+        // no flag to hide it — on stderr under `--json`.
         ui::keep_stdout_clean(&mut cmd);
         let status = cmd.status().context("cargo test")?;
         ui::blank();
@@ -146,8 +146,8 @@ pub fn gate_publish(module_root: &Path) -> Result<()> {
         }
         Err(refusal) => {
             step.abandon();
-            // La sortie des tests d'abord, puis celle de cargo : elle finit par la cible qui a
-            // échoué, c'est la dernière chose à lire avant le refus.
+            // The tests' output first, then cargo's: it ends on the target that failed, which
+            // is the last thing to read before the refusal.
             ui::emit_captured(&output.stdout);
             if refusal == Refusal::Failed {
                 ui::emit_captured(&output.stderr);

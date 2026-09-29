@@ -1,14 +1,15 @@
-//! Où la CLI parle : une seule base d'API, choisie une fois pour toute la commande.
+//! Where the CLI talks: a single API base, chosen once for the whole command.
 //!
-//! `dev`, `logs` et `sdk upgrade` lisaient `PORTAKI_DEV_URL` avant `PORTAKI_API_URL`, `login` et
-//! `publish` l'inverse : deux variables qui divergent envoyaient une commande vers une plateforme
-//! avec la session d'une autre (« the stored session belongs to… »). Il n'y a plus qu'une base.
+//! `dev`, `logs` and `sdk upgrade` used to read `PORTAKI_DEV_URL` before `PORTAKI_API_URL`, and
+//! `login` and `publish` the other way round: two variables drifting apart sent a command to one
+//! platform with another one's session ("the stored session belongs to…"). There is only one
+//! base left.
 //!
-//! Dans l'ordre : `--url` d'une commande (alias caché, ancien), `--api`, `--env`,
-//! `PORTAKI_API_URL`, `PORTAKI_DEV_URL` (déprécié), la production.
+//! In order: a command's `--url` (hidden, legacy alias), `--api`, `--env`, `PORTAKI_API_URL`,
+//! `PORTAKI_DEV_URL` (deprecated), production.
 //!
-//! Profils : `prod`, `staging` et `local` sont connus ; `~/.config/portaki/config.toml` en
-//! ajoute ou en redéfinit :
+//! Profiles: `prod`, `staging` and `local` are known; `~/.config/portaki/config.toml` adds to
+//! them or redefines them:
 //!
 //! ```toml
 //! [env.preprod]
@@ -20,7 +21,7 @@ use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 
-/// La plateforme de production.
+/// The production platform.
 pub const PRODUCTION: &str = "https://api.portaki.app";
 
 const BUILT_IN: [(&str, &str); 3] = [
@@ -29,14 +30,14 @@ const BUILT_IN: [(&str, &str); 3] = [
     ("local", "http://localhost:8080"),
 ];
 
-/// `--api` ou l'URL du profil `--env`, fixé une fois au démarrage.
+/// `--api`, or the URL of the `--env` profile, fixed once at startup.
 static CHOSEN: OnceLock<Option<String>> = OnceLock::new();
 
-/// L'avertissement sur `PORTAKI_DEV_URL` ne se répète pas à chaque appel.
+/// The warning about `PORTAKI_DEV_URL` is not repeated on every call.
 static WARNED: AtomicBool = AtomicBool::new(false);
 
-/// Retient `--api` / `--env`. Un profil inconnu est une erreur d'usage : partir en production à
-/// la place d'un `--env stagging` mal tapé serait la pire des lectures.
+/// Remembers `--api` / `--env`. An unknown profile is a usage error: going to production in
+/// place of a mistyped `--env stagging` would be the worst possible reading.
 pub fn select(api: Option<&str>, env: Option<&str>) -> Result<()> {
     let chosen = match (non_blank(api), non_blank(env)) {
         (Some(api), _) => Some(api.to_string()),
@@ -47,7 +48,7 @@ pub fn select(api: Option<&str>, env: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// La base d'API de cette commande, sans barre finale.
+/// This command's API base, with no trailing slash.
 pub fn api_url(explicit: Option<&str>) -> String {
     let dev = std::env::var("PORTAKI_DEV_URL").ok();
     if non_blank(dev.as_deref()).is_some() && !WARNED.swap(true, Ordering::Relaxed) {
@@ -63,10 +64,10 @@ pub fn api_url(explicit: Option<&str>) -> String {
     )
 }
 
-/// La règle seule, sans l'environnement, pour être vérifiable.
+/// The rule alone, without the environment, so that it can be checked.
 ///
-/// Une valeur vide ou blanche vaut « non définie » : une action de CI qui passe une entrée
-/// facultative non renseignée exporte une variable vide.
+/// An empty or blank value counts as "unset": a CI action passing an optional input that was
+/// left unfilled exports an empty variable.
 fn resolve(
     explicit: Option<&str>,
     chosen: Option<&str>,
@@ -85,7 +86,7 @@ fn non_blank(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
 
-/// Les profils connus : ceux de la CLI, puis ceux du fichier, qui l'emportent.
+/// The known profiles: the CLI's own, then the file's, which win.
 pub fn profiles() -> Result<Vec<(String, String)>> {
     let path = crate::auth::config_dir()?.join("config.toml");
     let raw = match std::fs::read_to_string(&path) {
@@ -130,7 +131,7 @@ fn profile_url(name: &str, profiles: &[(String, String)]) -> Result<String> {
         })
 }
 
-/// La commande qui ouvre une session sur `url` — ce qu'une commande sans session doit dire.
+/// The command that opens a session on `url` — what a command without a session has to say.
 pub fn login_command(url: &str) -> String {
     let origin = crate::auth::origin_of(url);
     let named = profiles().ok().and_then(|profiles| {
@@ -170,7 +171,7 @@ mod tests {
             ),
             "https://env.example"
         );
-        // L'alias déprécié sert encore quand il est seul.
+        // The deprecated alias still serves when it is the only one set.
         assert_eq!(
             resolve(None, None, None, Some("https://dev.example")),
             "https://dev.example"

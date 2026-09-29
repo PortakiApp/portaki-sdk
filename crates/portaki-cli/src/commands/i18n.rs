@@ -54,7 +54,7 @@ pub fn run(args: I18nArgs) -> Result<()> {
     Ok(())
 }
 
-/// Le contrôle `i18n` de la porte : chaque texte, dans chaque langue des bundles.
+/// The gate's `i18n` control: every text, in every language the bundles hold.
 pub fn gate(module_root: &Path) -> Result<()> {
     let checking = ui::step(crate::tr!(
         "checking every text in every language",
@@ -79,7 +79,7 @@ pub fn gate(module_root: &Path) -> Result<()> {
     ))
 }
 
-/// Ce qui manque, bundle par bundle, dans `i18n/` et `email_i18n/`.
+/// What is missing, bundle by bundle, in `i18n/` and `email_i18n/`.
 pub fn problems(module_root: &Path) -> Result<Vec<String>> {
     let mut problems = Vec::new();
     for dir in BUNDLE_DIRS {

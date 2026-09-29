@@ -15,8 +15,8 @@ pub fn run(_args: DocsArgs) -> Result<()> {
         "portaki docs",
         "There is no docs server — these two commands are the documentation.",
     );
-    // `list` plutôt que `next` : pour `docs`, ces deux commandes ne sont pas un conseil sur la
-    // suite, elles sont tout ce que la commande a à dire.
+    // `list` rather than `next`: for `docs`, these two commands are not advice about what to do
+    // next, they are everything the command has to say.
     ui::list(
         "commands",
         &[

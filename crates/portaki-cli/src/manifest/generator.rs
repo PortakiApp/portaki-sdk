@@ -3,13 +3,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// La version de manifeste que cette version du CLI produit.
+/// The manifest version this version of the CLI produces.
 ///
-/// Nommée plutôt que répétée en littéral : `ci check` compare le manifeste d'un module à cette
-/// référence, et deux littéraux qui doivent rester égaux finissent toujours par diverger.
+/// Named rather than repeated as a literal: `ci check` compares a module's manifest against this
+/// reference, and two literals that have to stay equal always end up drifting apart.
 pub const MANIFEST_VERSION: &str = "1";
 
-/// La version de schéma SDUI que cette version du CLI produit, pour les deux coquilles.
+/// The SDUI schema version this version of the CLI produces, for both shells.
 pub const SDUI_SCHEMA_VERSION: &str = "1";
 
 use anyhow::{Context, Result};
@@ -321,7 +321,8 @@ pub fn generate_manifest(
         .iter()
         .filter(|e| e.kind == "email")
         .map(|e| {
-            // La clé n'est pas du manifeste : le catalogue en tire la description traduite.
+            // The key is not manifest material: the catalogue pulls the translated description
+            // from it.
             let mut email = e.data.clone();
             if let Some(object) = email.as_object_mut() {
                 object.remove("descriptionKey");
@@ -393,7 +394,7 @@ pub fn imply_storage(
 }
 
 /// Writes `manifest.json` to `dest`.
-/// Les formes d'arguments émises par `#[params]`, par nom de type.
+/// The argument shapes emitted by `#[params]`, by type name.
 fn param_shapes(emissions: &[EmissionFile]) -> BTreeMap<String, ParamShape> {
     emissions
         .iter()
@@ -406,11 +407,11 @@ fn param_shapes(emissions: &[EmissionFile]) -> BTreeMap<String, ParamShape> {
         .collect()
 }
 
-/// Les arguments d'une opération, avec les types qu'ils nomment.
+/// An operation's arguments, along with the types they name.
 ///
-/// `None` quand le type ne porte pas `#[params]` : l'opération garde son `args`, et la sandbox
-/// dit quel type annoter plutôt que d'inventer une forme. `EmptyArgs` est connu sans émission —
-/// il vit dans le SDK, dont les émissions ne rejoignent pas celles du module.
+/// `None` when the type does not carry `#[params]`: the operation keeps its `args`, and the
+/// sandbox says which type to annotate rather than inventing a shape. `EmptyArgs` is known without
+/// any emission — it lives in the SDK, whose emissions do not join the module's.
 pub fn resolve_params(
     args: &str,
     shapes: &BTreeMap<String, ParamShape>,

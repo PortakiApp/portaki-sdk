@@ -1,27 +1,27 @@
-//! La langue de la CLI : celle du système, français ou anglais.
+//! The CLI's language: the machine's, French or English.
 //!
-//! `PORTAKI_LANG` d'abord, puis `LC_ALL`, `LC_MESSAGES` et `LANG` — l'ordre de POSIX. Une valeur
-//! qui commence par `fr` donne le français, avec les mots de l'espace développeur ; toute autre,
-//! l'anglais. Seul ce qu'une personne lit change : `--json` (toujours en anglais), les codes
-//! d'erreur de la plateforme et les codes de sortie restent les mêmes dans les deux langues.
+//! `PORTAKI_LANG` first, then `LC_ALL`, `LC_MESSAGES` and `LANG` — the POSIX order. A value that
+//! starts with `fr` gives French, with the words of the developer space; anything else gives
+//! English. Only what a person reads changes: `--json` (always English), the platform's error
+//! codes and the exit codes stay the same in both languages.
 //!
-//! Chaque phrase s'écrit à l'endroit où elle sert, dans les deux langues côte à côte
-//! ([`tr!`](crate::tr)) : une phrase ajoutée sans sa traduction ne compile pas.
+//! Every sentence is written where it is used, both languages side by side
+//! ([`tr!`](crate::tr)): a sentence added without its translation does not compile.
 
 use std::sync::OnceLock;
 
-/// Les variables lues, dans l'ordre où elles l'emportent.
+/// The variables read, in the order in which they win.
 const VARIABLES: [&str; 4] = ["PORTAKI_LANG", "LC_ALL", "LC_MESSAGES", "LANG"];
 
-/// La CLI parle-t-elle français ?
+/// Does the CLI speak French?
 ///
-/// Jamais sous `--json` : le document et les messages qu'il porte (`error`, `reason`) restent les
-/// mêmes quelle que soit la machine, et ce qui part sur stderr avec lui aussi.
+/// Never under `--json`: the document and the messages it carries (`error`, `reason`) stay the
+/// same whatever the machine, and so does what goes out on stderr alongside it.
 pub fn french() -> bool {
     static FRENCH: OnceLock<bool> = OnceLock::new();
     !crate::ui::json()
         && *FRENCH.get_or_init(|| {
-            // Les tests unitaires ne suivent pas la machine : leurs phrases attendues sont anglaises.
+            // Unit tests do not follow the machine: the sentences they expect are English.
             let variables: &[&str] = if cfg!(test) {
                 &VARIABLES[..1]
             } else {
@@ -31,7 +31,7 @@ pub fn french() -> bool {
         })
 }
 
-/// La première valeur non vide décide.
+/// The first non-empty value decides.
 fn is_french(values: impl Iterator<Item = Option<String>>) -> bool {
     values
         .flatten()
@@ -39,7 +39,7 @@ fn is_french(values: impl Iterator<Item = Option<String>>) -> bool {
         .is_some_and(|value| value.trim().to_ascii_lowercase().starts_with("fr"))
 }
 
-/// La phrase dans la langue de la CLI : `tr!("english {x}", "français {x}", …)`.
+/// The sentence in the CLI's language: `tr!("english {x}", "français {x}", …)`.
 #[macro_export]
 macro_rules! tr {
     ($en:literal, $fr:literal $(, $arg:expr)* $(,)?) => {
@@ -74,7 +74,7 @@ mod tests {
         assert!(decide(&[None, None, Some("fr_CA"), Some("C")]));
     }
 
-    /// Une variable posée vide ne décide rien : c'est la suivante qui parle.
+    /// A variable set to an empty value decides nothing: the next one speaks.
     #[test]
     fn an_empty_variable_is_skipped() {
         assert!(decide(&[Some(""), Some(" "), None, Some("fr_BE.UTF-8")]));

@@ -1,25 +1,25 @@
-//! La signature par défaut de `portaki release` : sans clé (Sigstore), sur le digest poussé dans
-//! le dépôt OCI de Portaki, avec les identifiants éphémères du droit de push.
+//! How `portaki release` signs by default: keyless (Sigstore), over the digest pushed into
+//! Portaki's OCI repository, with the ephemeral credentials of the push grant.
 //!
-//! **En CI** (`portaki ci release`), l'identité est le jeton OIDC du job : deux attestations
-//! `cosign attest` — la provenance SLSA v1 (dépôt, commit, workflow) et le rapport `cargo audit`
-//! ([`AUDIT_TYPE`]). Le certificat Fulcio porte lui-même le workflow, le dépôt et le commit :
-//! c'est lui que le registre confronte à la liaison du module.
+//! **In CI** (`portaki ci release`), the identity is the job's OIDC token: two `cosign attest`
+//! attestations — the SLSA v1 provenance (repository, commit, workflow) and the `cargo audit`
+//! report ([`AUDIT_TYPE`]). The Fulcio certificate itself carries the workflow, the repository
+//! and the commit: that is what the registry checks against the module's binding.
 //!
-//! **Depuis un poste**, il ne reste que l'identité de l'auteur : un certificat Fulcio éphémère
-//! pour son compte GitHub, et une attestation Portaki ([`PREDICATE_TYPE`]) au journal Rekor puis
-//! sur le dépôt OCI. Ce n'est pas une provenance : elle dit qui a publié quel module, en quelle
-//! version, rien de la façon dont il a été construit.
+//! **From a workstation**, all that is left is the author's identity: an ephemeral Fulcio
+//! certificate for their GitHub account, and a Portaki attestation ([`PREDICATE_TYPE`]) in the
+//! Rekor log and then on the OCI repository. This is not a provenance: it says who published
+//! which module, in which version, nothing about the way it was built.
 //!
-//! Pas `cosign sign` : son sujet in-toto n'a pas de `name`, et sigstore-java, côté registre, ne
-//! le lit pas. `cosign attest` nomme le sujet d'après le dépôt, à côté du digest.
+//! Not `cosign sign`: its in-toto subject has no `name`, and sigstore-java, on the registry side,
+//! does not read it. `cosign attest` names the subject after the repository, next to the digest.
 //!
-//! Le jeton OIDC d'un poste, c'est la CLI qui le demande. Le flux navigateur de cosign laisse
-//! choisir le fournisseur (GitHub, Google, Microsoft) et n'offre aucun drapeau pour l'imposer ;
-//! il ne dit pas non plus au nom de qui il a signé. La CLI fait donc le même flux que cosign
-//! (PKCE auprès de `oauth2.sigstore.dev`) avec `connector_id` fixé à GitHub, lit l'adresse dans
-//! le jeton, et le remet à cosign par `SIGSTORE_ID_TOKEN` — jamais sur la ligne de commande,
-//! jamais affiché. La clé est éphémère, fabriquée et jetée par cosign.
+//! A workstation's OIDC token is asked for by the CLI itself. Cosign's browser flow lets the
+//! provider be chosen (GitHub, Google, Microsoft) and offers no flag to force one; nor does it
+//! say on whose behalf it signed. The CLI therefore runs the same flow as cosign (PKCE against
+//! `oauth2.sigstore.dev`) with `connector_id` pinned to GitHub, reads the address from the token,
+//! and hands it to cosign through `SIGSTORE_ID_TOKEN` — never on the command line, never
+//! displayed. The key is ephemeral, made and thrown away by cosign.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -32,36 +32,36 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{oci, ui};
 
-/// L'émetteur public de Sigstore (Dex), et le connecteur GitHub qu'on lui impose.
+/// Sigstore's public issuer (Dex), and the GitHub connector we force on it.
 const ISSUER: &str = "https://oauth2.sigstore.dev/auth";
 const GITHUB: &str = "https://github.com/login/oauth";
 
-/// Le type du prédicat de l'attestation d'auteur, celui que le registre attend.
+/// The predicate type of the author attestation, the one the registry expects.
 const PREDICATE_TYPE: &str = "https://portaki.app/attestations/author/v1";
 
-/// La provenance SLSA v1 (`https://slsa.dev/provenance/v1`), sous le nom court de cosign.
+/// The SLSA v1 provenance (`https://slsa.dev/provenance/v1`), under cosign's short name.
 const PROVENANCE_TYPE: &str = "slsaprovenance1";
 
-/// Le rapport `cargo audit`, que le registre lit à côté de la provenance.
+/// The `cargo audit` report, which the registry reads alongside the provenance.
 pub const AUDIT_TYPE: &str = "https://portaki.app/attestations/cargo-audit/v1";
 
-/// La version de l'action de release, celle dont le registre vérifie le format.
+/// The release action's version, the one whose format the registry verifies.
 const MINIMUM: (u64, u64, u64) = (3, 1, 3);
 const INSTALL: &str =
     "brew install cosign, or go install github.com/sigstore/cosign/v3/cmd/cosign@v3.1.3";
 
-/// Le temps laissé pour se connecter dans le navigateur.
+/// The time allowed to sign in in the browser.
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// `CI` ou `GITHUB_ACTIONS` posés : on est dans une CI.
+/// `CI` or `GITHUB_ACTIONS` set: we are in a CI.
 pub fn in_ci() -> bool {
     ["CI", "GITHUB_ACTIONS"]
         .iter()
         .any(|name| std::env::var_os(name).is_some())
 }
 
-/// La signature d'auteur demande un navigateur : en CI, c'est `portaki ci release` qui signe,
-/// avec la provenance du workflow.
+/// The author signature needs a browser: in CI, it is `portaki ci release` that signs, with the
+/// workflow's provenance.
 pub fn refuse_in_ci(ci: bool) -> Result<()> {
     if ci {
         bail!(
@@ -74,15 +74,15 @@ pub fn refuse_in_ci(ci: bool) -> Result<()> {
     Ok(())
 }
 
-/// `PORTAKI_COSIGN`, sinon `cosign` dans le `PATH`.
+/// `PORTAKI_COSIGN`, otherwise `cosign` from the `PATH`.
 pub fn cosign_binary() -> PathBuf {
     std::env::var_os("PORTAKI_COSIGN")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("cosign"))
 }
 
-/// Vérifié avant tout build : découvrir l'absence de cosign après la poussée laisserait un
-/// artefact poussé sans signature ni annonce.
+/// Checked before any build: discovering that cosign is missing after the push would leave an
+/// artifact pushed with neither a signature nor an announcement.
 pub fn check_cosign(bin: &Path) -> Result<()> {
     let output = match Command::new(bin).args(["version", "--json"]).output() {
         Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
@@ -112,7 +112,7 @@ fn parse_version(raw: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
-/// Atteste le digest poussé au nom de l'auteur et rend son adresse.
+/// Attests the pushed digest in the author's name and returns their address.
 pub async fn sign(
     bin: &Path,
     pushed: &oci::PushedArtifact,
@@ -141,11 +141,11 @@ pub async fn sign(
     Ok(identity.email)
 }
 
-/// Atteste le digest poussé depuis la CI : la provenance du workflow, puis le rapport d'audit
-/// s'il y en a un. Rend vrai quand l'audit est attesté.
+/// Attests the pushed digest from CI: the workflow's provenance, then the audit report if there
+/// is one. Returns true when the audit is attested.
 ///
-/// L'identité est le jeton OIDC de ce job (`id-token: write`), que cosign demande lui-même à
-/// GitHub. Aucun code du module ne tourne ici.
+/// The identity is this job's OIDC token (`id-token: write`), which cosign asks GitHub for
+/// itself. No module code runs here.
 pub fn attest_ci(
     bin: &Path,
     pushed: &oci::PushedArtifact,
@@ -171,10 +171,11 @@ pub fn attest_ci(
     Ok(true)
 }
 
-/// La provenance SLSA v1 de ce run, depuis ce que GitHub Actions pose dans l'environnement.
+/// The SLSA v1 provenance of this run, from what GitHub Actions puts in the environment.
 ///
-/// Le registre ne croit pas ce contenu : il vérifie le certificat, qui porte les mêmes faits
-/// signés par GitHub. Le prédicat les rend lisibles à qui relit l'attestation.
+/// The registry does not take this content on trust: it verifies the certificate, which carries
+/// the same facts signed by GitHub. The predicate makes them readable to whoever re-reads the
+/// attestation.
 fn provenance(env: &dyn Fn(&str) -> Option<String>) -> serde_json::Value {
     let get = |name: &str| env(name).unwrap_or_default();
     let server = env("GITHUB_SERVER_URL").unwrap_or_else(|| "https://github.com".to_string());
@@ -216,12 +217,11 @@ fn provenance(env: &dyn Fn(&str) -> Option<String>) -> serde_json::Value {
     })
 }
 
-/// Le fournisseur d'identité de cosign dans un job GitHub Actions : le jeton OIDC du job.
+/// Cosign's identity provider inside a GitHub Actions job: the job's OIDC token.
 const CI: &str = "github-actions";
 
-/// `cosign attest` sur le digest poussé, avec les identifiants du droit de push dans un
-/// `DOCKER_CONFIG` éphémère : ni jeton ni mot de passe sur la ligne de commande, où `ps` les
-/// montrerait.
+/// `cosign attest` on the pushed digest, with the push grant's credentials in an ephemeral
+/// `DOCKER_CONFIG`: neither token nor password on the command line, where `ps` would show them.
 fn cosign_attest(
     bin: &Path,
     predicate_type: &str,
@@ -244,10 +244,10 @@ fn cosign_attest(
     command
 }
 
-/// Un dossier temporaire (0700) pour cosign : le `DOCKER_CONFIG` et le prédicat, chacun en 0600.
-/// Le droit de push y passe parce que cosign pousse ses attestations dans le même dépôt, et
-/// qu'un mot de passe sur la ligne de commande se lirait dans `ps`. Effacé à la sortie, quoi
-/// qu'il arrive.
+/// A temporary directory (0700) for cosign: the `DOCKER_CONFIG` and the predicate, each in 0600.
+/// The push grant goes through it because cosign pushes its attestations into the same
+/// repository, and because a password on the command line would be readable in `ps`. Deleted on
+/// the way out, whatever happens.
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -293,7 +293,7 @@ struct Identity {
     email: String,
 }
 
-/// Le flux navigateur de Sigstore, GitHub imposé : PKCE, retour sur un port local.
+/// Sigstore's browser flow, with GitHub forced: PKCE, callback on a local port.
 async fn github_identity() -> Result<Identity> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -346,7 +346,7 @@ fn authorize_url(redirect: &str, verifier: &str, state: &str, nonce: &str) -> St
     url.into()
 }
 
-/// Attend le retour du navigateur ; tout autre appel (favicon…) reçoit un 404.
+/// Waits for the browser to come back; any other call (favicon…) gets a 404.
 async fn callback(listener: &tokio::net::TcpListener, state: &str) -> Result<String> {
     loop {
         let (mut stream, _) = listener.accept().await?;
@@ -432,10 +432,11 @@ async fn exchange(code: &str, redirect: &str, verifier: &str) -> Result<String> 
         .id_token)
 }
 
-/// L'adresse à afficher, et deux contrôles : le nonce, et GitHub comme fournisseur.
+/// The address to display, and two checks: the nonce, and GitHub as the provider.
 ///
-/// La signature du jeton n'est pas vérifiée ici : c'est Fulcio qui le fait avant d'émettre le
-/// certificat. Ces claims ne servent qu'à dire au nom de qui on signe, et à refuser tôt.
+/// The token's signature is not verified here: Fulcio is the one that does it, before issuing the
+/// certificate. These claims only serve to say on whose behalf we are signing, and to refuse
+/// early.
 fn github_email(token: &str, nonce: &str) -> Result<String> {
     #[derive(serde::Deserialize)]
     struct Federated {
@@ -480,7 +481,7 @@ fn github_email(token: &str, nonce: &str) -> Result<String> {
 pub(crate) mod tests {
     use super::*;
 
-    /// Un faux cosign : un script qui écrit `stdout` et sort avec `code`.
+    /// A fake cosign: a script that writes `stdout` and exits with `code`.
     #[cfg(unix)]
     pub(crate) fn fake_cosign(dir: &Path, stdout: &str, code: i32) -> PathBuf {
         use std::os::unix::fs::PermissionsExt;
@@ -568,8 +569,8 @@ pub(crate) mod tests {
         assert!(command.get_args().any(|arg| arg == "--allow-http-registry"));
     }
 
-    /// Deux attestations sur le digest, la provenance d'abord ; le droit de push n'est que dans
-    /// le `DOCKER_CONFIG` éphémère, pour l'hôte que le registre a nommé.
+    /// Two attestations on the digest, the provenance first; the push grant is only in the
+    /// ephemeral `DOCKER_CONFIG`, for the host the registry named.
     #[cfg(unix)]
     #[test]
     fn ci_attests_provenance_then_audit_with_the_push_grant() {

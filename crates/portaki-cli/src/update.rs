@@ -1,36 +1,36 @@
-//! Prévenir qu'une version plus récente existe, sans jamais se mettre en travers.
+//! Warn that a newer version exists, without ever getting in the way.
 //!
-//! # Ce qui rendrait cet avis nuisible
+//! # What would make this notice harmful
 //!
-//! Un appel réseau à chaque commande. `portaki build` deviendrait plus lent parce qu'un jour
-//! quelqu'un pourrait vouloir savoir qu'une version est sortie — l'inverse du service rendu.
-//! La réponse est donc mise en cache un jour entier, et la seule commande qui la rafraîchit
-//! abandonne au bout d'une seconde et demie.
+//! A network call on every command. `portaki build` would become slower because one day someone
+//! might want to know that a version has shipped — the opposite of the service rendered. The
+//! answer is therefore cached for a whole day, and the one command that refreshes it gives up
+//! after a second and a half.
 //!
-//! # Où il ne s'affiche pas
+//! # Where it does not show
 //!
-//! Sous `--plain` : cette sortie est faite pour être lue par un programme, et une ligne de plus
-//! y est un champ de plus à filtrer. Hors terminal non plus — un journal de CI n'a personne
-//! pour agir dessus, et `portaki ci check` y dit déjà ce qui vieillit. Et jamais si
-//! `PORTAKI_NO_UPDATE_CHECK` est posé.
+//! Under `--plain`: that output is meant to be read by a program, and one more line there is one
+//! more field to filter out. Not outside a terminal either — a CI log has nobody to act on it,
+//! and `portaki ci check` already says there what is ageing. And never if
+//! `PORTAKI_NO_UPDATE_CHECK` is set.
 //!
-//! L'avis vient **après** la commande, une fois son travail rendu : il ne retarde rien de ce
-//! qu'on attendait, et n'éloigne pas du regard la ligne qu'on est venu lire.
+//! The notice comes **after** the command, once its work is delivered: it delays nothing that was
+//! being waited for, and does not push out of sight the line one came to read.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::ui;
 
-/// La version publiée reste valable un jour : au-delà on redemande, en deçà on se tait.
+/// The published version stays good for a day: beyond that we ask again, within it we keep quiet.
 const FRESH_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// Au-delà, la question ne vaut plus le temps qu'elle prend.
+/// Beyond that, the question is no longer worth the time it takes.
 const GIVE_UP_AFTER: Duration = Duration::from_millis(1_500);
 
-/// La variable qui éteint tout, pour qui ne veut pas en entendre parler.
+/// The variable that turns it all off, for whoever would rather not hear about it.
 const OPT_OUT: &str = "PORTAKI_NO_UPDATE_CHECK";
 
-/// Dit qu'une version plus récente existe, si c'est le cas et si quelqu'un est là pour le lire.
+/// Says that a newer version exists, if it does and if someone is there to read it.
 pub async fn notify() {
     if !wanted() {
         return;
@@ -49,12 +49,12 @@ pub async fn notify() {
     ui::detail(format!("{OPT_OUT}=1 silences this"));
 }
 
-/// Y a-t-il quelqu'un pour lire, et le veut-il ?
+/// Is there anyone to read it, and do they want it?
 fn wanted() -> bool {
     !ui::plain() && console::user_attended() && std::env::var_os(OPT_OUT).is_none()
 }
 
-/// La dernière version publiée, du cache tant qu'il est frais.
+/// The latest published version, from the cache while it is fresh.
 async fn latest() -> Option<String> {
     if let Some(cached) = read_cache() {
         return Some(cached);
@@ -67,15 +67,15 @@ async fn latest() -> Option<String> {
     Some(fetched)
 }
 
-/// La dernière version stable publiée d'un crate sur crates.io.
+/// The latest stable version of a crate published on crates.io.
 ///
-/// La seule question posée à crates.io : l'avis de mise à jour et `portaki ci check` la posent
-/// tous deux, pour le CLI et pour le SDK.
+/// The only question asked of crates.io: the update notice and `portaki ci check` both ask it,
+/// for the CLI and for the SDK.
 pub async fn latest_published(krate: &str) -> anyhow::Result<String> {
     use anyhow::Context;
     let body: serde_json::Value = crate::http::client()
         .get(format!("https://crates.io/api/v1/crates/{krate}"))
-        // crates.io refuse une requête sans agent identifiable, et le dit en 403.
+        // crates.io refuses a request without an identifiable agent, and says so with a 403.
         .header(
             "User-Agent",
             concat!("portaki-cli/", env!("CARGO_PKG_VERSION")),
@@ -95,11 +95,11 @@ fn read_cache() -> Option<String> {
     parse_cache(&std::fs::read_to_string(cache_path()?).ok()?, now())
 }
 
-/// `<horodatage> <version>` — deux champs, une ligne, aucun format à faire évoluer.
+/// `<timestamp> <version>` — two fields, one line, no format to keep evolving.
 ///
-/// Séparé de la lecture du fichier pour être vérifiable : un cache abîmé doit se lire comme
-/// une absence, jamais comme une version, sinon un fichier tronqué ferait annoncer n'importe
-/// quoi comme la dernière version publiée.
+/// Kept apart from reading the file so that it can be checked: a damaged cache must read as no
+/// answer, never as a version, otherwise a truncated file would have anything at all announced
+/// as the latest published version.
 fn parse_cache(raw: &str, now: Duration) -> Option<String> {
     let (stamped, version) = raw.trim().split_once(' ')?;
     let stamped = Duration::from_secs(stamped.parse().ok()?);
@@ -116,7 +116,7 @@ fn write_cache(version: &str) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    // Un cache qui ne s'écrit pas ne casse rien : on redemandera, voilà tout.
+    // A cache that fails to be written breaks nothing: we will ask again, that is all.
     let _ = std::fs::write(&path, format!("{} {version}", now().as_secs()));
 }
 
@@ -135,10 +135,10 @@ fn now() -> Duration {
         .unwrap_or_default()
 }
 
-/// `running` est-il en retard sur `latest` ?
+/// Is `running` behind `latest`?
 ///
-/// Comparé composant par composant, en nombres : `2.10.0` est postérieur à `2.9.0`, ce qu'un
-/// ordre lexicographique inverserait.
+/// Compared component by component, as numbers: `2.10.0` comes after `2.9.0`, which a
+/// lexicographic ordering would get backwards.
 pub fn outdated(running: &str, latest: &str) -> bool {
     parts(latest) > parts(running)
 }
@@ -164,8 +164,8 @@ mod tests {
         assert!(!outdated("2.4.0", "2.4.0"));
     }
 
-    /// Une préversion n'est pas une version plus récente : `2.5.0-rc.1` ne doit pas pousser
-    /// quelqu'un qui tourne en `2.5.0` à « mettre à jour » vers ce qu'il dépasse déjà.
+    /// A prerelease is not a newer version: `2.5.0-rc.1` must not push someone running `2.5.0`
+    /// into "updating" to something they are already ahead of.
     #[test]
     fn a_prerelease_suffix_is_ignored() {
         assert!(!outdated("2.5.0", "2.5.0-rc.1"));
@@ -183,7 +183,7 @@ mod tests {
         );
     }
 
-    /// Passé un jour, on redemande — sans quoi une version publiée resterait invisible.
+    /// Past a day, we ask again — without which a published version would stay invisible.
     #[test]
     fn a_stale_cache_asks_again() {
         let written = NOW.as_secs() - FRESH_FOR.as_secs() - 1;
@@ -191,8 +191,8 @@ mod tests {
         assert!(parse_cache(&format!("{written} 2.4.0"), NOW).is_none());
     }
 
-    /// Un cache abîmé se lit comme une absence, jamais comme une version : un fichier tronqué
-    /// ferait sinon annoncer n'importe quoi comme la dernière version publiée.
+    /// A damaged cache reads as no answer, never as a version: a truncated file would otherwise
+    /// have anything at all announced as the latest published version.
     #[test]
     fn a_damaged_cache_reads_as_no_answer() {
         for raw in ["", "   ", "n importe quoi", "pas-un-nombre 2.4.0", "1000 "] {
@@ -200,10 +200,10 @@ mod tests {
         }
     }
 
-    /// Une horloge qui recule — correction NTP, machine réveillée — écrit un horodatage dans
-    /// le futur. On redemande alors, plutôt que de faire confiance à une fraîcheur qu'on ne
-    /// sait pas calculer : redemander ne coûte qu'une requête, s'en remettre à un cache qu'on
-    /// ne comprend pas pourrait taire l'avis très longtemps.
+    /// A clock that goes backwards — an NTP correction, a machine waking up — writes a
+    /// timestamp in the future. We ask again then, rather than trusting a freshness we have no
+    /// way of computing: asking again costs one request, while relying on a cache we do not
+    /// understand could silence the notice for a very long time.
     #[test]
     fn a_cache_written_in_the_future_is_asked_again() {
         let written = NOW.as_secs() + 10;

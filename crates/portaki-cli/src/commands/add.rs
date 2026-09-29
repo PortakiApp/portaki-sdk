@@ -1,11 +1,11 @@
-//! `portaki add permission|connector|language` — déclarer ce que le module utilise, là où le
-//! SDK le lit.
+//! `portaki add permission|connector|language` — declare what the module uses, in the place
+//! where the SDK reads it.
 //!
-//! - une permission est une feature de `portaki-sdk` dans `Cargo.toml` ([`crate::commands::permissions`]) ;
-//! - un connecteur intégré, l'attribut `#[portaki_sdk::connector(builtin = "…")]` dans le code —
-//!   `portaki build` en déduit `connectors:<id>` ;
-//! - une langue, un bundle `i18n/<locale>.json` (et `email_i18n/`) aux mêmes clés, textes vides :
-//!   `portaki check --only i18n` liste alors ce qu'il reste à écrire.
+//! - a permission is a `portaki-sdk` feature in `Cargo.toml` ([`crate::commands::permissions`]);
+//! - a built-in connector, the `#[portaki_sdk::connector(builtin = "…")]` attribute in the code —
+//!   `portaki build` derives `connectors:<id>` from it;
+//! - a language, an `i18n/<locale>.json` bundle (and `email_i18n/`) with the same keys and empty
+//!   texts: `portaki check --only i18n` then lists what is left to write.
 
 use std::path::Path;
 
@@ -16,7 +16,7 @@ use serde_json::{Map, Value};
 use crate::commands::{i18n, permissions};
 use crate::{tr, ui, workspace};
 
-/// Les connecteurs intégrés, tels que `portaki-connectors` les sert (un sous-module chacun).
+/// The built-in connectors, as `portaki-connectors` serves them (one submodule each).
 pub const BUILTIN_CONNECTORS: [&str; 7] = [
     "open-weather",
     "open-agenda",
@@ -135,7 +135,7 @@ fn connector(args: ConnectorArgs) -> Result<()> {
     Ok(())
 }
 
-/// Le module déclare-t-il déjà ce connecteur, dans n'importe quel fichier de `src/` ?
+/// Does the module already declare this connector, in any file under `src/`?
 fn declares(module_root: &Path, id: &str) -> bool {
     let needle = format!("builtin = \"{id}\"");
     walkdir::WalkDir::new(module_root.join("src"))
@@ -147,7 +147,7 @@ fn declares(module_root: &Path, id: &str) -> bool {
         })
 }
 
-/// `open-weather` → la déclaration, sous un type `UsesOpenWeather`.
+/// `open-weather` → the declaration, under a `UsesOpenWeather` type.
 fn declaration(id: &str) -> String {
     let name: String = id
         .split('-')
@@ -219,9 +219,9 @@ fn language(args: LanguageArgs) -> Result<()> {
     Ok(())
 }
 
-/// Écrit le bundle de `lang` dans `dir`, aux clés de tous les autres, textes vides. Le nom du
-/// fichier suit ceux qui existent : `de-DE.json` à côté de `fr-FR.json`, `de.json` à côté de
-/// `fr.json`. `None` : rien à copier, ou la langue y est déjà.
+/// Writes `lang`'s bundle into `dir`, with the keys of all the others and empty texts. The file
+/// name follows the ones already there: `de-DE.json` next to `fr-FR.json`, `de.json` next to
+/// `fr.json`. `None`: nothing to copy, or the language is already there.
 fn add_bundle(
     dir: &Path,
     bundles: &std::collections::BTreeMap<String, Map<String, Value>>,
@@ -267,7 +267,7 @@ fn add_bundle(
 mod tests {
     use super::*;
 
-    /// La liste suit `portaki-connectors` : un connecteur qui y entre doit entrer ici.
+    /// The list follows `portaki-connectors`: a connector that goes in there must go in here.
     #[test]
     fn the_builtin_list_is_the_connectors_crate_table() {
         let table = include_str!("../../../portaki-connectors/src/lib.rs");

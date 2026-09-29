@@ -1,11 +1,11 @@
-//! Quel module une commande vise, quand un dépôt en porte plusieurs.
+//! Which module a command acts on, when a repository holds several.
 //!
-//! La GitHub App de la plateforme ne lit pas le code : c'est le CLI, qui a les fichiers sous la
-//! main, qui reconnaît un monorepo. La règle est celle de `portaki ci modules` — des modules
-//! sous `modules/*/` — et un dépôt à un seul module ne voit rien changer.
+//! The platform's GitHub App does not read the code: it is the CLI, which has the files at hand,
+//! that recognises a monorepo. The rule is the one `portaki ci modules` uses — modules under
+//! `modules/*/` — and a single-module repository sees nothing change.
 //!
-//! Toutes les commandes qui agissent sur un module passent par ici, avec les mêmes drapeaux
-//! ([`ModuleArgs`]) : `--module <id>` et `--all`.
+//! Every command that acts on a module goes through here, with the same flags
+//! ([`ModuleArgs`]): `--module <id>` and `--all`.
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -16,10 +16,10 @@ use crate::ui;
 
 use crate::manifest::source::{is_module, module_id as manifest_id};
 
-/// Le dossier où un dépôt multi-modules les range.
+/// The directory where a multi-module repository keeps them.
 const MODULES_DIR: &str = "modules";
 
-/// `--module <id>` / `--all`, les mêmes sur toutes les commandes qui agissent sur un module.
+/// `--module <id>` / `--all`, the same ones on every command that acts on a module.
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct ModuleArgs {
     /// In a repository holding several modules, the one to act on.
@@ -31,12 +31,12 @@ pub struct ModuleArgs {
 }
 
 impl ModuleArgs {
-    /// Les modules visés.
+    /// The modules acted on.
     pub fn resolve(&self) -> Result<Vec<Member>> {
         resolve(self.module.as_deref(), Some(self.all))
     }
 
-    /// Le seul module visé, pour une commande qui n'en tient qu'un à la fois (`dev`, `logs`).
+    /// The one module acted on, for a command that handles only one at a time (`dev`, `logs`).
     pub fn one(&self, command: &str) -> Result<Member> {
         if self.all {
             return Err(crate::exit::usage(crate::tr!(
@@ -50,7 +50,7 @@ impl ModuleArgs {
             .context("no module here")
     }
 
-    /// Chaque module visé, depuis sa racine, dans l'ordre ; revient au dossier de départ.
+    /// Each module acted on, from its root, in order; returns to the starting directory.
     pub fn for_each(&self, mut run: impl FnMut(&Member) -> Result<()>) -> Result<()> {
         let start = std::env::current_dir().context("current_dir")?;
         let chosen = self.resolve()?;
@@ -71,17 +71,17 @@ impl ModuleArgs {
     }
 }
 
-/// Un module du dépôt : son identifiant et sa racine.
+/// A module of the repository: its id and its root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Member {
     pub id: String,
     pub root: PathBuf,
 }
 
-/// Les modules rangés sous `modules/*/` du premier ancêtre qui en porte, triés par id.
+/// The modules kept under `modules/*/` of the first ancestor that holds any, sorted by id.
 ///
-/// En remontant : lancé depuis `modules/nuki`, le dépôt reste le même. La racine elle-même ne
-/// compte pas — un dépôt à un seul module n'est pas un monorepo.
+/// Walking upwards: run from `modules/nuki`, the repository is still the same one. The root
+/// itself does not count — a single-module repository is not a monorepo.
 pub fn members(start: &Path) -> Vec<Member> {
     start
         .ancestors()
@@ -111,18 +111,18 @@ fn nested_members(repo: &Path) -> Vec<Member> {
     found
 }
 
-/// Ce qu'on peut décider sans demander à personne.
+/// What can be decided without asking anyone.
 #[derive(Debug, PartialEq, Eq)]
 enum Resolved {
     Chosen(Vec<Member>),
-    /// Plusieurs candidats, aucun indice : il faut demander.
+    /// Several candidates, no hint: we have to ask.
     Ambiguous,
 }
 
-/// La décision seule, sans terminal, pour être vérifiable.
+/// The decision on its own, with no terminal, so that it can be checked.
 ///
-/// Hors monorepo, le dossier courant est le module, comme avant. Dans un monorepo : `--all`,
-/// puis `--module`, puis le module dans lequel on se trouve, puis le seul qui existe.
+/// Outside a monorepo, the current directory is the module, as before. Inside a monorepo:
+/// `--all`, then `--module`, then the module one is standing in, then the only one there is.
 fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Result<Resolved> {
     if members.is_empty() {
         let own = manifest_id(cwd);
@@ -164,13 +164,13 @@ fn decide(cwd: &Path, members: &[Member], module: Option<&str>, all: bool) -> Re
     Ok(Resolved::Ambiguous)
 }
 
-/// Les modules visés par la commande, en demandant lequel quand rien ne permet de trancher.
+/// The modules the command acts on, asking which one when nothing settles it.
 ///
-/// Hors terminal, pas de question : une CI qui attendrait une réponse attendrait jusqu'à son
-/// délai. En `--json` non plus : la question partirait sur stdout. L'erreur — d'usage, code 2 —
-/// liste les ids, pour qu'on puisse les recopier dans `--module`.
+/// Outside a terminal, no question: a CI that waited for an answer would wait until its own
+/// timeout. Not under `--json` either: the question would go out on stdout. The error — a usage
+/// one, code 2 — lists the ids, so that they can be copied into `--module`.
 ///
-/// `all` vaut `None` pour une commande qui ne vise qu'un module (`dev`, `link`).
+/// `all` is `None` for a command that acts on a single module (`dev`, `link`).
 pub fn resolve(module: Option<&str>, all: Option<bool>) -> Result<Vec<Member>> {
     let cwd = std::env::current_dir().context("current_dir")?;
     let members = members(&cwd);
@@ -221,7 +221,7 @@ fn ids(members: &[Member]) -> String {
         .join(", ")
 }
 
-/// Se place à la racine du module : les commandes lisent le dossier courant, `cargo` aussi.
+/// Moves to the module's root: the commands read the current directory, and so does `cargo`.
 pub fn enter(member: &Member) -> Result<()> {
     std::env::set_current_dir(&member.root)
         .with_context(|| format!("enter {}", member.root.display()))
@@ -242,7 +242,7 @@ mod tests {
         .unwrap();
     }
 
-    /// La disposition de `portaki-modules` : un workspace à la racine, les modules dessous.
+    /// The layout of `portaki-modules`: a workspace at the root, the modules underneath.
     fn monorepo() -> tempfile::TempDir {
         let repo = tempfile::tempdir().unwrap();
         module(&repo.path().join("modules/nuki"), "nuki");
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(members(&repo.path().join("modules/nuki/src")).len(), 2);
     }
 
-    /// Un dépôt à un module : rien ne change, le dossier courant est le module.
+    /// A single-module repository: nothing changes, the current directory is the module.
     #[test]
     fn a_single_module_repository_is_not_a_monorepo() {
         let repo = tempfile::tempdir().unwrap();

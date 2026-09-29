@@ -345,9 +345,9 @@ pub fn run(args: InitArgs) -> Result<()> {
     Ok(())
 }
 
-/// Ce qui vient d'être écrit, et à quoi chaque morceau sert.
+/// What has just been written, and what each piece is for.
 ///
-/// Un squelette qu'on découvre fichier par fichier se lit mal : chaque morceau dit à quoi il sert.
+/// A skeleton you discover file by file reads badly: each piece says what it is for.
 fn describe(template: &InitTemplate) {
     use crate::tr;
     let mut rows = vec![(

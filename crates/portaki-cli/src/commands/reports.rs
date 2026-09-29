@@ -1,9 +1,8 @@
-//! `portaki reports` — la page Rapports de l'espace développeur, dans le terminal.
+//! `portaki reports` — the developer space's Reports page, in the terminal.
 //!
-//! Ce qui remonte sur un module : les erreurs que Portaki relève à l'exécution, les problèmes et
-//! suggestions des hôtes. On ne répond pas à l'hôte : on corrige, puis on marque le rapport
-//! résolu avec une note interne. Routes : `GET /dev/v1/modules/{id}/reports` et
-//! `PATCH /dev/v1/reports/{id}`.
+//! What comes back about a module: the errors Portaki catches at run time, the problems and
+//! suggestions from hosts. You do not answer the host: you fix, then mark the report resolved with
+//! an internal note. Routes: `GET /dev/v1/modules/{id}/reports` and `PATCH /dev/v1/reports/{id}`.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -14,7 +13,7 @@ use crate::api::Platform;
 use crate::ui;
 use crate::workspace::ModuleArgs;
 
-/// Une page suffit à un terminal ; au-delà, l'espace développeur pagine.
+/// One page is enough for a terminal; beyond that, the developer space paginates.
 const PAGE_SIZE: u32 = 50;
 
 #[derive(Debug, Parser)]

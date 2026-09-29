@@ -1,18 +1,18 @@
-//! Ce qu'un module dit de lui-même, avec ou sans `portaki.module.json`.
+//! What a module says about itself, with or without `portaki.module.json`.
 //!
-//! Le fichier n'est plus nécessaire : le code déclare le module (`portaki_module!`, `#[surface]`,
-//! `#[email]`, les features de `portaki-sdk`) et `portaki build` en écrit le catalogue. Tant
-//! qu'un module le garde, il reste lu et l'emporte ; sans lui, `Cargo.toml` dit l'id et la
-//! version, et le build le reste.
+//! The file is no longer required: the code declares the module (`portaki_module!`, `#[surface]`,
+//! `#[email]`, the `portaki-sdk` features) and `portaki build` writes its catalogue. As long as a
+//! module keeps the file, it is still read and wins; without it, `Cargo.toml` gives the id and the
+//! version, and the build gives the rest.
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
 
-/// Le manifeste écrit à la main, facultatif.
+/// The hand-written manifest, optional.
 pub const MODULE_MANIFEST: &str = "portaki.module.json";
 
-/// Un dossier est un module s'il garde un manifeste, ou si son crate dépend de `portaki-sdk`.
+/// A directory is a module if it keeps a manifest, or if its crate depends on `portaki-sdk`.
 pub fn is_module(root: &Path) -> bool {
     root.join(MODULE_MANIFEST).is_file()
         || cargo_package(root).is_some_and(|doc| {
@@ -22,10 +22,10 @@ pub fn is_module(root: &Path) -> bool {
         })
 }
 
-/// L'id et la version du module : ceux du manifeste s'il les porte, ceux du crate sinon.
+/// The module's id and version: the manifest's if it carries them, the crate's otherwise.
 ///
-/// Le crate et le module portent le même nom et la même version dans tout le catalogue ;
-/// release-please les monte ensemble.
+/// The crate and the module carry the same name and the same version across the whole catalogue;
+/// release-please bumps them together.
 pub fn coordinates(root: &Path) -> Option<(String, String)> {
     let from_manifest = std::fs::read_to_string(root.join(MODULE_MANIFEST))
         .ok()
@@ -46,14 +46,14 @@ pub fn coordinates(root: &Path) -> Option<(String, String)> {
     })
 }
 
-/// L'id seul, pour désigner le module.
+/// The id alone, to designate the module.
 pub fn module_id(root: &Path) -> Option<String> {
     coordinates(root).map(|(id, _)| id)
 }
 
-/// Le manifeste de départ : le fichier écrit à la main, ou `{ id, version }` tirés du crate.
+/// The starting manifest: the hand-written file, or `{ id, version }` taken from the crate.
 ///
-/// L'appelant le complète ensuite de ce que le build a émis (catalogue, déclarations).
+/// The caller then completes it with what the build emitted (catalogue, declarations).
 pub fn source_manifest(root: &Path) -> Result<String> {
     let path = root.join(MODULE_MANIFEST);
     if path.is_file() {
