@@ -128,6 +128,9 @@ pub enum CapabilityId {
     /// Tiqets Content & Availability — property-owned partner key.
     #[serde(rename = "external.tiqets.byok")]
     TiqetsByok,
+    /// Viator Partner API (Basic affiliate) — platform-managed key. No BYOK (licence).
+    #[serde(rename = "external.viator.pool")]
+    ViatorPool,
     /// Inline text suggestion generation.
     #[serde(rename = "ai.text.suggestions")]
     TextSuggestions,
@@ -179,6 +182,7 @@ impl CapabilityId {
             Self::OpenAgendaByok => "external.open-agenda.byok",
             Self::TiqetsPool => "external.tiqets.pool",
             Self::TiqetsByok => "external.tiqets.byok",
+            Self::ViatorPool => "external.viator.pool",
             Self::TextSuggestions => "ai.text.suggestions",
             Self::Translation => "ai.translation",
             Self::ImageGeneration => "ai.image.generation",
@@ -219,6 +223,7 @@ impl CapabilityId {
         Self::OpenAgendaByok,
         Self::TiqetsPool,
         Self::TiqetsByok,
+        Self::ViatorPool,
         Self::TextSuggestions,
         Self::Translation,
         Self::ImageGeneration,
@@ -279,6 +284,7 @@ impl FromStr for CapabilityId {
             "external.open-agenda.byok" => Ok(Self::OpenAgendaByok),
             "external.tiqets.pool" => Ok(Self::TiqetsPool),
             "external.tiqets.byok" => Ok(Self::TiqetsByok),
+            "external.viator.pool" => Ok(Self::ViatorPool),
             "ai.text.suggestions" => Ok(Self::TextSuggestions),
             "ai.translation" => Ok(Self::Translation),
             "ai.image.generation" => Ok(Self::ImageGeneration),
@@ -384,6 +390,8 @@ pub mod external {
     pub const TIQETS_POOL: CapabilityId = CapabilityId::TiqetsPool;
     /// Tiqets — property-owned partner key; links then carry the host's affiliate code.
     pub const TIQETS_BYOK: CapabilityId = CapabilityId::TiqetsByok;
+    /// Viator — platform-managed affiliate key (monthly quota per workspace). No BYOK.
+    pub const VIATOR_POOL: CapabilityId = CapabilityId::ViatorPool;
 }
 
 /// AI capabilities (guest assistant is plan-mapped on Starter; others are roadmap).
@@ -455,6 +463,7 @@ mod tests {
         assert_eq!(core::POI_REIMPORTS.as_str(), "core.poi.reimports");
         assert_eq!(external::TIQETS_POOL.as_str(), "external.tiqets.pool");
         assert_eq!(external::TIQETS_BYOK.as_str(), "external.tiqets.byok");
+        assert_eq!(external::VIATOR_POOL.as_str(), "external.viator.pool");
     }
 
     /// Four hand-kept lists (serde rename, `as_str`, `ALL`, `FromStr`) name each id; this

@@ -17,7 +17,7 @@ use crate::commands::{i18n, permissions};
 use crate::{tr, ui, workspace};
 
 /// The built-in connectors, as `portaki-connectors` serves them (one submodule each).
-pub const BUILTIN_CONNECTORS: [&str; 7] = [
+pub const BUILTIN_CONNECTORS: [&str; 8] = [
     "open-weather",
     "open-agenda",
     "google-places",
@@ -25,6 +25,7 @@ pub const BUILTIN_CONNECTORS: [&str; 7] = [
     "osm-nominatim",
     "nuki",
     "tiqets",
+    "viator",
 ];
 
 #[derive(Debug, Parser)]

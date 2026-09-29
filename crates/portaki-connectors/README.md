@@ -50,6 +50,7 @@ portaki-connectors = "0.1"
 | `mapbox` | `mapbox` | `geocode`, `reverse_geocode`, `directions`, `static_map` |
 | `osm_nominatim` | `osm-nominatim` | `geocode`, `reverse_geocode` |
 | `tiqets` | `tiqets` | `nearby_products` (Content API, read-only) |
+| `viator` | `viator` | `search_products` (Partner API v2 freetext, Basic affiliate, read-only) |
 
 ## Example
 
