@@ -42,6 +42,31 @@ pub struct GeocodeResponse {
     pub display_name: String,
 }
 
+/// Canned responses for the mock host, keyed by operation.
+///
+/// Test builds only — see [`crate::mock`] for the convention and the boundary.
+#[cfg(feature = "mock")]
+pub const MOCK_RESPONSES: &[(&str, &str)] = &[
+    (
+        "geocode",
+        r#"{
+  "portakiMock": true,
+  "lat": 43.5513,
+  "lng": 7.0128,
+  "display_name": "MOCK 1 rue de la Simulation, 06400 MOCK Cannes, France"
+}"#,
+    ),
+    (
+        "reverse_geocode",
+        r#"{
+  "portakiMock": true,
+  "lat": 43.5513,
+  "lng": 7.0128,
+  "display_name": "MOCK Place de la Simulation, 06400 MOCK Cannes, France"
+}"#,
+    ),
+];
+
 impl OsmNominatim {
     /// Forward geocode: `connectors::call("osm-nominatim", "geocode", {"query": ...})`.
     pub fn geocode(query: &str) -> SdkResult<GeocodeResponse> {
@@ -66,5 +91,20 @@ impl OsmNominatim {
     /// Pool usage needs no token — always succeeds. Does not call Nominatim.
     pub fn validate_credentials(_token: &str) -> super::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "mock"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mock_responses_deserialize_and_announce_themselves() {
+        for (operation, json) in MOCK_RESPONSES {
+            let parsed: GeocodeResponse =
+                serde_json::from_str(json).unwrap_or_else(|err| panic!("{operation}: {err}"));
+            assert!(parsed.display_name.starts_with("MOCK "), "{operation}");
+            assert!((-90.0..=90.0).contains(&parsed.lat));
+        }
     }
 }

@@ -32,21 +32,19 @@
 //!
 //! # Test stubbing
 //!
-//! Register canned JSON on a `portaki_test_utils::MockContext` (see that crate's docs):
+//! [`MOCK_RESPONSES`] carries a canned answer for every operation; `portaki_test_utils`
+//! mounts them — and every other connector's — in one call:
 //!
 //! ```ignore
 //! use portaki_test_utils::MockContext;
 //!
-//! MockContext::guest()
-//!     .with_connector_response(
-//!         "open-weather",
-//!         "current",
-//!         r#"{"main":{"temp":21.5,"humidity":55},"weather":[{"main":"Clear"}]}"#,
-//!     )
-//!     .run(|_ctx| {
-//!         // OpenWeather::current(...) reads the stub above.
-//!     });
+//! MockContext::guest().with_builtin_connectors().run(|_ctx| {
+//!     // OpenWeather::current(...) answers 21.5 °C in "MOCK Cannes".
+//! });
 //! ```
+//!
+//! Register JSON of your own with `MockContext::with_connector_response` when a test needs
+//! a specific answer; it wins over the table above.
 
 use portaki_sdk::host::connectors;
 use portaki_sdk::Result as SdkResult;
@@ -140,6 +138,64 @@ pub struct ForecastResponse {
     /// City name from the provider (`city.name`), when present.
     pub city_name: Option<String>,
 }
+
+/// Canned responses for the mock host, keyed by operation.
+///
+/// Test builds only — see [`crate::mock`] for the convention and the boundary.
+#[cfg(feature = "mock")]
+pub const MOCK_RESPONSES: &[(&str, &str)] = &[
+    (
+        "current",
+        r#"{
+  "portakiMock": true,
+  "name": "MOCK Cannes",
+  "main": { "temp": 21.5, "feels_like": 21.0, "humidity": 55, "pressure": 1013 },
+  "clouds": { "all": 20 },
+  "wind": { "speed": 3.1 },
+  "weather": [{ "main": "Clear" }]
+}"#,
+    ),
+    (
+        "forecast",
+        r#"{
+  "portakiMock": true,
+  "city": { "name": "MOCK Cannes" },
+  "list": [
+    {
+      "dt_txt": "2026-01-02 09:00:00",
+      "main": { "temp_min": 11.0, "temp_max": 16.0, "humidity": 62 },
+      "weather": [{ "main": "Clear" }],
+      "wind": { "speed": 2.4 },
+      "pop": 0.1
+    },
+    {
+      "dt_txt": "2026-01-02 15:00:00",
+      "main": { "temp_min": 13.0, "temp_max": 18.0, "humidity": 58 },
+      "weather": [{ "main": "Clouds" }],
+      "wind": { "speed": 4.1 },
+      "pop": 0.25
+    },
+    {
+      "dt_txt": "2026-01-03 09:00:00",
+      "main": { "temp_min": 10.0, "temp_max": 14.0, "humidity": 71 },
+      "weather": [{ "main": "Rain" }],
+      "wind": { "speed": 5.6 },
+      "pop": 0.8
+    }
+  ]
+}"#,
+    ),
+    (
+        "historical",
+        r#"{
+  "portakiMock": true,
+  "timezone": "MOCK/Cannes",
+  "data": [
+    { "dt": 1767225600, "temp": 12.0, "humidity": 64, "weather": [{ "main": "Clouds" }] }
+  ]
+}"#,
+    ),
+];
 
 impl OpenWeather {
     /// Fetches current weather for `args` via `connectors::call("open-weather", "current", ...)`.
@@ -366,5 +422,27 @@ mod tests {
         assert_eq!(parsed.pressure_hpa, Some(1012));
         assert_eq!(parsed.cloud_pct, Some(40));
         assert_eq!(parsed.wind_speed_ms, Some(3.2));
+    }
+
+    #[cfg(feature = "mock")]
+    #[test]
+    fn mock_responses_parse_and_announce_themselves() {
+        let raw = |op: &str| -> serde_json::Value {
+            let (_, json) = MOCK_RESPONSES
+                .iter()
+                .find(|(name, _)| *name == op)
+                .expect(op);
+            serde_json::from_str(json).expect("valid JSON")
+        };
+
+        let current = parse_current(&raw("current")).expect("parse current");
+        assert_eq!(current.temp_c, 21.5);
+        assert_eq!(current.condition, "clear");
+        assert_eq!(current.city_name.as_deref(), Some("MOCK Cannes"));
+
+        let forecast = parse_forecast(&raw("forecast"), 5).expect("parse forecast");
+        assert_eq!(forecast.city_name.as_deref(), Some("MOCK Cannes"));
+        assert_eq!(forecast.days.len(), 2);
+        assert_eq!(forecast.days[1].precip_chance_pct, Some(80));
     }
 }

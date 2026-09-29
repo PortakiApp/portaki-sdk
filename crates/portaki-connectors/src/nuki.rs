@@ -27,6 +27,20 @@ pub struct UnlockArgs {
     pub smartlock_id: String,
 }
 
+/// Canned responses for the mock host, keyed by operation.
+///
+/// Test builds only — see [`crate::mock`] for the convention and the boundary.
+#[cfg(feature = "mock")]
+pub const MOCK_RESPONSES: &[(&str, &str)] = &[(
+    "remote_unlock",
+    r#"{
+  "portakiMock": true,
+  "smartlockId": "mock-smartlock-1",
+  "action": "unlock",
+  "success": true
+}"#,
+)];
+
 impl Nuki {
     /// `POST /smartlock/{smartlockId}/action/unlock` via host egress (Bearer).
     pub fn remote_unlock(args: &UnlockArgs) -> SdkResult<serde_json::Value> {

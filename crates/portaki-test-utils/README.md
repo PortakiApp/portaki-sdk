@@ -62,16 +62,24 @@ fn guest_home_renders() {
 }
 ```
 
-Stub connectors used by [`portaki-connectors`](https://crates.io/crates/portaki-connectors):
+Every built-in connector carries its own canned responses — one line mounts them all:
 
 ```rust,ignore
 MockContext::guest()
-    .with_connector_response(
-        "open-weather",
-        "current",
-        r#"{"main":{"temp":21.5},"weather":[{"main":"Clear"}]}"#,
-    )
-    .run(|_ctx| { /* OpenWeather::current reads the stub */ });
+    .with_builtin_connectors()
+    .run(|_ctx| { /* OpenWeather::current answers "MOCK Cannes", 21.5 °C */ });
+```
+
+They are constants, so the same call answers the same thing on every run, and they are
+visibly simulated (`"MOCK …"`, `"portakiMock": true`) so nothing rendered from them reads
+as a real provider's data. A custom connector hands over its own table the same way —
+keep it under `#[cfg(test)]` next to the `#[custom_connector]` type:
+
+```rust,ignore
+MockContext::host()
+    .with_connector_mocks("acme-pms", ACME_PMS_MOCKS)
+    .with_connector_response("acme-pms", "reservations", r#"{"rows":[]}"#) // pin one op
+    .run(|_ctx| { /* module under test */ });
 ```
 
 ## Conformance battery
