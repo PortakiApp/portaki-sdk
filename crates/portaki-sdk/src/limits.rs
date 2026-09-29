@@ -1,118 +1,118 @@
-//! Plafonds appliqués par la plateforme aux modules — une seule table.
+//! Caps the platform applies to modules — a single table.
 //!
-//! Chaque valeur ici est **aussi** appliquée par la plateforme (runtime et orchestrateur),
-//! et c'est elle qui fait foi : le SDK n'accorde rien de plus. Il recopie les valeurs pour
-//! échouer tôt. Un dépassement vérifié côté SDK remonte en erreur typée dès `cargo test`
-//! (via `portaki-test-utils`), alors qu'en production un email refusé par l'orchestrateur
-//! est simplement abandonné, sans retour vers le module.
+//! Every value here is **also** enforced by the platform (runtime and orchestrator), and the
+//! platform's copy is the one that counts: the SDK grants nothing on top of it. It mirrors the
+//! values in order to fail early. An overrun caught on the SDK side surfaces as a typed error
+//! as soon as `cargo test` runs (through `portaki-test-utils`), whereas in production an email
+//! the orchestrator rejects is simply dropped, with nothing reported back to the module.
 //!
-//! Certaines limites comptent au-delà d'une invocation ou d'un module (fenêtres glissantes,
-//! tous modules confondus) : le SDK ne peut pas les vérifier. Elles figurent quand même ici,
-//! marquées « plateforme seule », pour qu'un auteur de module les trouve au même endroit.
+//! Some limits count beyond a single invocation or a single module (sliding windows, all
+//! modules taken together): the SDK cannot check those. They are listed here all the same,
+//! marked "platform only", so that a module author finds them in the same place.
 //!
-//! Changer une valeur ici sans que la plateforme change la sienne ne change rien en
-//! production — seulement ce que les tests laissent passer.
+//! Changing a value here without the platform changing its own changes nothing in
+//! production — only what the tests let through.
 
-// ── Contenu d'un email (`host::email::send`) ─────────────────────────────────────────────
+// ── Email content (`host::email::send`) ──────────────────────────────────────────────────
 //
-// Comptés en caractères (`char`), pas en octets : un sujet accentué ne doit pas être refusé
-// avant un sujet ASCII de même longueur. Chaque locale est vérifiée séparément.
+// Counted in characters (`char`), not in bytes: a subject with accents must not be rejected
+// before an ASCII subject of the same length. Each locale is checked separately.
 
-/// Longueur maximale du sujet, en caractères, pour chaque locale.
+/// Maximum subject length, in characters, for each locale.
 pub const EMAIL_SUBJECT_MAX_CHARS: usize = 200;
 
-/// Longueur maximale de l'eyebrow (au-dessus du titre), en caractères, pour chaque locale.
+/// Maximum eyebrow length (above the title), in characters, for each locale.
 pub const EMAIL_EYEBROW_MAX_CHARS: usize = 120;
 
-/// Longueur maximale du titre, en caractères, pour chaque locale.
+/// Maximum title length, in characters, for each locale.
 pub const EMAIL_TITLE_MAX_CHARS: usize = 200;
 
-/// Longueur maximale du corps, en caractères, pour chaque locale.
+/// Maximum body length, in characters, for each locale.
 pub const EMAIL_BODY_MAX_CHARS: usize = 5000;
 
-/// Longueur maximale du libellé du CTA, en caractères, pour chaque locale.
+/// Maximum CTA label length, in characters, for each locale.
 pub const EMAIL_CTA_LABEL_MAX_CHARS: usize = 80;
 
-// ── Blocs d'un email (`ModuleEmailSdui::blocks`) ─────────────────────────────────────────
+// ── Email blocks (`ModuleEmailSdui::blocks`) ─────────────────────────────────────────────
 //
-// `emailBlocks` de `contracts/module-limits.json` côté plateforme. Un bloc hors contrat y refuse
-// l'email entier.
+// `emailBlocks` in `contracts/module-limits.json` on the platform side. A block that falls
+// outside the contract makes it reject the whole email.
 
-/// Nombre maximal de blocs par email.
+/// Maximum number of blocks per email.
 pub const EMAIL_BLOCKS_MAX: usize = 10;
 
-/// Nombre maximal d'éléments par bloc (au moins un ; `stats` en prend 2 ou 4).
+/// Maximum number of items per block (at least one; `stats` takes 2 or 4).
 pub const EMAIL_BLOCK_ITEMS_MAX: usize = 12;
 
-/// Longueur maximale de chaque texte d'un bloc, en caractères, pour chaque locale.
+/// Maximum length of each text in a block, in characters, for each locale.
 pub const EMAIL_BLOCK_TEXT_MAX_CHARS: usize = 200;
 
-/// Longueur maximale d'un emoji de bloc, en unités UTF-16 (drapeaux, séquences ZWJ).
+/// Maximum length of a block emoji, in UTF-16 units (flags, ZWJ sequences).
 ///
-/// La plateforme exige en plus un seul graphème de la catégorie « symbole » ; le SDK, sans
-/// segmentation Unicode, refuse seulement l'ASCII, les lettres, chiffres et espaces.
+/// On top of that the platform requires a single grapheme in the "symbol" category; the SDK,
+/// which has no Unicode segmentation, only rejects ASCII, letters, digits and spaces.
 pub const EMAIL_BLOCK_EMOJI_MAX_UTF16: usize = 16;
 
-// ── Par invocation ───────────────────────────────────────────────────────────────────────
+// ── Per invocation ───────────────────────────────────────────────────────────────────────
 
-/// Nombre maximal d'appels `email.send` par invocation.
+/// Maximum number of `email.send` calls per invocation.
 ///
-/// Au-delà, la plateforme répond `email_limit_exceeded`
-/// ([`crate::host::email::EmailError::LimitExceeded`]). Le SDK ne compte pas lui-même : le
-/// compteur vit côté hôte, que le mock de `portaki-test-utils` reproduit.
+/// Beyond that, the platform answers `email_limit_exceeded`
+/// ([`crate::host::email::EmailError::LimitExceeded`]). The SDK does not do the counting
+/// itself: the counter lives on the host side, and the `portaki-test-utils` mock reproduces it.
 pub const EMAIL_SENDS_PER_INVOCATION: usize = 5;
 
-/// Nombre maximal d'événements émis vers la gateway par invocation.
+/// Maximum number of events emitted to the gateway per invocation.
 ///
-/// Au-delà, la plateforme répond `event_limit_exceeded`
+/// Beyond that, the platform answers `event_limit_exceeded`
 /// ([`crate::error::PortakiError::EventLimitExceeded`]).
 pub const EVENTS_PER_INVOCATION: usize = 20;
 
-/// Nombre maximal d'appels `connector.call` par invocation.
+/// Maximum number of `connector.call` calls per invocation.
 pub const CONNECTOR_CALLS_PER_INVOCATION: usize = 5;
 
-/// Taille maximale d'une réponse de connecteur, en octets (1 Mio).
+/// Maximum size of a connector response, in bytes (1 MiB).
 pub const CONNECTOR_RESPONSE_MAX_BYTES: usize = 1024 * 1024;
 
-// ── Emails invités ───────────────────────────────────────────────────────────────────────
+// ── Guest emails ─────────────────────────────────────────────────────────────────────────
 
-/// Jours après le check-out pendant lesquels un email à l'audience invité reste accepté.
+/// Days after check-out during which an email to the guest audience is still accepted.
 ///
-/// Passé `checkout_at + 7 jours`, la plateforme refuse (`email_stay_ended`) : l'invité est
-/// parti depuis longtemps, et un rappel tardif ressemble à du spam. Le SDK vérifie la règle
-/// quand le séjour visé est celui de l'invocation — le seul dont il connaît le check-out.
+/// Past `checkout_at + 7 days`, the platform refuses (`email_stay_ended`): the guest left long
+/// ago, and a late reminder looks like spam. The SDK checks the rule when the stay being
+/// targeted is the invocation's own — the only one whose check-out it knows.
 pub const GUEST_EMAIL_DAYS_AFTER_CHECKOUT: i64 = 7;
 
-/// Emails de modules par séjour invité sur 24 h glissantes, tous modules confondus.
+/// Module emails per guest stay over a sliding 24 h window, all modules taken together.
 ///
-/// Plateforme seule : le compte couvre les autres modules et les invocations passées.
+/// Platform only: the count covers the other modules and past invocations.
 pub const GUEST_STAY_EMAILS_PER_24H: usize = 3;
 
-/// Emails de modules par séjour invité au total, tous modules confondus.
+/// Module emails per guest stay in total, all modules taken together.
 ///
-/// Plateforme seule : le compte couvre les autres modules et les invocations passées.
+/// Platform only: the count covers the other modules and past invocations.
 pub const GUEST_STAY_EMAILS_TOTAL: usize = 10;
 
-// ── Emails hôte ──────────────────────────────────────────────────────────────────────────
+// ── Host emails ──────────────────────────────────────────────────────────────────────────
 
-/// Emails à l'audience hôte par module et par workspace sur 24 h glissantes.
+/// Emails to the host audience per module and per workspace over a sliding 24 h window.
 ///
-/// Plateforme seule : le compte couvre les invocations passées.
+/// Platform only: the count covers past invocations.
 pub const HOST_EMAILS_PER_MODULE_PER_24H: usize = 20;
 
-// ── Fichiers invités (`ImageUpload`, permission `guest:files`) ───────────────────────────
+// ── Guest files (`ImageUpload`, `guest:files` permission) ────────────────────────────────
 //
-// Appliqués par l'endpoint d'upload voyageur de la plateforme : le SDK ne voit jamais les
-// octets, seulement la référence ([`crate::files::FileRef`]) qu'un formulaire lui transmet.
+// Enforced by the platform's traveller upload endpoint: the SDK never sees the bytes, only the
+// reference ([`crate::files::FileRef`]) that a form hands it.
 
-/// Taille maximale d'un fichier invité, en octets (5 Mio).
+/// Maximum size of a guest file, in bytes (5 MiB).
 pub const GUEST_FILE_MAX_BYTES: usize = 5 * 1024 * 1024;
 
-/// Types acceptés, vérifiés sur les octets et non sur l'en-tête déclaré. La plateforme
-/// réencode l'image, ce qui retire les métadonnées (EXIF, position GPS).
+/// Accepted types, checked on the bytes and not on the declared header. The platform re-encodes
+/// the image, which strips the metadata (EXIF, GPS position).
 pub const GUEST_FILE_CONTENT_TYPES: &[&str] = &["image/jpeg", "image/png"];
 
-/// Fichiers qu'un séjour peut envoyer, tous modules confondus.
+/// Files a stay may send, all modules taken together.
 ///
-/// Plateforme seule : le compte couvre les autres modules et les invocations passées.
+/// Platform only: the count covers the other modules and past invocations.
 pub const GUEST_FILES_PER_STAY: usize = 20;

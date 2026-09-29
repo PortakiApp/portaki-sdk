@@ -734,7 +734,7 @@ impl ChartEmpty {
 
 /// Whether a [`Stat`](super::primitives::Stat)'s `delta` is good news.
 ///
-/// The sign alone lies: « −40 min » of response time is an improvement.
+/// The sign alone lies: "−40 min" of response time is an improvement.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DeltaTone {
@@ -774,7 +774,7 @@ pub struct EditableListItem {
     /// English text, when the list is `bilingual`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label_en: Option<String>,
-    /// « Photo » switched on, when the list has `photoToggle`.
+    /// "Photo" switched on, when the list has `photoToggle`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub photo: Option<bool>,
     /// Ticked, when the list has `checkbox`.

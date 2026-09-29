@@ -122,11 +122,11 @@ fn main() {
     println!("cargo:rerun-if-changed=sdui_primitives.json");
 }
 
-/// Les types de `sdui/common.rs` qui portent un nœud dans `content: Option<Box<Component>>`.
+/// The types of `sdui/common.rs` that hold a node in `content: Option<Box<Component>>`.
 ///
-/// `build.rs` ne lit que le contrat JSON, qui nomme ces types sans les décrire : il ne peut pas
-/// deviner qu'un `AccordionItem` contient un arbre. Le test `sdui_tree` relit `common.rs` et
-/// échoue si un type y porte un `Component` sans figurer ici.
+/// `build.rs` only reads the JSON contract, which names these types without describing them: it
+/// cannot guess that an `AccordionItem` holds a tree. The `sdui_tree` test reads `common.rs` back
+/// and fails if a type there holds a `Component` without appearing in this list.
 const NODE_ITEM_TYPES: [&str; 2] = ["AccordionItem", "TabItem"];
 
 #[derive(serde::Deserialize)]
@@ -146,9 +146,9 @@ fn collect_type_deps(
 ) {
     match ty {
         "String" | "bool" | "f64" | "u32" | "i64" => {}
-        // `Component` est généré dans CE module : il est déjà en portée, pas à importer.
+        // `Component` is generated in THIS module: it is already in scope, nothing to import.
         "Component" => {}
-        // Déjà importés pour les champs communs : les réimporter serait un doublon.
+        // Already imported for the common fields: importing them again would be a duplicate.
         "Animation" | "Emphasis" | "SurfaceLevel" | "Tone" | "Visibility" => {}
         "Action" => *uses_action = true,
         "Value" => *uses_value = true,
@@ -165,8 +165,8 @@ fn collect_type_deps(
 fn rust_type(ty: &str) -> String {
     match ty {
         "Value" => "Value".to_string(),
-        // Un nœud imbriqué dans un primitif, qui est lui-même une variante de `Component` :
-        // sans `Box`, le type aurait une taille infinie. `Vec<Component>` n'en a pas besoin.
+        // A node nested inside a primitive, which is itself a variant of `Component`: without
+        // `Box`, the type would have infinite size. `Vec<Component>` does not need one.
         "Component" => "Box<Component>".to_string(),
         other => other.to_string(),
     }
@@ -189,8 +189,8 @@ fn common_field_defs() -> &'static str {
 
 fn builder_setter(field: &str, ty: &str) -> String {
     match ty {
-        // Le champ est `Option<Box<Component>>`, mais l'appelant écrit `.left(Text::new()...)` :
-        // c'est le setter qui emballe, pas lui.
+        // The field is `Option<Box<Component>>`, but the caller writes `.left(Text::new()...)`:
+        // the setter does the boxing, not the caller.
         "Component" => format!(
             "    pub fn {field}(mut self, value: impl Into<Component>) -> Self {{\n\
              self.{field} = Some(Box::new(value.into()));\n\
@@ -248,7 +248,7 @@ fn impl_sdui_primitive(name: &str, serde_name: &str) -> String {
     )
 }
 
-/// L'élément d'un champ `Vec<T>` ou `T`, tel que le contrat l'écrit.
+/// The element of a `Vec<T>` or `T` field, as the contract spells it.
 fn element_type(ty: &str) -> (&str, bool) {
     match ty.strip_prefix("Vec<").and_then(|t| t.strip_suffix('>')) {
         Some(inner) => (inner, true),
@@ -256,11 +256,10 @@ fn element_type(ty: &str) -> (&str, bool) {
     }
 }
 
-/// Le bras de `Component::child_nodes` d'un primitif, ou `None` s'il ne porte aucun nœud.
+/// A primitive's arm of `Component::child_nodes`, or `None` when it holds no node at all.
 ///
-/// Trois sources, dans cet ordre : les champs typés `Component` ou `Vec<Component>`, le
-/// `content` des éléments de [`NODE_ITEM_TYPES`] (champs dans l'ordre du contrat), puis
-/// `children`.
+/// Three sources, in this order: the fields typed `Component` or `Vec<Component>`, the `content`
+/// of the items of [`NODE_ITEM_TYPES`] (fields in contract order), then `children`.
 fn child_node_arm(
     name: &str,
     has_children: bool,
@@ -270,7 +269,7 @@ fn child_node_arm(
     for (field, ty) in fields {
         let (element, is_vec) = element_type(ty);
         let line = match (element, is_vec) {
-            // `Component` seul devient `Box<Component>` (voir `rust_type`).
+            // `Component` on its own becomes `Box<Component>` (see `rust_type`).
             ("Component", false) => {
                 format!("if let Some(node) = inner.{field}.as_deref() {{ nodes.push(node); }}")
             }

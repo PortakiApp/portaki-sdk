@@ -209,7 +209,7 @@ pub fn render_home_card(ctx: GuestContext) -> Result<Surface> {
 }
 ```
 
-The SDK renders « inactive » (module off) or « incomplete » (a required field empty) without
+The SDK renders "inactive" (module off) or "incomplete" (a required field empty) without
 calling it, and an `Err` as a logged error state (`<module>_<surface>_render_failed`), with the
 `portaki_module!` icon. Their texts come with the SDK in en, fr, es, de, it and nl; a key of the
 same name in the module's bundle overrides one (`module.status.inactive.*`,

@@ -65,7 +65,7 @@ pub enum Period {
     Days30,
     /// 90 days.
     Days90,
-    /// 365 days, « 12 months ».
+    /// 365 days, "12 months".
     Days365,
 }
 

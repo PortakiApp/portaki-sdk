@@ -1,10 +1,10 @@
-//! Le schéma du manifeste doit être exploitable : chaque référence locale pointe quelque part.
+//! The manifest schema has to be usable: every local reference points somewhere.
 //!
-//! Un `$ref` vers une définition absente ne se voit pas tant qu'aucun manifeste n'exerce la
-//! propriété qui le porte. La 6.1.0 a publié `queries` et `commands` avec des items
-//! `#/$defs/operation` sans définir `operation` : tous les manifestes existants validaient, et le
-//! premier module lié à cette version aurait reçu « schéma inexploitable » dans devapi. Ce test
-//! parcourt le schéma entier plutôt que les manifestes, pour ne dépendre d'aucun exemple.
+//! A `$ref` to a definition that does not exist stays invisible for as long as no manifest
+//! exercises the property carrying it. 6.1.0 published `queries` and `commands` with items
+//! `#/$defs/operation` without defining `operation`: every existing manifest still validated, and
+//! the first module bound to that release would have got « schéma inexploitable » in devapi. This
+//! test walks the whole schema rather than the manifests, so that it leans on no example.
 
 use serde_json::Value;
 
@@ -58,7 +58,7 @@ fn operations_are_described_the_way_the_build_stamps_them() {
         .pointer("/$defs/operation")
         .expect("queries et commands référencent #/$defs/operation");
 
-    // Ce que `portaki build` émet pour chaque #[portaki_sdk::query] / #[portaki_sdk::command].
+    // What `portaki build` emits for each #[portaki_sdk::query] / #[portaki_sdk::command].
     let properties = operation
         .pointer("/properties")
         .expect("propriétés d'une opération");

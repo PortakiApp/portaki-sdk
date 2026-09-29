@@ -218,7 +218,7 @@ fn log_failure(module_id: &str, surface_id: &str, error: &PortakiError) {
     let mut fields = host::log::Fields::new();
     fields.insert("surfaceId", &surface_id);
     fields.insert("error", &error.to_string());
-    // Un journal qui échoue ne doit pas priver le voyageur de l'état d'erreur.
+    // A log call that fails must not cost the guest the error state.
     let _ = host::log::error(&failure_event(module_id, surface_id), &fields);
 }
 
@@ -247,7 +247,7 @@ fn state_surface(state: State, surface_id: &str, locale: &str) -> Surface {
 
 /// The module's own text when its bundle has `key`, the SDK's otherwise.
 fn text(key: &str, locale: &str) -> Option<String> {
-    // Le runtime renvoie la clé elle-même quand le bundle ne l'a pas.
+    // The runtime returns the key itself when the bundle does not carry it.
     let own = crate::t!(key)
         .ok()
         .filter(|text| text != key && !text.trim().is_empty());
