@@ -15,39 +15,38 @@ GitHub bills **job-minutes**. Splitting fmt/clippy/test into three jobs ≈ 3× 
 - `paths-ignore` for docs-only changes.
 - Clean trybuild nests (`target/tests`) before rust-cache save.
 
-## Dépendances — un seul gestionnaire
+## Dependencies — one bot only
 
-**Renovate écrit les PR. Dependabot ne les écrit plus.** Ce dépôt est celui où la double
-installation a coûté quelque chose : le 7 septembre Renovate montait `syn` en patch (PR #46,
-groupée, conforme) ; le 9, Dependabot le montait de `2.0.119` à `3.0.5` — une majeure (PR #74),
-mergée. Même chose pour `getrandom 0.3→0.4` et `base64 0.22→0.23`.
+**Renovate writes the PRs. Dependabot no longer does.** This is the repo where running both cost
+us something: on 7 September Renovate bumped `syn` by a patch (PR #46, grouped, in line with the
+rules); on the 9th, Dependabot bumped it from `2.0.119` to `3.0.5` — a major (PR #74), and it got
+merged. Same story for `getrandom 0.3→0.4` and `base64 0.22→0.23`.
 
-La règle « Majors Rust — review manuelle » vit dans `renovate.json`. Dependabot ne la lit pas :
-il ne l'a pas contournée, il ne l'a jamais vue. C'est la raison de fond pour n'en garder qu'un —
-une politique qu'un second robot ignore n'est pas une politique.
+The "Majors Rust — review manuelle" rule lives in `renovate.json`. Dependabot does not read it: it
+did not work around the rule, it never saw it. That is the underlying reason to keep only one bot
+— a policy a second robot ignores is not a policy.
 
 ### Automerge
 
-Patch, `pin` et `digest` fusionnent seuls quand `quality` est vert. Les majeures ne fusionnent
-jamais seules — et les **mineures en `0.x` non plus** : semver ne s'applique pas avant `1.0`, une
-mineure y casse comme une majeure ailleurs, et la moitié de l'écosystème Rust est en `0.x`.
+Patch, `pin` and `digest` merge on their own once `quality` is green. Majors never merge on their
+own — and **neither do `0.x` minors**: semver does not apply before `1.0`, a minor there breaks
+like a major anywhere else, and half the Rust ecosystem is on `0.x`.
 
-Une montée attend **trois jours** après publication. Sans ce délai, il existe un chemin direct
-entre le compte crates.io d'un mainteneur et ce qui se publie. Les correctifs de sécurité
-n'attendent pas.
+A bump waits **three days** after publication. Without that delay there is a direct path from a
+maintainer's crates.io account to what we ship. Security fixes do not wait.
 
-`extism-pdk` est exclu de l'automerge quel que soit le type : c'est la frontière avec le runtime
-hôte, et une montée non alignée casse les modules à l'exécution, pas à la compilation.
+`extism-pdk` is excluded from automerge whatever the bump type: it is the boundary with the host
+runtime, and a bump that is not matched on the other side breaks modules at run time, not at
+compile time.
 
-La configuration vit dans `PortakiApp/renovate-config`.
+The configuration lives in `PortakiApp/renovate-config`.
 
-La règle reste **une étiquette `breaking` sur une PR**, pas un blocage : c'est bien une revue
-manuelle, puisqu'un humain merge. Ce qui manquait n'était pas le verrou, c'était l'unicité.
+The rule is still **a `breaking` label on a PR**, not a block: it really is a manual review, since
+a human does the merge. What was missing was not the lock, it was having a single bot.
 
-Ce qui reste de Dependabot, et qui n'a rien à voir avec ce fichier : les **alertes de
-vulnérabilité** et le **graphe de dépendances**, activés côté GitHub, plus le **secret scanning**
-avec sa protection au push — ce dépôt est public, une clé poussée y est indexée dans la seconde.
-Les *security updates* automatiques restent éteints : `vulnerabilityAlerts` de Renovate est déjà
-réglé sur `at any time`.
+What is left of Dependabot, and has nothing to do with this file: the **vulnerability alerts** and
+the **dependency graph**, enabled on the GitHub side, plus **secret scanning** with its push
+protection — this repo is public, a key pushed here is indexed within the second. Automatic
+*security updates* stay off: Renovate's `vulnerabilityAlerts` is already set to `at any time`.
 
 Local Cursor mirror (gitignored): `.cursor/rules/github-actions-ci.mdc`.

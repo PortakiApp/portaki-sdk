@@ -1,17 +1,17 @@
-# Une CVE paraît sans qu'on pousse de commit.
+# A CVE comes out without anyone pushing a commit.
 #
-# La CI ne se déclenchait que sur `push` et `pull_request` : un avis RustSec publié un mardi
-# sur une dépendance qu'on n'a pas touchée depuis six mois n'aurait rien déclenché du tout.
-# D'où le `schedule`, qui est le cœur de ce fichier ; le déclenchement sur PR ne fait que
-# rapprocher le signal du moment où on peut encore l'éviter.
+# CI only ran on `push` and `pull_request`: a RustSec advisory published on a Tuesday about a
+# dependency nobody has touched in six months would have triggered nothing at all. Hence the
+# `schedule`, which is the heart of this file; the PR trigger only moves the signal closer to
+# the moment you can still avoid the problem.
 #
-# Ce dépôt publie sur crates.io : ce qui est vulnérable ici est réinstallé par la CI des
-# modules et par chaque auteur tiers.
+# This repo publishes to crates.io: whatever is vulnerable here gets reinstalled by the modules'
+# CI and by every third-party author.
 name: security-audit
 
 on:
   schedule:
-    # 06:20 UTC — décalé de l'heure pile, où la file d'Actions est la plus chargée.
+    # 06:20 UTC — offset from the top of the hour, when the Actions queue is busiest.
     - cron: "20 6 * * *"
   workflow_dispatch:
 
@@ -21,8 +21,8 @@ concurrency:
 
 permissions:
   contents: read
-  # L'action ouvre une issue quand elle trouve quelque chose sur le cadencement périodique —
-  # sans ça, la trouvaille reste dans un journal que personne ne relit.
+  # The action opens an issue when it finds something on the scheduled run — without this, the
+  # finding stays in a log nobody reads back.
   issues: write
   checks: write
 

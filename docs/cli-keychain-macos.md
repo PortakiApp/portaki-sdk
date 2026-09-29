@@ -1,67 +1,67 @@
-# Où la CLI range ses identifiants
+# Where the CLI keeps its credentials
 
-## Par défaut : un fichier
+## By default: a file
 
-`~/.config/portaki/credentials.json`, en `0600`, dossier en `0700`.
+`~/.config/portaki/credentials.json`, mode `0600`, in a `0700` directory.
 
-- **Hors du dépôt** — un fichier de secrets dans un arbre de travail finit par être commité, ou
-  balayé par un `git add -A`.
-- **Écrit par renommage atomique** — une interruption ne laisse pas un fichier tronqué, ce qui
-  obligerait à se reconnecter pour une raison sans rapport.
-- **Jamais affiché**, et `portaki logout` l'efface entièrement.
+- **Outside the repository** — a secrets file inside a working tree eventually gets committed, or
+  swept up by a `git add -A`.
+- **Written by atomic rename** — an interruption never leaves a truncated file, which would force
+  you to log in again for an unrelated reason.
+- **Never printed**, and `portaki logout` wipes it entirely.
 
-Le chemin se change par `PORTAKI_CREDENTIALS_FILE`.
+Set `PORTAKI_CREDENTIALS_FILE` to change the path.
 
-## Ce que ce fichier ne fait pas
+## What this file does not do
 
-**Il n'est pas chiffré.** Deux idées reviennent, et aucune ne tient :
+**It is not encrypted.** Two ideas keep coming up, and neither holds:
 
-- *le hacher* — impossible : un jeton doit être rejoué tel quel, et un condensat ne se rejoue
-  pas. Ce qu'on hacherait ne servirait plus à s'authentifier ;
-- *le chiffrer* — il faudrait une clé, qu'il faudrait ranger quelque part sur la même machine.
-  Le seul endroit correct est le trousseau, celui-là même qu'on vient de quitter. Brouiller le
-  contenu sans clé protégée ne protège de rien, ça donne seulement l'air de protéger.
+- *hash it* — impossible: a token has to be replayed as-is, and a digest cannot be replayed. What
+  you would hash would no longer authenticate anything;
+- *encrypt it* — that needs a key, and the key has to be stored somewhere on the same machine. The
+  only right place for it is the keychain, the very thing we just walked away from. Scrambling the
+  contents without a protected key protects nothing, it only looks like protection.
 
-Sur une machine mono-utilisateur, la protection qui compte est celle des droits du fichier, et
-elle est en place. Le jeton d'accès vit quinze minutes ; celui de renouvellement, sept jours et
-se révoque par `portaki logout`.
+On a single-user machine, the protection that counts is the file permissions, and those are in
+place. The access token lives fifteen minutes; the refresh token, seven days, and `portaki logout`
+revokes it.
 
-## Pourquoi ce n'est plus le trousseau
+## Why it is no longer the keychain
 
-Le trousseau était le bon choix sur le papier : chiffré au repos, verrouillé avec la session. Son
-coût réel sur macOS l'a emporté.
+The keychain was the right choice on paper: encrypted at rest, locked with the session. Its real
+cost on macOS won out.
 
-Le trousseau n'autorise pas *un fichier à un emplacement*, il autorise une **identité de code**.
-Un binaire recompilé n'a pas la même : chaque `cargo install` produit un programme inconnu, et
-« Toujours autoriser » ne vaut que pour l'empreinte du jour. Une boucle de développement qui
-recompile redemande donc le mot de passe de session à chaque passage.
+The keychain does not authorise *a file at a path*, it authorises a **code identity**. A rebuilt
+binary does not have the same one: every `cargo install` produces a program it has never seen, and
+"Always Allow" only ever covers that day's hash. A development loop that rebuilds therefore asks
+for the login password on every pass.
 
-Un garde-fou qu'on affronte cent fois par jour finit par être contourné — celui-ci l'était déjà,
-par la variable d'environnement.
+A safeguard you run into a hundred times a day ends up being worked around — this one already was,
+through the environment variable.
 
-## Revenir au trousseau
+## Going back to the keychain
 
 ```sh
 export PORTAKI_CREDENTIALS=keychain
 ```
 
-Rien n'a été retiré. Si vous le faites sur macOS et que le dialogue vous lasse, la vraie réponse
-est une identité de signature stable :
+Nothing was removed. If you do this on macOS and the dialog wears you down, the real answer is a
+stable signing identity:
 
-1. **Trousseaux d'accès ▸ Assistant de certification ▸ Créer un certificat…**
-   Nom `Portaki Dev`, type d'identité `Racine auto-signée`, type de certificat `Signature de code`.
-2. Installer avec `./scripts/install-cli.sh`, qui signe le binaire après l'avoir installé.
+1. **Keychain Access ▸ Certificate Assistant ▸ Create a Certificate…**
+   Name `Portaki Dev`, identity type `Self Signed Root`, certificate type `Code Signing`.
+2. Install with `./scripts/install-cli.sh`, which signs the binary after installing it.
 
-Vérifier que la signature tient sur l'identité et non sur une empreinte :
+Check that the signature rests on the identity and not on a hash:
 
 ```sh
 codesign -d -r- "$(command -v portaki)"
 ```
 
-Une exigence qui mentionne un `cdhash` signifie que la signature est restée ad hoc, et le
-dialogue reviendra.
+A requirement that mentions a `cdhash` means the signature stayed ad hoc, and the dialog will be
+back.
 
-## En CI
+## In CI
 
-`PORTAKI_DEV_TOKEN` court-circuite tout : ni fichier, ni trousseau. Un agent de build n'a ni
-l'un ni l'autre, et cette variable gagne sur le reste — y compris sur l'OIDC.
+`PORTAKI_DEV_TOKEN` short-circuits everything: no file, no keychain. A build agent has neither, and
+this variable wins over the rest — including over OIDC.
