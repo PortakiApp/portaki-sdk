@@ -1,25 +1,24 @@
 name: Publish contracts
 
-# Pousse les contrats de la version taguée vers le registre Portaki.
+# Pushes the tagged version's contracts to the Portaki registry.
 #
-# Sans eux, la plateforme dev ne peut valider ni un manifeste ni un arbre SDUI contre la version
-# qu'un module cible : les deux contrôles de conformité correspondants restent bloqués.
+# Without them, the dev platform can validate neither a manifest nor an SDUI tree against the
+# version a module targets: the two matching conformance checks stay blocked.
 #
-# Auth : jeton OIDC de GitHub Actions, comme la publication crates.io juste à côté. Aucun secret
-# longue durée. Ce que le jeton de ce job affirme, et que le registre doit exiger :
+# Auth: GitHub Actions OIDC token, like the crates.io publication right next door. No long-lived
+# secret. What this job's token asserts, and what the registry must require:
 #
-#   repository_id     celui de PortakiApp/portaki-sdk
+#   repository_id     that of PortakiApp/portaki-sdk
 #   event_name        push
-#   ref               refs/tags/v<version publiée>
+#   ref               refs/tags/v<published version>
 #   job_workflow_ref  PortakiApp/portaki-sdk/.github/workflows/publish-contracts.yml@refs/tags/v<version>
 #   environment       contracts
 #
-# D'où : aucun déclenchement manuel, et la version publiée est celle du tag, jamais une entrée.
-# Rejouer après une indisponibilité du registre = « Re-run jobs » sur le run du tag : même
-# événement, même ref, nouveau jeton.
+# Hence: no manual trigger, and the published version is the tag's, never an input. Replaying
+# after a registry outage means "Re-run jobs" on the tag's run: same event, same ref, new token.
 #
-# Séparé de `publish-crates.yml` à dessein : un registre indisponible ne doit pas empêcher une
-# publication crates.io, ni l'inverse.
+# Kept separate from `publish-crates.yml` on purpose: an unavailable registry must not block a
+# crates.io publication, nor the other way round.
 on:
   push:
     tags:
@@ -27,8 +26,8 @@ on:
 
 concurrency:
   group: publish-contracts
-  # Pas d'annulation : une publication interrompue laisserait une version à moitié poussée au
-  # registre, et une version publiée ne se republie pas.
+  # No cancellation: an interrupted publication would leave a version half-pushed to the
+  # registry, and a published version cannot be published again.
   cancel-in-progress: false
 
 permissions:
@@ -40,12 +39,12 @@ jobs:
     name: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # N'accepte que les tags `v*` (règle de l'environment) ; le registre exige ce nom dans le jeton.
+    # Only accepts `v*` tags (an environment rule); the registry requires this name in the token.
     environment: contracts
     steps:
       - uses: actions/checkout@v7
 
-      # La version est celle du tag : le script refuse un Cargo.toml qui ne la porte pas.
+      # The version is the tag's: the script rejects a Cargo.toml that does not carry it.
       - name: Assemble the bundle
         id: bundle
         env:
@@ -54,7 +53,7 @@ jobs:
           set -euo pipefail
           node scripts/build-contracts-bundle.mjs "${TAG#v}" > bundle.json
           echo "version=$(node -e 'process.stdout.write(require("./bundle.json").version)')" >> "$GITHUB_OUTPUT"
-          echo "Bundle: $(wc -c < bundle.json) octets"
+          echo "Bundle: $(wc -c < bundle.json) bytes"
 
       - name: Publish to the registry
         env:
@@ -64,8 +63,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # L'audience est demandée par l'appelant : elle lie le jeton à ce service, elle ne
-          # prouve rien sur l'identité. Ce sont les claims listés en tête que le registre vérifie.
+          # The audience is chosen by the caller: it binds the token to this service, it proves
+          # nothing about identity. It is the claims listed at the top that the registry checks.
           token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$OIDC_AUDIENCE" \
             | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).value))')
@@ -80,8 +79,8 @@ jobs:
           cat response.json
 
           case "$status" in
-            201) echo "::notice::contrats $VERSION publiés" ;;
-            # Déjà publiés : le cas d'un rejeu, pas une erreur. Les contrats sont immuables.
-            200) echo "::notice::contrats $VERSION déjà au registre" ;;
-            *)   echo "::error::le registre a refusé les contrats ($status)"; exit 1 ;;
+            201) echo "::notice::contracts $VERSION published" ;;
+            # Already published: this is a replay, not an error. Contracts are immutable.
+            200) echo "::notice::contracts $VERSION already in the registry" ;;
+            *)   echo "::error::the registry rejected the contracts ($status)"; exit 1 ;;
           esac
