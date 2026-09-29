@@ -51,6 +51,7 @@ Prefer the constants in `portaki_sdk::capability::external::*` so ids stay align
 | `osm` / `osm-nominatim` | `external.osm.pool` | — | `none` |
 | `nuki` | — | `external.nuki.byok` | `bearer` |
 | `tiqets` | `external.tiqets.pool` | `external.tiqets.byok` | `Authorization: Token <key>` — set by the platform catalogue; leave `auth` unset |
+| `viator` | `external.viator.pool` | — (licence: no BYOK) | `exp-api-key: <key>`, versioned `Accept`, `lang` → `Accept-Language` — set by the platform catalogue; leave `auth` unset |
 
 Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_connector]` overrides the provider default. Paths may include `{argName}` templates; matching args are consumed from the JSON object. `POST` / `PUT` / `PATCH` send remaining args as a JSON body (empty → `{}`).
 
