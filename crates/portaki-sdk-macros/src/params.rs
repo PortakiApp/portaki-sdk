@@ -120,8 +120,8 @@ pub(crate) struct Serde {
 pub(crate) fn serde_of(attrs: &[Attribute]) -> Serde {
     let mut serde = Serde::default();
     for attr in attrs.iter().filter(|attr| attr.path().is_ident("serde")) {
-        // Une erreur ici ne remonte pas : un attribut serde exotique vaut mieux décrit à moitié
-        // qu'un module qui ne compile plus.
+        // An error here does not bubble up: an exotic serde attribute is better half described
+        // than a module that no longer compiles.
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("rename") {
                 serde.rename = string_value(&meta)?;
@@ -239,7 +239,7 @@ fn struct_shape(item: &ItemStruct) -> Value {
                 Some(Value::Object(entry))
             })
             .collect(),
-        // Un tuple struct n'a pas de noms à proposer : l'éditeur JSON reste la seule saisie juste.
+        // A tuple struct has no names to offer: the JSON editor stays the only accurate input.
         Fields::Unnamed(_) => {
             shape.insert("opaque".into(), json!(true));
             Vec::new()
@@ -256,8 +256,8 @@ fn enum_shape(item: &ItemEnum) -> Value {
     if let Some(doc) = doc_of(&item.attrs) {
         shape.insert("doc".into(), json!(doc));
     }
-    // Seules les variantes unitaires se choisissent dans une liste ; une variante qui porte des
-    // données dépend du marquage serde, que la sandbox laisse à l'éditeur JSON.
+    // Only unit variants can be picked from a list; a variant that carries data depends on serde's
+    // tagging, which the sandbox leaves to the JSON editor.
     if item
         .variants
         .iter()
@@ -343,7 +343,7 @@ fn scalar(ident: &str) -> Value {
         "NaiveDate" | "Date" => json!({ "type": "string", "format": "date" }),
         "NaiveTime" | "Time" => json!({ "type": "string", "format": "time" }),
         "Value" => json!({ "type": "json" }),
-        // Un type du module : sa forme vient de son propre #[params], s'il en porte un.
+        // A module's own type: its shape comes from its own #[params], if it carries one.
         other => json!({ "type": "ref", "ref": other }),
     }
 }
