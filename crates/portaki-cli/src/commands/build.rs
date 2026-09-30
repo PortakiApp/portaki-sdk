@@ -181,10 +181,7 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
         let i18n_dir = module_root.join("i18n");
         let supported = read_supported_locales(&i18n_dir)
             .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
-        let default_locale = supported
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "fr-FR".to_string());
+        let default_locale = pick_default_locale(&supported);
 
         let sdk_features = pack::sdk_features(module_root)?;
         let mut manifest = generate_manifest(&emissions, &default_locale, &supported)?;
@@ -297,6 +294,28 @@ fn catalog_module_version(catalog_path: &std::path::Path) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The locale a module falls back to, which the manifest carries to the platform.
+///
+/// It used to be whichever file sorted first, which nobody chose and nothing declared. With the two
+/// locales every module shipped that quietly meant `en-US`, since `e` precedes `f`. The moment a
+/// module gained a third — translating it into the ten languages the picker offers — the default
+/// became `ar-SA`, and every host without a matching locale would have been served Arabic.
+///
+/// French first because it is the reference language these modules are written in; English next,
+/// for a module that ever drops French. Alphabetical order remains the last resort, so a module
+/// with neither still builds.
+fn pick_default_locale(supported: &[String]) -> String {
+    for preferred in ["fr-FR", "en-US"] {
+        if supported.iter().any(|locale| locale == preferred) {
+            return preferred.to_string();
+        }
+    }
+    supported
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "fr-FR".to_string())
+}
+
 fn read_supported_locales(i18n_dir: &PathBuf) -> Option<Vec<String>> {
     let entries = std::fs::read_dir(i18n_dir).ok()?;
     let mut locales = Vec::new();
@@ -334,6 +353,38 @@ fn bundle_i18n(i18n_dir: &PathBuf, dest: &PathBuf) -> Result<Option<PathBuf>> {
 
 #[cfg(test)]
 mod tests {
+    use super::pick_default_locale;
+
+    fn locales(names: &[&str]) -> Vec<String> {
+        let mut sorted: Vec<String> = names.iter().map(|name| name.to_string()).collect();
+        // Comme `read_supported_locales` : trié, donc `ar-SA` arrive en tête.
+        sorted.sort();
+        sorted
+    }
+
+    #[test]
+    fn french_wins_over_the_alphabet() {
+        assert_eq!(pick_default_locale(&locales(&["fr-FR", "en-US"])), "fr-FR");
+        assert_eq!(
+            pick_default_locale(&locales(&["ar-SA", "de-DE", "en-US", "fr-FR", "ja-JP"])),
+            "fr-FR"
+        );
+    }
+
+    #[test]
+    fn english_covers_a_module_without_french() {
+        assert_eq!(
+            pick_default_locale(&locales(&["ar-SA", "en-US", "zh-CN"])),
+            "en-US"
+        );
+    }
+
+    #[test]
+    fn the_alphabet_remains_the_last_resort() {
+        assert_eq!(pick_default_locale(&locales(&["de-DE", "zh-CN"])), "de-DE");
+        assert_eq!(pick_default_locale(&[]), "fr-FR");
+    }
+
     use super::*;
 
     #[test]
