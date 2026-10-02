@@ -261,7 +261,23 @@ pub fn generate_manifest(
                 }
             }
         }
-        if let Some(connector) = custom_connectors.last_mut() {
+        // The operation names its connector; an older one (no `connector`) goes to the last
+        // connector declared, which was right only while a module had a single custom connector.
+        let target = match emission.data.get("connector").and_then(Value::as_str) {
+            Some(id) => Some(
+                custom_connectors
+                    .iter_mut()
+                    .find(|c| c["id"].as_str() == Some(id))
+                    .with_context(|| {
+                        format!(
+                            "#[connector_op(connector = \"{id}\")] on `{}`: no #[custom_connector] with that id",
+                            emission.data["fn"].as_str().unwrap_or_default()
+                        )
+                    })?,
+            ),
+            None => custom_connectors.last_mut(),
+        };
+        if let Some(connector) = target {
             if let Some(ops) = connector
                 .get_mut("operations")
                 .and_then(Value::as_array_mut)

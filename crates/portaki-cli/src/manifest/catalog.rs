@@ -736,6 +736,46 @@ mod tests {
         assert!(custom[1].get("monthlyQuota").is_none());
     }
 
+    /// Two custom connectors: each operation goes to the connector it names, whatever the order
+    /// in which the macros emitted them.
+    #[test]
+    fn an_operation_goes_to_the_connector_it_names() {
+        let mut emissions = module();
+        for (id, base) in [
+            ("tiqets", "https://api.tiqets.com"),
+            ("viator", "https://api.viator.com"),
+        ] {
+            emissions.push(EmissionFile {
+                kind: "connector_custom".into(),
+                data: json!({ "id": id, "baseUrl": base, "credentialProviderId": id }),
+            });
+        }
+        for (op, connector) in [("nearby_products", "tiqets"), ("search_products", "viator")] {
+            emissions.push(EmissionFile {
+                kind: "connector_op".into(),
+                data: json!({ "fn": op, "method": "GET", "path": "/x", "connector": connector }),
+            });
+        }
+
+        let manifest =
+            crate::manifest::generator::generate_manifest(&emissions, "fr", &[]).expect("manifest");
+        let custom = &manifest.connectors.custom;
+
+        assert_eq!(custom[0]["operations"][0]["id"], "nearby_products");
+        assert_eq!(custom[1]["operations"][0]["id"], "search_products");
+        assert_eq!(custom[0]["operations"].as_array().map(Vec::len), Some(1));
+
+        emissions.push(EmissionFile {
+            kind: "connector_op".into(),
+            data: json!({ "fn": "lost", "method": "GET", "path": "/x", "connector": "nope" }),
+        });
+        let refused = crate::manifest::generator::generate_manifest(&emissions, "fr", &[]);
+        assert!(refused
+            .unwrap_err()
+            .to_string()
+            .contains("no #[custom_connector] with that id"));
+    }
+
     /// ADR-0021: a connector the module points itself must declare, per operation, what it
     /// accepts and what it sends; a catalogued provider need not.
     #[test]

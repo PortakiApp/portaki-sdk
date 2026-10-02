@@ -1,0 +1,424 @@
+{
+  "author": {
+    "name": "Portaki",
+    "type": "official",
+    "url": "https://portaki.app"
+  },
+  "commands": [
+    {
+      "fn": "refresh_forecast",
+      "guest": false,
+      "name": "refreshForecast"
+    },
+    {
+      "fn": "portaki_legacy_config_adopted",
+      "guest": false,
+      "name": "legacyConfigAdopted"
+    }
+  ],
+  "config": {
+    "fields": [
+      {
+        "key": "units",
+        "label": {
+          "ar": "وحدة الحرارة",
+          "de": "Temperatureinheit",
+          "en": "Temperature units",
+          "es": "Unidades de temperatura",
+          "fr": "Unités de température",
+          "it": "Unità di temperatura",
+          "ja": "温度の単位",
+          "nl": "Temperatuureenheid",
+          "pt": "Unidades de temperatura",
+          "zh": "温度单位"
+        },
+        "options": [
+          {
+            "label": {
+              "ar": "°C",
+              "de": "°C",
+              "en": "°C",
+              "es": "°C",
+              "fr": "°C",
+              "it": "°C",
+              "ja": "°C",
+              "nl": "°C",
+              "pt": "°C",
+              "zh": "°C"
+            },
+            "value": "celsius"
+          },
+          {
+            "label": {
+              "ar": "°F",
+              "de": "°F",
+              "en": "°F",
+              "es": "°F",
+              "fr": "°F",
+              "it": "°F",
+              "ja": "°F",
+              "nl": "°F",
+              "pt": "°F",
+              "zh": "°F"
+            },
+            "value": "fahrenheit"
+          }
+        ],
+        "recommended": false,
+        "required": false,
+        "type": "select"
+      },
+      {
+        "key": "refresh_interval",
+        "label": {
+          "ar": "وتيرة التحديث",
+          "de": "Aktualisierungsrhythmus",
+          "en": "Refresh interval",
+          "es": "Frecuencia de actualización",
+          "fr": "Fréquence de rafraîchissement",
+          "it": "Frequenza di aggiornamento",
+          "ja": "更新の間隔",
+          "nl": "Verversfrequentie",
+          "pt": "Frequência de atualização",
+          "zh": "刷新频率"
+        },
+        "options": [
+          {
+            "label": {
+              "ar": "كل ساعة",
+              "de": "Jede Stunde",
+              "en": "Every hour",
+              "es": "Cada hora",
+              "fr": "Toutes les heures",
+              "it": "Ogni ora",
+              "ja": "1 時間ごと",
+              "nl": "Elk uur",
+              "pt": "A cada hora",
+              "zh": "每小时"
+            },
+            "value": "1h"
+          },
+          {
+            "label": {
+              "ar": "كل 3 ساعات",
+              "de": "Alle 3 Stunden",
+              "en": "Every 3 hours",
+              "es": "Cada 3 horas",
+              "fr": "Toutes les 3 heures",
+              "it": "Ogni 3 ore",
+              "ja": "3 時間ごと",
+              "nl": "Elke 3 uur",
+              "pt": "A cada 3 horas",
+              "zh": "每 3 小时"
+            },
+            "value": "3h"
+          },
+          {
+            "label": {
+              "ar": "كل 6 ساعات",
+              "de": "Alle 6 Stunden",
+              "en": "Every 6 hours",
+              "es": "Cada 6 horas",
+              "fr": "Toutes les 6 heures",
+              "it": "Ogni 6 ore",
+              "ja": "6 時間ごと",
+              "nl": "Elke 6 uur",
+              "pt": "A cada 6 horas",
+              "zh": "每 6 小时"
+            },
+            "value": "6h"
+          }
+        ],
+        "recommended": false,
+        "required": false,
+        "type": "select"
+      }
+    ]
+  },
+  "connectors": {
+    "builtin": [],
+    "custom": [
+      {
+        "baseUrl": "https://api.openweathermap.org",
+        "credentialProviderId": "open-weather",
+        "displayNameKey": "connector.openWeather.name",
+        "id": "open-weather",
+        "operations": [
+          {
+            "id": "current",
+            "method": "GET",
+            "path": "/data/2.5/weather"
+          },
+          {
+            "id": "forecast",
+            "method": "GET",
+            "path": "/data/2.5/forecast"
+          }
+        ]
+      }
+    ]
+  },
+  "description": {
+    "ar": "الحالة الراهنة وتوقّعات خمسة أيام لضيوفك.",
+    "de": "Aktuelle Lage und eine 5-Tage-Vorhersage für Ihre Gäste.",
+    "en": "Current conditions and a 5-day forecast for your guests.",
+    "es": "Condiciones actuales y previsión a 5 días para sus huéspedes.",
+    "fr": "Conditions actuelles et prévisions sur 5 jours pour vos voyageurs.",
+    "it": "Condizioni attuali e previsioni a 5 giorni per i tuoi ospiti.",
+    "ja": "ゲストに現在の天気と 5 日間の予報を見せます。",
+    "nl": "Actuele situatie en een verwachting voor 5 dagen voor je gasten.",
+    "pt": "Condições atuais e previsão a 5 dias para os seus hóspedes.",
+    "zh": "为房客显示当前天气和 5 天预报。"
+  },
+  "dispatchExamples": [
+    {
+      "input": {},
+      "kind": "command",
+      "name": "refreshForecast",
+      "title": "Vider le cache météo"
+    },
+    {
+      "input": {},
+      "kind": "query",
+      "name": "getCurrent",
+      "title": "Au logement"
+    },
+    {
+      "input": {
+        "lat": 43.5528,
+        "lng": 7.0174
+      },
+      "kind": "query",
+      "name": "getCurrent",
+      "title": "Cannes"
+    },
+    {
+      "input": {
+        "templateKey": "arrival-day"
+      },
+      "kind": "query",
+      "name": "emailContext",
+      "title": "E-mail du jour d'arrivée"
+    },
+    {
+      "input": {
+        "addressHint": "Cannes",
+        "templateKey": "arrival-day"
+      },
+      "kind": "query",
+      "name": "emailContext",
+      "title": "Ville indiquée par l'hôte"
+    },
+    {
+      "input": {
+        "days": 5
+      },
+      "kind": "query",
+      "name": "getForecast",
+      "title": "Au logement, 5 jours"
+    },
+    {
+      "input": {
+        "days": 3,
+        "lat": 48.8566,
+        "lng": 2.3522
+      },
+      "kind": "query",
+      "name": "getForecast",
+      "title": "Paris, 3 jours"
+    }
+  ],
+  "entities": [
+    {
+      "fields": [
+        {
+          "name": "id",
+          "type": "Uuid"
+        },
+        {
+          "name": "lat",
+          "type": "f64"
+        },
+        {
+          "name": "lng",
+          "type": "f64"
+        },
+        {
+          "name": "current_json",
+          "type": "String"
+        },
+        {
+          "name": "forecast_json",
+          "type": "String"
+        },
+        {
+          "name": "units",
+          "type": "WeatherUnits"
+        },
+        {
+          "name": "fetched_at",
+          "type": "DateTime<Utc>"
+        },
+        {
+          "name": "expires_at",
+          "type": "DateTime<Utc>"
+        },
+        {
+          "name": "created_at",
+          "type": "DateTime<Utc>"
+        },
+        {
+          "name": "updated_at",
+          "type": "DateTime<Utc>"
+        }
+      ],
+      "name": "WeatherCache",
+      "schema_version": 1
+    }
+  ],
+  "guestSurfaces": [
+    {
+      "labelKey": "nav.weather",
+      "path": "upcoming",
+      "role": "upcoming",
+      "surfaceId": "upcoming.card"
+    },
+    {
+      "labelKey": "nav.forecast",
+      "path": "weather/forecast",
+      "surfaceId": "explore.forecast"
+    }
+  ],
+  "hostSurfaces": [
+    {
+      "icon": "cloud-sun",
+      "label": {
+        "ar": "الطقس",
+        "de": "Wetter",
+        "en": "Weather",
+        "es": "Tiempo",
+        "fr": "Météo",
+        "it": "Meteo",
+        "ja": "天気",
+        "nl": "Weer",
+        "pt": "Meteorologia",
+        "zh": "天气"
+      },
+      "pathSegment": "weather",
+      "type": "property-module-sheet"
+    }
+  ],
+  "icon": "cloud-sun",
+  "id": "weather",
+  "maturity": "stable",
+  "name": {
+    "ar": "الطقس",
+    "de": "Wetter",
+    "en": "Weather",
+    "es": "Tiempo",
+    "fr": "Météo",
+    "it": "Meteo",
+    "ja": "天気",
+    "nl": "Weer",
+    "pt": "Meteorologia",
+    "zh": "天气"
+  },
+  "permissions": [
+    "connectors:open-weather",
+    "kv",
+    "platform",
+    "repo"
+  ],
+  "queries": [
+    {
+      "args": "GetCurrentArgs",
+      "fn": "get_current",
+      "guest": false,
+      "name": "getCurrent",
+      "params": {
+        "doc": "Arguments for `getCurrent`.",
+        "fields": [
+          {
+            "doc": "Optional latitude override (with `lng`; defaults to the property coordinates).",
+            "name": "lat",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "doc": "Optional longitude override.",
+            "name": "lng",
+            "required": false,
+            "type": "number"
+          }
+        ]
+      }
+    },
+    {
+      "args": "EmailContextArgs",
+      "fn": "email_context",
+      "guest": false,
+      "name": "emailContext"
+    },
+    {
+      "fn": "portaki_legacy_config",
+      "guest": false,
+      "name": "legacyConfig"
+    },
+    {
+      "args": "GetForecastArgs",
+      "fn": "get_forecast",
+      "guest": false,
+      "name": "getForecast",
+      "params": {
+        "doc": "Arguments for `getForecast`.",
+        "fields": [
+          {
+            "doc": "Optional latitude override.",
+            "name": "lat",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "doc": "Optional longitude override.",
+            "name": "lng",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "doc": "Number of forecast days (default 5).",
+            "name": "days",
+            "required": false,
+            "type": "integer"
+          }
+        ]
+      }
+    }
+  ],
+  "requiresModuleSdk": "9.4.0",
+  "sdkVersion": "9.4.0",
+  "sortOrder": 130,
+  "surfaces": {
+    "guest": [
+      {
+        "id": "home.card",
+        "render_fn": "render_home_card"
+      },
+      {
+        "id": "explore.forecast",
+        "render_fn": "render_explore_forecast"
+      },
+      {
+        "id": "upcoming.card",
+        "render_fn": "render_upcoming_card"
+      }
+    ],
+    "host": [
+      {
+        "id": "main",
+        "render_fn": "render_host_main"
+      }
+    ]
+  },
+  "type": "official",
+  "version": "1.1.0"
+}
