@@ -46,6 +46,37 @@ struct CustomConnectorAttrs {
     token_url: Option<String>,
     /// Scopes asked at that exchange, space-separated.
     scopes: Option<String>,
+    /// ADR-0021: fixed headers (`header = "Accept: application/json;version=2.0"`, repeatable).
+    headers: std::collections::BTreeMap<String, String>,
+    /// Headers taken from an argument (`header_arg = "Accept-Language=lang"`, repeatable).
+    header_args: std::collections::BTreeMap<String, String>,
+    /// Put before the key in a `header:<name>` form (`auth_prefix = "Token "`).
+    auth_prefix: Option<String>,
+    /// `false`: the publisher's key only, a host can never set theirs (a provider licence, say).
+    host_key: bool,
+}
+
+/// What a module may never set itself: the transport.
+const TRANSPORT_HEADERS: [&str; 8] = [
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "upgrade",
+    "te",
+    "trailer",
+];
+
+fn is_settable_header(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && !TRANSPORT_HEADERS.contains(&name.to_ascii_lowercase().as_str())
+}
+
+fn is_visible_ascii(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 256 && value.chars().all(|c| (' '..='~').contains(&c))
 }
 
 /// A token URL receives the key: https, a host, and nothing that could hide another destination
@@ -117,11 +148,22 @@ impl Parse for CustomConnectorAttrs {
         let mut monthly_quota = None;
         let mut token_url = None;
         let mut scopes = None;
+        let mut headers = std::collections::BTreeMap::new();
+        let mut header_args = std::collections::BTreeMap::new();
+        let mut auth_prefix = None;
+        let mut host_key = true;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             // The one integer attribute: a cap on calls made with the publisher's key.
+            if key == "host_key" {
+                host_key = input.parse::<syn::LitBool>()?.value;
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
+                continue;
+            }
             if key == "monthly_quota" {
                 let value: syn::LitInt = input.parse()?;
                 let quota: u64 = value.base10_parse()?;
@@ -165,6 +207,48 @@ impl Parse for CustomConnectorAttrs {
                     token_url = Some(text)
                 }
                 "scopes" => scopes = Some(text),
+                "header" => {
+                    let parsed = text
+                        .split_once(':')
+                        .map(|(n, v)| (n.trim().to_string(), v.trim().to_string()));
+                    match parsed {
+                        Some((name, header_value)) if is_settable_header(&name) && is_visible_ascii(&header_value) => {
+                            headers.insert(name, header_value);
+                        }
+                        _ => {
+                            return Err(syn::Error::new(
+                                value.span(),
+                                "header = \"Name: value\": a name that is not a transport header, a visible-ASCII value",
+                            ))
+                        }
+                    }
+                }
+                "header_arg" => {
+                    let parsed = text
+                        .split_once('=')
+                        .map(|(n, a)| (n.trim().to_string(), a.trim().to_string()));
+                    match parsed {
+                        Some((name, arg))
+                            if is_settable_header(&name)
+                                && !arg.is_empty()
+                                && arg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') =>
+                        {
+                            header_args.insert(name, arg);
+                        }
+                        _ => {
+                            return Err(syn::Error::new(
+                                value.span(),
+                                "header_arg = \"Header-Name=argName\": the header takes the argument's value",
+                            ))
+                        }
+                    }
+                }
+                "auth_prefix" => {
+                    if !is_visible_ascii(&text) {
+                        return Err(syn::Error::new(value.span(), "auth_prefix: visible ASCII"));
+                    }
+                    auth_prefix = Some(text)
+                }
                 "auth" => {
                     if !is_known_auth(&text) {
                         return Err(syn::Error::new(
@@ -189,6 +273,28 @@ impl Parse for CustomConnectorAttrs {
             }
         }
 
+        if auth_prefix.is_some() && !auth.as_deref().is_some_and(|a| a.starts_with("header:")) {
+            return Err(syn::Error::new(
+                input.span(),
+                "auth_prefix only goes with auth = \"header:<name>\"",
+            ));
+        }
+        let key_header = auth
+            .as_deref()
+            .and_then(|a| a.strip_prefix("header:"))
+            .map(str::to_ascii_lowercase);
+        if let Some(key_header) = key_header {
+            if headers
+                .keys()
+                .chain(header_args.keys())
+                .any(|n| n.to_ascii_lowercase() == key_header)
+            {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "a header cannot replace the one that carries the key",
+                ));
+            }
+        }
         let oauth = auth.as_deref() == Some("oauth2_client_credentials");
         if oauth != token_url.is_some() {
             return Err(syn::Error::new(
@@ -209,6 +315,10 @@ impl Parse for CustomConnectorAttrs {
             monthly_quota,
             token_url,
             scopes,
+            headers,
+            header_args,
+            auth_prefix,
+            host_key,
         })
     }
 }
@@ -371,7 +481,11 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
   "auth": {},
   "monthlyQuota": {},
   "tokenUrl": {},
-  "scopes": {}
+  "scopes": {},
+  "headers": {},
+  "headerArgs": {},
+  "authPrefix": {},
+  "hostKey": {}
 }}"#,
         serde_json::to_string(&attrs.id).unwrap(),
         serde_json::to_string(&attrs.display_name_key).unwrap(),
@@ -381,6 +495,10 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.monthly_quota).unwrap(),
         serde_json::to_string(&attrs.token_url).unwrap(),
         serde_json::to_string(&attrs.scopes).unwrap(),
+        serde_json::to_string(&attrs.headers).unwrap(),
+        serde_json::to_string(&attrs.header_args).unwrap(),
+        serde_json::to_string(&attrs.auth_prefix).unwrap(),
+        attrs.host_key,
     );
 
     let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);
@@ -444,6 +562,17 @@ mod auth_form_tests {
         ] {
             assert!(is_known_auth(auth), "{auth}");
         }
+    }
+
+    #[test]
+    fn a_module_sets_any_header_but_the_transport() {
+        assert!(super::is_settable_header("Accept"));
+        assert!(super::is_settable_header("Accept-Language"));
+        for name in ["Host", "content-length", "Transfer-Encoding", "", "X Bad"] {
+            assert!(!super::is_settable_header(name), "{name}");
+        }
+        assert!(super::is_visible_ascii("application/json;version=2.0"));
+        assert!(!super::is_visible_ascii("a\r\nb"));
     }
 
     #[test]

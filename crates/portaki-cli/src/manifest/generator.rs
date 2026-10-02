@@ -216,11 +216,26 @@ pub fn generate_manifest(
                     "credentialProviderId": emission.data["credentialProviderId"],
                     "operations": []
                 });
-                for key in ["auth", "monthlyQuota", "tokenUrl", "scopes"] {
+                for key in ["auth", "monthlyQuota", "tokenUrl", "scopes", "authPrefix"] {
                     if let Some(value) = emission.data.get(key).filter(|v| !v.is_null()) {
                         if let Some(obj) = connector.as_object_mut() {
                             obj.insert(key.to_string(), value.clone());
                         }
+                    }
+                }
+                // Empty maps and the default (`hostKey: true`) stay out: the manifest says only what differs.
+                if let Some(obj) = connector.as_object_mut() {
+                    for key in ["headers", "headerArgs"] {
+                        if let Some(map) = emission
+                            .data
+                            .get(key)
+                            .filter(|v| v.as_object().is_some_and(|m| !m.is_empty()))
+                        {
+                            obj.insert(key.to_string(), map.clone());
+                        }
+                    }
+                    if emission.data.get("hostKey") == Some(&Value::Bool(false)) {
+                        obj.insert("hostKey".to_string(), Value::Bool(false));
                     }
                 }
                 custom_connectors.push(connector);
