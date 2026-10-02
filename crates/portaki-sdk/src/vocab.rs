@@ -206,6 +206,7 @@ vocabulary! {
     /// The union of what the host dashboard and the guest booklet draw. `contracts/sdui_types.json`
     /// lists it for both, so each shell can check it renders every token.
     IconName {
+        ArrowUp = "arrow-up",
         Ban = "ban",
         Bell = "bell",
         Building = "building",
@@ -226,6 +227,7 @@ vocabulary! {
         CloudRain = "cloud-rain",
         CloudSnow = "cloud-snow",
         CloudSun = "cloud-sun",
+        Compass = "compass",
         DangerTriangle = "danger-triangle",
         Dots = "dots",
         Droplet = "droplet",

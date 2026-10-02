@@ -451,6 +451,9 @@
     "kind": "enum",
     "variants": [
       {
+        "name": "arrow-up"
+      },
+      {
         "name": "ban"
       },
       {
@@ -509,6 +512,9 @@
       },
       {
         "name": "cloud-sun"
+      },
+      {
+        "name": "compass"
       },
       {
         "name": "danger-triangle"
