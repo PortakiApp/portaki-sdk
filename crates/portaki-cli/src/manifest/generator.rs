@@ -216,7 +216,7 @@ pub fn generate_manifest(
                     "credentialProviderId": emission.data["credentialProviderId"],
                     "operations": []
                 });
-                for key in ["auth", "monthlyQuota"] {
+                for key in ["auth", "monthlyQuota", "tokenUrl", "scopes"] {
                     if let Some(value) = emission.data.get(key).filter(|v| !v.is_null()) {
                         if let Some(obj) = connector.as_object_mut() {
                             obj.insert(key.to_string(), value.clone());

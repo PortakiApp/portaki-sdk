@@ -662,6 +662,27 @@ mod tests {
         );
     }
 
+    /// ADR-0021: an OAuth connector's token URL and scopes travel with it — the runtime pins them.
+    #[test]
+    fn the_token_url_reaches_the_built_connector() {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "wx", "baseUrl": "https://api.weather.example", "auth": "oauth2_client_credentials",
+                          "tokenUrl": "https://auth.weather.example/oauth/token", "scopes": "read" }),
+        });
+
+        let manifest =
+            crate::manifest::generator::generate_manifest(&emissions, "fr", &[]).expect("manifest");
+        let connector = &manifest.connectors.custom[0];
+
+        assert_eq!(
+            connector["tokenUrl"],
+            "https://auth.weather.example/oauth/token"
+        );
+        assert_eq!(connector["scopes"], "read");
+    }
+
     /// ADR-0021: the publisher's cap travels with the connector, into the manifest the
     /// orchestrator reads; an absent cap stays absent rather than becoming `null`.
     #[test]
