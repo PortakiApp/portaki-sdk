@@ -111,6 +111,34 @@ pub fn resolve_vocabulary(value: &mut Value) -> Result<()> {
 }
 
 /// Generates a [`ModuleManifest`] from emission files and crate metadata.
+/// ADR-0021: a connector whose destination the module sets itself (no `credential_provider_id`,
+/// so no platform catalogue pins it) must say, for every operation, which arguments it accepts
+/// (`fields`) and what data it sends (`sends`). Optional, the declaration would be skipped by
+/// exactly the author it exists for.
+fn require_declared_egress(custom_connectors: &[Value]) -> Result<()> {
+    for connector in custom_connectors {
+        let provider = connector["credentialProviderId"]
+            .as_str()
+            .unwrap_or_default();
+        if !provider.trim().is_empty() {
+            continue;
+        }
+        let id = connector["id"].as_str().unwrap_or_default();
+        for operation in connector["operations"].as_array().into_iter().flatten() {
+            for key in ["fields", "sends"] {
+                if matches!(operation.get(key), None | Some(Value::Null)) {
+                    anyhow::bail!(
+                        "connector `{id}`, operation `{}`: declare `{key}` on #[connector_op] — \
+                         a connector the module points itself must say what it accepts and sends",
+                        operation["id"].as_str().unwrap_or_default()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn generate_manifest(
     emissions: &[EmissionFile],
     default_locale: &str,
@@ -205,11 +233,19 @@ pub fn generate_manifest(
         if emission.kind != "connector_op" {
             continue;
         }
-        let operation = serde_json::json!({
+        let mut operation = serde_json::json!({
             "id": emission.data["fn"],
             "method": emission.data["method"],
             "path": emission.data["path"],
         });
+        // ADR-0021: what the operation accepts and what it says it sends, absent when undeclared.
+        for key in ["fields", "sends"] {
+            if let Some(value) = emission.data.get(key).filter(|v| !v.is_null()) {
+                if let Some(obj) = operation.as_object_mut() {
+                    obj.insert(key.to_string(), value.clone());
+                }
+            }
+        }
         if let Some(connector) = custom_connectors.last_mut() {
             if let Some(ops) = connector
                 .get_mut("operations")
@@ -219,6 +255,7 @@ pub fn generate_manifest(
             }
         }
     }
+    require_declared_egress(&custom_connectors)?;
 
     let mut host_surfaces = Vec::new();
     let mut guest_surfaces = Vec::new();
