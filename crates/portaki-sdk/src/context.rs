@@ -393,6 +393,78 @@ impl Context {
     pub fn input_u64(&self, key: &str) -> Option<u64> {
         self.input.get(key).and_then(Value::as_u64)
     }
+
+    /// How many rows a host form should draw for a dynamic bounded list.
+    ///
+    /// A host surface that renders `for index in 0..SLOTS` freezes the list at `SLOTS`: the host
+    /// cannot type an eleventh line because the form never draws one. The pattern that works
+    /// instead — a `StepList` whose `addAction` emits `{ "<key>_count": n + 1 }` — needs the same
+    /// four lines in every module, so they live here.
+    ///
+    /// `stored` is how many rows the module actually holds; `max` is the module's own capacity
+    /// bound, a constant, never a value read from the form. The answer is at least one: a list
+    /// drawn with no row at all offers the host nothing to fill.
+    ///
+    /// ```
+    /// # use portaki_sdk::context::Context;
+    /// const SPOT_SLOTS: usize = 30;
+    /// # let ctx = Context::default();
+    /// let rows = ctx.draft_row_count("spots", 4, SPOT_SLOTS); // 4 stored, nothing added yet
+    /// assert_eq!(rows, 4);
+    /// ```
+    pub fn draft_row_count(&self, key: &str, stored: usize, max: usize) -> usize {
+        let max = max.max(1);
+        match self.input_u64(&format!("{key}_count")) {
+            Some(asked) => (asked as usize).clamp(1, max),
+            None => stored.clamp(1, max),
+        }
+    }
+}
+
+#[cfg(test)]
+mod draft_row_count_tests {
+    use super::*;
+
+    fn with_input(key: &str, value: u64) -> Context {
+        Context {
+            input: serde_json::json!({ key: value }),
+            ..Context::default()
+        }
+    }
+
+    /// Rien de demandé : on dessine ce qui est stocké, et au moins une ligne à remplir.
+    #[test]
+    fn without_a_draft_it_follows_what_is_stored() {
+        let ctx = Context::default();
+        assert_eq!(ctx.draft_row_count("spots", 4, 30), 4);
+        assert_eq!(ctx.draft_row_count("spots", 0, 30), 1);
+    }
+
+    /// « Ajouter » demande une ligne de plus, jusqu'à la capacité du module.
+    #[test]
+    fn a_draft_asks_for_rows_within_the_bound() {
+        assert_eq!(
+            with_input("spots_count", 5).draft_row_count("spots", 4, 30),
+            5
+        );
+        assert_eq!(
+            with_input("spots_count", 99).draft_row_count("spots", 4, 30),
+            30
+        );
+        assert_eq!(
+            with_input("spots_count", 0).draft_row_count("spots", 4, 30),
+            1
+        );
+    }
+
+    /// Plus de lignes stockées que la capacité — une borne qu'on a baissée : on en montre le
+    /// maximum, sans jamais en perdre côté stockage.
+    #[test]
+    fn stored_rows_beyond_the_bound_are_clamped() {
+        let ctx = Context::default();
+        assert_eq!(ctx.draft_row_count("bins", 20, 12), 12);
+        assert_eq!(ctx.draft_row_count("bins", 3, 0), 1);
+    }
 }
 
 impl Default for Context {

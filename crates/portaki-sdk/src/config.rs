@@ -36,6 +36,30 @@
 //! `#[field(secret)]` is `item.secret`: encrypted at rest, and kept when a save sends it back empty
 //! or masked, like a `secret` config field.
 //!
+//! # How many rows the host form draws
+//!
+//! A `structured` list has no bound: the platform keeps as many rows as the module sends. The bound
+//! belongs to the module, as a constant — and it must not reach the form as a row count.
+//!
+//! A host surface that draws `for index in 0..SLOTS` freezes the list at `SLOTS`. The host cannot
+//! type an eleventh line because the form never draws one, and a constant meant as a ceiling
+//! becomes the capacity. Draw the rows the module holds instead, and let the host ask for one more:
+//! a `StepList` whose `addAction` emits `{ "<key>_count": n + 1 }`, read back by
+//! [`Context::draft_row_count`](crate::context::Context::draft_row_count) within the bound.
+//!
+//! ```ignore
+//! const SPOT_SLOTS: usize = 30; // capacity, not the number of rows drawn
+//!
+//! let rows = ctx.draft_row_count("spots", config.spots.len(), SPOT_SLOTS);
+//! StepList::new()
+//!     .itemKeyPrefix("spots")
+//!     .addAction(emit_input(json!({ "spots_count": (rows + 1).min(SPOT_SLOTS) })))
+//!     .children((0..rows).map(|i| spot_row(i, config.spots.get(i))).collect())
+//! ```
+//!
+//! An `EditableList` is the simpler answer when the rows are plain: it adds, removes and reorders
+//! on its own, and submits the whole list as JSON under its `name`.
+//!
 //! ```
 //! use portaki_sdk::contracts::i18n::I18nText;
 //!
