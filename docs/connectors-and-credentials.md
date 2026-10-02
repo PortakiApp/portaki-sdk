@@ -53,7 +53,33 @@ Prefer the constants in `portaki_sdk::capability::external::*` so ids stay align
 | `tiqets` | `external.tiqets.pool` | `external.tiqets.byok` | `Authorization: Token <key>` — set by the platform catalogue; leave `auth` unset |
 | `viator` | `external.viator.pool` | — (licence: no BYOK) | `exp-api-key: <key>`, versioned `Accept`, `lang` → `Accept-Language` — set by the platform catalogue; leave `auth` unset |
 
-Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_connector]` overrides the provider default. Paths may include `{argName}` templates; matching args are consumed from the JSON object. `POST` / `PUT` / `PATCH` send remaining args as a JSON body (empty → `{}`).
+Optional `auth = "bearer" | "query_appid" | "query_key" | "none"` on `#[custom_connector]` overrides the provider default (for your own API, see below). Paths may include `{argName}` templates; matching args are consumed from the JSON object. `POST` / `PUT` / `PATCH` send remaining args as a JSON body (empty → `{}`).
+
+### Your own API, with your own key (ADR-0021)
+
+A connector to a service the platform does not catalogue can carry a key, as long as it declares
+one of the platform's auth forms and leaves `credential_provider_id` unset:
+
+```rust
+#[portaki_sdk::custom_connector(id = "wx", base_url = "https://api.weather.example", auth = "header:X-Api-Key")]
+pub struct WeatherApi;
+```
+
+| `auth` | What the runtime sends |
+|--------|------------------------|
+| `bearer` | `Authorization: Bearer <key>` |
+| `basic` | `Authorization: Basic base64(<key>)` — enter the key as `user:password` |
+| `header:<name>` | `<name>: <key>` |
+| `query:<name>` | `?<name>=<key>` |
+
+- **You set the key yourself**, in the developer space: *Modules → your module → Connectors*. No
+  request to Portaki, no deploy. It is stored encrypted and only ever shown as `***abcd`.
+- **It only serves your module**, and only towards the `base_url` and `auth` of your **published**
+  manifest. A build whose manifest says otherwise gets no key.
+- `base_url` is `https://` + host only: no path, port or credentials. Put the path in the operation.
+- Your module never sees the key: the runtime adds it to the request.
+
+A typo in `auth` is a build error.
 
 ## What ends up in the manifest
 
