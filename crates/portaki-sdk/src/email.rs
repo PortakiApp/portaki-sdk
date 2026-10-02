@@ -969,6 +969,95 @@ impl EmailBlock {
     pub fn block_type(&self) -> BlockType {
         self.block_type
     }
+
+    /// Checks the block against the platform's caps, in every language it carries.
+    ///
+    /// The platform cuts a long text and keeps the first rows rather than refusing them: a module
+    /// recomputes them at every send, and an email that never arrives is worse than one that says
+    /// a little less. That silence is what this catches — `cargo test` says what production would
+    /// have quietly shortened. [`serve_blocks`] calls it for every block.
+    pub fn validate(&self) -> crate::Result<()> {
+        use crate::limits::*;
+
+        let text = |field: &str, value: &crate::contracts::i18n::I18nText, max: usize| {
+            for (language, value) in value.by_language() {
+                let length = value.chars().count();
+                if length > max {
+                    return Err(crate::PortakiError::Host(format!(
+                        "email_block_too_long: `{field}` is {length} characters in `{language}`, \
+                         the platform cuts at {max}"
+                    )));
+                }
+            }
+            Ok(())
+        };
+        let count = |field: &str, len: usize, min: usize, max: usize| {
+            if len < min || len > max {
+                return Err(crate::PortakiError::Host(format!(
+                    "email_block_count: {len} `{field}`, the platform takes {min} to {max}"
+                )));
+            }
+            Ok(())
+        };
+
+        text("label", &self.label, GUEST_EMAIL_BLOCK_LABEL_MAX_CHARS)?;
+        if let Some(title) = &self.title {
+            text("title", title, GUEST_EMAIL_BLOCK_TITLE_MAX_CHARS)?;
+        }
+        if let Some(body) = &self.text {
+            text("text", body, GUEST_EMAIL_BLOCK_TEXT_MAX_CHARS)?;
+        }
+        if let Some(label) = &self.link_label {
+            text("linkLabel", label, GUEST_EMAIL_BLOCK_LINK_LABEL_MAX_CHARS)?;
+        }
+        if let Some(anchor) = &self.anchor {
+            let slug = anchor
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+            if !slug || anchor.starts_with('-') || anchor.ends_with('-') || anchor.is_empty() {
+                return Err(crate::PortakiError::Host(format!(
+                    "email_block_anchor: `{anchor}` is not a section of the stay page — \
+                     lowercase letters, digits and dashes"
+                )));
+            }
+        }
+
+        let (label_max, value_max) = match self.block_type {
+            BlockType::List => (
+                GUEST_EMAIL_LIST_LABEL_MAX_CHARS,
+                GUEST_EMAIL_LIST_VALUE_MAX_CHARS,
+            ),
+            _ => (
+                GUEST_EMAIL_PAIRS_LABEL_MAX_CHARS,
+                GUEST_EMAIL_PAIRS_VALUE_MAX_CHARS,
+            ),
+        };
+        for row in &self.rows {
+            text("rows[].label", &row.label, label_max)?;
+            text("rows[].value", &row.value, value_max)?;
+        }
+        for item in &self.items {
+            text("items[]", item, GUEST_EMAIL_BLOCK_ITEM_MAX_CHARS)?;
+        }
+
+        match self.block_type {
+            BlockType::Pairs | BlockType::List => {
+                count("rows", self.rows.len(), 1, GUEST_EMAIL_BLOCK_ROWS_MAX)?;
+            }
+            BlockType::Checklist => {
+                count("items", self.items.len(), 1, GUEST_EMAIL_BLOCK_ITEMS_MAX)?;
+            }
+            BlockType::Info | BlockType::Alert => {
+                if self.text.is_none() {
+                    return Err(crate::PortakiError::Host(format!(
+                        "email_block_text: a `{}` block says nothing without its text",
+                        self.block_type
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The blocks a module gives one email — what an `#[email_blocks]` function returns.
@@ -1053,6 +1142,7 @@ pub fn serve_blocks(
         if !allowed.contains(&kind) {
             continue;
         }
+        block.validate()?;
         kept.push(block);
     }
     if kept.is_empty() {
@@ -1234,6 +1324,94 @@ mod block_tests {
             error.to_string().contains("email_block_too_many"),
             "{error}"
         );
+    }
+
+    /// Ce que la plateforme couperait en silence, `cargo test` le dit.
+    #[test]
+    fn what_the_platform_would_quietly_shorten_is_an_error_here() {
+        let long = "x".repeat(200);
+        for (block, expected) in [
+            (EmailBlock::info(long.clone(), "t"), "label"),
+            (EmailBlock::info("L", long.clone()), "text"),
+            (EmailBlock::info("L", "t").title(long.clone()), "title"),
+            (
+                EmailBlock::info("L", "t").link(long.clone(), "a"),
+                "linkLabel",
+            ),
+            (
+                EmailBlock::pairs("L").row(long.clone(), "v"),
+                "rows[].label",
+            ),
+            (EmailBlock::list("L").row("l", long.clone()), "rows[].value"),
+            (EmailBlock::checklist("L").item(long.clone()), "items[]"),
+        ] {
+            let error = block.validate().unwrap_err().to_string();
+            assert!(
+                error.contains("email_block_too_long"),
+                "{expected}: {error}"
+            );
+            assert!(error.contains(expected), "{expected}: {error}");
+        }
+    }
+
+    /// Les longueurs se comptent langue par langue : une traduction plus longue compte aussi.
+    #[test]
+    fn each_language_is_measured_on_its_own() {
+        let label = I18nText::new("Parking", "x".repeat(40));
+        let error = EmailBlock::pairs(label)
+            .row("a", "b")
+            .validate()
+            .unwrap_err();
+        assert!(error.to_string().contains("in `en`"), "{error}");
+    }
+
+    #[test]
+    fn a_block_without_its_rows_or_its_text_is_refused() {
+        assert!(EmailBlock::pairs("P").validate().is_err());
+        assert!(EmailBlock::checklist("C").validate().is_err());
+        assert!(EmailBlock::pairs("P").row("a", "b").validate().is_ok());
+    }
+
+    #[test]
+    fn too_many_rows_or_items_is_an_error_not_a_silent_cut() {
+        let mut rows = EmailBlock::pairs("P");
+        for _ in 0..crate::limits::GUEST_EMAIL_BLOCK_ROWS_MAX + 1 {
+            rows = rows.row("a", "b");
+        }
+        assert!(rows
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("email_block_count"));
+
+        let mut items = EmailBlock::checklist("C");
+        for _ in 0..crate::limits::GUEST_EMAIL_BLOCK_ITEMS_MAX + 1 {
+            items = items.item("x");
+        }
+        assert!(items
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("email_block_count"));
+    }
+
+    #[test]
+    fn an_anchor_is_a_section_of_the_stay_page_not_anything_else() {
+        for bad in ["../etc", "a b", "https://evil.test", "Parking", "-x", "x-"] {
+            let block = EmailBlock::info("L", "t").link("V", bad);
+            assert!(
+                block
+                    .validate()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("email_block_anchor"),
+                "{bad}"
+            );
+        }
+        assert!(EmailBlock::info("L", "t")
+            .link("V", "waste-recycling")
+            .validate()
+            .is_ok());
     }
 
     #[test]
