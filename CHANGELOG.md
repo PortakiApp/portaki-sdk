@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.2.2...v9.3.0) (2026-10-02)
+
+
+### Features
+
+* **config:** draw the rows a host has, not a fixed six ([187110f](https://github.com/PortakiApp/portaki-sdk/commit/187110fc1db878bbe0c0a5aec0899d639b04c2c5))
+* **connectors:** flag machine-translated viator products ([237c3a1](https://github.com/PortakiApp/portaki-sdk/commit/237c3a1eff3374287c3ce7a9a9b5459585ab02dd))
+* **macros:** add monthly_quota to custom connectors ([c5d601a](https://github.com/PortakiApp/portaki-sdk/commit/c5d601ad647a2a7841c446cffa922346d3cf8210))
+* **macros:** check module connector auth forms ([f686866](https://github.com/PortakiApp/portaki-sdk/commit/f6868664be4caa1eade3dad867613860769c8beb))
+* **macros:** declare connector op fields and sends ([74b6492](https://github.com/PortakiApp/portaki-sdk/commit/74b6492e37220e9965ae5c0c1436466e1bf4903a))
+* **macros:** oauth2 client credentials connectors ([6ec3fc1](https://github.com/PortakiApp/portaki-sdk/commit/6ec3fc11486c85ed3bcc8d39b21160b9cd12b51a))
+* **sdk:** declare the blocks a module adds to stay emails ([6578e7e](https://github.com/PortakiApp/portaki-sdk/commit/6578e7e9d970f238f3d6ded2b55f0f81e93887d2))
+* **sdui:** let an editable row carry a group and a line ([d5c0c09](https://github.com/PortakiApp/portaki-sdk/commit/d5c0c09cea073a32647b6c11e31b59df913ad582))
+
+
+### Bug Fixes
+
+* **cli:** carry connectors into publish manifest ([8dad74f](https://github.com/PortakiApp/portaki-sdk/commit/8dad74f0eae3b4edf9896da63099651c9c9355c3))
+* **macros:** drop query auth, check connector ids ([6fd14c6](https://github.com/PortakiApp/portaki-sdk/commit/6fd14c672b5a26bce1a878c8d2e0b5e52b122b61))
+* **sdk:** hold the block to every cap, not just one ([f5c1336](https://github.com/PortakiApp/portaki-sdk/commit/f5c133609b2ba91e68db0c0d96fe79763d683b30))
+
 ## [9.2.2](https://github.com/PortakiApp/portaki-sdk/compare/v9.2.1...v9.2.2) (2026-09-30)
 
 
