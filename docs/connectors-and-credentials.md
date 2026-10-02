@@ -70,6 +70,22 @@ pub struct WeatherApi;
 | `bearer` | `Authorization: Bearer <key>` |
 | `basic` | `Authorization: Basic base64(<key>)` — enter the key as `user:password` |
 | `header:<name>` | `<name>: <key>` — not a transport header (`Host`, `Content-Type`, `Accept`…) |
+| `oauth2_client_credentials` | `Authorization: Bearer <access token>`, obtained by trading the key (`client_id:client_secret`) at `token_url` |
+
+For OAuth client credentials, also give `token_url` (https, a path is fine; no credentials, port,
+query or fragment) and optionally `scopes = "read write"`:
+
+```rust
+#[portaki_sdk::custom_connector(id = "wx", base_url = "https://api.weather.example",
+    auth = "oauth2_client_credentials", token_url = "https://auth.weather.example/oauth/token")]
+pub struct WeatherApi;
+```
+
+The runtime makes the exchange itself, through the same guarded egress as your calls, and keeps
+the access token until it expires (per key: two hosts' keys are two clients). The exchange is not
+counted against `monthly_quota`. A failed or unusable exchange surfaces as
+`connector_oauth_token_failed`, distinct from an error of your API. A host-side "Connect" button
+(authorization code) is not available yet.
 
 - **You set the key yourself**, in the developer space: *Modules → your module → Connectors*. No
   request to Portaki, no deploy. It is stored encrypted and only ever shown as `***abcd`.

@@ -42,6 +42,23 @@ struct CustomConnectorAttrs {
     /// ADR-0021: calls made with the publisher's key, per workspace and month. `None`: no cap
     /// (still counted).
     monthly_quota: Option<u64>,
+    /// ADR-0021: where `oauth2_client_credentials` trades the key for an access token.
+    token_url: Option<String>,
+    /// Scopes asked at that exchange, space-separated.
+    scopes: Option<String>,
+}
+
+/// A token URL receives the key: https, a host, and nothing that could hide another destination
+/// (credentials, port, query, fragment). A path is allowed, unlike `base_url`.
+fn is_valid_token_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or("");
+    !authority.is_empty()
+        && !authority.contains(['@', ':'])
+        && !url.contains(['?', '#'])
+        && !url.chars().any(char::is_whitespace)
 }
 
 /// The auth forms the platform knows how to inject. Anything else would only fail at the first
@@ -50,7 +67,7 @@ fn is_known_auth(auth: &str) -> bool {
     match auth.split_once(':') {
         None => matches!(
             auth,
-            "bearer" | "basic" | "none" | "query_appid" | "query_key"
+            "bearer" | "basic" | "none" | "query_appid" | "query_key" | "oauth2_client_credentials"
         ),
         // Not a transport or negotiation header: the key would break the request, or travel as
         // `Host`. The runtime refuses the same list.
@@ -98,6 +115,8 @@ impl Parse for CustomConnectorAttrs {
         let mut credential_provider_id = None;
         let mut auth = None;
         let mut monthly_quota = None;
+        let mut token_url = None;
+        let mut scopes = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -136,6 +155,16 @@ impl Parse for CustomConnectorAttrs {
                 "display_name_key" => display_name_key = Some(text),
                 "base_url" => base_url = Some(text),
                 "credential_provider_id" => credential_provider_id = Some(text),
+                "token_url" => {
+                    if !is_valid_token_url(&text) {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            "token_url: an https URL with a host, no credentials, port, query or fragment",
+                        ));
+                    }
+                    token_url = Some(text)
+                }
+                "scopes" => scopes = Some(text),
                 "auth" => {
                     if !is_known_auth(&text) {
                         return Err(syn::Error::new(
@@ -160,6 +189,17 @@ impl Parse for CustomConnectorAttrs {
             }
         }
 
+        let oauth = auth.as_deref() == Some("oauth2_client_credentials");
+        if oauth != token_url.is_some() {
+            return Err(syn::Error::new(
+                input.span(),
+                if oauth {
+                    "auth = \"oauth2_client_credentials\" needs token_url"
+                } else {
+                    "token_url only goes with auth = \"oauth2_client_credentials\""
+                },
+            ));
+        }
         Ok(CustomConnectorAttrs {
             id: id.ok_or_else(|| syn::Error::new(input.span(), "id is required"))?,
             display_name_key,
@@ -167,6 +207,8 @@ impl Parse for CustomConnectorAttrs {
             credential_provider_id,
             auth,
             monthly_quota,
+            token_url,
+            scopes,
         })
     }
 }
@@ -327,7 +369,9 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
   "baseUrl": {},
   "credentialProviderId": {},
   "auth": {},
-  "monthlyQuota": {}
+  "monthlyQuota": {},
+  "tokenUrl": {},
+  "scopes": {}
 }}"#,
         serde_json::to_string(&attrs.id).unwrap(),
         serde_json::to_string(&attrs.display_name_key).unwrap(),
@@ -335,6 +379,8 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.credential_provider_id).unwrap(),
         serde_json::to_string(&attrs.auth).unwrap(),
         serde_json::to_string(&attrs.monthly_quota).unwrap(),
+        serde_json::to_string(&attrs.token_url).unwrap(),
+        serde_json::to_string(&attrs.scopes).unwrap(),
     );
 
     let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);
@@ -392,10 +438,28 @@ mod auth_form_tests {
             "basic",
             "none",
             "header:exp-api-key",
+            "oauth2_client_credentials",
             "query_appid",
             "query_key",
         ] {
             assert!(is_known_auth(auth), "{auth}");
+        }
+    }
+
+    #[test]
+    fn token_urls_are_https_with_nothing_hidden() {
+        assert!(super::is_valid_token_url(
+            "https://auth.example/oauth/token"
+        ));
+        for url in [
+            "http://auth.example/token",
+            "https://u:p@auth.example/token",
+            "https://auth.example:8443/token",
+            "https://auth.example/token?x=1",
+            "https://auth.example/token#f",
+            "https:///token",
+        ] {
+            assert!(!super::is_valid_token_url(url), "{url}");
         }
     }
 
