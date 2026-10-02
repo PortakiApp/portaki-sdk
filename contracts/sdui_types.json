@@ -372,6 +372,14 @@
         "optional": true,
         "type": "bool"
       },
+      "description": {
+        "optional": true,
+        "type": "String"
+      },
+      "group": {
+        "optional": true,
+        "type": "String"
+      },
       "id": {
         "optional": true,
         "type": "String"
