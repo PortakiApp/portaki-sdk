@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.3.0...v9.4.0) (2026-10-02)
+
+
+### Features
+
+* **macros:** connector headers, key prefix, host_key ([c42145d](https://github.com/PortakiApp/portaki-sdk/commit/c42145d3db4ad72bd09023ed1c0809e9513fd27e))
+
 ## [9.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.2.2...v9.3.0) (2026-10-02)
 
 
