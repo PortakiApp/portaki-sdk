@@ -76,6 +76,22 @@
       "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, i18n.translate, log.",
       "items": { "$ref": "#/$defs/permission" }
     },
+    "connectors": {
+      "type": "object",
+      "description": "Connectors the build emitted (#[builtin_connector], #[custom_connector]), carried into the published manifest since portaki-sdk 9.3: the orchestrator lends a key only to a connector the published manifest declares, and the runtime pins each call to it (ADR-0021). Never hand-written.",
+      "additionalProperties": false,
+      "properties": {
+        "builtin": { "type": "array", "items": { "type": "string" } },
+        "custom": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" } }
+          }
+        }
+      }
+    },
     "queries": {
       "type": "array",
       "description": "Read-only operations the module exports. Never hand-written: stamped from the build output at publish time, because only the build knows what the binary serves — a wasm module exports portaki_query and nothing else. The platform reads this to know which module to ask for a given operation, instead of dispatching blind and collecting wasm_handler_not_found from the ones that stay silent.",

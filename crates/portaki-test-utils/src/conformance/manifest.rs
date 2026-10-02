@@ -206,4 +206,25 @@ mod tests {
             ]
         );
     }
+
+    /// Since portaki-sdk 9.3 the published manifest carries `connectors` (ADR-0021). A real one —
+    /// `weather`, built by the 9.4 CLI — must validate, or every module with a connector fails
+    /// its conformance test the moment it is built.
+    #[test]
+    fn a_published_manifest_with_connectors_validates() {
+        let schema: Value = serde_json::from_str(MODULE_SCHEMA_V1).expect("schema");
+        let validator = jsonschema::validator_for(&schema).expect("compiles");
+        let manifest: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/published-manifest-with-connectors.json"
+        ))
+        .expect("fixture");
+        assert!(manifest["connectors"]["custom"].is_array());
+
+        let errors: Vec<String> = validator.iter_errors(&manifest).map(|e| e.to_string()).collect();
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let mut wrong = manifest.clone();
+        wrong["connectors"]["custom"][0]["id"] = json!("Not An Id");
+        assert!(validator.iter_errors(&wrong).next().is_some());
+    }
 }

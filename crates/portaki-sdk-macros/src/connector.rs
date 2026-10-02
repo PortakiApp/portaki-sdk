@@ -332,6 +332,9 @@ struct ConnectorOpAttrs {
     fields: Option<Vec<String>>,
     /// ADR-0021: what it sends, from [`DATA_CATEGORIES`], shown to the host.
     sends: Option<Vec<String>>,
+    /// The `#[custom_connector]` id this operation belongs to. Required as soon as a module
+    /// declares two custom connectors; without it the operation goes to the last one declared.
+    connector: Option<String>,
 }
 
 /// The data a connector operation may say it sends. A closed list: the host reads these, so a
@@ -367,6 +370,7 @@ impl Parse for ConnectorOpAttrs {
                 validator: true,
                 fields: None,
                 sends: None,
+                connector: None,
             });
         }
 
@@ -375,6 +379,7 @@ impl Parse for ConnectorOpAttrs {
         let mut cache = None;
         let mut fields = None;
         let mut sends = None;
+        let mut connector = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -386,6 +391,7 @@ impl Parse for ConnectorOpAttrs {
                     validator: true,
                     fields: None,
                     sends: None,
+                    connector: None,
                 });
             }
 
@@ -398,6 +404,7 @@ impl Parse for ConnectorOpAttrs {
                 "path" => path = Some(text),
                 "cache" => cache = Some(text),
                 "fields" => fields = Some(comma_list(&text)),
+                "connector" => connector = Some(text),
                 "sends" => {
                     let categories = comma_list(&text);
                     if let Some(unknown) = categories
@@ -440,6 +447,7 @@ impl Parse for ConnectorOpAttrs {
             validator: false,
             fields,
             sends,
+            connector,
         })
     }
 }
@@ -525,7 +533,8 @@ pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
   "cache": {},
   "validator": {},
   "fields": {},
-  "sends": {}
+  "sends": {},
+  "connector": {}
 }}"#,
         serde_json::to_string(&fn_name).unwrap(),
         serde_json::to_string(&attrs.method).unwrap(),
@@ -534,6 +543,7 @@ pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
         attrs.validator,
         serde_json::to_string(&attrs.fields).unwrap(),
         serde_json::to_string(&attrs.sends).unwrap(),
+        serde_json::to_string(&attrs.connector).unwrap(),
     );
 
     let emission = write_emission("connector_op", &sanitize_key(&fn_name), &json);

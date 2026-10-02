@@ -110,6 +110,9 @@ counted against `monthly_quota`. A failed or unusable exchange surfaces as
   manifest. A build whose manifest says otherwise gets no key.
 - `base_url` is `https://` + host only: no path, port or credentials. Put the path in the operation.
 - Your module never sees the key: the runtime adds it to the request.
+- **Two custom connectors in one module?** Name each operation's connector:
+  `#[connector_op(connector = "viator", …)]`. Without it, an operation belongs to the last
+  `#[custom_connector]` declared, which is only right while there is one.
 - **Say what each operation accepts and sends** — required for a connector without
   `credential_provider_id`, a build error otherwise:
 
