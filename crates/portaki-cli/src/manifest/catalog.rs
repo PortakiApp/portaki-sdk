@@ -662,6 +662,35 @@ mod tests {
         );
     }
 
+    /// ADR-0021: Viator's headers, a key prefix, and "publisher key only" reach the manifest;
+    /// defaults (no headers, host key allowed) stay out of it.
+    #[test]
+    fn headers_prefix_and_publisher_only_reach_the_built_connector() {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "viator", "baseUrl": "https://api.viator.com", "auth": "header:exp-api-key",
+                          "headers": { "Accept": "application/json;version=2.0" },
+                          "headerArgs": { "Accept-Language": "lang" }, "authPrefix": null, "hostKey": false }),
+        });
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "tiqets", "baseUrl": "https://api.tiqets.com", "auth": "header:Authorization",
+                          "headers": {}, "headerArgs": {}, "authPrefix": "Token ", "hostKey": true }),
+        });
+
+        let manifest =
+            crate::manifest::generator::generate_manifest(&emissions, "fr", &[]).expect("manifest");
+        let viator = &manifest.connectors.custom[0];
+        let tiqets = &manifest.connectors.custom[1];
+
+        assert_eq!(viator["headers"]["Accept"], "application/json;version=2.0");
+        assert_eq!(viator["headerArgs"]["Accept-Language"], "lang");
+        assert_eq!(viator["hostKey"], false);
+        assert_eq!(tiqets["authPrefix"], "Token ");
+        assert!(tiqets.get("headers").is_none() && tiqets.get("hostKey").is_none());
+    }
+
     /// ADR-0021: an OAuth connector's token URL and scopes travel with it — the runtime pins them.
     #[test]
     fn the_token_url_reaches_the_built_connector() {

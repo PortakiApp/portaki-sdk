@@ -81,6 +81,23 @@ query or fragment) and optionally `scopes = "read write"`:
 pub struct WeatherApi;
 ```
 
+**Headers, key prefix, publisher-only.** Some APIs need more than a key:
+
+```rust
+#[portaki_sdk::custom_connector(id = "viator", base_url = "https://api.viator.com", auth = "header:exp-api-key",
+    header = "Accept: application/json;version=2.0", header_arg = "Accept-Language=lang", host_key = false)]
+#[portaki_sdk::custom_connector(id = "tiqets", base_url = "https://api.tiqets.com",
+    auth = "header:Authorization", auth_prefix = "Token ")]
+```
+
+- `header = "Name: value"` (repeatable) is sent as is; `Accept` is fine, transport headers (`Host`,
+  `Content-Length`, `Transfer-Encoding`…) and the header that carries the key are refused.
+- `header_arg = "Header=arg"` (repeatable) takes the value of argument `arg`; list `arg` in the
+  operation's `fields`. The value must be a short token (a language code, an id).
+- `auth_prefix` goes before the key, with `header:<name>` only.
+- `host_key = false`: only your key is ever used; hosts see the service but cannot set a key —
+  for a provider whose licence forbids showing content under someone else's key.
+
 The runtime makes the exchange itself, through the same guarded egress as your calls, and keeps
 the access token until it expires (per key: two hosts' keys are two clients). The exchange is not
 counted against `monthly_quota`. A failed or unusable exchange surfaces as
