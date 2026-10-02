@@ -103,12 +103,15 @@ pub use context::{
 };
 #[allow(deprecated)]
 pub use email::EmailContextContribution;
-pub use email::{EmailContextArgs, EmailTemplateKey, EmailVar, EmailVars};
+pub use email::{
+    BlockRow, BlockTone, BlockType, EmailBlock, EmailBlocks, EmailContextArgs, EmailTemplateKey,
+    EmailVar, EmailVars,
+};
 pub use error::{PortakiError, Result};
 pub use ids::{EventType, FragmentId, ModuleId, OperationName, SurfaceId};
 pub use portaki_sdk_macros::{
     bundle_text, capability, command, config, connector, connector_op, custom_connector, email,
-    email_vars, entity, entity_indexes, event_handler, nav, params,
+    email_blocks, email_vars, entity, entity_indexes, event_handler, nav, params,
     portaki_module_decl as portaki_module, query, surface, wire,
 };
 pub use sdui::{
@@ -141,7 +144,10 @@ pub mod prelude {
     pub use crate::capability::{self, CapabilityId};
     pub use crate::context::{Context, GuestContext, HostContext, StayContext};
     pub use crate::contracts;
-    pub use crate::email::{EmailContextArgs, EmailTemplateKey, EmailVar, EmailVars};
+    pub use crate::email::{
+        BlockTone, BlockType, EmailBlock, EmailBlocks, EmailContextArgs, EmailTemplateKey,
+        EmailVar, EmailVars,
+    };
     pub use crate::error::{PortakiError, Result};
     pub use crate::host;
     pub use crate::host::email::EmailAudience;

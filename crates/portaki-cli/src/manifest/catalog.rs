@@ -97,6 +97,24 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["emails"] = Value::Array(emails);
     }
 
+    // `#[email_blocks]`: per email, the kinds of block the module adds.
+    if let Some(declared) = emissions
+        .iter()
+        .find(|e| e.kind == "email_blocks")
+        .and_then(|e| e.data["declared"].as_array())
+    {
+        catalog["emailBlocks"] = declared
+            .iter()
+            .filter_map(|entry| {
+                Some((
+                    entry["template"].as_str()?.to_string(),
+                    entry["blocks"].clone(),
+                ))
+            })
+            .collect::<Map<String, Value>>()
+            .into();
+    }
+
     // `#[email_vars]`: per template, the variables the module supplies.
     if let Some(declared) = emissions
         .iter()
@@ -339,6 +357,30 @@ pub fn check_references(
 
     if emissions.iter().filter(|e| e.kind == "email_vars").count() > 1 {
         anyhow::bail!("#[email_vars] is on more than one function — a module has one emailContext");
+    }
+
+    if emissions
+        .iter()
+        .filter(|e| e.kind == "email_blocks")
+        .count()
+        > 1
+    {
+        anyhow::bail!(
+            "#[email_blocks] is on more than one function — a module has one emailContext"
+        );
+    }
+
+    // A module gives an email either variables or blocks. Both would need two `emailContext`
+    // queries, and would put the same data twice in the same email — once in the body, once in a
+    // tile. The platform ignores the blocks of a module that declares variables; say so here,
+    // where the author can still choose.
+    if emissions.iter().any(|e| e.kind == "email_vars")
+        && emissions.iter().any(|e| e.kind == "email_blocks")
+    {
+        anyhow::bail!(
+            "#[email_vars] and #[email_blocks] are both declared — a module gives an email \
+             variables or blocks, not both (the platform reads only the variables)"
+        );
     }
 
     let queries: Vec<&str> = emissions
@@ -709,6 +751,53 @@ mod tests {
         emissions.push(emissions.last().unwrap().clone());
         let twice = super::check_references(&emissions, dir.path(), &[]).unwrap_err();
         assert!(twice.to_string().contains("#[email_vars]"), "{twice}");
+    }
+
+    #[test]
+    fn email_blocks_become_a_map_by_email() {
+        let mut emission = json!({ "kind": "email_blocks", "declared": [
+            { "template": "EmailTemplateKey::Arrival", "blocks": ["BlockType::Pairs", "BlockType::Info"] },
+            { "template": "EmailTemplateKey::PostArrival", "blocks": ["BlockType::Checklist"] },
+        ]});
+        super::super::generator::resolve_vocabulary(&mut emission).expect("resolve");
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "email_blocks".into(),
+            data: emission,
+        });
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let catalog = catalog_defaults(&emissions, dir.path(), &[]);
+
+        assert_eq!(
+            catalog["emailBlocks"],
+            json!({ "arrival": ["pairs", "info"], "post-arrival": ["checklist"] })
+        );
+        emissions.push(emissions.last().unwrap().clone());
+        let twice = super::check_references(&emissions, dir.path(), &[]).unwrap_err();
+        assert!(twice.to_string().contains("#[email_blocks]"), "{twice}");
+    }
+
+    /// Un module donne à un e-mail des variables ou des blocs, pas les deux : il n'a qu'un
+    /// `emailContext`, et la plateforme ne lirait que les variables.
+    #[test]
+    fn variables_and_blocks_together_are_refused() {
+        let mut emissions = module();
+        for kind in ["email_vars", "email_blocks"] {
+            emissions.push(EmissionFile {
+                kind: kind.into(),
+                data: json!({ "kind": kind, "declared": [] }),
+            });
+        }
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let both = super::check_references(&emissions, dir.path(), &[]).unwrap_err();
+
+        assert!(
+            both.to_string()
+                .contains("#[email_vars] and #[email_blocks]"),
+            "{both}"
+        );
     }
 
     #[test]

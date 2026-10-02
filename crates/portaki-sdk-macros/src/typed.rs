@@ -36,6 +36,10 @@ pub(crate) const EMAIL_VAR: Vocab = Vocab {
     name: "EmailVar",
     module: "email",
 };
+pub(crate) const BLOCK_TYPE: Vocab = Vocab {
+    name: "BlockType",
+    module: "email",
+};
 pub(crate) const EMAIL_AUDIENCE: Vocab = Vocab {
     name: "EmailAudience",
     module: "host::email",

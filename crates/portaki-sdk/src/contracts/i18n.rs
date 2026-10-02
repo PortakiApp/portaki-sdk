@@ -54,6 +54,26 @@ enum Wire {
     ByLanguage(BTreeMap<String, Option<String>>),
 }
 
+/// One text, the same in every language — what the wire already means by a bare string.
+///
+/// ```
+/// use portaki_sdk::contracts::i18n::I18nText;
+///
+/// let text: I18nText = "4821".into();
+/// assert_eq!(text.get("ja"), "4821");
+/// ```
+impl From<&str> for I18nText {
+    fn from(text: &str) -> Self {
+        Self::new(text, text)
+    }
+}
+
+impl From<String> for I18nText {
+    fn from(text: String) -> Self {
+        Self::new(text.clone(), text)
+    }
+}
+
 impl From<Wire> for I18nText {
     fn from(wire: Wire) -> Self {
         match wire {
