@@ -176,6 +176,33 @@ struct ConnectorOpAttrs {
     path: Option<String>,
     cache: Option<String>,
     validator: bool,
+    /// ADR-0021: every argument name the operation accepts (path, query, header and body keys).
+    fields: Option<Vec<String>>,
+    /// ADR-0021: what it sends, from [`DATA_CATEGORIES`], shown to the host.
+    sends: Option<Vec<String>>,
+}
+
+/// The data a connector operation may say it sends. A closed list: the host reads these, so a
+/// free-form label would say whatever its author wanted. `none` is a declaration, not an omission.
+pub(crate) const DATA_CATEGORIES: [&str; 10] = [
+    "none",
+    "property_city",
+    "property_address",
+    "property_coordinates",
+    "stay_dates",
+    "guest_count",
+    "guest_name",
+    "guest_contact",
+    "access_codes",
+    "module_config",
+];
+
+fn comma_list(text: &str) -> Vec<String> {
+    text.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 impl Parse for ConnectorOpAttrs {
@@ -186,12 +213,16 @@ impl Parse for ConnectorOpAttrs {
                 path: None,
                 cache: None,
                 validator: true,
+                fields: None,
+                sends: None,
             });
         }
 
         let mut method = None;
         let mut path = None;
         let mut cache = None;
+        let mut fields = None;
+        let mut sends = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -201,6 +232,8 @@ impl Parse for ConnectorOpAttrs {
                     path: None,
                     cache: None,
                     validator: true,
+                    fields: None,
+                    sends: None,
                 });
             }
 
@@ -212,6 +245,29 @@ impl Parse for ConnectorOpAttrs {
                 "method" => method = Some(text),
                 "path" => path = Some(text),
                 "cache" => cache = Some(text),
+                "fields" => fields = Some(comma_list(&text)),
+                "sends" => {
+                    let categories = comma_list(&text);
+                    if let Some(unknown) = categories
+                        .iter()
+                        .find(|c| !DATA_CATEGORIES.contains(&c.as_str()))
+                    {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            format!(
+                                "unknown data category `{unknown}`: expected one of {}",
+                                DATA_CATEGORIES.join(", ")
+                            ),
+                        ));
+                    }
+                    if categories.is_empty() {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            "sends: say `none` when nothing is sent",
+                        ));
+                    }
+                    sends = Some(categories)
+                }
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -230,6 +286,8 @@ impl Parse for ConnectorOpAttrs {
             path,
             cache,
             validator: false,
+            fields,
+            sends,
         })
     }
 }
@@ -301,13 +359,17 @@ pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
   "method": {},
   "path": {},
   "cache": {},
-  "validator": {}
+  "validator": {},
+  "fields": {},
+  "sends": {}
 }}"#,
         serde_json::to_string(&fn_name).unwrap(),
         serde_json::to_string(&attrs.method).unwrap(),
         serde_json::to_string(&attrs.path).unwrap(),
         serde_json::to_string(&attrs.cache).unwrap(),
         attrs.validator,
+        serde_json::to_string(&attrs.fields).unwrap(),
+        serde_json::to_string(&attrs.sends).unwrap(),
     );
 
     let emission = write_emission("connector_op", &sanitize_key(&fn_name), &json);

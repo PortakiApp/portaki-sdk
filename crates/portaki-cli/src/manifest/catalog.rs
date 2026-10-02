@@ -686,6 +686,50 @@ mod tests {
         assert!(custom[1].get("monthlyQuota").is_none());
     }
 
+    /// ADR-0021: a connector the module points itself must declare, per operation, what it
+    /// accepts and what it sends; a catalogued provider need not.
+    #[test]
+    fn a_module_connector_must_declare_fields_and_sends() {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "wx", "baseUrl": "https://api.weather.example", "auth": "header:X-Api-Key" }),
+        });
+        emissions.push(EmissionFile {
+            kind: "connector_op".into(),
+            data: json!({ "fn": "now", "method": "GET", "path": "/v1/now" }),
+        });
+        let refused = crate::manifest::generator::generate_manifest(&emissions, "fr", &[]);
+        assert!(refused
+            .unwrap_err()
+            .to_string()
+            .contains("declare `fields`"));
+
+        emissions.pop();
+        emissions.push(EmissionFile {
+            kind: "connector_op".into(),
+            data: json!({ "fn": "now", "method": "GET", "path": "/v1/now",
+                          "fields": ["city"], "sends": ["property_city"] }),
+        });
+        let manifest =
+            crate::manifest::generator::generate_manifest(&emissions, "fr", &[]).expect("manifest");
+        let op = &manifest.connectors.custom[0]["operations"][0];
+        assert_eq!(op["fields"], json!(["city"]));
+        assert_eq!(op["sends"], json!(["property_city"]));
+
+        // A catalogued provider is pinned by the platform: nothing to declare.
+        let mut catalogued = module();
+        catalogued.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "tiqets", "baseUrl": "https://api.tiqets.com", "credentialProviderId": "tiqets" }),
+        });
+        catalogued.push(EmissionFile {
+            kind: "connector_op".into(),
+            data: json!({ "fn": "nearby", "method": "GET", "path": "/v2/products" }),
+        });
+        assert!(crate::manifest::generator::generate_manifest(&catalogued, "fr", &[]).is_ok());
+    }
+
     #[test]
     fn permissions_come_from_sdk_features_and_connectors() {
         let mut emissions = module();

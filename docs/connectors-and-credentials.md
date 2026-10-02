@@ -77,6 +77,22 @@ pub struct WeatherApi;
   manifest. A build whose manifest says otherwise gets no key.
 - `base_url` is `https://` + host only: no path, port or credentials. Put the path in the operation.
 - Your module never sees the key: the runtime adds it to the request.
+- **Say what each operation accepts and sends** — required for a connector without
+  `credential_provider_id`, a build error otherwise:
+
+  ```rust
+  #[portaki_sdk::connector_op(method = "POST", path = "/v1/search",
+      fields = "searchTerm, currency, lang", sends = "property_city")]
+  pub fn search() {}
+  ```
+
+  `fields` lists every argument name the operation takes (path, query, header and body keys, top
+  level). Any other argument is refused at call time (`connector_args_not_declared`); what is
+  inside a nested object is not inspected. `sends` comes from a closed list, shown to the host next
+  to the destination: `none`, `property_city`, `property_address`, `property_coordinates`,
+  `stay_dates`, `guest_count`, `guest_name`, `guest_contact`, `access_codes`, `module_config`. Both
+  are part of what the published manifest pins, and a reviewer checks that `sends` matches what
+  feeds `fields`.
 - **Cap what your key costs you**: `monthly_quota = 1000` on `#[custom_connector]` limits the calls
   made **with your key**, per workspace and per calendar month (UTC). Beyond it, the call fails with
   `connector_pool_quota_exhausted` until the next month, or until the host sets their own key, which
