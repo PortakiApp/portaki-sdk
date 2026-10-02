@@ -451,6 +451,9 @@
     "kind": "enum",
     "variants": [
       {
+        "name": "alarm-smoke"
+      },
+      {
         "name": "arrow-up"
       },
       {
@@ -533,6 +536,9 @@
       },
       {
         "name": "file-text"
+      },
+      {
+        "name": "fire-extinguisher"
       },
       {
         "name": "flag"
