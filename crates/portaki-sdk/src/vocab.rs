@@ -277,6 +277,7 @@ vocabulary! {
         Search = "search",
         SearchX = "search-x",
         Send = "send",
+        Shield = "shield",
         Sliders = "sliders",
         Smile = "smile",
         Sparkles = "sparkles",
