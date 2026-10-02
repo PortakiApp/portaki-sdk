@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.4.0...v9.5.0) (2026-10-02)
+
+
+### Features
+
+* **vocab:** five glyphs the booklet needs ([50495c8](https://github.com/PortakiApp/portaki-sdk/commit/50495c8eacbf473d5906bcf0e26ef2211d3c97b5))
+
+
+### Bug Fixes
+
+* **macros:** a generated emailContext carries its examples ([024673b](https://github.com/PortakiApp/portaki-sdk/commit/024673b5700a6acdfceec644f3b02046a63c83a3))
+
 ## [9.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.3.0...v9.4.0) (2026-10-02)
 
 
