@@ -387,10 +387,13 @@ pub mod external {
     /// OpenAgenda — property-owned key.
     pub const OPEN_AGENDA_BYOK: CapabilityId = CapabilityId::OpenAgendaByok;
     /// Tiqets — platform-managed partner key (monthly quota per workspace).
+    #[deprecated(since = "9.5.2", note = "Tiqets and Viator are module connectors since ADR-0021: the platform grants no capability for them any more. Removed in 10.0.")]
     pub const TIQETS_POOL: CapabilityId = CapabilityId::TiqetsPool;
     /// Tiqets — property-owned partner key; links then carry the host's affiliate code.
+    #[deprecated(since = "9.5.2", note = "Tiqets and Viator are module connectors since ADR-0021: the platform grants no capability for them any more. Removed in 10.0.")]
     pub const TIQETS_BYOK: CapabilityId = CapabilityId::TiqetsByok;
     /// Viator — platform-managed affiliate key (monthly quota per workspace). No BYOK.
+    #[deprecated(since = "9.5.2", note = "Tiqets and Viator are module connectors since ADR-0021: the platform grants no capability for them any more. Removed in 10.0.")]
     pub const VIATOR_POOL: CapabilityId = CapabilityId::ViatorPool;
 }
 
@@ -442,6 +445,7 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
+    #[allow(deprecated)] // the deprecated Tiqets/Viator constants keep their ids until 10.0
     fn capability_ids_match_java_enum() {
         assert!(ALL.contains(&core::STORAGE));
         assert!(ALL.contains(&external::OPEN_WEATHER_POOL));
