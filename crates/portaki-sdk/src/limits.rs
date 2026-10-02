@@ -53,6 +53,33 @@ pub const EMAIL_BLOCK_TEXT_MAX_CHARS: usize = 200;
 /// which has no Unicode segmentation, only rejects ASCII, letters, digits and spaces.
 pub const EMAIL_BLOCK_EMOJI_MAX_UTF16: usize = 16;
 
+// ── Guest stay email zone (`#[email_blocks]`) ────────────────────────────────────────────
+//
+// `guestEmailBlocks` in `contracts/module-limits.json` on the platform side. Unlike the blocks
+// of an email a module writes, a block outside the contract is dropped and the email still
+// goes: the email belongs to Portaki, and no module keeps it from arriving.
+
+/// Maximum number of blocks one module gives one email.
+pub const GUEST_EMAIL_BLOCKS_MAX: usize = 4;
+
+/// Maximum number of rows in a `pairs` or `list` block; the platform keeps the first ones.
+pub const GUEST_EMAIL_BLOCK_ROWS_MAX: usize = 3;
+
+/// Maximum number of items in a `checklist` block; the platform keeps the first ones.
+pub const GUEST_EMAIL_BLOCK_ITEMS_MAX: usize = 4;
+
+/// Maximum length of a block eyebrow, in characters, for each locale.
+pub const GUEST_EMAIL_BLOCK_LABEL_MAX_CHARS: usize = 24;
+
+/// Maximum length of a block title, in characters, for each locale.
+pub const GUEST_EMAIL_BLOCK_TITLE_MAX_CHARS: usize = 40;
+
+/// Maximum length of a block text, in characters, for each locale.
+pub const GUEST_EMAIL_BLOCK_TEXT_MAX_CHARS: usize = 140;
+
+/// Maximum length of a block link label, in characters, for each locale.
+pub const GUEST_EMAIL_BLOCK_LINK_LABEL_MAX_CHARS: usize = 32;
+
 // ── Per invocation ───────────────────────────────────────────────────────────────────────
 
 /// Maximum number of `email.send` calls per invocation.

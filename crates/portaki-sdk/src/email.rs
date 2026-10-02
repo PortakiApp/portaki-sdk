@@ -707,6 +707,577 @@ pub fn serve(
     Ok(out.into())
 }
 
+// ── Blocs de la zone modules des e-mails de séjour ───────────────────────────────────────
+
+/// A kind of block a module may add to a Portaki stay email — the whole catalogue.
+///
+/// Mirrors `guestEmailBlocks.perEmail` in the platform's `contracts/module-limits.json`
+/// (`GuestEmailBlockSlots` in Java): each kind is rendered by the emails listed on it, and only
+/// there. Declare the ones a module provides with [`#[email_blocks]`](crate::email_blocks);
+/// declaring one for an email that does not render it does not compile.
+///
+/// Not to be confused with the blocks of [`crate::host::email`], which are the body of an email a
+/// module *writes*. These are a short addition to an email Portaki owns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BlockType {
+    /// A tile: eyebrow, title, two lines of text.
+    #[serde(rename = "info")]
+    Info,
+    /// A tile of label/value rows — a code, a spot, a height.
+    #[serde(rename = "pairs")]
+    Pairs,
+    /// A tile of rows read as a list — departures, opening hours.
+    #[serde(rename = "list")]
+    List,
+    /// A tile of things to tick off before leaving.
+    #[serde(rename = "checklist")]
+    Checklist,
+    /// Full width, tinted, at the top of the zone: something that changes the stay.
+    #[serde(rename = "alert")]
+    Alert,
+}
+
+impl BlockType {
+    /// The whole catalogue, in declaration order.
+    pub const ALL: &'static [BlockType] = &[
+        Self::Info,
+        Self::Pairs,
+        Self::List,
+        Self::Checklist,
+        Self::Alert,
+    ];
+
+    /// The wire string the platform reads.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Pairs => "pairs",
+            Self::List => "list",
+            Self::Checklist => "checklist",
+            Self::Alert => "alert",
+        }
+    }
+
+    /// The emails that render this kind of block.
+    pub const fn templates(self) -> &'static [EmailTemplateKey] {
+        match self {
+            Self::Info => &[
+                EmailTemplateKey::StayLink,
+                EmailTemplateKey::Arrival,
+                EmailTemplateKey::ArrivalDay,
+                EmailTemplateKey::StayModified,
+                EmailTemplateKey::PostArrival,
+            ],
+            Self::Pairs => &[EmailTemplateKey::Arrival, EmailTemplateKey::ArrivalDay],
+            Self::List => &[
+                EmailTemplateKey::StayLink,
+                EmailTemplateKey::Arrival,
+                EmailTemplateKey::ArrivalDay,
+                EmailTemplateKey::PostArrival,
+            ],
+            Self::Checklist => &[EmailTemplateKey::StayLink, EmailTemplateKey::PostArrival],
+            Self::Alert => &[
+                EmailTemplateKey::Arrival,
+                EmailTemplateKey::ArrivalDay,
+                EmailTemplateKey::StayModified,
+            ],
+        }
+    }
+
+    /// `true` when `template` renders this kind — usable in `const` context, which is how
+    /// `#[email_blocks]` refuses a declaration at compile time.
+    pub const fn renders_in(self, template: EmailTemplateKey) -> bool {
+        let templates = self.templates();
+        let mut i = 0;
+        while i < templates.len() {
+            if templates[i] as usize == template as usize {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+}
+
+impl crate::vocab::Vocabulary for BlockType {
+    const ALL: &'static [Self] = BlockType::ALL;
+    fn wire(self) -> &'static str {
+        self.as_str()
+    }
+    fn variant(self) -> &'static str {
+        match self {
+            Self::Info => "Info",
+            Self::Pairs => "Pairs",
+            Self::List => "List",
+            Self::Checklist => "Checklist",
+            Self::Alert => "Alert",
+        }
+    }
+}
+
+impl fmt::Display for BlockType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// How an [`BlockType::Alert`] reads: something to act on, or something to know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BlockTone {
+    /// Amber: the guest has to do something differently.
+    #[serde(rename = "warning")]
+    Warning,
+    /// Blue: good to know, nothing to do.
+    #[serde(rename = "info")]
+    Info,
+}
+
+/// One row of a [`BlockType::Pairs`] or [`BlockType::List`] block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BlockRow {
+    /// Left side: what it is.
+    pub label: crate::contracts::i18n::I18nText,
+    /// Right side: the value, in mono.
+    pub value: crate::contracts::i18n::I18nText,
+}
+
+/// A block a module adds to a stay email.
+///
+/// The platform cuts every text to the design's lengths, drops a block that says nothing in the
+/// guest's language, and builds the link itself from the stay page and `anchor` — which is why
+/// there is no URL to set here.
+///
+/// ```
+/// use portaki_sdk::email::EmailBlock;
+///
+/// let block = EmailBlock::info("Tri des déchets", "Collecte le mardi et le vendredi.")
+///     .title("Sortez les bacs la veille")
+///     .link("Guide du tri", "waste-recycling");
+/// assert_eq!(block.block_type().as_str(), "info");
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EmailBlock {
+    #[serde(rename = "type")]
+    block_type: BlockType,
+    label: crate::contracts::i18n::I18nText,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<crate::contracts::i18n::I18nText>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<crate::contracts::i18n::I18nText>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rows: Vec<BlockRow>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    items: Vec<crate::contracts::i18n::I18nText>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tone: Option<BlockTone>,
+    #[serde(rename = "linkLabel", skip_serializing_if = "Option::is_none")]
+    link_label: Option<crate::contracts::i18n::I18nText>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    anchor: Option<String>,
+}
+
+impl EmailBlock {
+    fn of(block_type: BlockType, label: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        Self {
+            block_type,
+            label: label.into(),
+            title: None,
+            text: None,
+            rows: Vec::new(),
+            items: Vec::new(),
+            tone: None,
+            link_label: None,
+            anchor: None,
+        }
+    }
+
+    /// A tile of text.
+    pub fn info(
+        label: impl Into<crate::contracts::i18n::I18nText>,
+        text: impl Into<crate::contracts::i18n::I18nText>,
+    ) -> Self {
+        let mut block = Self::of(BlockType::Info, label);
+        block.text = Some(text.into());
+        block
+    }
+
+    /// Something that changes the stay, at the top of the zone.
+    pub fn alert(
+        label: impl Into<crate::contracts::i18n::I18nText>,
+        text: impl Into<crate::contracts::i18n::I18nText>,
+        tone: BlockTone,
+    ) -> Self {
+        let mut block = Self::of(BlockType::Alert, label);
+        block.text = Some(text.into());
+        block.tone = Some(tone);
+        block
+    }
+
+    /// A tile of label/value rows; add them with [`Self::row`].
+    pub fn pairs(label: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        Self::of(BlockType::Pairs, label)
+    }
+
+    /// A tile of rows read as a list; add them with [`Self::row`].
+    pub fn list(label: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        Self::of(BlockType::List, label)
+    }
+
+    /// A tile of things to tick off; add them with [`Self::item`].
+    pub fn checklist(label: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        Self::of(BlockType::Checklist, label)
+    }
+
+    /// The headline, under the eyebrow. An alert has none.
+    pub fn title(mut self, title: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// One row. The platform keeps the first three.
+    pub fn row(
+        mut self,
+        label: impl Into<crate::contracts::i18n::I18nText>,
+        value: impl Into<crate::contracts::i18n::I18nText>,
+    ) -> Self {
+        self.rows.push(BlockRow {
+            label: label.into(),
+            value: value.into(),
+        });
+        self
+    }
+
+    /// One thing to tick off. The platform keeps the first four.
+    pub fn item(mut self, item: impl Into<crate::contracts::i18n::I18nText>) -> Self {
+        self.items.push(item.into());
+        self
+    }
+
+    /// The one link of the block, to `anchor` on the stay page. The URL is the platform's: it is
+    /// built from the stay page, and a module cannot point a guest anywhere else.
+    pub fn link(
+        mut self,
+        label: impl Into<crate::contracts::i18n::I18nText>,
+        anchor: impl Into<String>,
+    ) -> Self {
+        self.link_label = Some(label.into());
+        self.anchor = Some(anchor.into());
+        self
+    }
+
+    /// What kind of block this is.
+    pub fn block_type(&self) -> BlockType {
+        self.block_type
+    }
+}
+
+/// The blocks a module gives one email — what an `#[email_blocks]` function returns.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EmailBlocks(Vec<EmailBlock>);
+
+impl EmailBlocks {
+    /// No block.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a block.
+    pub fn push(&mut self, block: EmailBlock) {
+        self.0.push(block);
+    }
+
+    /// [`push`](Self::push), chained.
+    pub fn with(mut self, block: EmailBlock) -> Self {
+        self.push(block);
+        self
+    }
+
+    /// The blocks, in order.
+    pub fn blocks(&self) -> &[EmailBlock] {
+        &self.0
+    }
+}
+
+impl FromIterator<EmailBlock> for EmailBlocks {
+    fn from_iter<I: IntoIterator<Item = EmailBlock>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+/// What a module declared with `#[email_blocks]`: per email, the kinds of block it provides.
+pub type DeclaredEmailBlocks = &'static [(EmailTemplateKey, &'static [BlockType])];
+
+/// The `#[email_blocks]` of a linked module crate — native targets only, for the conformance battery.
+#[doc(hidden)]
+pub struct EmailBlocksDeclaration {
+    /// The declaration, as written.
+    pub declared: DeclaredEmailBlocks,
+    /// The shim behind the generated `emailContext` query.
+    pub dispatch: crate::wasm::registry::WasmHandlerFn,
+}
+
+inventory::collect!(EmailBlocksDeclaration);
+
+/// The `#[email_blocks]` declarations linked into this binary (empty on `wasm32`).
+pub fn block_declarations() -> impl Iterator<Item = &'static EmailBlocksDeclaration> {
+    inventory::iter::<EmailBlocksDeclaration>.into_iter()
+}
+
+/// The body of the `emailContext` query `#[email_blocks]` generates.
+///
+/// Nothing is asked of the module for an email it did not declare (nor without one). Of what it
+/// answers, only the kinds declared for *this* email are sent; a kind declared for no email at all
+/// is an error — a missing declaration. The answer is `{ "blocks": [ … ] }`, which is the only key
+/// the platform reads.
+pub fn serve_blocks(
+    declared: DeclaredEmailBlocks,
+    ctx: crate::Context,
+    args: EmailContextArgs,
+    provide: impl FnOnce(crate::Context, EmailContextArgs) -> crate::Result<EmailBlocks>,
+) -> crate::Result<serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    let Some(template) = args.template_key else {
+        return Ok(out.into());
+    };
+    let Some((_, allowed)) = declared.iter().find(|(key, _)| *key == template) else {
+        return Ok(out.into());
+    };
+    let mut kept: Vec<EmailBlock> = Vec::new();
+    for block in provide(ctx, args)?.0 {
+        let kind = block.block_type;
+        if !declared.iter().any(|(_, kinds)| kinds.contains(&kind)) {
+            return Err(crate::PortakiError::Host(format!(
+                "email_block_undeclared: a `{kind}` block is returned but not declared in #[email_blocks]"
+            )));
+        }
+        if !allowed.contains(&kind) {
+            continue;
+        }
+        kept.push(block);
+    }
+    if kept.is_empty() {
+        return Ok(out.into());
+    }
+    if kept.len() > crate::limits::GUEST_EMAIL_BLOCKS_MAX {
+        return Err(crate::PortakiError::Host(format!(
+            "email_block_too_many: {} blocks for one email, the platform takes {}",
+            kept.len(),
+            crate::limits::GUEST_EMAIL_BLOCKS_MAX
+        )));
+    }
+    out.insert(
+        "blocks".to_string(),
+        serde_json::to_value(&kept).map_err(|e| crate::PortakiError::Host(e.to_string()))?,
+    );
+    Ok(out.into())
+}
+
+#[cfg(test)]
+mod block_tests {
+    use super::*;
+    use crate::contracts::i18n::I18nText;
+
+    /// La table des types et celle de `guestEmailBlocks.perEmail` côté plateforme sont un miroir :
+    /// recopiée ici, elle ne vaut que si elle est écrite une fois et lue dans les deux sens.
+    #[test]
+    fn every_email_with_a_zone_renders_at_least_one_kind() {
+        let with_a_zone = [
+            EmailTemplateKey::StayLink,
+            EmailTemplateKey::Arrival,
+            EmailTemplateKey::ArrivalDay,
+            EmailTemplateKey::StayModified,
+            EmailTemplateKey::PostArrival,
+        ];
+        for template in with_a_zone {
+            assert!(
+                BlockType::ALL.iter().any(|kind| kind.renders_in(template)),
+                "{template:?} has a zone but renders no kind"
+            );
+            assert!(template.is_guest_stay(), "{template:?}");
+        }
+        // Et aucun autre e-mail n'en rend.
+        for kind in BlockType::ALL {
+            for template in kind.templates() {
+                assert!(with_a_zone.contains(template), "{kind} in {template:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_catalogue_round_trips_through_the_wire() {
+        use crate::vocab::Vocabulary;
+        for kind in BlockType::ALL {
+            assert_eq!(BlockType::from_wire(kind.as_str()), Some(*kind));
+            assert_eq!(BlockType::from_variant(kind.variant()), Some(*kind));
+            assert_eq!(serde_json::to_value(kind).unwrap(), kind.as_str());
+        }
+    }
+
+    #[test]
+    fn a_block_serialises_to_what_the_platform_parses() {
+        let block = EmailBlock::pairs("Parking")
+            .title("Votre place")
+            .row("Place", "n° 14")
+            .link("Voir le plan", "parking");
+
+        assert_eq!(
+            serde_json::to_value(&block).unwrap(),
+            serde_json::json!({
+                "type": "pairs",
+                "label": { "fr": "Parking", "en": "Parking" },
+                "title": { "fr": "Votre place", "en": "Votre place" },
+                "rows": [{
+                    "label": { "fr": "Place", "en": "Place" },
+                    "value": { "fr": "n° 14", "en": "n° 14" },
+                }],
+                "linkLabel": { "fr": "Voir le plan", "en": "Voir le plan" },
+                "anchor": "parking",
+            })
+        );
+    }
+
+    /// Le module ne donne jamais d'URL : il nomme une section de la page de séjour, la plateforme
+    /// construit le lien.
+    #[test]
+    fn a_block_carries_no_url() {
+        let json = serde_json::to_string(&EmailBlock::info("L", "t").link("V", "parking")).unwrap();
+        assert!(!json.contains("linkUrl"), "{json}");
+        assert!(!json.contains("http"), "{json}");
+    }
+
+    #[test]
+    fn an_alert_carries_its_tone_and_no_title() {
+        let alert = EmailBlock::alert("Travaux", "La rue est fermée.", BlockTone::Warning);
+        let json = serde_json::to_value(&alert).unwrap();
+        assert_eq!(json["tone"], "warning");
+        assert!(json.get("title").is_none(), "{json}");
+    }
+
+    const DECLARED: DeclaredEmailBlocks = &[
+        (EmailTemplateKey::Arrival, &[BlockType::Pairs]),
+        (EmailTemplateKey::PostArrival, &[BlockType::Info]),
+    ];
+
+    fn serve(template: Option<EmailTemplateKey>, blocks: EmailBlocks) -> serde_json::Value {
+        serve_blocks(
+            DECLARED,
+            crate::Context::default(),
+            EmailContextArgs {
+                template_key: template,
+                ..Default::default()
+            },
+            |_, _| Ok(blocks),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn nothing_is_asked_for_an_email_the_module_did_not_declare() {
+        let pairs = || EmailBlocks::new().with(EmailBlock::pairs("P").row("a", "b"));
+        assert_eq!(serve(None, pairs()), serde_json::json!({}));
+        assert_eq!(
+            serve(Some(EmailTemplateKey::StayLink), pairs()),
+            serde_json::json!({})
+        );
+        assert!(serve(Some(EmailTemplateKey::Arrival), pairs())["blocks"].is_array());
+    }
+
+    /// Un type déclaré ailleurs ne part pas dans cet e-mail — le miroir de ce que fait `serve`.
+    #[test]
+    fn a_kind_declared_for_another_email_is_left_out() {
+        let answer = serve(
+            Some(EmailTemplateKey::Arrival),
+            EmailBlocks::new()
+                .with(EmailBlock::info("I", "t"))
+                .with(EmailBlock::pairs("P").row("a", "b")),
+        );
+        let blocks = answer["blocks"].as_array().unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0]["type"], "pairs");
+    }
+
+    #[test]
+    fn a_kind_declared_nowhere_is_a_mistake_in_the_module() {
+        let error = serve_blocks(
+            DECLARED,
+            crate::Context::default(),
+            EmailContextArgs {
+                template_key: Some(EmailTemplateKey::Arrival),
+                ..Default::default()
+            },
+            |_, _| Ok(EmailBlocks::new().with(EmailBlock::checklist("C").item("x"))),
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("email_block_undeclared"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn more_blocks_than_the_platform_takes_is_an_error_here_not_a_silent_cut() {
+        let mut blocks = EmailBlocks::new();
+        for _ in 0..crate::limits::GUEST_EMAIL_BLOCKS_MAX + 1 {
+            blocks.push(EmailBlock::pairs("P").row("a", "b"));
+        }
+        let error = serve_blocks(
+            DECLARED,
+            crate::Context::default(),
+            EmailContextArgs {
+                template_key: Some(EmailTemplateKey::Arrival),
+                ..Default::default()
+            },
+            |_, _| Ok(blocks),
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("email_block_too_many"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn the_schema_lists_the_block_catalogue() {
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../../schema/module.v1.json")).unwrap();
+        let declared = &schema["properties"]["emailBlocks"];
+        let kinds: Vec<&str> = BlockType::ALL.iter().map(|k| k.as_str()).collect();
+        assert_eq!(
+            declared["additionalProperties"]["items"]["enum"],
+            serde_json::json!(kinds)
+        );
+        let mut emails: Vec<&str> = Vec::new();
+        for kind in BlockType::ALL {
+            for template in kind.templates() {
+                if !emails.contains(&template.as_str()) {
+                    emails.push(template.as_str());
+                }
+            }
+        }
+        let listed = declared["propertyNames"]["enum"].as_array().unwrap();
+        assert_eq!(listed.len(), emails.len(), "{listed:?} vs {emails:?}");
+        for email in emails {
+            assert!(
+                listed.iter().any(|l| l == email),
+                "{email} absent du schéma"
+            );
+        }
+    }
+
+    #[test]
+    fn i18n_text_survives_the_builder() {
+        let block = EmailBlock::info(
+            I18nText::new("Tri", "Waste"),
+            I18nText::new("Mardi", "Tuesday"),
+        );
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(
+            json["label"],
+            serde_json::json!({ "fr": "Tri", "en": "Waste" })
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::EmailTemplateKey;

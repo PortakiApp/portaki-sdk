@@ -39,6 +39,7 @@
 //! | `params` | `params` | `params-{TypeName}.json` |
 //! | `config` | `config` (+ `query` `legacyConfig`, `command` `legacyConfigAdopted`) | `config-{StructName}.json` |
 //! | `email_vars` | `email_vars` (+ `query` `emailContext`) | `email_vars-emailContext.json` |
+//! | `email_blocks` | `email_blocks` (+ `query` `emailContext`) | `email_blocks-emailContext.json` |
 //! | `event_handler` | `event_handler` | `event_handler-{event_type}.json` |
 //! | `capability` | `capability` | `capability-{id}.json` |
 //! | `connector` | `connector_builtin` | `connector_builtin-{builtin}.json` |
@@ -66,6 +67,7 @@ mod command;
 mod config;
 mod connector;
 mod email;
+mod email_blocks;
 mod email_vars;
 mod emit;
 mod entity;
@@ -783,6 +785,50 @@ pub fn custom_connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn email_vars(attr: TokenStream, item: TokenStream) -> TokenStream {
     email_vars::expand(attr, item)
+}
+
+/// Declares the **blocks** a module adds to Portaki stay emails, per email.
+///
+/// A short addition to an email Portaki owns — not an email the module writes
+/// ([`email`](macro@email) does that). A module declares either `#[email_vars]` or
+/// `#[email_blocks]`, never both: it has one `emailContext`, and data already rendered in the body
+/// of an email has no business being repeated in a block.
+///
+/// # Syntax
+///
+/// ```ignore
+/// use portaki_sdk::prelude::*;
+///
+/// #[portaki_sdk::email_blocks(Arrival | ArrivalDay => [Pairs])]
+/// pub fn email_blocks(ctx: Context, _args: EmailContextArgs) -> Result<EmailBlocks> {
+///     let config = Config::load(&ctx)?;
+///     Ok(EmailBlocks::new().with(
+///         EmailBlock::pairs("Parking")
+///             .title("Votre place")
+///             .row("Place", config.spot)
+///             .link("Voir le plan", "parking"),
+///     ))
+/// }
+/// ```
+///
+/// Emails are `EmailTemplateKey` variants, blocks `BlockType` variants (bare or by path);
+/// `A | B => [..]` shares one list. A kind its email does not render (`BlockType::templates`) is a
+/// **compile error**, as are an email declared twice and a string instead of a variant.
+///
+/// # Generated
+///
+/// - the host query `emailContext` the platform calls: the function runs only for a declared
+///   email; a kind it returns but did not declare for that email is dropped, and one declared
+///   nowhere is an error. Do not write an `emailContext` query next to it.
+/// - `emailBlocks` in the manifest: `{ "arrival": ["pairs"], … }` — the platform calls the module
+///   for those emails, and for no other.
+///
+/// # Emission
+///
+/// `email_blocks-emailContext.json` → `emailBlocks`; and `query-emailContext.json`.
+#[proc_macro_attribute]
+pub fn email_blocks(attr: TokenStream, item: TokenStream) -> TokenStream {
+    email_blocks::expand(attr, item)
 }
 
 /// Marks a struct or enum as a Portaki **wire** JSON DTO (gateway / SDUI / events / email).

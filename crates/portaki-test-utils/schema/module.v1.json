@@ -126,6 +126,34 @@
         }
       }
     },
+    "emailBlocks": {
+        "type": "object",
+        "description": "Kinds of block the module adds to Portaki stay emails, per email, declared by #[portaki_sdk::email_blocks] (portaki build writes it). The platform calls the module's emailContext query for a declared email and reads the `blocks` key of the answer. Exclusive with emailVars: a module gives an email variables or blocks, never both. Each kind is rendered only by some emails (portaki_sdk::email::BlockType::templates).",
+        "propertyNames": {
+          "enum": [
+            "stay-link",
+            "arrival",
+            "arrival-day",
+            "stay-modified",
+            "post-arrival"
+          ]
+        },
+        "additionalProperties": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "info",
+              "pairs",
+              "list",
+              "checklist",
+              "alert"
+            ]
+          }
+        }
+      },
     "audience": {
       "type": "string",
       "enum": ["guest", "host"],

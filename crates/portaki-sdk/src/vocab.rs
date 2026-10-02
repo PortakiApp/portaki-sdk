@@ -329,6 +329,7 @@ pub fn wire_of(vocabulary: &str, variant: &str) -> Option<&'static str> {
         "IconName" => find::<IconName>(variant),
         "EmailAudience" => find::<crate::host::email::EmailAudience>(variant),
         "EmailVar" => find::<crate::email::EmailVar>(variant),
+        "BlockType" => find::<crate::email::BlockType>(variant),
         "EmailTemplateKey" => crate::email::EmailTemplateKey::ALL
             .iter()
             .find(|key| format!("{key:?}") == variant)
@@ -409,6 +410,7 @@ mod tests {
             Some("guest.email.missing")
         );
         assert_eq!(wire_of("EmailVar", "WifiName"), Some("wifiName"));
+        assert_eq!(wire_of("BlockType", "Checklist"), Some("checklist"));
         assert_eq!(
             wire_of("EmailTemplateKey", "ArrivalDay"),
             Some("arrival-day")
