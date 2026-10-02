@@ -662,6 +662,30 @@ mod tests {
         );
     }
 
+    /// ADR-0021: the publisher's cap travels with the connector, into the manifest the
+    /// orchestrator reads; an absent cap stays absent rather than becoming `null`.
+    #[test]
+    fn the_monthly_quota_reaches_the_built_connector() {
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "wx", "baseUrl": "https://api.weather.example", "auth": "header:X-Api-Key",
+                          "monthlyQuota": 1000 }),
+        });
+        emissions.push(EmissionFile {
+            kind: "connector_custom".into(),
+            data: json!({ "id": "free", "baseUrl": "https://api.free.example", "auth": null, "monthlyQuota": null }),
+        });
+
+        let manifest =
+            crate::manifest::generator::generate_manifest(&emissions, "fr", &[]).expect("manifest");
+        let custom = &manifest.connectors.custom;
+
+        assert_eq!(custom[0]["monthlyQuota"], 1000);
+        assert_eq!(custom[0]["auth"], "header:X-Api-Key");
+        assert!(custom[1].get("monthlyQuota").is_none());
+    }
+
     #[test]
     fn permissions_come_from_sdk_features_and_connectors() {
         let mut emissions = module();

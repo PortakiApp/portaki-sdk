@@ -77,6 +77,11 @@ pub struct WeatherApi;
   manifest. A build whose manifest says otherwise gets no key.
 - `base_url` is `https://` + host only: no path, port or credentials. Put the path in the operation.
 - Your module never sees the key: the runtime adds it to the request.
+- **Cap what your key costs you**: `monthly_quota = 1000` on `#[custom_connector]` limits the calls
+  made **with your key**, per workspace and per calendar month (UTC). Beyond it, the call fails with
+  `connector_pool_quota_exhausted` until the next month, or until the host sets their own key, which
+  is never counted. Without `monthly_quota`, calls are still counted, just not capped. It is not a
+  global cap on your provider account and not a per-minute rate limit.
 
 A typo in `auth`, or a connector `id` that is not lowercase letters, digits, `-` and `_`, is a build
 error. A key in the query string (`query:<name>`) is not offered yet: URLs reach traces.
