@@ -69,8 +69,7 @@ pub struct WeatherApi;
 |--------|------------------------|
 | `bearer` | `Authorization: Bearer <key>` |
 | `basic` | `Authorization: Basic base64(<key>)` — enter the key as `user:password` |
-| `header:<name>` | `<name>: <key>` |
-| `query:<name>` | `?<name>=<key>` |
+| `header:<name>` | `<name>: <key>` — not a transport header (`Host`, `Content-Type`, `Accept`…) |
 
 - **You set the key yourself**, in the developer space: *Modules → your module → Connectors*. No
   request to Portaki, no deploy. It is stored encrypted and only ever shown as `***abcd`.
@@ -79,7 +78,8 @@ pub struct WeatherApi;
 - `base_url` is `https://` + host only: no path, port or credentials. Put the path in the operation.
 - Your module never sees the key: the runtime adds it to the request.
 
-A typo in `auth` is a build error.
+A typo in `auth`, or a connector `id` that is not lowercase letters, digits, `-` and `_`, is a build
+error. A key in the query string (`query:<name>`) is not offered yet: URLs reach traces.
 
 ## What ends up in the manifest
 

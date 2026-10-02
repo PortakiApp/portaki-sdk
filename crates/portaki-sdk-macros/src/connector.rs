@@ -36,29 +36,55 @@ struct CustomConnectorAttrs {
     base_url: Option<String>,
     credential_provider_id: Option<String>,
     /// Optional egress auth. For a connector the module declares itself (ADR-0021), one of the
-    /// platform's forms: `bearer` | `basic` | `header:<name>` | `query:<name>` | `none`. The
-    /// historical `query_appid` / `query_key` stay accepted for catalogued providers.
+    /// platform's forms: `bearer` | `basic` | `header:<name>` | `none`. The historical
+    /// `query_appid` / `query_key` stay accepted for catalogued providers.
     auth: Option<String>,
 }
 
 /// The auth forms the platform knows how to inject. Anything else would only fail at the first
 /// call, in the host's booklet; refusing it here makes it a build error instead.
 fn is_known_auth(auth: &str) -> bool {
-    let name_ok = |name: &str, extra: &str| {
-        !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || extra.contains(c))
-    };
     match auth.split_once(':') {
         None => matches!(
             auth,
             "bearer" | "basic" | "none" | "query_appid" | "query_key"
         ),
-        Some(("header", name)) => name_ok(name, ""),
-        Some(("query", name)) => name_ok(name, "_."),
+        // Not a transport or negotiation header: the key would break the request, or travel as
+        // `Host`. The runtime refuses the same list.
+        Some(("header", name)) => {
+            !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+                && !RESERVED_HEADERS.contains(&name.to_ascii_lowercase().as_str())
+        }
+        // `query:<name>` waits until URL masking covers a publisher's parameter name.
         Some(_) => false,
     }
+}
+
+const RESERVED_HEADERS: [&str; 12] = [
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+    "upgrade",
+    "te",
+    "trailer",
+    "accept",
+    "content-type",
+    "accept-encoding",
+    "content-encoding",
+];
+
+/// The orchestrator files a publisher's key under `module:<module>/<connector>` and refuses any
+/// other connector id; an uppercase id would compile, then fail as a missing key.
+fn is_valid_connector_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    id.len() <= 64
+        && chars
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
 impl Parse for CustomConnectorAttrs {
@@ -76,7 +102,17 @@ impl Parse for CustomConnectorAttrs {
             let text = value.value();
 
             match key.to_string().as_str() {
-                "id" => id = Some(text),
+                "id" => {
+                    if !is_valid_connector_id(&text) {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            format!(
+                                "connector id `{text}`: lowercase letters, digits, `-` and `_`, 64 at most"
+                            ),
+                        ));
+                    }
+                    id = Some(text)
+                }
                 "display_name_key" => display_name_key = Some(text),
                 "base_url" => base_url = Some(text),
                 "credential_provider_id" => credential_provider_id = Some(text),
@@ -85,7 +121,7 @@ impl Parse for CustomConnectorAttrs {
                         return Err(syn::Error::new(
                             value.span(),
                             format!(
-                                "unknown auth `{text}`: expected bearer, basic, none, header:<name> or query:<name>"
+                                "unknown auth `{text}`: expected bearer, basic, none or header:<name>"
                             ),
                         ));
                     }
@@ -271,7 +307,6 @@ mod auth_form_tests {
             "basic",
             "none",
             "header:exp-api-key",
-            "query:api_key",
             "query_appid",
             "query_key",
         ] {
@@ -280,10 +315,24 @@ mod auth_form_tests {
     }
 
     #[test]
+    fn connector_ids_follow_the_orchestrator_rule() {
+        for id in ["viator", "wx", "my_api-2"] {
+            assert!(super::is_valid_connector_id(id), "{id}");
+        }
+        let too_long = "x".repeat(65);
+        for id in ["", "Viator", "-wx", "a/b", too_long.as_str()] {
+            assert!(!super::is_valid_connector_id(id), "{id}");
+        }
+    }
+
+    #[test]
     fn anything_else_is_a_build_error() {
         for auth in [
             "Bearer",
             "digest",
+            "query:api_key",
+            "header:Host",
+            "header:Content-Type",
             "header:",
             "header:X Bad",
             "query:",
