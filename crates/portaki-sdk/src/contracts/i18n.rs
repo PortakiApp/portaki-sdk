@@ -62,6 +62,16 @@ enum Wire {
 /// let text: I18nText = "4821".into();
 /// assert_eq!(text.get("ja"), "4821");
 /// ```
+impl I18nText {
+    /// Every language this text carries, with its code — what a per-locale check walks.
+    pub fn by_language(&self) -> impl Iterator<Item = (&str, &str)> {
+        [("fr", self.fr.as_str()), ("en", self.en.as_str())]
+            .into_iter()
+            .chain(self.others.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .filter(|(_, text)| !text.is_empty())
+    }
+}
+
 impl From<&str> for I18nText {
     fn from(text: &str) -> Self {
         Self::new(text, text)

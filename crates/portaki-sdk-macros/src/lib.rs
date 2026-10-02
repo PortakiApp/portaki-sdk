@@ -771,6 +771,9 @@ pub fn custom_connector(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// `A | B => [..]` shares one list. A variable its template does not render (`EmailVar::templates`)
 /// is a **compile error**, as are a template declared twice and a string instead of a variant.
 ///
+/// To add a tile to a stay email rather than fill a variable of its body, see
+/// [`email_blocks`](macro@email_blocks) — a module declares one or the other, never both.
+///
 /// # Generated
 ///
 /// - the host query `emailContext` the platform calls: the function runs only for a declared
@@ -814,6 +817,9 @@ pub fn email_vars(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Emails are `EmailTemplateKey` variants, blocks `BlockType` variants (bare or by path);
 /// `A | B => [..]` shares one list. A kind its email does not render (`BlockType::templates`) is a
 /// **compile error**, as are an email declared twice and a string instead of a variant.
+///
+/// To fill a variable of an email's body rather than add a tile, see
+/// [`email_vars`](macro@email_vars).
 ///
 /// # Generated
 ///

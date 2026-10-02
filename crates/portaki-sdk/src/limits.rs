@@ -80,6 +80,21 @@ pub const GUEST_EMAIL_BLOCK_TEXT_MAX_CHARS: usize = 140;
 /// Maximum length of a block link label, in characters, for each locale.
 pub const GUEST_EMAIL_BLOCK_LINK_LABEL_MAX_CHARS: usize = 32;
 
+/// Maximum length of a `pairs` row label, in characters, for each locale.
+pub const GUEST_EMAIL_PAIRS_LABEL_MAX_CHARS: usize = 24;
+
+/// Maximum length of a `pairs` row value, in characters, for each locale.
+pub const GUEST_EMAIL_PAIRS_VALUE_MAX_CHARS: usize = 28;
+
+/// Maximum length of a `list` row label, in characters, for each locale.
+pub const GUEST_EMAIL_LIST_LABEL_MAX_CHARS: usize = 36;
+
+/// Maximum length of a `list` row value, in characters, for each locale — it stays on one line.
+pub const GUEST_EMAIL_LIST_VALUE_MAX_CHARS: usize = 16;
+
+/// Maximum length of a checklist item, in characters, for each locale.
+pub const GUEST_EMAIL_BLOCK_ITEM_MAX_CHARS: usize = 48;
+
 // ── Per invocation ───────────────────────────────────────────────────────────────────────
 
 /// Maximum number of `email.send` calls per invocation.
