@@ -842,6 +842,15 @@ pub struct EditableListItem {
     /// Ticked, when the list has `checkbox`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checked: Option<bool>,
+    /// Heading this row sits under, when the list has `groupField`.
+    ///
+    /// Free text in the language being edited, like the label: a host names their own sections
+    /// (« Cuisine », « Clés ») better than an enumeration written here could.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// Supporting line under the label, when the list has `descriptionField`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 impl EditableListItem {
