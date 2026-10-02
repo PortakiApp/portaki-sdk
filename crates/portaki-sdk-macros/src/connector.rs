@@ -35,8 +35,30 @@ struct CustomConnectorAttrs {
     display_name_key: Option<String>,
     base_url: Option<String>,
     credential_provider_id: Option<String>,
-    /// Optional egress auth: `bearer` | `query_appid` | `query_key` | `none`.
+    /// Optional egress auth. For a connector the module declares itself (ADR-0021), one of the
+    /// platform's forms: `bearer` | `basic` | `header:<name>` | `query:<name>` | `none`. The
+    /// historical `query_appid` / `query_key` stay accepted for catalogued providers.
     auth: Option<String>,
+}
+
+/// The auth forms the platform knows how to inject. Anything else would only fail at the first
+/// call, in the host's booklet; refusing it here makes it a build error instead.
+fn is_known_auth(auth: &str) -> bool {
+    let name_ok = |name: &str, extra: &str| {
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || extra.contains(c))
+    };
+    match auth.split_once(':') {
+        None => matches!(
+            auth,
+            "bearer" | "basic" | "none" | "query_appid" | "query_key"
+        ),
+        Some(("header", name)) => name_ok(name, ""),
+        Some(("query", name)) => name_ok(name, "_."),
+        Some(_) => false,
+    }
 }
 
 impl Parse for CustomConnectorAttrs {
@@ -58,7 +80,17 @@ impl Parse for CustomConnectorAttrs {
                 "display_name_key" => display_name_key = Some(text),
                 "base_url" => base_url = Some(text),
                 "credential_provider_id" => credential_provider_id = Some(text),
-                "auth" => auth = Some(text),
+                "auth" => {
+                    if !is_known_auth(&text) {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            format!(
+                                "unknown auth `{text}`: expected bearer, basic, none, header:<name> or query:<name>"
+                            ),
+                        ));
+                    }
+                    auth = Some(text)
+                }
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -226,4 +258,39 @@ pub fn expand_op(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     output.into()
+}
+
+#[cfg(test)]
+mod auth_form_tests {
+    use super::is_known_auth;
+
+    #[test]
+    fn the_platform_forms_and_the_historical_styles_are_known() {
+        for auth in [
+            "bearer",
+            "basic",
+            "none",
+            "header:exp-api-key",
+            "query:api_key",
+            "query_appid",
+            "query_key",
+        ] {
+            assert!(is_known_auth(auth), "{auth}");
+        }
+    }
+
+    #[test]
+    fn anything_else_is_a_build_error() {
+        for auth in [
+            "Bearer",
+            "digest",
+            "header:",
+            "header:X Bad",
+            "query:",
+            "cookie:sid",
+            "header:a\r\nb",
+        ] {
+            assert!(!is_known_auth(auth), "{auth}");
+        }
+    }
 }
