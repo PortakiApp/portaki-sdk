@@ -248,12 +248,18 @@ fn merge_emails(
 ///
 /// `dispatchExamples` for the same reason: `example(…)` only exists in what the build emits, and
 /// the sandbox's "Exécuter" tab reads them from this manifest.
-const BUILT_DECLARATIONS: [&str; 5] = [
+///
+/// `connectors` because the orchestrator lends a key (BYOK or pool) only to a module whose
+/// published manifest declares the connector's `credentialProviderId`. `#[custom_connector]`
+/// only exists in the build's manifest: without it, every keyed call was refused
+/// `PROVIDER_NOT_DECLARED`, while the runtime, reading the build's manifest, saw the connector.
+const BUILT_DECLARATIONS: [&str; 6] = [
     "surfaces",
     "queries",
     "commands",
     "entities",
     "dispatchExamples",
+    "connectors",
 ];
 
 /// Writes `requiresModuleSdk` into the manifest, or refuses if the author announces another one.
@@ -902,6 +908,29 @@ mod stamp_built_declarations_tests {
         // Stamped twice, nothing is duplicated.
         let again = stamp_surfaces(&stamped, built).expect("stamp");
         assert_eq!(again, stamped);
+    }
+
+    /// The orchestrator reads the connectors from the published manifest to lend a key.
+    #[test]
+    fn carries_the_built_connectors_into_the_uploaded_manifest() {
+        let raw = r#"{"id":"local-guide","permissions":["connectors:tiqets"]}"#;
+        let built = r#"{"id":"local-guide","connectors":{"builtin":[],"custom":[{"id":"tiqets","baseUrl":"https://api.tiqets.com","credentialProviderId":"tiqets","operations":[{"id":"nearby_products","method":"GET","path":"/v2/products"}]}]}}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(
+            value["connectors"]["custom"][0]["credentialProviderId"],
+            "tiqets"
+        );
+        assert_eq!(
+            value["connectors"]["custom"][0]["operations"][0]["path"],
+            "/v2/products"
+        );
+        assert_eq!(
+            value["permissions"],
+            serde_json::json!(["connectors:tiqets"])
+        );
     }
 
     /// A build that emits nothing must not prevent a deployment.
