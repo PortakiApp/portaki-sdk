@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.5.1...v9.6.0) (2026-10-02)
+
+
+### Features
+
+* **vocab:** add compass and arrow-up to IconName ([3f5d596](https://github.com/PortakiApp/portaki-sdk/commit/3f5d596f1bfe7ba980f60736ab91c7ab3c57a44f))
+* **vocab:** add fire-extinguisher and alarm-smoke ([639dc83](https://github.com/PortakiApp/portaki-sdk/commit/639dc8398ba46f670179c923e671e86d44198e40))
+* **vocab:** add shield to IconName ([ea46ab9](https://github.com/PortakiApp/portaki-sdk/commit/ea46ab9072695b75d41cef56bacaa817f16fde7e))
+
 ## [9.5.1](https://github.com/PortakiApp/portaki-sdk/compare/v9.5.0...v9.5.1) (2026-10-02)
 
 
