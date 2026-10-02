@@ -39,6 +39,9 @@ struct CustomConnectorAttrs {
     /// platform's forms: `bearer` | `basic` | `header:<name>` | `none`. The historical
     /// `query_appid` / `query_key` stay accepted for catalogued providers.
     auth: Option<String>,
+    /// ADR-0021: calls made with the publisher's key, per workspace and month. `None`: no cap
+    /// (still counted).
+    monthly_quota: Option<u64>,
 }
 
 /// The auth forms the platform knows how to inject. Anything else would only fail at the first
@@ -94,10 +97,27 @@ impl Parse for CustomConnectorAttrs {
         let mut base_url = None;
         let mut credential_provider_id = None;
         let mut auth = None;
+        let mut monthly_quota = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
+            // The one integer attribute: a cap on calls made with the publisher's key.
+            if key == "monthly_quota" {
+                let value: syn::LitInt = input.parse()?;
+                let quota: u64 = value.base10_parse()?;
+                if quota == 0 {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "monthly_quota must be at least 1; leave it out for no cap",
+                    ));
+                }
+                monthly_quota = Some(quota);
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
+                continue;
+            }
             let value: LitStr = input.parse()?;
             let text = value.value();
 
@@ -146,6 +166,7 @@ impl Parse for CustomConnectorAttrs {
             base_url,
             credential_provider_id,
             auth,
+            monthly_quota,
         })
     }
 }
@@ -247,13 +268,15 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
   "displayNameKey": {},
   "baseUrl": {},
   "credentialProviderId": {},
-  "auth": {}
+  "auth": {},
+  "monthlyQuota": {}
 }}"#,
         serde_json::to_string(&attrs.id).unwrap(),
         serde_json::to_string(&attrs.display_name_key).unwrap(),
         serde_json::to_string(&attrs.base_url).unwrap(),
         serde_json::to_string(&attrs.credential_provider_id).unwrap(),
         serde_json::to_string(&attrs.auth).unwrap(),
+        serde_json::to_string(&attrs.monthly_quota).unwrap(),
     );
 
     let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);
