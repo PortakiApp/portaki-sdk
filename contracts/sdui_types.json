@@ -517,10 +517,22 @@
         "name": "dots"
       },
       {
+        "name": "droplet"
+      },
+      {
         "name": "droplets"
       },
       {
+        "name": "file"
+      },
+      {
         "name": "file-text"
+      },
+      {
+        "name": "flag"
+      },
+      {
+        "name": "flame"
       },
       {
         "name": "fingerprint"
@@ -599,6 +611,9 @@
       },
       {
         "name": "ok"
+      },
+      {
+        "name": "mountain"
       },
       {
         "name": "package"
