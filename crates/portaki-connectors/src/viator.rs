@@ -131,6 +131,8 @@ pub struct ViatorProduct {
     pub duration_minutes: Option<u32>,
     /// Free cancellation offered.
     pub free_cancellation: bool,
+    /// Title or description machine-translated (Viator's `translationInfo`); the booklet says so.
+    pub machine_translated: bool,
     /// viator.com product page, affiliate parameters included — never rewritten.
     pub product_url: String,
 }
@@ -213,6 +215,10 @@ fn map_product(item: &Value) -> Option<ViatorProduct> {
                     .iter()
                     .any(|f| f.as_str() == Some("FREE_CANCELLATION"))
             }),
+        machine_translated: item
+            .pointer("/translationInfo/containsMachineTranslatedText")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         product_url,
     })
 }
@@ -290,6 +296,7 @@ mod tests {
                         "duration": { "variableDurationFromMinutes": 90, "variableDurationToMinutes": 120 },
                         "pricing": { "summary": { "fromPrice": 39.5 }, "currency": "EUR" },
                         "flags": ["LIKELY_TO_SELL_OUT", "FREE_CANCELLATION"],
+                        "translationInfo": { "containsMachineTranslatedText": true, "translationSource": "MACHINE" },
                         "productUrl": "https://www.viator.com/tours/Nice/Cruise/d478-5010SYDNEY?pid=P1&mcid=42&medium=api"
                     },
                     { "productCode": "NOTITLE", "productUrl": "https://www.viator.com/tours/x" },
@@ -317,6 +324,7 @@ mod tests {
         assert_eq!(product.rating_count, 812);
         assert_eq!(product.duration_minutes, Some(90));
         assert!(product.free_cancellation);
+        assert!(product.machine_translated);
         assert_eq!(
             product.product_url,
             "https://www.viator.com/tours/Nice/Cruise/d478-5010SYDNEY?pid=P1&mcid=42&medium=api"
@@ -329,6 +337,7 @@ mod tests {
             "https://www.viator.com/x",
             "https://viator.com/x",
             "https://fr.viator.com/x?pid=a",
+            "https://shop.live.rc.viator.com/fr-FR/tours/Nice/x/d478-1?mcid=1&pid=P1",
         ] {
             assert!(is_viator_url(url), "{url}");
         }
