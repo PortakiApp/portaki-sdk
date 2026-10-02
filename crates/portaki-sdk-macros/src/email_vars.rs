@@ -139,6 +139,18 @@ fn expand_fn(declaration: Declaration, function: ItemFn) -> syn::Result<TokenStr
         }
     };
     let shim_name = shim_ident.to_string();
+    // Un exemple par e-mail déclaré : le bac à sable en fait un formulaire, et le harnais des
+    // scénarios refuse une opération qui n'en a aucun — une requête générée se tient comme une
+    // requête écrite à la main.
+    let examples: Vec<_> = by_template
+        .iter()
+        .map(|(template, _, _)| {
+            json!({
+                "label": template,
+                "input": { "templateKey": template },
+            })
+        })
+        .collect();
     let query_emission = write_emission(
         "query",
         &sanitize_key(QUERY),
@@ -146,7 +158,9 @@ fn expand_fn(declaration: Declaration, function: ItemFn) -> syn::Result<TokenStr
             "kind": "query",
             "name": QUERY,
             "fn": shim_name,
+            "args": "EmailContextArgs",
             "guest": false,
+            "examples": examples,
         }))
         .unwrap(),
     );
