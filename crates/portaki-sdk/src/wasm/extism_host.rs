@@ -138,6 +138,17 @@ impl HostBackend for ExtismHostBackend {
         Ok(())
     }
 
+    fn file_read(&self, reference: &str) -> Result<Vec<u8>> {
+        let result = self.dispatch_value("files.read", json!({ "ref": reference }))?;
+        let encoded = result
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| PortakiError::Host("file_read_missing_content".into()))?;
+        BASE64
+            .decode(encoded)
+            .map_err(|e| PortakiError::Host(format!("file_read_base64: {e}")))
+    }
+
     fn time_now_iso(&self) -> Result<String> {
         let result = self.dispatch_value("time.now", json!({}))?;
         result

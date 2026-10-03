@@ -48,6 +48,7 @@
 pub mod connectors;
 pub mod email;
 pub mod events;
+pub mod files;
 pub mod i18n;
 pub mod kv;
 pub mod log;

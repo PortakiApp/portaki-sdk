@@ -97,6 +97,14 @@ pub trait HostBackend: Send + Sync {
         Err(PortakiError::HostNotConfigured)
     }
 
+    /// Reads the bytes of a file attached to this property and module (`files.read`).
+    ///
+    /// Default: refused. A host that serves no file answers `HostNotConfigured` rather than an
+    /// empty buffer — a module must be able to tell "no file service" from "empty file".
+    fn file_read(&self, _reference: &str) -> Result<Vec<u8>> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
     /// Returns current UTC time as ISO-8601 (Wasm host dispatch).
     fn time_now_iso(&self) -> Result<String> {
         Err(PortakiError::HostNotConfigured)

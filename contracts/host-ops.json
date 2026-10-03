@@ -15,6 +15,7 @@
     "module.status",
     "module.listByCapability",
     "events.emit",
-    "email.send"
+    "email.send",
+    "files.read"
   ]
 }
