@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.7.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.6.0...v9.7.0) (2026-10-03)
+
+
+### Features
+
+* **host:** un module peut lire un fichier qui lui est joint ([fd589fe](https://github.com/PortakiApp/portaki-sdk/commit/fd589fe55595c60e5a6410f1228bcaa84baca998))
+* **sdui:** Map porte le tracé d'un itinéraire ([d5af1a8](https://github.com/PortakiApp/portaki-sdk/commit/d5af1a814762f092a1c2b08e5afc4a830ab354be))
+
 ## [9.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.5.1...v9.6.0) (2026-10-02)
 
 
