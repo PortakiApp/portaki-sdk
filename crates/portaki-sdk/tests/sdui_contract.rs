@@ -14,6 +14,7 @@ use portaki_sdk::sdui::primitives::{
     Text, TextArea, TimeColumn,
 };
 use portaki_sdk::sdui::Action;
+use portaki_sdk::sdui::GeoPoint;
 use portaki_sdk::sdui::{
     AccordionItem, ActionRowItem, ChartEmpty, DeltaTone, FilterBarChip, MapClustering, TabBarItem,
     TabItem,
@@ -91,6 +92,36 @@ fn the_formerly_untyped_fields_now_have_a_shape() {
     );
     assert_eq!(map["clustering"]["enabled"], true);
     assert_eq!(map["clustering"]["radius"], 40.0);
+}
+
+/// Le tracé d'un itinéraire : une suite de points, absente du fil tant qu'il n'y en a pas.
+///
+/// L'ordre compte — c'est un chemin, pas un nuage de repères — et le shell le dessine d'un bout à
+/// l'autre. Une carte sans tracé ne doit porter aucune clé `path` : un tableau vide ferait croire
+/// à un tracé que l'hôte n'a pas déposé.
+#[test]
+fn une_carte_porte_le_trace_dun_itineraire() {
+    let plain = wire(Map::new().into());
+    assert!(plain.get("path").is_none(), "pas de tracé, pas de clé");
+
+    let drawn = wire(
+        Map::new()
+            .path(vec![
+                GeoPoint::new(43.55, 6.94),
+                GeoPoint::new(43.56, 6.95),
+                GeoPoint::new(43.57, 6.93),
+            ])
+            .into(),
+    );
+    assert_eq!(drawn["path"].as_array().expect("un tableau").len(), 3);
+    assert_eq!(drawn["path"][0]["lat"], 43.55);
+    assert_eq!(drawn["path"][2]["lng"], 6.93);
+
+    let read: Component = serde_json::from_value(drawn).expect("se relit");
+    let Component::Map(read) = read else {
+        panic!("pas une Map")
+    };
+    assert_eq!(read.path.as_ref().map(Vec::len), Some(3));
 }
 
 /// A column shows ONE date with a label; `dates`/`times` never matched what the shells render.
