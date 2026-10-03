@@ -147,6 +147,12 @@ pub const HOST_EMAILS_PER_MODULE_PER_24H: usize = 20;
 // Enforced by the platform's traveller upload endpoint: the SDK never sees the bytes, only the
 // reference ([`crate::files::FileRef`]) that a form hands it.
 
+/// Plafond de ce qu'un module peut lire d'un fichier d'hôte (2 MiB).
+///
+/// Lire, c'est tenir le fichier en mémoire dans le bac à sable : un module n'a pas à découvrir
+/// qu'il en tient dix. Une trace GPS de randonnée dépasse rarement quelques centaines de kilo-octets.
+pub const HOST_FILE_READ_MAX_BYTES: usize = 2 * 1024 * 1024;
+
 /// Maximum size of a guest file, in bytes (5 MiB).
 pub const GUEST_FILE_MAX_BYTES: usize = 5 * 1024 * 1024;
 

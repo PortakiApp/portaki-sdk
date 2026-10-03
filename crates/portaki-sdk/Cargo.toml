@@ -30,6 +30,8 @@ platform = []
 # host attaches (checklist); the platform refuses a guest upload without `guest:files`, and leaves
 # StayContext::guest_email / guest_phone empty without the second one.
 guest-files = []
+# Lire les octets d'un fichier joint par l'hôte à ce module (`host::files::read`).
+host-files = []
 stay-guest-contact = []
 
 [dependencies]
