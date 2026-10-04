@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.8.1](https://github.com/PortakiApp/portaki-sdk/compare/v9.8.0...v9.8.1) (2026-10-04)
+
+
+### Reverts
+
+* **connectors:** the Viator gallery belongs to the module ([bbe3813](https://github.com/PortakiApp/portaki-sdk/commit/bbe3813e06f780bbaa54e86c2b42b58ad98e368d))
+
 ## [9.8.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.7.0...v9.8.0) (2026-10-04)
 
 
