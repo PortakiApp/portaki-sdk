@@ -21,6 +21,20 @@
 //! - Styling uses semantic tokens ([`common::Tone`], [`common::Emphasis`], …) —
 //!   shells map tokens to platform theme — do not embed hex colors in Wasm.
 //!
+//! ## Un champ qui n'apparaît qu'au bon moment — `Field::visibleWhen`
+//!
+//! `Field::visibleWhen("autreChamp=valeur")` ne montre le champ que tant que la commande nommée
+//! porte exactement cette valeur. L'égalité est stricte : une liste à choix multiples ne
+//! correspond que si sa valeur sérialisée est égale, pas si elle contient la valeur.
+//!
+//! Un champ masqué **n'est pas rendu** : il n'est donc ni validé — un `required` masqué n'empêche
+//! rien — ni envoyé. C'est ce qui permet de demander une adresse de renvoi obligatoire *sous*
+//! « Me le renvoyer » sans l'imposer à qui choisit de repasser la prendre.
+//!
+//! **Le livret seul l'honore.** Le tableau de bord de l'hôte rend le champ sans condition : une
+//! surface hôte ne doit pas en dépendre. Un nom inconnu laisse le champ visible — se tromper de
+//! nom montre un champ de trop, jamais un champ qui manque.
+//!
 //! ## What modules must not assume
 //!
 //! - Not every shell implements every primitive — stick to the documented catalog.
