@@ -119,13 +119,6 @@ pub struct ViatorProduct {
     pub title: String,
     /// Cover image (`https`), the variant closest to 720 px wide.
     pub image_url: Option<String>,
-    /// Every image, cover first, one `https` variant each — the gallery of a product page.
-    ///
-    /// [`ViatorProduct::image_url`] is its first entry when there is one; a caller that only
-    /// needs a thumbnail keeps reading that field and ignores this one.
-    pub gallery: Vec<String>,
-    /// The product blurb Viator serves in the requested language, when it sends one.
-    pub description: Option<String>,
     /// "From" price on viator.com, in [`ViatorProduct::currency`].
     pub price: Option<f64>,
     /// ISO 4217 code of the price.
@@ -190,8 +183,6 @@ fn map_product(item: &Value) -> Option<ViatorProduct> {
         code,
         title,
         image_url: cover_image(item.get("images")),
-        gallery: gallery(item.get("images")),
-        description: text(item, "description"),
         price: item
             .pointer("/pricing/summary/fromPrice")
             .and_then(Value::as_f64)
@@ -242,31 +233,11 @@ fn text(item: &Value, key: &str) -> Option<String> {
 
 /// The cover image (else the first), variant whose width is closest to 720 px.
 fn cover_image(images: Option<&Value>) -> Option<String> {
-    gallery(images).into_iter().next()
-}
-
-/// Every image, cover first, one variant each — the one whose width is closest to 720 px.
-///
-/// Cover first because a gallery opens on it; the rest keep the order Viator sends, which is the
-/// order its own product page shows. An image with no `https` variant is dropped rather than
-/// leaving a hole a caller would have to filter again.
-fn gallery(images: Option<&Value>) -> Vec<String> {
-    let Some(images) = images.and_then(Value::as_array) else {
-        return Vec::new();
-    };
-    let cover = images
+    let images = images?.as_array()?;
+    let image = images
         .iter()
-        .position(|i| i.get("isCover").and_then(Value::as_bool) == Some(true));
-    let ordered = cover
-        .into_iter()
-        .chain((0..images.len()).filter(|index| Some(*index) != cover));
-    ordered
-        .filter_map(|index| best_variant(&images[index]))
-        .collect()
-}
-
-/// The `https` variant of one image whose width is closest to 720 px.
-fn best_variant(image: &Value) -> Option<String> {
+        .find(|i| i.get("isCover").and_then(Value::as_bool) == Some(true))
+        .or_else(|| images.first())?;
     image
         .get("variants")?
         .as_array()?
@@ -321,7 +292,6 @@ mod tests {
                                 { "width": 1200, "url": "https://cdn.example/l.jpg" }
                             ]}
                         ],
-                        "description": "  Deux heures sur l'eau, commentaires compris.  ",
                         "reviews": { "totalReviews": 812, "combinedAverageRating": 4.7 },
                         "duration": { "variableDurationFromMinutes": 90, "variableDurationToMinutes": 120 },
                         "pricing": { "summary": { "fromPrice": 39.5 }, "currency": "EUR" },
@@ -350,20 +320,6 @@ mod tests {
         );
         assert_eq!(product.price, Some(39.5));
         assert_eq!(product.currency.as_deref(), Some("EUR"));
-        // La galerie ouvre sur la couverture, puis garde l'ordre de Viator ; `image_url` en est la
-        // première entrée. Une image sans variante `https` ne laisse pas de trou.
-        assert_eq!(
-            product.gallery,
-            ["https://cdn.example/m.jpg", "https://cdn.example/other.jpg"]
-        );
-        assert_eq!(
-            product.gallery.first().map(String::as_str),
-            product.image_url.as_deref()
-        );
-        assert_eq!(
-            product.description.as_deref(),
-            Some("Deux heures sur l'eau, commentaires compris.")
-        );
         assert_eq!(product.rating, Some(4.7));
         assert_eq!(product.rating_count, 812);
         assert_eq!(product.duration_minutes, Some(90));
