@@ -220,7 +220,10 @@ mod tests {
         .expect("fixture");
         assert!(manifest["connectors"]["custom"].is_array());
 
-        let errors: Vec<String> = validator.iter_errors(&manifest).map(|e| e.to_string()).collect();
+        let errors: Vec<String> = validator
+            .iter_errors(&manifest)
+            .map(|e| e.to_string())
+            .collect();
         assert!(errors.is_empty(), "{errors:?}");
 
         let mut wrong = manifest.clone();

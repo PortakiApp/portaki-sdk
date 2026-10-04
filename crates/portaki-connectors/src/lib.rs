@@ -29,8 +29,26 @@
 //! | [`mapbox`] | `mapbox` | `geocode`, `reverse_geocode`, `directions`, `static_map` |
 //! | [`osm_nominatim`] | `osm-nominatim` | `geocode`, `reverse_geocode` |
 //! | [`nuki`] | `nuki` | `remote_unlock` |
-//! | [`tiqets`] | `tiqets` | `nearby_products` |
-//! | [`viator`] | `viator` | `search_products` |
+//! | `tiqets` | `tiqets` | `nearby_products` — **déprécié**, voir ci-dessous |
+//! | `viator` | `viator` | `search_products` — **déprécié**, voir ci-dessous |
+//!
+//! # Ce qui n'a pas sa place ici
+//!
+//! Ce crate ne porte que des connecteurs **catalogués par la plateforme** : elle en résout les
+//! identifiants, en accorde les capacités et en garde les clés. Un connecteur qu'un module
+//! déclare lui-même (ADR-0021) n'y a rien à faire — ses types et son analyse lui appartiennent,
+//! et les mettre ici met son travail derrière une release du SDK pour rien.
+//!
+//! `tiqets` et `viator` sont dans ce cas, par héritage : la plateforme n'accorde plus de capacité
+//! pour eux (leurs [`portaki_sdk::capability::CapabilityId`] le disent déjà), `local-guide` les a
+//! rapatriés, et **plus rien ici ne les consomme**. Ils partiront en 10.0, et `portaki add
+//! connector` ne les propose plus — ils ont quitté la liste des connecteurs intégrés, qu'un test
+//! épingle sur le tableau ci-dessus.
+//!
+//! Pas de `#[deprecated]` dessus, et ce n'est pas un oubli : l'attribut sur un module fait rougir
+//! les constantes que `#[test]` engendre dans ses propres tests, et aucun `allow` ne les couvre.
+//! On perdrait la couverture de code qui tourne encore en 9.x pour avertir des appelants qui
+//! n'existent plus. La note ci-dessus et la dépréciation des capacités disent la même chose.
 //!
 //! The gateway resolves credentials (platform pool or BYOK) from the invocation
 //! [`portaki_sdk::context::Context`] capabilities before executing egress.

@@ -17,15 +17,18 @@ use crate::commands::{i18n, permissions};
 use crate::{tr, ui, workspace};
 
 /// The built-in connectors, as `portaki-connectors` serves them (one submodule each).
-pub const BUILTIN_CONNECTORS: [&str; 8] = [
+///
+/// Only connectors the **platform** catalogues: it resolves their ids, grants their capabilities
+/// and holds their keys. `tiqets` and `viator` left the list with ADR-0021 — a module declares
+/// those itself (`#[portaki_sdk::custom_connector]`), so scaffolding a platform declaration for
+/// them would write code the gateway refuses.
+pub const BUILTIN_CONNECTORS: [&str; 6] = [
     "open-weather",
     "open-agenda",
     "google-places",
     "mapbox",
     "osm-nominatim",
     "nuki",
-    "tiqets",
-    "viator",
 ];
 
 #[derive(Debug, Parser)]
