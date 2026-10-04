@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.8.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.7.0...v9.8.0) (2026-10-04)
+
+
+### Features
+
+* **sdui:** reveal a field on another's answer, and a Viator gallery ([2fdfeba](https://github.com/PortakiApp/portaki-sdk/commit/2fdfeba18d68ba350e035291cc4b8c22cb897c97))
+
 ## [9.7.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.6.0...v9.7.0) (2026-10-03)
 
 
