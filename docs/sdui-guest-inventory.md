@@ -215,7 +215,7 @@ Five modules have the guest fill something in: `consumables`, `guest-reviews`, `
 | Primitive | What it is for | Variants | Used on the guest side |
 |---|---|---|---|
 | `Form` | the form, and what it submits for validation | submit action | **yes — 5** (`consumables` / `guest.form`) · host too |
-| `Field` | the label above a field, with the asterisk if required | required or not | **yes — 5** · host too |
+| `Field` | the label above a field, with the asterisk if required | required or not, `visibleWhen` | **yes — 5** · host too (`visibleWhen`: **guest only**) |
 | `TextInput` | a single input line, 40 px, 10 px corner | — | **yes — 3** (`issue-report` / `guest.form`) · host too |
 | `TextArea` | a multi-line input area | number of lines | **yes — 5** · host too |
 | `Select` | a dropdown list | options | **yes — 1** (`guest-reviews` / `post-stay.card`) · host too |
