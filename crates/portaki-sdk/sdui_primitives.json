@@ -33,7 +33,7 @@
   {"name": "SafeArea", "serde_name": "SafeArea", "has_children": true, "fields": {"edges": "Vec<String>"}},
   {"name": "Anchor", "serde_name": "Anchor", "has_children": true, "fields": {"targetId": "String"}},
   {"name": "PullToRefresh", "serde_name": "PullToRefresh", "has_children": true, "fields": {}},
-  {"name": "Button", "serde_name": "Button", "has_children": false, "fields": {"label": "String", "action": "Action", "variant": "ButtonVariant"}},
+  {"name": "Button", "serde_name": "Button", "has_children": false, "fields": {"label": "String", "action": "Action", "variant": "ButtonVariant", "icon": "IconName"}},
   {"name": "EmergencyButton", "serde_name": "EmergencyButton", "has_children": false, "fields": {"label": "String", "action": "Action"}},
   {"name": "IconButton", "serde_name": "IconButton", "has_children": false, "fields": {"icon": "IconName", "action": "Action", "label": "String"}},
   {"name": "ActionRow", "serde_name": "ActionRow", "has_children": true, "fields": {"title": "String", "actions": "Vec<ActionRowItem>"}},
