@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.9.0...v10.0.0) (2026-10-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **test-utils:** `portaki_test_utils::previews` is gone. A module that called `previews::check_all` / `previews::check` renders its surfaces and compares `previews.json` itself, or copies the harness `portaki-modules` keeps under `support/`.
+
+### Features
+
+* **sdui:** let Button carry an icon ([5aef91f](https://github.com/PortakiApp/portaki-sdk/commit/5aef91fedeb8e866a095e20abe3d415da953113e))
+* **test-utils:** refuser le HTML pré-rendu dans RichText ([952fa0a](https://github.com/PortakiApp/portaki-sdk/commit/952fa0ad04e4a09210a0ad2d6b90582d83f7d2d1))
+
+
+### Miscellaneous
+
+* **test-utils:** drop the previews harness ([38763f7](https://github.com/PortakiApp/portaki-sdk/commit/38763f714330d9aa0bc1f334182809229e134119))
+
 ## [9.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.8.1...v9.9.0) (2026-10-07)
 
 
