@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v9.8.1...v9.9.0) (2026-10-07)
+
+
+### Features
+
+* **sdui:** let Icon carry an emoji ([746b35a](https://github.com/PortakiApp/portaki-sdk/commit/746b35a1ab8ce6a6bd6dcdf654683b5f8a9951d8))
+
 ## [9.8.1](https://github.com/PortakiApp/portaki-sdk/compare/v9.8.0...v9.8.1) (2026-10-04)
 
 
