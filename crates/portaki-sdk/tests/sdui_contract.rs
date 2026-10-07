@@ -10,8 +10,8 @@
 use portaki_sdk::prelude::IconName;
 use portaki_sdk::sdui::primitives::{
     Accordion, ActionRow, Anchor, BackButton, BottomTabBar, BulletList, Chart, ColorDotItem,
-    Component, DateColumn, Dot, FilterBar, Form, IconButton, Map, Skeleton, Split, Stat, Tabs,
-    Text, TextArea, TimeColumn,
+    Component, DateColumn, Dot, FilterBar, Form, Icon, IconButton, Map, Skeleton, Split, Stat,
+    Tabs, Text, TextArea, TimeColumn,
 };
 use portaki_sdk::sdui::Action;
 use portaki_sdk::sdui::GeoPoint;
@@ -311,4 +311,16 @@ fn a_stat_and_a_chart_carry_their_tone_icon_and_empty_state() {
         panic!("pas un Chart")
     };
     assert_eq!(old.empty, None);
+}
+
+#[test]
+fn an_icon_carries_an_emoji_beside_its_token() {
+    let json = wire(Icon::new().emoji("🍳").size(44.0).into());
+
+    assert_eq!(json["type"], "Icon");
+    assert_eq!(json["emoji"], "🍳");
+    assert_eq!(json["size"], 44.0);
+    // An emoji is not an icon token — `name` is an `IconName`, a closed vocabulary. A module that
+    // leads with a glyph leaves `name` absent instead of smuggling the glyph through it.
+    assert!(json.get("name").is_none());
 }
