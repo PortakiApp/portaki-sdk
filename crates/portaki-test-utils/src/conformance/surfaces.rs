@@ -89,6 +89,13 @@ fn problems(module: &Module) -> Vec<String> {
 /// committed next to the manifest and reviewed in a PR: the one place a test reads it.
 ///
 /// A module that keeps neither passes — the files are a catalogue and a demonstration, not a duty.
+///
+/// This crate does not write them: `portaki-modules` has its own harness, included by `#[path]`
+/// into every module's `tests/previews.rs`, which is also what writes `demo.json`. Hence the rule
+/// lives here and not there. A rule put in a harness only binds the tests that call it, and a
+/// harness this crate exports is called by none of them — the RichText check spent a release that
+/// way, green in the SDK and absent from all twenty-three modules. A rule about a rendered tree
+/// goes where the committed file is read.
 fn rendered_file_problems(module: &Module) -> Vec<String> {
     RENDERED_FILES
         .iter()
@@ -111,7 +118,7 @@ fn rendered_file_problems(module: &Module) -> Vec<String> {
 
 /// What a module commits of its own rendering: the catalogue previews, and the booklet's
 /// demonstration (`demo.json`, which the modules repository writes beside them).
-const RENDERED_FILES: [&str; 2] = [crate::previews::FILE, "demo.json"];
+const RENDERED_FILES: [&str; 2] = ["previews.json", "demo.json"];
 
 /// The error a guest surface logged through `portaki_sdk::guest_shell`, if it did.
 fn render_failure(declaration: &HandlerDeclaration, logs: &[crate::LogLine]) -> Option<String> {

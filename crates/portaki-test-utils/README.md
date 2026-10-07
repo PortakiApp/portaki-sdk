@@ -96,35 +96,13 @@ It generates one test per check under `portaki_conformance::`. `portaki release`
 |------|------------|
 | `manifest` | the manifest — `portaki.module.json` if kept, else the one `portaki build` wrote — does not validate against `module.v1.json` (bundled, no network); an `I18nText` config field is not `localized` there, a row's `I18nText` fields are not its `item.localized` (its `#[field(secret)]` fields not its `item.secret`), or `item.localized` / `item.id` name a sub-key the row type (`#[params]`) does not have |
 | `listing` | `listing.json` is there and does not validate against `listing.v1.json` (bundled, no network), or still holds the `portaki init` instructions — no `listing.json` passes, the listing can be written in the dashboard |
-| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell (a guest `Err` the SDK shows as its error state included), sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface; a guest surface panics, fails or renders nothing to read with the module inactive, incomplete, or `host::module::status` failing |
+| `surfaces` | a `#[surface]` panics or errors with an empty mock in its shell (a guest `Err` the SDK shows as its error state included), sends a tree that does not parse as contract primitives or holds a `Select` without options or with a `value` outside them, or a `guestSurfaces[].surfaceId` has no guest surface; a guest surface panics, fails or renders nothing to read with the module inactive, incomplete, or `host::module::status` failing; a `RichText.content` holds pre-rendered HTML instead of a TipTap document, an `i18n:` reference or text without markup — read on the rendered trees and on the `previews.json` / `demo.json` the module commits, when it commits them |
 | `operations` | a `#[command]` or `#[query]` panics on `{}` in a guest or host mock (an `Err` is fine) |
 | `i18n` | a key used by `guestSurfaces[].labelKey`, a rendered `"i18n:…"` string or `host::i18n::translate` is missing from the `fr` or `en` bundle in `i18n/` (the guest-state keys the SDK ships a text for aside); a `config.fields[]` label, description or option label has no text in one of the languages of `i18n/` |
 | `emails` | an `emails[]` command is not declared or panics around a mock stay, `emailContext` panics for a template key, or a variable `#[email_vars]` declares does not come back on the module's fixture (`conformance!(email_fixture = …)`) |
 | `contracts` | a `property-stats-card` has no `statsSummary`, or it answers off `stats-summary.v1.json` (`fr`/`en`, `value` ≤ 12 chars) or slower than 300 ms; a `property-stats-detail` has no host surface of id `pathSegment`, or it fails with `input.periodDays`; a `workspace-timeline-task` has no `timelineTasks`, or it answers off `timeline-tasks.v1.json` on three fixture stays (ISO dates, non-empty items), or `taskToggle` ticks a `photoRequired` item without a photo instead of refusing it with `photo_required`; an exported `publishReadiness` answers off `publish-readiness.v1.json` |
 
 The battery finds handlers through the `HandlerDeclaration`s that `#[query]`, `#[command]` and `#[surface]` register on native targets: nothing to list by hand. It needs `portaki-sdk-macros` from the same release. Not checked: the sandbox clock (`Utc::now()` runs natively — use clippy's `disallowed-methods`), `portaki_module!` display keys, and `#[event_handler]`s.
-
-## Catalogue previews
-
-`previews.json` — every guest surface the booklet serves (`#[surface(guest, path = …)]`), rendered
-on sample data for the module's public page — is written and checked by `previews`:
-
-```rust,ignore
-// tests/previews.rs
-use portaki_test_utils::previews;
-
-portaki_test_utils::link_module!();
-
-#[test]
-fn previews_match_the_rendered_surfaces() {
-    let root = env!("CARGO_MANIFEST_DIR");
-    previews::check_all(root, previews::guest(root).with_config(&sample_config()));
-}
-```
-
-`previews::guest` is a French guest, a stay from 1 to 8 June 2026, the clock the day before;
-`PORTAKI_UPDATE_PREVIEWS=1 cargo test --test previews` rewrites the file. `previews::check` takes
-surfaces rendered by hand instead.
 
 ## What you get
 
