@@ -28,6 +28,10 @@
 //!
 //! [`check_all`] renders every guest surface declared with a `path` through the SDK's own
 //! dispatch; [`check`] takes surfaces rendered by hand, when one needs its own context.
+//!
+//! Beyond the comparison, a rendering is held to what the booklet can paint: a `RichText.content`
+//! is a TipTap document, an `i18n:` reference or text without markup. The conformance battery says
+//! the same on an empty mock — but a `content` is built from data, so this is where it is seen.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -152,6 +156,10 @@ fn compare(module_root: &str, mut rendered: Vec<(&'static str, Value)>) {
         .into_iter()
         .map(|(surface_id, mut tree)| {
             stable_uuids(&mut tree, &mut seen);
+            // Here rather than only in the conformance battery: a `RichText.content` is usually
+            // built from data, and an empty mock renders the empty state instead of the card.
+            let markup = crate::conformance::rich_text_problems(&tree);
+            assert!(markup.is_empty(), "{surface_id} {}", markup.join("\n"));
             let label_key = declared[surface_id]["label_key"]
                 .as_str()
                 .unwrap_or_default();

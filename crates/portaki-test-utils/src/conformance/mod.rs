@@ -24,7 +24,7 @@
 //! |------|-------|
 //! | `manifest` | `portaki.module.json` validates against the `module.v1.json` schema bundled in this crate |
 //! | `listing` | `listing.json`, when the module versions one, validates against the `listing.v1.json` schema bundled in this crate and no longer holds the `portaki init` instructions (`À compléter …` / `To be completed …`); no `listing.json` passes — the listing can be written in the dashboard |
-//! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface; a guest surface whose `Err` the SDK turned into its error state (`portaki_sdk::guest_shell`) counts as failed; every guest surface, rendered again with the module inactive, incomplete and with `host::module::status` failing, answers a non-blank tree without panicking or failing |
+//! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface; a guest surface whose `Err` the SDK turned into its error state (`portaki_sdk::guest_shell`) counts as failed; every guest surface, rendered again with the module inactive, incomplete and with `host::module::status` failing, answers a non-blank tree without panicking or failing. Every `RichText.content` is a TipTap document, an `i18n:` reference or text without markup — pre-rendered HTML reaches the guest as visible tags — read on the rendered trees and on the `previews.json` / `demo.json` the module commits, which are its rendering *on* data |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
 //! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` (the guest-state keys of `portaki_sdk::guest_shell::TEXTS` aside: the SDK has a text for each); every `config.fields[]` label (description, option labels) has a text in each language of `i18n/` |
 //! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking; with `#[email_vars]`, every declared variable comes back non-blank for its template on the module's fixture (`conformance!(email_fixture = …)`), and no hand-written `emailContext` sits next to the generated one |
@@ -76,6 +76,7 @@ pub use contracts::{
 pub use findings::Findings;
 pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
 pub use manifest::MODULE_SCHEMA_V1;
+pub(crate) use surfaces::rich_text_problems;
 
 /// The data `#[email_vars]` is asked on: seed the mock (config, KV, connector stubs) so every
 /// declared variable of `template` has a value. The mock comes set to the template's moment

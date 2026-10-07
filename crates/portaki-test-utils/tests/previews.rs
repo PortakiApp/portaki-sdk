@@ -1,7 +1,7 @@
 //! `previews`: every guest route rendered, compared to the committed `previews.json`.
 
 use portaki_sdk::prelude::*;
-use portaki_sdk::sdui::primitives::{Card, Text};
+use portaki_sdk::sdui::primitives::{Card, RichText, Text};
 use portaki_test_utils::previews;
 
 /// A route: rendered in the previews, with its title.
@@ -52,4 +52,13 @@ fn surfaces_rendered_by_hand_compare_the_same() {
 #[should_panic(expected = "one preview per guest surface")]
 fn a_missing_route_fails() {
     previews::check(ROOT, Vec::new());
+}
+
+/// A `content` built from data is where pre-rendered HTML lands — the conformance battery's empty
+/// mock renders the empty state instead, and would not see it.
+#[test]
+#[should_panic(expected = "carries a RichText")]
+fn pre_rendered_markup_in_a_preview_fails() {
+    let detail = Surface::new(RichText::new().content("<p>Appuyez 2 secondes.</p>"));
+    previews::check(ROOT, vec![("explore.detail", detail)]);
 }
