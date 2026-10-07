@@ -266,7 +266,7 @@ Five modules have the guest fill something in: `consumables`, `guest-reviews`, `
 | Primitive | What it is for | Variants | Used on the guest side |
 |---|---|---|---|
 | `Map` | a Mapbox map with markers, clustered or not | `interactionMode`: `pan-zoom` · `none`; markers: `property` · `poi` | **yes — 3** (`access-guide`, `events`, `local-guide`) |
-| `Icon` | a lone icon, adjustable size | `name`: ~83 tokens — see §4 | **yes — 1** (`weather` / `explore.forecast`) |
+| `Icon` | a lone pictogram, adjustable size: an icon token (`name`) or an emoji (`emoji`) | `name`: ~83 tokens — see §4 | **yes — 2** (`weather` / `explore.forecast`, `appliances` / `explore.item`) |
 | `Image` | a full-width image with a rounded corner and a loading blur | `size`: `full` · `thumb` (**ignored by the booklet**) | **yes — 1** (`local-guide`) · host too |
 | `QRCode` | supposed to show a QR code | size | **yes — 1** (`guest-reviews`) — **but what it renders today is a fake hardcoded pattern**, unreadable by a phone (see §5) |
 | `Avatar` | a round photo, or initials | — | no |
@@ -549,9 +549,10 @@ from the most decisive to the most cosmetic.
 16. **`SuccessState`, `CompletionState`** say the same thing with two different layouts, and
     neither is used.
 17. **`LoadingState` and `Spinner`**: the first is the second plus a message.
-18. **`Icon` carries an icon token, but `Text`+`display` carries an emoji, and `ListItem.leading`
-    accepts both** — with a regular expression to decide which. Three ways to place a pictogram;
-    a clear rule is missing.
+18. **Settled.** `Icon` used to carry an icon token only, so an emoji travelled as
+    `Text`+`display` — a hero-title variant for something that is not a title. `Icon` now carries
+    `emoji` beside `name`: a lone pictogram is an `Icon`, whichever kind, and `display` is for
+    titles again. `ListItem.leading` keeps accepting both, with its regular expression, for rows.
 
 ### Fields never filled in, or ignored
 
