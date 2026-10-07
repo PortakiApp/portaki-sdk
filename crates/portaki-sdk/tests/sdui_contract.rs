@@ -9,9 +9,9 @@
 
 use portaki_sdk::prelude::IconName;
 use portaki_sdk::sdui::primitives::{
-    Accordion, ActionRow, Anchor, BackButton, BottomTabBar, BulletList, Chart, ColorDotItem,
-    Component, DateColumn, Dot, FilterBar, Form, Icon, IconButton, Map, Skeleton, Split, Stat,
-    Tabs, Text, TextArea, TimeColumn,
+    Accordion, ActionRow, Anchor, BackButton, BottomTabBar, BulletList, Button, Chart,
+    ColorDotItem, Component, DateColumn, Dot, FilterBar, Form, Icon, IconButton, Map, Skeleton,
+    Split, Stat, Tabs, Text, TextArea, TimeColumn,
 };
 use portaki_sdk::sdui::Action;
 use portaki_sdk::sdui::GeoPoint;
@@ -139,6 +139,18 @@ fn the_columns_declare_the_single_value_they_show() {
 /// An icon-only button needs a name, and a form needs somewhere to send itself.
 #[test]
 fn the_buttons_and_the_form_declare_what_they_need() {
+    // A labelled button may lead with a glyph: the guest design puts one on 57 of its 96 buttons
+    // ("Ouvrir dans Maps" / map-pin, "Voir tout sur la carte" / map), and without the field a
+    // module could only send the label.
+    assert_eq!(
+        wire(
+            Button::new()
+                .label("Ouvrir dans Maps")
+                .icon(IconName::MapPin)
+                .into()
+        )["icon"],
+        "map-pin"
+    );
     assert_eq!(
         wire(IconButton::new().label("Fermer").into())["label"],
         "Fermer"
