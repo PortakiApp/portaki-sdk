@@ -1,0 +1,21 @@
+{
+  "locale": "fr-FR",
+  "surfaces": [
+    {
+      "surfaceId": "explore.detail",
+      "tree": {
+        "type": "Stack",
+        "children": [
+          {
+            "type": "RichText",
+            "content": "<p>Appuyez 2 secondes sur la touche marche.</p>"
+          },
+          {
+            "type": "RichText",
+            "content": "Venez avant 9 h : les croissants partent vite."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 
 use portaki_sdk::host::module::ModuleStatus;
 use portaki_sdk::sdui::component::Component;
-use portaki_sdk::sdui::primitives::Select;
+use portaki_sdk::sdui::primitives::{RichText, SduiPrimitive, Select};
 use portaki_sdk::sdui::surface::Surface;
 use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
 use serde_json::Value;
@@ -75,9 +75,43 @@ fn problems(module: &Module) -> Vec<String> {
     }
 
     problems.extend(guest_state_problems(module));
+    problems.extend(rendered_file_problems(module));
     problems.extend(undeclared_guest_routes(module, &declarations));
     problems
 }
+
+/// The module's committed renderings, held to the same rules as a live one.
+///
+/// The walk above renders with an empty mock, where a `content` built from data is simply not
+/// there to look at: `appliances` put pre-rendered HTML in its how-to card, and its guest detail
+/// answers an empty state until an appliance is saved — every check stayed green, and the tags
+/// only showed on a page that had one. These files are the module's rendering **on** data,
+/// committed next to the manifest and reviewed in a PR: the one place a test reads it.
+///
+/// A module that keeps neither passes — the files are a catalogue and a demonstration, not a duty.
+fn rendered_file_problems(module: &Module) -> Vec<String> {
+    RENDERED_FILES
+        .iter()
+        .flat_map(|file| {
+            let path = module.root().join(file);
+            let Ok(raw) = std::fs::read_to_string(&path) else {
+                return Vec::new();
+            };
+            let Ok(document) = serde_json::from_str::<Value>(&raw) else {
+                // Whatever wrote the file owns its syntax; this check only reads what parses.
+                return Vec::new();
+            };
+            rich_text_problems(&document)
+                .into_iter()
+                .map(|problem| format!("{file} {problem}"))
+                .collect()
+        })
+        .collect()
+}
+
+/// What a module commits of its own rendering: the catalogue previews, and the booklet's
+/// demonstration (`demo.json`, which the modules repository writes beside them).
+const RENDERED_FILES: [&str; 2] = [crate::previews::FILE, "demo.json"];
 
 /// The error a guest surface logged through `portaki_sdk::guest_shell`, if it did.
 fn render_failure(declaration: &HandlerDeclaration, logs: &[crate::LogLine]) -> Option<String> {
@@ -172,19 +206,21 @@ fn is_blank(tree: &Value) -> bool {
 
 /// What the shell would refuse in the JSON a surface sends.
 pub(super) fn contract_problems(tree: &Value) -> Vec<String> {
+    // On the raw tree, so a `content` is still reported when the rest does not parse.
+    let mut problems = rich_text_problems(tree);
     let surface: Surface = match serde_json::from_value(tree.clone()) {
         Ok(surface) => surface,
         Err(error) => {
-            return vec![format!(
+            problems.push(format!(
                 "sent a tree that does not parse as SDUI primitives of the contract: {error}"
-            )]
+            ));
+            return problems;
         }
     };
 
     // Typed Rust cannot build a node outside the contract; this guards the wire instead — a
     // tree that re-parsed into a variant the contract does not list would be a generator bug.
     let mut unknown: Vec<String> = Vec::new();
-    let mut problems = Vec::new();
     for node in SurfaceAssertions::new(&surface).nodes() {
         let name = node.type_name();
         if !Component::TYPE_NAMES.contains(&name) {
@@ -250,4 +286,163 @@ fn undeclared_guest_routes(module: &Module, declarations: &[&HandlerDeclaration]
             )
         })
         .collect()
+}
+
+/// Pre-rendered markup sitting in a `RichText.content`, which the guest reads as text.
+///
+/// `content` is a TipTap document. The booklet parses it and paints the result; anything that does
+/// not parse as `{"type":"doc",…}` it renders as literal text — deliberately, since `content` is a
+/// declared field whose value the platform boundary does not inspect, and `<img src=x onerror=…>`
+/// from a module used to execute in the booklet. A module that pre-renders HTML into it therefore
+/// ships its own tags to the guest, visible: `<p>Appuyez 2 secondes…</p>`, angle brackets and all.
+///
+/// Plain text passes — the booklet shows it as written, and `local-guide` puts the host's tips
+/// there. An `i18n:` reference passes too: the booklet translates before it looks for a document.
+///
+/// Read on the serialized tree rather than on the typed one: the same rule then covers a
+/// `previews.json` rendering, where this is the shape that is actually kept.
+pub(crate) fn rich_text_problems(tree: &Value) -> Vec<String> {
+    rich_text_contents(tree)
+        .into_iter()
+        .filter_map(|content| {
+            let content = content.trim();
+            if content.is_empty()
+                || content.starts_with(super::i18n::I18N_PREFIX)
+                || is_tiptap_doc(content)
+            {
+                return None;
+            }
+            let tag = first_markup_tag(content)?;
+            Some(format!(
+                "carries a RichText whose `content` holds the markup `{tag}` outside a TipTap \
+                 document — `content` is a TipTap field and the booklet shows anything else as \
+                 literal text, tags included; send the document \
+                 (`RichTextDoc::to_json_string`) or plain text: {}",
+                excerpt(content)
+            ))
+        })
+        .collect()
+}
+
+/// Every `RichText.content` of a serialized tree, wherever it sits.
+fn rich_text_contents(tree: &Value) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut stack = vec![tree];
+    while let Some(value) = stack.pop() {
+        match value {
+            Value::Object(fields) => {
+                if fields.get("type").and_then(Value::as_str) == Some(RichText::TYPE_NAME) {
+                    found.extend(fields.get("content").and_then(Value::as_str));
+                }
+                stack.extend(fields.values());
+            }
+            Value::Array(items) => stack.extend(items),
+            _ => {}
+        }
+    }
+    found
+}
+
+/// The booklet's own test: it parses as JSON, and its `type` is `doc`.
+///
+/// The document itself is not validated against a node vocabulary — the booklet's converter walks
+/// what it knows and falls through to the text of the rest, and a module may legitimately carry a
+/// node it renders itself (`appliances` puts an `image` in its how-to steps).
+fn is_tiptap_doc(content: &str) -> bool {
+    content.starts_with('{')
+        && serde_json::from_str::<Value>(content)
+            .is_ok_and(|doc| doc.get("type").and_then(Value::as_str) == Some("doc"))
+}
+
+/// The first `<tag …>` or `</tag>` of `text` — `</?[a-z][^>]*>`, without a regex crate.
+///
+/// A lone `<` is not markup: « 3 < 5 » and « <3 » are text a host may well have typed, and
+/// reporting them would push modules to escape prose that renders fine.
+fn first_markup_tag(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    for open in text
+        .char_indices()
+        .filter(|(_, character)| *character == '<')
+        .map(|(index, _)| index)
+    {
+        let name = if bytes.get(open + 1) == Some(&b'/') {
+            open + 2
+        } else {
+            open + 1
+        };
+        if !bytes.get(name).is_some_and(u8::is_ascii_alphabetic) {
+            continue;
+        }
+        if let Some(length) = text[name..].find('>') {
+            return Some(&text[open..name + length + 1]);
+        }
+    }
+    None
+}
+
+/// Enough of the value to recognise it in a report, on one line.
+fn excerpt(content: &str) -> String {
+    let flat = content.replace(['\n', '\r', '\t'], " ");
+    match flat.char_indices().nth(120) {
+        Some((cut, _)) => format!("{}…", &flat[..cut]),
+        None => flat,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::rich_text_problems;
+
+    fn rich_text(content: &str) -> serde_json::Value {
+        json!({ "root": { "type": "Stack", "children": [{ "type": "RichText", "content": content }] } })
+    }
+
+    #[test]
+    fn pre_rendered_html_is_reported_with_its_tag() {
+        let problems = rich_text_problems(&rich_text("<p>Appuyez 2 secondes.</p>"));
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("`<p>`"), "{problems:?}");
+    }
+
+    #[test]
+    fn a_tiptap_document_plain_text_and_an_i18n_reference_pass() {
+        for content in [
+            r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Appuyez."}]}]}"#,
+            // What `local-guide` sends: a host's tip, shown as written.
+            "Venez avant 9 h : les croissants partent vite le dimanche.",
+            "i18n:explore.item.howto",
+            "",
+            // A lone `<` is prose, not a tag.
+            "Ouvrez à 3 < 5 bars, <3",
+            // An unterminated tag never closes: nothing to render as markup.
+            "Appuyez <2 secondes",
+        ] {
+            let problems = rich_text_problems(&rich_text(content));
+            assert!(problems.is_empty(), "{content:?}: {problems:?}");
+        }
+    }
+
+    #[test]
+    fn a_closing_tag_and_an_attribute_are_markup_too() {
+        for content in ["</div> fin", "<img src=x onerror=alert(1)>", "a <br/> b"] {
+            assert_eq!(
+                rich_text_problems(&rich_text(content)).len(),
+                1,
+                "{content:?}"
+            );
+        }
+    }
+
+    /// A `content` the module nests deep in the tree is read like any other.
+    #[test]
+    fn a_nested_rich_text_is_read() {
+        let tree = json!({
+            "root": { "type": "Card", "children": [
+                { "type": "Tabs", "items": [{ "content": { "type": "RichText", "content": "<ul><li>a</li></ul>" } }] }
+            ]}
+        });
+        assert_eq!(rich_text_problems(&tree).len(), 1);
+    }
 }

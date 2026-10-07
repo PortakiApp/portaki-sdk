@@ -4,7 +4,7 @@ mod common;
 
 use common::{assert_reports, broken, failing, passing};
 use portaki_sdk::prelude::*;
-use portaki_sdk::sdui::primitives::{Select, Stack, Text};
+use portaki_sdk::sdui::primitives::{RichText, Select, Stack, Text};
 
 #[portaki_sdk::surface(guest, id = "home.card")]
 pub fn render_home_card(ctx: GuestContext) -> Surface {
@@ -66,6 +66,60 @@ pub fn render_explore_picker(_ctx: GuestContext) -> Surface {
                     .value(""),
             ),
     )
+}
+
+/// `content` is a TipTap field: the booklet renders anything else as literal text, tags included.
+#[portaki_sdk::surface(guest, id = "explore.howto")]
+pub fn render_explore_howto(_ctx: GuestContext) -> Surface {
+    Surface::new(
+        Stack::new()
+            .child(RichText::new().content("<p>Appuyez 2 secondes sur la touche marche.</p>"))
+            // A host's tip, shown as written — what `local-guide` sends.
+            .child(RichText::new().content("Venez avant 9 h : les croissants partent vite."))
+            // Translated before the booklet looks for a document.
+            .child(RichText::new().content("i18n:guest.empty.title"))
+            .child(RichText::new().content(
+                r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Appuyez."}]}]}"#,
+            )),
+    )
+}
+
+#[test]
+fn pre_rendered_markup_in_a_rich_text_is_reported() {
+    let findings = failing("surfaces", passing().check_surfaces());
+
+    assert_reports(
+        &findings,
+        &["guest surface `explore.howto`", "`<p>`", "TipTap"],
+    );
+    // The plain tip, the `i18n:` reference and the TipTap document are not reported.
+    assert_eq!(
+        findings
+            .problems()
+            .iter()
+            .filter(|problem| problem.contains("explore.howto"))
+            .count(),
+        1,
+        "{findings}"
+    );
+}
+
+/// The committed rendering is read too: a `content` built from data is not in the empty-mock tree.
+#[test]
+fn pre_rendered_markup_in_a_committed_rendering_is_reported() {
+    let findings = failing("surfaces", broken().check_surfaces());
+
+    assert_reports(&findings, &["previews.json", "`<p>`", "TipTap"]);
+    // The plain tip beside it, and the module that commits no rendering at all, are not reported.
+    assert_eq!(
+        findings
+            .problems()
+            .iter()
+            .filter(|problem| problem.contains("previews.json"))
+            .count(),
+        1,
+        "{findings}"
+    );
 }
 
 #[test]
