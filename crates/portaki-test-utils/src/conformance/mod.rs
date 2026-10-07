@@ -76,7 +76,6 @@ pub use contracts::{
 pub use findings::Findings;
 pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
 pub use manifest::MODULE_SCHEMA_V1;
-pub(crate) use surfaces::rich_text_problems;
 
 /// The data `#[email_vars]` is asked on: seed the mock (config, KV, connector stubs) so every
 /// declared variable of `template` has a value. The mock comes set to the template's moment
