@@ -389,6 +389,18 @@ pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Same attribute and signature rules as [`query`]. Emits `command-{name}.json` →
 /// `manifest.commands[]`. Wasm `inventory` registration mirrors [`query`].
+///
+/// # Result
+///
+/// A command's `Ok(T)` is serialized and returned to its caller, like a query's — `()` answers
+/// `null`. A guest command's result reaches the booklet, which reads one key by convention:
+///
+/// - `guest_notice` — one sentence, **already translated** by the module (`t!`), that the booklet
+///   shows the traveller as a notice. Nothing else of the result is rendered; the rest is for the
+///   caller that reads it (`access-guide` reading a smart lock's credential).
+///
+/// Everything in the result crosses to the traveller's browser: return what they may see, nothing
+/// of the module's bookkeeping.
 #[proc_macro_attribute]
 pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     command::expand(attr, item)
