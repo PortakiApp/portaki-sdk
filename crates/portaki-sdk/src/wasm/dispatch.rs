@@ -101,15 +101,19 @@ pub fn dispatch_query_json(input: &str) -> Result<String> {
     dispatch_envelope(input)
 }
 
-/// Dispatches a command envelope (`portaki_command`).
+/// Dispatches a command envelope (`portaki_command`), and hands back its result.
+///
+/// Same JSON as a query's: a command that returns `()` answers `null`, and the host treats that
+/// as no result. Before this, the result was dropped here — `getGuestCredential` could not hand
+/// a code to anyone, and a `unlock` that fell back to the keypad could not say so.
 pub fn dispatch_command_json(input: &str) -> Result<String> {
-    dispatch_envelope(input)?;
-    Ok(String::new())
+    dispatch_envelope(input)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::dispatch_query_json;
+    use super::{dispatch_command_json, dispatch_query_json};
+    use crate::wasm::registry::HandlerRegistration;
 
     fn email_context(context: &str) -> String {
         let envelope = format!(
@@ -137,5 +141,35 @@ mod tests {
         // The platform's stay path gets past the guard (here, for want of a registered handler).
         assert!(email_context(&format!(r#"{stay},"caller":"guest""#))
             .contains("wasm_handler_not_found"));
+    }
+
+    inventory::submit! {
+        HandlerRegistration {
+            operation_names: &["testUnlock"],
+            dispatch: |_ctx, _params| Ok(serde_json::json!({ "guest_notice": "Tapez 1234" })),
+        }
+    }
+
+    inventory::submit! {
+        HandlerRegistration {
+            operation_names: &["testSubmit"],
+            dispatch: |_ctx, _params| Ok(serde_json::Value::Null),
+        }
+    }
+
+    fn command(name: &str) -> String {
+        let envelope = format!(
+            r#"{{"command":"{name}","params":{{}},"context":{{"moduleId":"nuki","moduleVersion":"1.0.0","propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2","stayId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","caller":"guest"}}}}"#
+        );
+        dispatch_command_json(&envelope).expect("dispatched")
+    }
+
+    /// Ce qu'une commande renvoie revient à son appelant — sans quoi `getGuestCredential` ne peut
+    /// remettre un code à personne, et un `unlock` retombé sur le clavier ne peut pas le dire.
+    #[test]
+    fn a_command_hands_back_its_result() {
+        assert_eq!(command("testUnlock"), r#"{"guest_notice":"Tapez 1234"}"#);
+        // Et une commande sans retour répond `null` : au host de n'en rien faire.
+        assert_eq!(command("testSubmit"), "null");
     }
 }
