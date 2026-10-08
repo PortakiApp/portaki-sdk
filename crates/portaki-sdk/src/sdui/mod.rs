@@ -35,6 +35,14 @@
 //! surface hôte ne doit pas en dépendre. Un nom inconnu laisse le champ visible — se tromper de
 //! nom montre un champ de trop, jamais un champ qui manque.
 //!
+//! ## Une erreur sous le champ — `Field::error`
+//!
+//! `Field::error` est le message affiché sous le champ, à la place de son aide (`FieldHint`) :
+//! ce qui ne va pas et quoi faire (« 60 caractères au maximum. »). Le module rend son formulaire
+//! depuis le brouillon de config : il calcule l'erreur au rendu, avec les validateurs de
+//! [`crate::config::check`], et la même règle bloque « Publier » via sa query `publishReadiness`.
+//! Vide ou absent, pas d'erreur.
+//!
 //! ## What modules must not assume
 //!
 //! - Not every shell implements every primitive — stick to the documented catalog.

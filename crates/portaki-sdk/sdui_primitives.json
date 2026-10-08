@@ -41,7 +41,7 @@
   {"name": "Pressable", "serde_name": "Pressable", "has_children": true, "fields": {"action": "Action"}},
   {"name": "Link", "serde_name": "Link", "has_children": false, "fields": {"label": "String", "href": "String", "action": "Action"}},
   {"name": "Form", "serde_name": "Form", "has_children": true, "fields": {"onSubmit": "Action", "wizard": "bool", "submitLabel": "String"}},
-  {"name": "Field", "serde_name": "Field", "has_children": true, "fields": {"label": "String", "name": "String", "required": "bool", "visibleWhen": "String"}},
+  {"name": "Field", "serde_name": "Field", "has_children": true, "fields": {"error": "String", "label": "String", "name": "String", "required": "bool", "visibleWhen": "String"}},
   {"name": "TextInput", "serde_name": "TextInput", "has_children": false, "fields": {"name": "String", "placeholder": "String", "value": "String"}},
   {"name": "TextArea", "serde_name": "TextArea", "has_children": false, "fields": {"name": "String", "placeholder": "String", "value": "String", "rows": "u32"}},
   {"name": "NumberInput", "serde_name": "NumberInput", "has_children": false, "fields": {"name": "String", "value": "f64", "min": "f64", "max": "f64"}},

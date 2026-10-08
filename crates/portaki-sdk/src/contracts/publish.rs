@@ -44,7 +44,9 @@ pub struct PublishReadiness {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishCheck {
-    /// Stable id within the module (`entry-code`).
+    /// Stable id within the module (`entry-code`). `config.<key>` (`config.networks`,
+    /// `config.networks[0].password`) names the config field the point is about — the platform
+    /// uses the same form for an empty declared field — and the dashboard scrolls to it.
     pub id: String,
     /// Whether it blocks the publication.
     pub level: PublishLevel,

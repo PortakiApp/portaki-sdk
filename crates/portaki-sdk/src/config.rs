@@ -97,6 +97,8 @@
 //! assert_eq!(config.steps[0].title.host_value(&ctx), "Portail");
 //! ```
 
+pub mod check;
+
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
