@@ -90,7 +90,7 @@ questions; Enter skips one and keeps the default:
     display name [<id>]:
     description, in one sentence:
     catalogue tagline, 90 characters at most:
-    category [stay]:        (1. arrival  2. stay  3. around  4. formalities)
+    category [house]:       (1. arrival  2. house  3. good-to-know  4. help  5. welcome  6. around  7. formalities)
     author name [<git config user.name, or TODO>]:
 ```
 
