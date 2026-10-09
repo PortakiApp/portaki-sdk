@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.1.0...v10.1.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **sdk:** flag a row secret in its params shape ([4ae8b89](https://github.com/PortakiApp/portaki-sdk/commit/4ae8b89e386b1db34c5a8daa36f7224794961a54))
+
 ## [10.1.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.0.0...v10.1.0) (2026-10-08)
 
 
