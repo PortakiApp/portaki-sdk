@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.4.0...v10.5.0) (2026-10-09)
+
+
+### Features
+
+* **sdui:** add host form primitives and local fields ([bfe888c](https://github.com/PortakiApp/portaki-sdk/commit/bfe888ced32f0221c771d810503389544b30bcaf))
+
 ## [10.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.3.0...v10.4.0) (2026-10-09)
 
 
