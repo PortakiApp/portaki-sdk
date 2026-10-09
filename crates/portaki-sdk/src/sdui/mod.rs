@@ -31,9 +31,24 @@
 //! rien — ni envoyé. C'est ce qui permet de demander une adresse de renvoi obligatoire *sous*
 //! « Me le renvoyer » sans l'imposer à qui choisit de repasser la prendre.
 //!
-//! **Le livret seul l'honore.** Le tableau de bord de l'hôte rend le champ sans condition : une
-//! surface hôte ne doit pas en dépendre. Un nom inconnu laisse le champ visible — se tromper de
-//! nom montre un champ de trop, jamais un champ qui manque.
+//! Le livret et le tableau de bord l'honorent. Côté hôte, un champ masqué n'est pas envoyé :
+//! `updateConfig` fusionne, sa valeur enregistrée reste. Un nom inconnu laisse le champ visible —
+//! se tromper de nom montre un champ de trop, jamais un champ qui manque.
+//!
+//! `Section::visibleWhen` suit la même règle pour un bloc entier : la section et tous ses champs
+//! disparaissent, et la colonne de navigation de la page de réglages ne la liste plus.
+//!
+//! ## Trois saisies de formulaire hôte
+//!
+//! Leur valeur est une chaîne, comme celle de tout champ : le formulaire reste plat.
+//!
+//! - `TimeRange` : un créneau `HH:MM-HH:MM` (« 16:00-19:00 »), `min` / `max` bornent les deux
+//!   heures. Une fin avant le début passe minuit. Lire avec [`hours::parse_range`].
+//! - `WeeklyHours` : des plages par jour, `mon=07:00-12:00,14:00-22:00;tue=…` ; un jour absent
+//!   ou vide est fermé, `maxRanges` borne les plages d'un jour (3 par défaut). Lire et écrire avec
+//!   [`hours::parse_week`] / [`hours::format_week`].
+//! - `PhoneInput` : un numéro E.164 (« +33612345678 »), l'indicatif choisi à côté du numéro ;
+//!   `defaultCountry` (ISO 3166, « FR ») est l'indicatif proposé d'abord.
 //!
 //! ## Une erreur sous le champ — `Field::error`
 //!
@@ -71,6 +86,7 @@
 pub mod action;
 pub mod common;
 pub mod component;
+pub mod hours;
 pub mod primitives;
 pub mod surface;
 

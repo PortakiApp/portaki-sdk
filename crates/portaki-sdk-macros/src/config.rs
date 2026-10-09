@@ -242,6 +242,7 @@ fn declared_fields(item: &mut ItemStruct) -> syn::Result<Vec<Value>> {
 fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Value> {
     let mut required = false;
     let mut recommended = false;
+    let mut local = false;
     let mut kind: Option<String> = None;
     let mut label: Option<String> = None;
     let mut description: Option<String> = None;
@@ -270,6 +271,7 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
         match name.as_str() {
             "required" => required = true,
             "recommended" => recommended = true,
+            "local" => local = true,
             "secret" | "structured" => set_kind(name, span)?,
             "kind" => {
                 let value: syn::LitStr = meta.value()?.parse()?;
@@ -317,12 +319,10 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
                 }
                 options = Some(values);
             }
-            _ => {
-                return Err(meta.error(
-                    "unknown #[field] attribute — required, recommended, secret, structured, \
+            _ => return Err(meta.error(
+                "unknown #[field] attribute — required, recommended, local, secret, structured, \
                      label, description, kind, options, item_id, reveal",
-                ))
-            }
+            )),
         }
         Ok(())
     })?;
@@ -406,6 +406,9 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
     }
     if !reveal.is_empty() {
         schema["reveal"] = json!(reveal);
+    }
+    if local {
+        schema["local"] = json!(true);
     }
     // The macro cannot see the row type's fields; `portaki build` reads them from its `#[params]`
     // emission and fills `item` (see `portaki_sdk::config::resolve_items`).
@@ -495,7 +498,7 @@ mod tests {
                 pub contacts: Vec<Contact>,
                 #[field(kind = "select", options = ["wpa2", "wep"], label = "config.security")]
                 pub security: String,
-                #[field(label = "config.guests")]
+                #[field(local, label = "config.guests")]
                 pub max_guests: Option<u32>,
                 #[field(label = "config.enabled")]
                 pub enabled: bool,
@@ -516,7 +519,8 @@ mod tests {
                         "label": "config.contacts", "itemType": "Contact" }),
                 json!({ "key": "security", "type": "select", "required": false, "recommended": false,
                         "label": "config.security", "options": ["wpa2", "wep"] }),
-                json!({ "key": "max_guests", "type": "number", "required": false, "recommended": false, "label": "config.guests" }),
+                json!({ "key": "max_guests", "type": "number", "required": false, "recommended": false, "label": "config.guests",
+                        "local": true }),
                 json!({ "key": "enabled", "type": "toggle", "required": false, "recommended": false, "label": "config.enabled" }),
             ]
         );
