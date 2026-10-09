@@ -6,6 +6,7 @@
     "kv.delete",
     "kv.list",
     "time.now",
+    "random.bytes",
     "connector.call",
     "i18n.translate",
     "log",

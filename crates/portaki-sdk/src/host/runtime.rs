@@ -110,6 +110,11 @@ pub trait HostBackend: Send + Sync {
         Err(PortakiError::HostNotConfigured)
     }
 
+    /// Returns `len` bytes from the host's cryptographic generator (`random.bytes`, at most 256).
+    fn random_bytes(&self, _len: usize) -> Result<Vec<u8>> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
     /// Runs a typed repository find; returns serialized [`crate::host::repo::Page`] JSON.
     fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
         Err(PortakiError::HostNotConfigured)

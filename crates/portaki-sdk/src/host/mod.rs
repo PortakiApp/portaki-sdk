@@ -53,6 +53,7 @@ pub mod i18n;
 pub mod kv;
 pub mod log;
 pub mod module;
+pub mod random;
 pub mod repo;
 pub mod runtime;
 pub mod time;
