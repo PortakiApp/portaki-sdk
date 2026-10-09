@@ -65,6 +65,7 @@ pub mod manifest;
 pub mod permission;
 pub mod reveal;
 pub mod sdui;
+pub mod surfaces;
 pub mod vocab;
 
 pub mod wasm;

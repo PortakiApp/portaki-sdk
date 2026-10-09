@@ -368,6 +368,16 @@ pub mod convention {
     pub const EXPLORE_DETAIL: SurfaceId = SurfaceId::new("explore.detail");
     /// Host dashboard primary settings surface.
     pub const HOST_MAIN: SurfaceId = SurfaceId::new("main");
+    /// Block of the property's public page — what a visitor without a stay sees.
+    ///
+    /// Declared like any guest surface (`#[surface(guest, id = "property.public")]`) and rendered
+    /// with a public-visitor context ([`crate::Context::is_public_visitor`]): published config,
+    /// no stay, no guest, the address cut down to the city and the coordinates blurred.
+    ///
+    /// The root is a `Section`: its `title` is the proposed title and its `subtitle` is read as
+    /// the **eyebrow** on this surface (both may be `i18n:` keys). The tree is static and only uses
+    /// [`crate::surfaces::PROPERTY_PUBLIC_PRIMITIVES`] — see [`crate::surfaces`].
+    pub const PROPERTY_PUBLIC: SurfaceId = SurfaceId::new("property.public");
 }
 
 /// Declares a module-local [`SurfaceId`] catalog.

@@ -142,6 +142,31 @@ impl MockContextBuilder {
         }
     }
 
+    /// A visitor of the property's public page (`property.public`), as the platform invokes
+    /// it: the default [`Property`]'s id, `fr-FR`, a published (empty) config, no stay, no guest,
+    /// no host, no input — and a property whose address is only the city (`Cannes`), at the
+    /// default coordinates. [`Context::is_public_visitor`] holds.
+    ///
+    /// Move it with [`Self::with_coordinates`] (the blurred centre in production), set the
+    /// published config with [`Self::with_config`]. [`Self::with_property`] would put back a
+    /// full address.
+    pub fn public_visitor() -> Self {
+        let mut context =
+            Context::with_capabilities(&[portaki_sdk::capability::CapabilityId::Storage]);
+        Property::default().apply(&mut context);
+        context.surface = Some(portaki_sdk::ids::convention::PROPERTY_PUBLIC.to_string());
+        context.property.address = Some("Cannes".to_string());
+        context.property_lang = Some("fr".to_string());
+        context.module_config = Some(serde_json::json!({}));
+        context.guest = None;
+        context.stay = None;
+        context.host = None;
+        Self {
+            context,
+            ..Default::default()
+        }
+    }
+
     /// Applies `property` to the built [`Context`] (`property_id`, `property`, locale, timezone).
     pub fn with_property(mut self, property: Property) -> Self {
         property.apply(&mut self.context);

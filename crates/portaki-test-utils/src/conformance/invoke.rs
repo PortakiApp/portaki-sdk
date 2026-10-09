@@ -100,18 +100,28 @@ pub(crate) fn describe(declaration: &HandlerDeclaration) -> String {
     format!("{what} `{}` ({})", declaration.name, declaration.fn_name)
 }
 
-/// The mock a surface renders in: its own shell, its own surface id.
+/// The mock a surface renders in: its own shell, its own surface id — a public visitor for
+/// `property.public`, which the platform never renders for a guest.
 pub(crate) fn surface_mock(
     declaration: &HandlerDeclaration,
     module_id: Option<&str>,
 ) -> MockContextBuilder {
     let mut mock = if declaration.context == "host" {
         MockContextBuilder::host()
+    } else if is_property_public(declaration) {
+        MockContextBuilder::public_visitor()
     } else {
         MockContextBuilder::guest()
     };
     mock.context.surface = Some(declaration.name.to_string());
     with_module_id(mock, module_id)
+}
+
+/// The guest surface of the property's public page.
+pub(crate) fn is_property_public(declaration: &HandlerDeclaration) -> bool {
+    declaration.kind == HandlerKind::Surface
+        && declaration.context == "guest"
+        && declaration.name == portaki_sdk::ids::convention::PROPERTY_PUBLIC.as_str()
 }
 
 /// The manifest's module id on the context, when there is one — actions a surface builds carry it.
