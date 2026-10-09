@@ -34,11 +34,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
     let mut parsed = syn::parse_macro_input!(item as Item);
-    if let Item::Struct(item) = &mut parsed {
-        if let Err(error) = strip_field_flags(item) {
-            return error.to_compile_error().into();
-        }
-    }
+    // The shape first: it reads `#[field(secret)]`, which stripping removes. In the other order a
+    // row secret was never flagged, so the platform never sealed it.
     let (name, shape) = match &parsed {
         Item::Struct(item) => (item.ident.to_string(), struct_shape(item)),
         Item::Enum(item) => (item.ident.to_string(), enum_shape(item)),
@@ -51,6 +48,11 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             .into();
         }
     };
+    if let Item::Struct(item) = &mut parsed {
+        if let Err(error) = strip_field_flags(item) {
+            return error.to_compile_error().into();
+        }
+    }
 
     let mut emission = Map::new();
     emission.insert("kind".into(), json!("params"));
