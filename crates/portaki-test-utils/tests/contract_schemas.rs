@@ -2,6 +2,7 @@
 //! the platform generate their types from.
 
 use chrono::{TimeZone, Utc};
+use portaki_sdk::contracts::amenities;
 use portaki_sdk::contracts::i18n::I18nText;
 use portaki_sdk::contracts::publish::{PublishCheck, PublishLevel, PublishReadiness};
 use portaki_sdk::contracts::stats::{self, AttentionLevel, StatsSummaryArgs, TrendDirection};
@@ -10,7 +11,8 @@ use portaki_sdk::contracts::timeline::{
     TimelineTasks, TimelineTasksArgs,
 };
 use portaki_test_utils::conformance::{
-    PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1, TIMELINE_TASKS_SCHEMA_V1,
+    AMENITIES_LIST_SCHEMA_V1, PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1,
+    TIMELINE_TASKS_SCHEMA_V1,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -149,4 +151,37 @@ fn the_schemas_refuse_what_the_contract_forbids() {
     assert!(!validator.is_valid(&serde_json::json!({
         "value": "1234567890123", "label": { "fr": "x", "en": "x" }
     })));
+}
+
+#[test]
+fn amenities_list_examples_fit_the_schema() {
+    assert_valid(
+        AMENITIES_LIST_SCHEMA_V1,
+        "AmenitiesList",
+        amenities::list([]),
+    );
+    assert_valid(
+        AMENITIES_LIST_SCHEMA_V1,
+        "AmenitiesList",
+        amenities::list([
+            amenities::amenity("wifi").detail("fibre 1 Gb/s"),
+            amenities::amenity("ev-charger"),
+        ]),
+    );
+}
+
+/// Nothing but `id` and `detail` leaves the module — no usage data, at any level.
+#[test]
+fn the_amenities_schema_refuses_any_other_field() {
+    let mut schema: Value = serde_json::from_str(AMENITIES_LIST_SCHEMA_V1).unwrap();
+    schema["$ref"] = Value::String("#/$defs/AmenitiesList".into());
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    assert!(
+        validator.is_valid(&serde_json::json!({ "amenities": [{ "id": "wifi", "detail": null }] }))
+    );
+    assert!(!validator.is_valid(&serde_json::json!({
+        "amenities": [{ "id": "wifi", "usage": 42 }]
+    })));
+    assert!(!validator.is_valid(&serde_json::json!({ "amenities": [], "stats": {} })));
+    assert!(!validator.is_valid(&serde_json::json!({ "amenities": [{ "detail": "x" }] })));
 }

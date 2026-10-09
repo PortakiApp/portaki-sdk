@@ -33,9 +33,11 @@ fn the_bundled_listing_schema_is_the_repository_one() {
 #[test]
 fn the_bundled_contract_schemas_are_the_repository_ones() {
     use portaki_test_utils::conformance::{
-        PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1, TIMELINE_TASKS_SCHEMA_V1,
+        AMENITIES_LIST_SCHEMA_V1, PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1,
+        TIMELINE_TASKS_SCHEMA_V1,
     };
 
+    assert_same("contracts/amenities-list.v1.json", AMENITIES_LIST_SCHEMA_V1);
     assert_same(
         "contracts/publish-readiness.v1.json",
         PUBLISH_READINESS_SCHEMA_V1,

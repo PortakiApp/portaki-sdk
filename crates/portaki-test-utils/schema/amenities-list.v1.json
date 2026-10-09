@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/PortakiApp/portaki-sdk/main/contracts/amenities-list.v1.json",
+  "title": "amenities.list query — portaki_sdk::contracts::amenities",
+  "$ref": "#/$defs/AmenitiesList",
+  "$defs": {
+    "AmenitiesList": {
+      "type": "object",
+      "required": [
+        "amenities"
+      ],
+      "properties": {
+        "amenities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProvidedAmenity"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProvidedAmenity": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Id in the platform's amenities catalogue; unknown ids are ignored."
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Precision shown next to the amenity; the platform keeps 40 characters."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

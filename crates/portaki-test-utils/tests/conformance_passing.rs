@@ -3,6 +3,7 @@
 //! The handlers live in this test binary, so the battery sees them without `extern crate`:
 //! `dir =` points it at the fixture's manifest and bundles instead of this crate's.
 
+use portaki_sdk::contracts::amenities::{self, AmenitiesList};
 use portaki_sdk::contracts::i18n::I18nText;
 use portaki_sdk::contracts::publish::{PublishCheck, PublishLevel, PublishReadiness};
 use portaki_sdk::contracts::stats::{self, StatsSummary, StatsSummaryArgs};
@@ -11,7 +12,9 @@ use portaki_sdk::contracts::timeline::{
 };
 use portaki_sdk::email::EmailContextArgs;
 use portaki_sdk::prelude::*;
-use portaki_sdk::sdui::primitives::{Button, Card, EmptyState, Form, Select, Stack, Text};
+use portaki_sdk::sdui::primitives::{
+    Button, Card, EmptyState, Form, ListItem, Section, Select, Stack, Text,
+};
 
 #[portaki_sdk::surface(guest, id = "home.card")]
 pub fn render_home_card(_ctx: GuestContext) -> Surface {
@@ -26,6 +29,24 @@ pub fn render_home_card(_ctx: GuestContext) -> Surface {
 #[portaki_sdk::surface(guest, id = "explore.detail")]
 pub fn render_explore_detail(_ctx: GuestContext) -> Surface {
     Surface::new(Stack::new().child(Text::new().text("i18n:guest.empty.title")))
+}
+
+/// Static, and only for a visitor without a stay: a guest context would show a button.
+#[portaki_sdk::surface(guest, id = "property.public")]
+pub fn render_property_public(ctx: GuestContext) -> Surface {
+    if !ctx.is_public_visitor() || ctx.property.address.as_deref() != Some("Cannes") {
+        return Surface::new(Button::new().label("i18n:host.save"));
+    }
+    Surface::new(
+        Section::new()
+            .title("i18n:nav.fixture")
+            .subtitle("i18n:guest.empty.title")
+            .child(
+                Stack::new()
+                    .child(Text::new().text("i18n:guest.empty.title"))
+                    .child(ListItem::new().title("i18n:nav.fixture")),
+            ),
+    )
 }
 
 #[portaki_sdk::surface(host, id = "main")]
@@ -130,6 +151,14 @@ pub fn task_toggle(_ctx: Context, args: TaskToggleArgs) -> Result<()> {
     host::kv::set(&format!("{}/{}", args.task_id, args.item_id), b"1", None)
 }
 
+#[portaki_sdk::query(name = "amenities.list")]
+pub fn amenities_list(_ctx: Context) -> Result<AmenitiesList> {
+    Ok(amenities::list([
+        amenities::amenity("wifi").detail("fibre"),
+        amenities::amenity("ev-charger"),
+    ]))
+}
+
 #[portaki_sdk::query(name = "publishReadiness")]
 pub fn publish_readiness(_ctx: Context) -> Result<PublishReadiness> {
     let saved = host::kv::get("config")?;
@@ -172,6 +201,7 @@ fn the_battery_sees_every_declared_handler() {
     assert_eq!(
         seen,
         vec![
+            (HandlerKind::Query, "", "amenities.list"),
             (HandlerKind::Query, "", "emailContext"),
             (HandlerKind::Query, "", "publishReadiness"),
             (HandlerKind::Command, "", "sendReminder"),
@@ -181,6 +211,7 @@ fn the_battery_sees_every_declared_handler() {
             (HandlerKind::Command, "", "updateConfig"),
             (HandlerKind::Surface, "guest", "explore.detail"),
             (HandlerKind::Surface, "guest", "home.card"),
+            (HandlerKind::Surface, "guest", "property.public"),
             (HandlerKind::Surface, "host", "main"),
             (HandlerKind::Surface, "host", "reports"),
         ]
