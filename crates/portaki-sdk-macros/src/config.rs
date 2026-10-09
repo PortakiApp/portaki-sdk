@@ -358,10 +358,12 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             "item_id names the sub-key identifying a row — only on a structured field",
         ));
     }
-    if !reveal.is_empty() && kind != "secret" {
+    // On a structured field, `reveal` covers the secret sub-keys of its rows (`networks[].password`):
+    // the registry refuses it when the row type declares none.
+    if !reveal.is_empty() && kind != "secret" && kind != "structured" {
         return Err(syn::Error::new(
             attr.span(),
-            "reveal names where a secret is shown — only on a secret field",
+            "reveal names where a secret is shown — only on a secret field, or a list whose rows hold one",
         ));
     }
     if kind == "readonly" && (required || recommended) {
@@ -674,6 +676,31 @@ mod tests {
         assert_eq!(
             schema["$defs"]["configField"]["properties"]["reveal"]["items"]["enum"],
             json!(REVEALS)
+        );
+    }
+
+    /// Le mot de passe de chaque réseau : `reveal` sur la liste, pour ses sous-clés secrètes.
+    #[test]
+    fn a_list_may_reveal_its_row_secrets_but_a_text_may_not() {
+        let fields = schema_of(parse_quote! {
+            struct Config {
+                #[field(structured, reveal(guest_stay), label = "networks")]
+                networks: Vec<Network>,
+            }
+        })
+        .unwrap();
+        assert_eq!(fields[0]["reveal"], json!(["guest_stay"]));
+        assert_eq!(fields[0]["type"], "structured");
+
+        let error = schema_of(parse_quote! {
+            struct Config { #[field(reveal(guest_stay), label = "ssid")] ssid: String }
+        })
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("only on a secret field, or a list"),
+            "{error}"
         );
     }
 
