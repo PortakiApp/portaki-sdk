@@ -24,6 +24,20 @@ pub fn validate_manifest(manifest: &ModuleManifest, i18n_dir: &Path) -> Result<(
         }
     }
 
+    // The platform calls `amenities.list` on every provider: one without it provides nothing.
+    let amenities = portaki_sdk::contracts::amenities::CAPABILITY;
+    if manifest.capabilities.provided.contains(&amenities)
+        && !manifest
+            .queries
+            .iter()
+            .any(|query| query.name == portaki_sdk::contracts::amenities::AMENITIES_LIST.as_str())
+    {
+        bail!(
+            "the module provides {amenities} but exports no #[query(name = \"{}\")]",
+            portaki_sdk::contracts::amenities::AMENITIES_LIST
+        );
+    }
+
     let mut keys_by_locale: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for locale in &manifest.i18n.supported {
         let path = i18n_dir.join(format!("{locale}.json"));
@@ -104,9 +118,10 @@ fn collect_i18n_keys(manifest: &ModuleManifest, reference_keys: &BTreeSet<String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use portaki_sdk::capability::CapabilityId;
     use portaki_sdk::manifest::{
         ManifestAuthor, ManifestCapabilities, ManifestConnectors, ManifestEvents, ManifestI18n,
-        ManifestSurfaces, ModuleManifest, UiSchemaVersions,
+        ManifestQuery, ManifestSurfaces, ModuleManifest, UiSchemaVersions,
     };
 
     #[test]
@@ -116,7 +131,47 @@ mod tests {
 
     #[test]
     fn accepts_known_required_capability() {
-        let manifest = ModuleManifest {
+        let manifest = manifest();
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let i18n = i18n_dir(&temp);
+
+        assert!(validate_manifest(&manifest, &i18n).is_ok());
+    }
+
+    #[test]
+    fn an_amenities_provider_must_export_amenities_list() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let i18n = i18n_dir(&temp);
+        let mut manifest = manifest();
+        manifest.capabilities.provided = vec![CapabilityId::AmenitiesProvide];
+
+        let refused = validate_manifest(&manifest, &i18n).expect_err("no amenities.list");
+        assert!(refused.to_string().contains("amenities.list"), "{refused}");
+
+        manifest.queries = vec![ManifestQuery {
+            name: "amenities.list".into(),
+            r#fn: "amenities_list".into(),
+            args: None,
+            params: None,
+            guest: false,
+        }];
+        assert!(validate_manifest(&manifest, &i18n).is_ok());
+    }
+
+    fn i18n_dir(temp: &tempfile::TempDir) -> std::path::PathBuf {
+        let i18n = temp.path().join("i18n");
+        std::fs::create_dir_all(&i18n).expect("dir");
+        std::fs::write(
+            i18n.join("fr-FR.json"),
+            r#"{"module.displayName":"x","module.description":"y"}"#,
+        )
+        .expect("write");
+        i18n
+    }
+
+    fn manifest() -> ModuleManifest {
+        ModuleManifest {
             manifest_version: "1".into(),
             id: "test".into(),
             version: "0.1.0".into(),
@@ -148,17 +203,6 @@ mod tests {
                 default: "fr-FR".into(),
                 supported: vec!["fr-FR".into()],
             },
-        };
-
-        let temp = tempfile::tempdir().expect("tempdir");
-        let i18n = temp.path().join("i18n");
-        std::fs::create_dir_all(&i18n).expect("dir");
-        std::fs::write(
-            i18n.join("fr-FR.json"),
-            r#"{"module.displayName":"x","module.description":"y"}"#,
-        )
-        .expect("write");
-
-        assert!(validate_manifest(&manifest, &i18n).is_ok());
+        }
     }
 }

@@ -1,10 +1,10 @@
 //! The typed answers a host surface commits the module to — stats tile, stats detail, timeline
-//! tasks — and `publishReadiness` when it is exported.
+//! tasks — and `publishReadiness` and `amenities.list` when they are exported.
 
 use std::time::{Duration, Instant};
 
 use chrono::Duration as Days;
-use portaki_sdk::contracts::{publish, stats, timeline};
+use portaki_sdk::contracts::{amenities, publish, stats, timeline};
 use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
 use serde_json::{json, Value};
 
@@ -17,6 +17,8 @@ use crate::{Booking, MockContextBuilder};
 /// `contracts/publish-readiness.v1.json` of the SDK, carried like [`super::MODULE_SCHEMA_V1`].
 pub const PUBLISH_READINESS_SCHEMA_V1: &str =
     include_str!("../../schema/publish-readiness.v1.json");
+/// `contracts/amenities-list.v1.json` of the SDK.
+pub const AMENITIES_LIST_SCHEMA_V1: &str = include_str!("../../schema/amenities-list.v1.json");
 /// `contracts/stats-summary.v1.json` of the SDK.
 pub const STATS_SUMMARY_SCHEMA_V1: &str = include_str!("../../schema/stats-summary.v1.json");
 /// `contracts/timeline-tasks.v1.json` of the SDK.
@@ -55,6 +57,15 @@ fn problems(module: &Module) -> Vec<String> {
         &publish::PUBLISH_READINESS,
     ) {
         problems.extend(publish_readiness(query, host()));
+    }
+    // `portaki lint` requires it of an `amenities.provide` provider; the catalogue manifest read
+    // here does not carry capabilities, so it is checked whenever it is exported.
+    if let Some(query) = find(
+        &declarations,
+        HandlerKind::Query,
+        &amenities::AMENITIES_LIST,
+    ) {
+        problems.extend(amenities_list(query, host()));
     }
     problems
 }
@@ -230,6 +241,20 @@ fn publish_readiness(query: &HandlerDeclaration, mock: MockContextBuilder) -> Ve
         outcome,
         PUBLISH_READINESS_SCHEMA_V1,
         "PublishReadiness",
+    )
+    .err()
+    .unwrap_or_default()
+}
+
+/// Called with no args on the published config, as the platform does on publication.
+fn amenities_list(query: &HandlerDeclaration, mock: MockContextBuilder) -> Vec<String> {
+    let mock = mock.with_config(&json!({}));
+    let outcome = invoke(query, mock, json!({})).outcome;
+    validated(
+        &describe(query),
+        outcome,
+        AMENITIES_LIST_SCHEMA_V1,
+        "AmenitiesList",
     )
     .err()
     .unwrap_or_default()

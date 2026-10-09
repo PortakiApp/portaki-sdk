@@ -33,6 +33,7 @@ const CONTRACTS = {
   "deprecations.json": "contracts/deprecations.json",
   // The typed responses the platform asks modules for, outside SDUI. The dashboard generates its
   // types from them; optional for the registry, which does not read them.
+  "amenities-list.v1.json": "contracts/amenities-list.v1.json",
   "publish-readiness.v1.json": "contracts/publish-readiness.v1.json",
   "stats-summary.v1.json": "contracts/stats-summary.v1.json",
   "timeline-tasks.v1.json": "contracts/timeline-tasks.v1.json",

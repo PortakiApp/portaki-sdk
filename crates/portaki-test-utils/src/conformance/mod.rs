@@ -24,11 +24,11 @@
 //! |------|-------|
 //! | `manifest` | `portaki.module.json` validates against the `module.v1.json` schema bundled in this crate |
 //! | `listing` | `listing.json`, when the module versions one, validates against the `listing.v1.json` schema bundled in this crate and no longer holds the `portaki init` instructions (`À compléter …` / `To be completed …`); no `listing.json` passes — the listing can be written in the dashboard |
-//! | `surfaces` | every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface; a guest surface whose `Err` the SDK turned into its error state (`portaki_sdk::guest_shell`) counts as failed; every guest surface, rendered again with the module inactive, incomplete and with `host::module::status` failing, answers a non-blank tree without panicking or failing. Every `RichText.content` is a TipTap document, an `i18n:` reference or text without markup — pre-rendered HTML reaches the guest as visible tags — read on the rendered trees and on the `previews.json` / `demo.json` the module commits, which are its rendering *on* data |
+//! | `surfaces` | a `property.public` guest surface renders with the public-visitor mock ([`MockContext::public_visitor`](crate::MockContext::public_visitor)) into a static tree of `portaki_sdk::surfaces::PROPERTY_PUBLIC_PRIMITIVES` only — `Section` at the root only, no action-bearing prop; every `#[surface]` renders in its shell (guest or host) with an empty mock, without panicking or failing; the tree it sends parses as SDUI primitives of the contract, and every `Select` in it has options and a `value` among them (or none); every `guestSurfaces[].surfaceId` of the manifest is a declared guest surface; a guest surface whose `Err` the SDK turned into its error state (`portaki_sdk::guest_shell`) counts as failed; every guest surface, rendered again with the module inactive, incomplete and with `host::module::status` failing, answers a non-blank tree without panicking or failing. Every `RichText.content` is a TipTap document, an `i18n:` reference or text without markup — pre-rendered HTML reaches the guest as visible tags — read on the rendered trees and on the `previews.json` / `demo.json` the module commits, which are its rendering *on* data |
 //! | `operations` | every `#[command]` and `#[query]` dispatched with `{}` in a guest and a host mock does not panic — an `Err` is a fine answer to empty input |
 //! | `i18n` | every key the manifest (`guestSurfaces[].labelKey`), the rendered surfaces (`"i18n:…"`) and the handlers (`host::i18n::translate`) use exists in the `fr` and `en` bundles of `i18n/` (the guest-state keys of `portaki_sdk::guest_shell::TEXTS` aside: the SDK has a text for each); every `config.fields[]` label (description, option labels) has a text in each language of `i18n/` |
 //! | `emails` | every `emails[]` entry that names a command dispatches it, and an `emailContext` query composes for every template key, around a mock stay, without panicking; with `#[email_vars]`, every declared variable comes back non-blank for its template on the module's fixture (`conformance!(email_fixture = …)`), and no hand-written `emailContext` sits next to the generated one |
-//! | `contracts` | a `property-stats-card` surface: `statsSummary` answers for its `pathSegment` over 30, 90 and 365 days, on the `stats-summary.v1.json` contract (`fr` and `en`, `value` ≤ 12 characters), within 300 ms; a `property-stats-detail`: a host surface of id `pathSegment` renders with `input.periodDays`; a `workspace-timeline-task`: `timelineTasks` answers on three fixture stays on the `timeline-tasks.v1.json` contract (ISO dates, items never empty), and `taskToggle` refuses a photo-required item ticked without a photo with `photo_required`; an exported `publishReadiness` answers on the `publish-readiness.v1.json` contract |
+//! | `contracts` | a `property-stats-card` surface: `statsSummary` answers for its `pathSegment` over 30, 90 and 365 days, on the `stats-summary.v1.json` contract (`fr` and `en`, `value` ≤ 12 characters), within 300 ms; a `property-stats-detail`: a host surface of id `pathSegment` renders with `input.periodDays`; a `workspace-timeline-task`: `timelineTasks` answers on three fixture stays on the `timeline-tasks.v1.json` contract (ISO dates, items never empty), and `taskToggle` refuses a photo-required item ticked without a photo with `photo_required`; an exported `publishReadiness` answers on the `publish-readiness.v1.json` contract; an exported `amenities.list` answers on the `amenities-list.v1.json` contract (nothing beyond `id` and `detail`) |
 //!
 //! "Empty mock" is [`MockContext::guest`](crate::MockContext::guest) or
 //! [`MockContext::host`](crate::MockContext::host) as they come: no KV, no seeded translation, no
@@ -71,7 +71,8 @@ use serde_json::Value;
 use crate::MockContextBuilder;
 
 pub use contracts::{
-    PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1, TIMELINE_TASKS_SCHEMA_V1,
+    AMENITIES_LIST_SCHEMA_V1, PUBLISH_READINESS_SCHEMA_V1, STATS_SUMMARY_SCHEMA_V1,
+    TIMELINE_TASKS_SCHEMA_V1,
 };
 pub use findings::Findings;
 pub use listing::{LISTING_FILE, LISTING_SCHEMA_V1, TEMPLATE_MARKERS};
@@ -146,7 +147,7 @@ impl Module {
 
     /// What the declared host surfaces commit the module to: `statsSummary` for a stats card, a
     /// host surface for a stats detail, `timelineTasks` for a timeline task — and a
-    /// `publishReadiness` on the contract when it is exported.
+    /// `publishReadiness` and an `amenities.list` on the contract when they are exported.
     pub fn check_contracts(&self) -> Result<(), Findings> {
         contracts::check(self)
     }

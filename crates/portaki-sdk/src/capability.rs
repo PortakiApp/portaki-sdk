@@ -146,6 +146,9 @@ pub enum CapabilityId {
     /// Smart-lock provider contract (`getGuestCredential`, `unlock`).
     #[serde(rename = "access.smart_lock")]
     SmartLock,
+    /// Amenities provider contract (`amenities.list`) — equipment a module adds to the property.
+    #[serde(rename = "amenities.provide")]
+    AmenitiesProvide,
 }
 
 impl CapabilityId {
@@ -188,6 +191,7 @@ impl CapabilityId {
             Self::ImageGeneration => "ai.image.generation",
             Self::GuestAssistant => "ai.guest.assistant",
             Self::SmartLock => "access.smart_lock",
+            Self::AmenitiesProvide => "amenities.provide",
         }
     }
 
@@ -229,6 +233,7 @@ impl CapabilityId {
         Self::ImageGeneration,
         Self::GuestAssistant,
         Self::SmartLock,
+        Self::AmenitiesProvide,
     ];
 
     /// Returns `true` when `id` is a registered platform capability string.
@@ -290,6 +295,7 @@ impl FromStr for CapabilityId {
             "ai.image.generation" => Ok(Self::ImageGeneration),
             "ai.guest.assistant" => Ok(Self::GuestAssistant),
             "access.smart_lock" => Ok(Self::SmartLock),
+            "amenities.provide" => Ok(Self::AmenitiesProvide),
             other => Err(ParseCapabilityIdError {
                 id: other.to_string(),
             }),
@@ -467,6 +473,12 @@ mod tests {
             "external.google-places.byok"
         );
         assert_eq!(access::SMART_LOCK.as_str(), "access.smart_lock");
+        assert!(ALL.contains(&CapabilityId::AmenitiesProvide));
+        assert_eq!(CapabilityId::AmenitiesProvide.as_str(), "amenities.provide");
+        assert_eq!(
+            CapabilityId::from_str("amenities.provide").unwrap(),
+            CapabilityId::AmenitiesProvide
+        );
         assert_eq!(
             CapabilityId::from_str("core.storage").unwrap(),
             CapabilityId::Storage
