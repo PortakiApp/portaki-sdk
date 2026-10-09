@@ -13,8 +13,8 @@
     },
     "category": {
       "type": "string",
-      "enum": ["arrival", "stay", "around", "formalities"],
-      "description": "The moment of the stay the module belongs to: arrival (getting in, check-in), stay (life in the rental), around (the neighbourhood, outings), formalities (forms, rules, paperwork)."
+      "enum": ["arrival", "house", "good-to-know", "help", "welcome", "around", "formalities", "stay"],
+      "description": "The moment of the stay the module belongs to — the guest booklet places the module from it: arrival (getting in, check-in → Accès), house (the rental itself → Le logement), good-to-know (rules, hours, sorting → Bon à savoir), help (problems, emergencies → Aide), welcome (the host's note → Le mot), around (the neighbourhood, outings → Autour), formalities (forms, departure, review). `stay` is the former catch-all, read as `house`."
     },
     "tagline": {
       "$ref": "#/$defs/i18nFrRequired",

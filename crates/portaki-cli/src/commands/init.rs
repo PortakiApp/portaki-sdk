@@ -55,22 +55,32 @@ pub struct InitArgs {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-/// The moment of the stay a module belongs to — the closed list of the registry.
+/// The moment of the stay a module belongs to — the closed list of the registry. The guest
+/// booklet places the module from it: nothing else to declare.
 pub enum Category {
-    /// Getting in, check-in.
+    /// Getting in, check-in — the « Accès » section.
     Arrival,
-    /// Life in the rental.
-    Stay,
-    /// The neighbourhood, outings.
+    /// The rental itself: appliances, supplies — « Le logement ».
+    House,
+    /// Rules, hours, sorting — « Bon à savoir ».
+    GoodToKnow,
+    /// Problems and emergencies — « Aide ».
+    Help,
+    /// The host's welcome note — « Le mot ».
+    Welcome,
+    /// The neighbourhood, outings — « Autour ».
     Around,
-    /// Forms, rules, paperwork.
+    /// Forms, departure, review — « Formalités », « Avant de partir », « Merci ».
     Formalities,
 }
 
 impl Category {
-    const ALL: [Category; 4] = [
+    const ALL: [Category; 7] = [
         Category::Arrival,
-        Category::Stay,
+        Category::House,
+        Category::GoodToKnow,
+        Category::Help,
+        Category::Welcome,
         Category::Around,
         Category::Formalities,
     ];
@@ -78,7 +88,10 @@ impl Category {
     fn wire(self) -> &'static str {
         match self {
             Category::Arrival => "arrival",
-            Category::Stay => "stay",
+            Category::House => "house",
+            Category::GoodToKnow => "good-to-know",
+            Category::Help => "help",
+            Category::Welcome => "welcome",
             Category::Around => "around",
             Category::Formalities => "formalities",
         }
@@ -129,7 +142,7 @@ impl Answers {
             ),
             (
                 "{{CATEGORY}}",
-                self.category.unwrap_or(Category::Stay).wire().to_string(),
+                self.category.unwrap_or(Category::House).wire().to_string(),
             ),
             ("{{AUTHOR_NAME}}", or(&self.author, "TODO")),
         ]
@@ -186,7 +199,7 @@ fn ask(
             writeln!(output, "    {}. {}", index + 1, category.wire())?;
         }
         answers.category = loop {
-            let Some(choice) = prompt(input, output, "category", "stay")? else {
+            let Some(choice) = prompt(input, output, "category", "house")? else {
                 break None;
             };
             let found = Category::ALL.iter().enumerate().find(|(index, category)| {
@@ -194,7 +207,11 @@ fn ask(
             });
             match found {
                 Some((_, category)) => break Some(*category),
-                None => writeln!(output, "    no category {choice:?} — 1 to 4, or its name.")?,
+                None => writeln!(
+                    output,
+                    "    no category {choice:?} — 1 to {}, or its name.",
+                    Category::ALL.len()
+                )?,
             }
         };
     }
@@ -742,7 +759,7 @@ mod tests {
                 .map(|e| e.to_string())
                 .collect();
             assert!(errors.is_empty(), "{template}: {errors:?}");
-            assert_eq!(listing["category"], "stay");
+            assert_eq!(listing["category"], "house");
             assert_eq!(listing["guestSurface"].is_object(), guest, "{template}");
             // The instructions the `listing` conformance check refuses to publish.
             let tagline = listing["tagline"]["fr"].as_str().unwrap();
@@ -760,7 +777,7 @@ mod tests {
     #[test]
     fn the_answers_fill_both_files_escaped() {
         let mut input =
-            std::io::Cursor::new("Le \"Concierge\"\nTout \\ en un.\nAccueil sans clé\n3\nCyril\n");
+            std::io::Cursor::new("Le \"Concierge\"\nTout \\ en un.\nAccueil sans clé\n6\nCyril\n");
         let mut output = Vec::new();
         let answers = ask(
             &mut input,
