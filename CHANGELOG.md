@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.2.0...v10.3.0) (2026-10-09)
+
+
+### Features
+
+* **sdk:** add the amenities.provide capability ([8171e53](https://github.com/PortakiApp/portaki-sdk/commit/8171e53e2b2ab3436b0708142671f134ef28c612))
+* **sdk:** add the property.public surface rules ([1fe089d](https://github.com/PortakiApp/portaki-sdk/commit/1fe089da8fecd5bf666e5b3cc93e3fee0e5e93f3))
+
 ## [10.2.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.1.1...v10.2.0) (2026-10-09)
 
 
