@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.4.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.3.0...v10.4.0) (2026-10-09)
+
+
+### Features
+
+* **host:** draw randomness from host random.bytes ([4f18204](https://github.com/PortakiApp/portaki-sdk/commit/4f1820416940f59d543de2499cc791caaea1cd92))
+
 ## [10.3.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.2.0...v10.3.0) (2026-10-09)
 
 
