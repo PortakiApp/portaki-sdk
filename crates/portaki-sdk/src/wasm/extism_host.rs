@@ -158,6 +158,17 @@ impl HostBackend for ExtismHostBackend {
             .ok_or_else(|| PortakiError::Host("time_now_missing_iso".into()))
     }
 
+    fn random_bytes(&self, len: usize) -> Result<Vec<u8>> {
+        let result = self.dispatch_value("random.bytes", json!({ "len": len }))?;
+        let encoded = result
+            .get("bytes")
+            .and_then(Value::as_str)
+            .ok_or_else(|| PortakiError::Host("random_bytes_missing_bytes".into()))?;
+        BASE64
+            .decode(encoded)
+            .map_err(|e| PortakiError::Host(format!("random_bytes_base64: {e}")))
+    }
+
     fn repo_find(&self, entity: &str, query_json: &str) -> Result<String> {
         let result = self.dispatch_value(
             "repo.find",

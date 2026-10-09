@@ -2,6 +2,8 @@
 //!
 //! Extism loads modules as `wasm32-unknown-unknown`; the `uuid` `js` feature (or
 //! getrandom's `wasm_js` backend) emits `__wbindgen_*` imports the runtime does not provide.
+//! Bytes come from the host ([`crate::host::random`]); a runtime without `random.bytes` falls
+//! back to a fixed-seed xorshift — ids that may repeat across instances, never secrets.
 
 #[cfg(target_arch = "wasm32")]
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -11,26 +13,27 @@ pub use getrandom;
 #[cfg(target_arch = "wasm32")]
 static STATE: AtomicU64 = AtomicU64::new(0x853c49e6748fea9b_u64);
 
-/// Fills `buf` with pseudo-random bytes for module-local IDs (not cryptographic).
-#[cfg(target_arch = "wasm32")]
+/// Fills `buf` from the host's generator; on an old runtime, with pseudo-random bytes (Wasm) or
+/// `UNSUPPORTED` (native, where getrandom has the OS and never calls this).
 pub fn fill(buf: &mut [u8]) -> Result<(), getrandom::Error> {
-    let mut offset = 0usize;
-    while offset + 8 <= buf.len() {
-        buf[offset..offset + 8].copy_from_slice(&next_u64().to_le_bytes());
-        offset += 8;
+    if crate::host::random::fill(buf).is_ok() {
+        return Ok(());
     }
-    if offset < buf.len() {
-        let tail = next_u64().to_le_bytes();
-        let remaining = buf.len() - offset;
-        buf[offset..].copy_from_slice(&tail[..remaining]);
-    }
-    Ok(())
+    fallback(buf)
 }
 
-/// No-op on non-wasm targets (modules are built for wasm32 in production).
 #[cfg(not(target_arch = "wasm32"))]
-pub fn fill(_buf: &mut [u8]) -> Result<(), getrandom::Error> {
+fn fallback(_buf: &mut [u8]) -> Result<(), getrandom::Error> {
     Err(getrandom::Error::UNSUPPORTED)
+}
+
+// ponytail: fixed seed — only for runtimes predating `random.bytes`; delete once none is left.
+#[cfg(target_arch = "wasm32")]
+fn fallback(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    for chunk in buf.chunks_mut(8) {
+        chunk.copy_from_slice(&next_u64().to_le_bytes()[..chunk.len()]);
+    }
+    Ok(())
 }
 
 #[cfg(target_arch = "wasm32")]

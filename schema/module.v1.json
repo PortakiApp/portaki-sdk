@@ -73,7 +73,7 @@
     "permissions": {
       "type": "array",
       "uniqueItems": true,
-      "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, i18n.translate, log.",
+      "description": "Host operations this module is allowed to call. The manifest declares, the runtime enforces: any host op outside the granted set fails at execution. Omitted or empty means the module calls only the ambient ops, which need no permission — time.now, random.bytes, i18n.translate, log.",
       "items": { "$ref": "#/$defs/permission" }
     },
     "connectors": {
