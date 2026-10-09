@@ -317,6 +317,22 @@ impl Context {
         }
     }
 
+    /// Whether this invocation comes from a visitor of the property's public page: no stay and
+    /// no guest behind it — what [`crate::ids::convention::PROPERTY_PUBLIC`] is rendered with.
+    ///
+    /// Then the config is the published one, the property address is only the city and its
+    /// coordinates are blurred, and no secret can be revealed. Meaningful on guest surfaces only:
+    /// a host-dashboard invocation has neither stay nor guest either.
+    ///
+    /// ```
+    /// use portaki_sdk::context::Context;
+    ///
+    /// assert!(Context::default().is_public_visitor());
+    /// ```
+    pub fn is_public_visitor(&self) -> bool {
+        self.stay.is_none() && self.guest.is_none()
+    }
+
     /// Returns whether `capability_id` is in the effective grant set.
     pub fn has_capability(&self, capability_id: CapabilityId) -> bool {
         let id = capability_id.as_str();
@@ -533,6 +549,21 @@ mod tests {
             };
             assert_eq!(ctx.lang(), lang, "{locale:?}");
         }
+    }
+
+    #[test]
+    fn a_public_visitor_has_neither_stay_nor_guest() {
+        let mut ctx = Context::default();
+        assert!(ctx.is_public_visitor());
+        ctx.stay = Some(StayContext::default());
+        assert!(!ctx.is_public_visitor());
+        ctx.stay = None;
+        ctx.guest = Some(GuestIdentity {
+            session_id: Uuid::nil(),
+            display_name: None,
+            locale: None,
+        });
+        assert!(!ctx.is_public_visitor());
     }
 
     #[test]

@@ -8,7 +8,9 @@ use portaki_sdk::sdui::surface::Surface;
 use portaki_sdk::wasm::registry::{HandlerDeclaration, HandlerKind};
 use serde_json::Value;
 
-use super::invoke::{describe, empty_params, invoke, surface_mock, Invocation, Outcome};
+use super::invoke::{
+    describe, empty_params, invoke, is_property_public, surface_mock, Invocation, Outcome,
+};
 use super::{Findings, Module, MANIFEST_FILE, NO_DECLARATIONS};
 use crate::{MockContextBuilder, SurfaceAssertions};
 
@@ -69,7 +71,14 @@ fn problems(module: &Module) -> Vec<String> {
                     contract_problems(&tree)
                         .into_iter()
                         .map(|problem| format!("{what} {problem}")),
-                )
+                );
+                if is_property_public(declaration) {
+                    problems.extend(
+                        portaki_sdk::surfaces::check_property_public_tree(&tree["root"])
+                            .into_iter()
+                            .map(|violation| format!("{what} for a public visitor: {violation}")),
+                    );
+                }
             }
         }
     }
