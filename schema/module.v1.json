@@ -286,6 +286,10 @@
             }
           }
         },
+        "local": {
+          "type": "boolean",
+          "description": "Depends on where the property is (a position, a distance, an address, local hours, a parking spot): a copy from another property lands in the draft marked « À vérifier » for this key, until the host edits or confirms it. Absent = false."
+        },
         "reveal": {
           "type": "array",
           "description": "On a secret field, or on a structured list whose rows hold secret sub-keys (item.secret — then it covers each of them, keyed <key>[].<sub>): where the module shows the value, closed. guest_pre_arrival — the guest booklet before the stay; guest_stay — the guest booklet during the stay (never after departure); arrival_email — the emailContext answer the platform puts in arrival e-mails. Anywhere else (host surfaces, logs, events, e-mails the module sends, other answers) the conformance battery fails the version. A reveal added since the previous stable is justified in the release notes like an added permission (permissionReasons key reveal:<key>:<place>).",
