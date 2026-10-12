@@ -9,6 +9,7 @@
 //! | Area | Module may | Module must not |
 //! |------|------------|-----------------|
 //! | [`kv`] | Store small opaque blobs scoped to property + module | Store secrets (keys are linted) |
+//! | `stay_secrets` | Keep a short secret for one stay (door code), never draft, encrypted at rest | Read another stay's secret from a guest invocation |
 //! | [`repo`] | CRUD module-owned entities via typed builders | Issue SQL or access other modules' tables |
 //! | [`connectors`] | Invoke declared connector operations | Open raw HTTP clients |
 //! | [`module`] | Read install/config readiness from orchestrator | Mutate enablement or config |
@@ -56,6 +57,8 @@ pub mod module;
 pub mod random;
 pub mod repo;
 pub mod runtime;
+#[cfg(feature = "kv")]
+pub mod stay_secrets;
 pub mod time;
 pub mod wasm_getrandom;
 
