@@ -1,0 +1,5 @@
+error: #[capability(shares = [...])] only applies to a provided capability
+ --> tests/ui/capability-fail/shares_without_provided.rs:2:11
+  |
+2 | pub const STORAGE: &str = "core.storage";
+  |           ^^^^^^^

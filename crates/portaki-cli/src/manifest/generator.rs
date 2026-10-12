@@ -173,6 +173,7 @@ pub fn generate_manifest(
     let mut required_caps = Vec::new();
     let mut optional_caps = Vec::new();
     let mut provided_caps = Vec::new();
+    let mut shares = BTreeMap::new();
     let mut builtin_connectors = Vec::new();
     let mut custom_connectors: Vec<Value> = Vec::new();
 
@@ -186,6 +187,15 @@ pub fn generate_manifest(
                 let id = CapabilityId::from_str(id_raw)
                     .with_context(|| format!("unknown capability id in emission: {id_raw}"))?;
                 if emission.data["provided"].as_bool().unwrap_or(false) {
+                    let keys: Vec<String> = emission.data["shares"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|key| key.as_str().map(str::to_string))
+                        .collect();
+                    if !keys.is_empty() {
+                        shares.insert(id_raw.to_string(), keys);
+                    }
                     provided_caps.push(id);
                 } else if emission.data["optional"].as_bool().unwrap_or(false) {
                     optional_caps.push(ManifestOptionalCapability {
@@ -420,6 +430,7 @@ pub fn generate_manifest(
             required: required_caps,
             optional: optional_caps,
             provided: provided_caps,
+            shares,
         },
         connectors: ManifestConnectors {
             builtin: builtin_connectors,
@@ -988,6 +999,33 @@ mod imply_storage_tests {
             kind: kind.into(),
             data: serde_json::json!({ "id": "demo", "name": "Config" }),
         }
+    }
+
+    /// `#[capability(provided, …, shares = [...])]` reaches the build manifest keyed by id.
+    #[test]
+    fn provided_shares_are_kept_by_capability() {
+        let provided = EmissionFile {
+            kind: "capability".into(),
+            data: serde_json::json!({
+                "id": "amenities.provide",
+                "provided": true,
+                "shares": ["reveal_policy", "reveal_hours"]
+            }),
+        };
+        let built = generate_manifest(
+            &[emission("module"), provided],
+            "fr-FR",
+            &["fr-FR".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            built.capabilities.provided,
+            vec![CapabilityId::AmenitiesProvide]
+        );
+        assert_eq!(
+            built.capabilities.shares["amenities.provide"],
+            vec!["reveal_policy", "reveal_hours"]
+        );
     }
 
     #[test]
