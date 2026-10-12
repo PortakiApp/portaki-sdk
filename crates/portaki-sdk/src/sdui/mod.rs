@@ -84,7 +84,9 @@
 //! - **Colonnes** (`columns`, une liste d'objets) : `key`, `label`, et `kind` — `text` par
 //!   défaut ; `check`, une case liée à `{rowName}.{i}.{key}` (valeur booléenne de la ligne), que
 //!   `max` borne en nombre de cases cochées (au-delà, les autres se désactivent et `maxMessage`
-//!   s'affiche) ; `pill`, une pastille quand la valeur n'est pas vide.
+//!   s'affiche) ; `pill`, une pastille quand la valeur n'est pas vide. Une colonne `text` peut
+//!   porter `sub` (la clé d'une autre valeur de la ligne, en seconde ligne discrète : la précision
+//!   sous la règle) et `mono: true` (chiffres à chasse fixe : des heures).
 //! - `searchPlaceholder` ajoute une recherche sur le texte des cellules ; `filterKey` des
 //!   pastilles de filtre, une par valeur distincte de cette colonne ; `addLabel` + `addAction`,
 //!   un bouton « Ajouter » : le module rend une ligne de plus (avec son id), et le tableau de bord
