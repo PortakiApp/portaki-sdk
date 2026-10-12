@@ -180,7 +180,8 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
         .get("emails")
         .and_then(serde_json::Value::as_array)
         .filter(|emails| !emails.is_empty());
-    if carried.is_empty() && emails.is_none() {
+    let provided = published_capabilities(&built);
+    if carried.is_empty() && emails.is_none() && provided.is_none() {
         return Ok(raw.to_string());
     }
     let mut manifest: serde_json::Value =
@@ -189,11 +190,34 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
         for (key, value) in carried {
             object.insert(key.to_string(), value.clone());
         }
+        if let Some(provided) = provided {
+            object.insert("capabilities".to_string(), provided);
+        }
         if let Some(emails) = emails {
             merge_emails(object, emails);
         }
     }
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
+}
+
+/// `capabilities.provided` of the published manifest, from what the build emitted: an id alone, or
+/// `{ "id", "shares" }` when `#[capability(provided, …, shares = [...])]` names config keys.
+///
+/// Only `provided`: the platform finds peers with it (`host::module::list_by_capability`) and
+/// serves the shared keys from the provider's published config. `required` / `optional` stay out
+/// — the orchestrator derives credential bindings from them, and nothing asked to change those.
+fn published_capabilities(built: &serde_json::Value) -> Option<serde_json::Value> {
+    let capabilities = &built["capabilities"];
+    let provided: Vec<serde_json::Value> = capabilities["provided"]
+        .as_array()?
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(|id| match capabilities["shares"][id].as_array() {
+            Some(keys) if !keys.is_empty() => serde_json::json!({ "id": id, "shares": keys }),
+            _ => serde_json::Value::from(id),
+        })
+        .collect();
+    (!provided.is_empty()).then(|| serde_json::json!({ "provided": provided }))
 }
 
 /// Pours the build's `#[email]`s into `emails[]`, by `id`, and grants the `email` permission.
@@ -931,6 +955,40 @@ mod stamp_built_declarations_tests {
             value["permissions"],
             serde_json::json!(["connectors:tiqets"])
         );
+    }
+
+    /// The platform finds peers — and what they share — in the published manifest only.
+    #[test]
+    fn carries_the_provided_capabilities_and_their_shares_only() {
+        let raw = r#"{"id":"provider"}"#;
+        let built = r#"{"id":"provider","capabilities":{
+            "required":["core.storage"],
+            "provided":["amenities.provide","access.smart_lock"],
+            "shares":{"amenities.provide":["reveal_policy","reveal_hours"]}}}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(
+            value["capabilities"],
+            serde_json::json!({ "provided": [
+                { "id": "amenities.provide", "shares": ["reveal_policy", "reveal_hours"] },
+                "access.smart_lock"
+            ] })
+        );
+    }
+
+    /// A module that provides nothing publishes no `capabilities` at all.
+    #[test]
+    fn leaves_capabilities_out_when_nothing_is_provided() {
+        let raw = r#"{"id":"consumer"}"#;
+        let built =
+            r#"{"id":"consumer","capabilities":{"required":["core.storage"],"provided":[]}}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert!(value.get("capabilities").is_none(), "{value}");
     }
 
     /// A build that emits nothing must not prevent a deployment.

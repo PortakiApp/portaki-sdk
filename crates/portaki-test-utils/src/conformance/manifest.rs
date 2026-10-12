@@ -57,6 +57,53 @@ fn problems(module: &Module) -> Vec<String> {
             .into_iter()
             .map(|problem| format!("{file}: {problem}")),
     );
+    problems.extend(
+        shares_problems(&manifest)
+            .into_iter()
+            .map(|problem| format!("{file}: {problem}")),
+    );
+    problems
+}
+
+/// What a provided capability `shares` is read by other modules: it must be one of the module's
+/// own settings, and never a secret — the platform serves it to any peer, decrypted or not.
+fn shares_problems(manifest: &Value) -> Vec<String> {
+    let fields = manifest["config"]["fields"].as_array();
+    let mut problems = Vec::new();
+    for entry in manifest["capabilities"]["provided"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let capability = entry["id"].as_str().unwrap_or("?");
+        for key in entry["shares"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            let field = fields
+                .into_iter()
+                .flatten()
+                .find(|field| field["key"] == key);
+            let problem = match field {
+                None => "is not one of the module's config fields",
+                Some(field) if field["type"] == "secret" => "is a secret field",
+                Some(field)
+                    if field["item"]["secret"]
+                        .as_array()
+                        .is_some_and(|keys| !keys.is_empty()) =>
+                {
+                    "has secret sub-keys (item.secret)"
+                }
+                Some(_) => continue,
+            };
+            problems.push(format!(
+                "capability `{capability}` shares `{key}`, which {problem} — only the module's \
+                 own non-secret settings can be shared"
+            ));
+        }
+    }
     problems
 }
 
@@ -161,6 +208,67 @@ fn config_problems(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_capability_shares_its_own_plain_settings() {
+        let manifest = json!({
+            "config": { "fields": [
+                { "key": "reveal_policy", "type": "select" },
+                { "key": "reveal_hours", "type": "number" }
+            ] },
+            "capabilities": { "provided": [
+                "access.smart_lock",
+                { "id": "amenities.provide", "shares": ["reveal_policy", "reveal_hours"] }
+            ] }
+        });
+        assert!(shares_problems(&manifest).is_empty());
+    }
+
+    #[test]
+    fn a_capability_never_shares_a_secret_or_an_unknown_key() {
+        let manifest = json!({
+            "config": { "fields": [
+                { "key": "door_code", "type": "secret" },
+                { "key": "spots", "type": "structured", "item": { "secret": ["code"] } }
+            ] },
+            "capabilities": { "provided": [
+                { "id": "amenities.provide", "shares": ["door_code", "spots", "nowhere"] }
+            ] }
+        });
+        assert_eq!(
+            shares_problems(&manifest),
+            vec![
+                "capability `amenities.provide` shares `door_code`, which is a secret field — \
+                 only the module's own non-secret settings can be shared",
+                "capability `amenities.provide` shares `spots`, which has secret sub-keys \
+                 (item.secret) — only the module's own non-secret settings can be shared",
+                "capability `amenities.provide` shares `nowhere`, which is not one of the \
+                 module's config fields — only the module's own non-secret settings can be shared",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_schema_accepts_provided_capabilities_with_shares() {
+        let schema: Value = serde_json::from_str(MODULE_SCHEMA_V1).unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let manifest = json!({
+            "id": "provider", "name": { "fr": "P" }, "description": { "fr": "P" },
+            "version": "1.0.0", "author": { "name": "A", "type": "official" }, "icon": "i", "type": "guest",
+            "capabilities": { "provided": [
+                "access.smart_lock",
+                { "id": "amenities.provide", "shares": ["reveal_policy"] }
+            ] }
+        });
+        let errors: Vec<String> = validator
+            .iter_errors(&manifest)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut wrong = manifest.clone();
+        wrong["capabilities"]["provided"][1]["shares"] = json!("reveal_policy");
+        assert!(!validator.is_valid(&wrong));
+    }
 
     fn step() -> Option<Value> {
         Some(json!({ "fields": [

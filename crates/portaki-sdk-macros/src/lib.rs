@@ -669,16 +669,20 @@ pub fn event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     fallback_key = "capability.openWeather.fallback"
 /// )]
 /// pub const OPEN_WEATHER_POOL: &str = "external.open-weather.pool";
+///
+/// #[portaki_sdk::capability(provided, id = "amenities.provide", shares = ["reveal_policy"])]
+/// pub const AMENITIES: &str = "amenities.provide";
 /// ```
 ///
 /// # Attributes
 ///
 /// | Key | Required | Notes |
 /// |-----|----------|-------|
-/// | `required` or `optional` | one of | bare flags (no `=`), default is required |
+/// | `required`, `optional` or `provided` | one of | bare flags (no `=`), default is required |
 /// | `id = "…"` | if const value is not a string literal | capability id |
 /// | `purpose_key = "…"` | no | i18n key for optional capabilities |
 /// | `fallback_key = "…"` | no | i18n key when capability unavailable |
+/// | `shares = ["key", …]` | no, `provided` only | own config keys peers read through `host::module::list_by_capability` (`ModulePeer::shared`), published values only — `portaki check` refuses an unknown key, a secret field or a list with secret sub-keys |
 ///
 /// Capability id is taken from `id = "…"` or from a **string literal** const initializer. A const
 /// referencing another const (e.g. `capability::core::STORAGE`) without explicit `id` → **compile
@@ -693,8 +697,8 @@ pub fn event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Emission
 ///
-/// `capability-{id}.json` → `manifest.capabilities.required[]` or `.optional[]` (with
-/// `purposeKey` / `fallbackKey` for optional entries).
+/// `capability-{id}.json` → `manifest.capabilities.required[]`, `.optional[]` (with
+/// `purposeKey` / `fallbackKey` for optional entries) or `.provided[]` (with `.shares[id]`).
 #[proc_macro_attribute]
 pub fn capability(attr: TokenStream, item: TokenStream) -> TokenStream {
     capability::expand(attr, item)

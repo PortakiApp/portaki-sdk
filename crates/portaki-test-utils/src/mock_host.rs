@@ -91,7 +91,7 @@ use chrono::{DateTime, Utc};
 use portaki_sdk::context::{CapabilityGrant, Context, PropertyContext, StayContext};
 use portaki_sdk::error::{PortakiError, Result};
 use portaki_sdk::host::email::{EmailError, SendEmailArgs};
-use portaki_sdk::host::module::ModuleStatus;
+use portaki_sdk::host::module::{ModulePeer, ModuleStatus};
 use portaki_sdk::host::{with_host, HostBackend};
 use portaki_sdk::limits;
 use portaki_sdk::sdui::common::GeoPoint;
@@ -114,6 +114,7 @@ pub struct MockContextBuilder {
     now: Option<DateTime<Utc>>,
     module_status: Option<ModuleStatus>,
     module_status_error: Option<String>,
+    peers: HashMap<String, Vec<ModulePeer>>,
 }
 
 impl MockContextBuilder {
@@ -373,6 +374,17 @@ impl MockContextBuilder {
         self
     }
 
+    /// What `host::module::list_by_capability(capability)` answers — the peers providing it, with
+    /// what they share (`ModulePeer::shared`). Without it, no peer.
+    pub fn with_peers(
+        mut self,
+        capability: portaki_sdk::capability::CapabilityId,
+        peers: Vec<ModulePeer>,
+    ) -> Self {
+        self.peers.insert(capability.as_str().to_string(), peers);
+        self
+    }
+
     /// Freezes the mock clock (`host::time::now`) at `now`.
     ///
     /// Without it the mock answers the real current time, which makes the after-stay email
@@ -406,6 +418,7 @@ impl MockContextBuilder {
             event_emits: Mutex::new(0),
             logs: Mutex::new(Vec::new()),
             module_status_error: self.module_status_error,
+            peers: self.peers,
             module_status: self.module_status.unwrap_or(ModuleStatus {
                 active: true,
                 workspace_enabled: true,
@@ -481,6 +494,7 @@ pub struct MockHostFunctions {
     logs: Mutex<Vec<LogLine>>,
     module_status: ModuleStatus,
     module_status_error: Option<String>,
+    peers: HashMap<String, Vec<ModulePeer>>,
 }
 
 impl MockHostFunctions {
@@ -661,15 +675,36 @@ impl HostBackend for MockHostFunctions {
 
     fn module_list_by_capability(
         &self,
-        _capability_id: &str,
+        capability_id: &str,
     ) -> Result<Vec<portaki_sdk::host::module::ModulePeer>> {
-        Ok(Vec::new())
+        Ok(self.peers.get(capability_id).cloned().unwrap_or_default())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn peers_answer_with_what_they_share() {
+        use portaki_sdk::capability::CapabilityId;
+        let peer: ModulePeer = serde_json::from_value(serde_json::json!({
+            "moduleId": "provider",
+            "shared": { "reveal_policy": "before_arrival" }
+        }))
+        .unwrap();
+        let (found, other) = MockContextBuilder::guest()
+            .with_peers(CapabilityId::AmenitiesProvide, vec![peer])
+            .run(|_ctx| {
+                (
+                    portaki_sdk::host::module::list_by_capability(CapabilityId::AmenitiesProvide)
+                        .unwrap(),
+                    portaki_sdk::host::module::list_by_capability(CapabilityId::SmartLock).unwrap(),
+                )
+            });
+        assert_eq!(found[0].shared["reveal_policy"], "before_arrival");
+        assert!(other.is_empty());
+    }
 
     /// A third party that refuses is most of what a module's own code is about.
     #[test]

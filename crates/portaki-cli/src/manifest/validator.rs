@@ -190,6 +190,7 @@ mod tests {
                 required: vec![portaki_sdk::capability::CapabilityId::Storage],
                 optional: vec![],
                 provided: vec![],
+                shares: Default::default(),
             },
             connectors: ManifestConnectors::default(),
             entities: vec![],

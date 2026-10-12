@@ -1,4 +1,5 @@
-//! `capability` expansion — required/optional host capability dependencies.
+//! `capability` expansion — required/optional host capability dependencies, and provided ones
+//! with the config keys they share (`shares = ["key", …]`).
 //!
 //! Resolves capability id from `id = "…"` or a string-literal const initializer. Cross-const
 //! references require an explicit `id` attribute.
@@ -18,6 +19,7 @@ struct CapabilityAttrs {
     capability_id: Option<String>,
     purpose_key: Option<String>,
     fallback_key: Option<String>,
+    shares: Vec<String>,
 }
 
 impl Parse for CapabilityAttrs {
@@ -27,6 +29,7 @@ impl Parse for CapabilityAttrs {
         let mut capability_id = None;
         let mut purpose_key = None;
         let mut fallback_key = None;
+        let mut shares = Vec::new();
 
         while !input.is_empty() {
             if input.peek(Token![,]) {
@@ -55,6 +58,13 @@ impl Parse for CapabilityAttrs {
 
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
+            if key == "shares" {
+                let list;
+                syn::bracketed!(list in input);
+                let keys = list.parse_terminated(|p| p.parse::<LitStr>(), Token![,])?;
+                shares = keys.iter().map(LitStr::value).collect();
+                continue;
+            }
             let value: LitStr = input.parse()?;
             let text = value.value();
 
@@ -77,6 +87,7 @@ impl Parse for CapabilityAttrs {
             capability_id,
             purpose_key,
             fallback_key,
+            shares,
         })
     }
 }
@@ -91,6 +102,15 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         .capability_id
         .or_else(|| capability_id_from_expr(&const_item.expr))
         .unwrap_or_default();
+
+    if !attrs.shares.is_empty() && !attrs.provided {
+        return syn::Error::new(
+            const_item.ident.span(),
+            "#[capability(shares = [...])] only applies to a provided capability",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     if capability_id.is_empty() {
         return syn::Error::new(
@@ -109,7 +129,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
   "optional": {},
   "provided": {},
   "purposeKey": {},
-  "fallbackKey": {}
+  "fallbackKey": {},
+  "shares": {}
 }}"#,
         serde_json::to_string(&const_name).unwrap(),
         serde_json::to_string(&capability_id).unwrap(),
@@ -117,6 +138,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         attrs.provided,
         serde_json::to_string(&attrs.purpose_key).unwrap(),
         serde_json::to_string(&attrs.fallback_key).unwrap(),
+        serde_json::to_string(&attrs.shares).unwrap(),
     );
 
     let emission = write_emission("capability", &sanitize_key(&capability_id), &json);

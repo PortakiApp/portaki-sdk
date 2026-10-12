@@ -12,12 +12,22 @@
 //! - `missing_required_keys` lists manifest config field keys still unset.
 //! - [`list_by_capability`] returns peer modules installed on the same property that
 //!   declare `capabilities.provided` containing the requested id (e.g. `access.smart_lock`).
+//! - [`ModulePeer::shared`] carries the provider's settings it declared under `shares` for that
+//!   capability (`#[capability(provided, id = "…", shares = ["reveal_policy"])]`), keyed by
+//!   config key — so a consumer can show the provider's value read-only instead of asking the
+//!   host twice.
 //!
 //! ## What modules must not assume
 //!
 //! - `active` can be `true` while `incomplete` is `true` — module runs but should block UX.
 //! - This API does not mutate config; owners edit settings through host UI flows.
 //! - Values may change between invocations — do not cache readiness across guest sessions.
+//! - [`ModulePeer::shared`] holds the provider's **published** values, never its draft: a host
+//!   editing the provider sees the consumer catch up only once they publish.
+//! - A shared key may be absent — never set, empty, or no longer declared by the provider's
+//!   installed version. Fall back to the module's own setting.
+//! - It never holds a secret: `portaki check` refuses to share a secret field or a list with
+//!   secret sub-keys, and the platform drops one again when serving.
 //!
 //! # Examples
 //!
@@ -78,6 +88,10 @@ pub struct ModulePeer {
     /// Localized display name when available (fallback: module id).
     #[serde(default)]
     pub display_name: String,
+    /// The provider's published config values for the keys it `shares` for this capability,
+    /// by config key. Empty or missing keys are left out; never secrets.
+    #[serde(default)]
+    pub shared: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Fetches the current module status from the gateway orchestrator.
@@ -96,4 +110,29 @@ pub fn status() -> Result<ModuleStatus> {
 #[cfg(feature = "platform")]
 pub fn list_by_capability(capability_id: CapabilityId) -> Result<Vec<ModulePeer>> {
     backend()?.module_list_by_capability(capability_id.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ModulePeer;
+    use serde_json::json;
+
+    #[test]
+    fn a_peer_reads_its_shared_settings() {
+        let peer: ModulePeer = serde_json::from_value(json!({
+            "moduleId": "provider",
+            "displayName": "Provider",
+            "shared": { "reveal_policy": "before_arrival", "reveal_hours": 48 }
+        }))
+        .unwrap();
+        assert_eq!(peer.shared["reveal_policy"], "before_arrival");
+        assert_eq!(peer.shared["reveal_hours"], 48);
+    }
+
+    /// A platform that predates `shared` still answers.
+    #[test]
+    fn a_peer_without_shared_settings_reads_empty() {
+        let peer: ModulePeer = serde_json::from_value(json!({ "moduleId": "provider" })).unwrap();
+        assert!(peer.shared.is_empty());
+    }
 }

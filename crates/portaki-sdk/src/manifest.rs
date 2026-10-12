@@ -124,6 +124,12 @@ pub struct ManifestCapabilities {
     /// Capabilities this module **provides** for peer discovery (e.g. `access.smart_lock`).
     #[serde(default)]
     pub provided: Vec<CapabilityId>,
+    /// Own config keys each provided capability shares with its consumers, by capability wire
+    /// id — `#[capability(provided, …, shares = [...])]`. `portaki build` writes them into the
+    /// published manifest as `capabilities.provided[] = { "id", "shares" }`; peers read the
+    /// **published** values as `host::module::ModulePeer::shared`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub shares: BTreeMap<String, Vec<String>>,
 }
 
 /// Optional capability entry with i18n keys for setup and degraded UX.

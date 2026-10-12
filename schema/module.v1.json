@@ -207,6 +207,36 @@
         "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 160 }
       }
     },
+    "capabilities": {
+      "type": "object",
+      "description": "Capabilities the module provides to its peers, stamped from the build output by `portaki build` (#[portaki_sdk::capability(provided, …)]) — never hand-written. The platform finds peers with them: host::module::list_by_capability.",
+      "additionalProperties": false,
+      "properties": {
+        "provided": {
+          "type": "array",
+          "description": "A capability id alone, or { id, shares } when the module shares some of its own settings with the modules that consume this capability.",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "required": ["id"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "shares": {
+                    "type": "array",
+                    "description": "Keys of this module's own config.fields that consumers read, read-only, as ModulePeer.shared. Only the published values are shared — never the draft — and never a secret: a secret field or a structured list with item.secret sub-keys is refused by the conformance battery and dropped again by the platform.",
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     "config": {
       "type": "object",
       "description": "Host configuration, declared by #[portaki_sdk::config] (portaki build writes it). The platform validates and stores what the host saves (updateConfig), encrypts secret fields at rest and passes the result to the module as context.moduleConfig. A required field left empty flags the install requiresConfig / incomplete and blocks publication; a recommended one only warns. Empty = absent, null, blank string, empty list or object; toggle and number are never empty. The dashboard also reads globalAlert and defaults.",
