@@ -45,6 +45,11 @@ find it:
   `stay_id` column.
 - **KV**: keys under `stay:<stay_id>:` are deleted, for every module of the property. Build
   them with `host::kv::stay_key(stay.stay_id, "review")`, never by hand.
+- **Stay secrets**: a code for one stay (door, keypad) goes in `host::stay_secrets`, never in KV
+  or the config. Encrypted at rest, never draft (the guest sees a host change at once), deleted
+  with the stay and 7 days after its check-out at the latest. A guest invocation reaches only its
+  own stay; a host invocation, any stay of its property — the platform checks, from the
+  invocation.
 
 Anything stored elsewhere (a property-wide KV blob, a table without `stay_id`) outlives the
 stay. Do not put guest data there.

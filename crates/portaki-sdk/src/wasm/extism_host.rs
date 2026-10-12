@@ -149,6 +149,45 @@ impl HostBackend for ExtismHostBackend {
             .map_err(|e| PortakiError::Host(format!("file_read_base64: {e}")))
     }
 
+    fn stay_secret_get(&self, stay_id: &str, key: &str) -> Result<Option<String>> {
+        let result =
+            self.dispatch_value("staySecret.get", json!({ "stayId": stay_id, "key": key }))?;
+        Ok(result
+            .get("value")
+            .and_then(Value::as_str)
+            .map(str::to_string))
+    }
+
+    fn stay_secret_set(&self, stay_id: &str, key: &str, value: &str) -> Result<()> {
+        self.dispatch_value(
+            "staySecret.set",
+            json!({ "stayId": stay_id, "key": key, "value": value }),
+        )?;
+        Ok(())
+    }
+
+    fn stay_secret_delete(&self, stay_id: &str, key: &str) -> Result<()> {
+        self.dispatch_value(
+            "staySecret.delete",
+            json!({ "stayId": stay_id, "key": key }),
+        )?;
+        Ok(())
+    }
+
+    fn stay_secret_list(&self, key: &str) -> Result<Vec<String>> {
+        let result = self.dispatch_value("staySecret.list", json!({ "key": key }))?;
+        Ok(result
+            .get("stayIds")
+            .and_then(Value::as_array)
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
     fn time_now_iso(&self) -> Result<String> {
         let result = self.dispatch_value("time.now", json!({}))?;
         result

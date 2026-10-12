@@ -109,6 +109,7 @@ pub struct MockContextBuilder {
     pub(crate) context: Context,
     translations: HashMap<String, String>,
     kv: HashMap<String, Vec<u8>>,
+    stay_secrets: HashMap<(String, String), String>,
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
     now: Option<DateTime<Utc>>,
@@ -214,6 +215,18 @@ impl MockContextBuilder {
     /// Pre-seeds a KV entry visible to `host::kv::get` before the test closure runs.
     pub fn with_kv(mut self, key: impl Into<String>, value: Vec<u8>) -> Self {
         self.kv.insert(key.into(), value);
+        self
+    }
+
+    /// Pre-seeds a stay secret visible to `host::stay_secrets::get` before the test closure runs.
+    pub fn with_stay_secret(
+        mut self,
+        stay_id: uuid::Uuid,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.stay_secrets
+            .insert((stay_id.to_string(), key.into()), value.into());
         self
     }
 
@@ -408,6 +421,8 @@ impl MockContextBuilder {
             context: self.context.clone(),
             translations: self.translations,
             kv: Mutex::new(self.kv),
+            stay_secrets: Mutex::new(self.stay_secrets),
+            random_draws: Mutex::new(0),
             connector_responses: self.connector_responses,
             connector_errors: self.connector_errors,
             connector_calls: Mutex::new(Vec::new()),
@@ -483,6 +498,8 @@ pub struct MockHostFunctions {
     context: Context,
     translations: HashMap<String, String>,
     kv: Mutex<HashMap<String, Vec<u8>>>,
+    stay_secrets: Mutex<HashMap<(String, String), String>>,
+    random_draws: Mutex<u64>,
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
     connector_calls: Mutex<Vec<ConnectorCall>>,
@@ -527,8 +544,25 @@ impl MockHostFunctions {
         self.sent_emails.lock().expect("sent emails lock").clone()
     }
 
+    /// The stay secrets as the module left them, `(stay id, key) → value`.
+    pub fn stay_secrets(&self) -> HashMap<(String, String), String> {
+        self.stay_secrets.lock().expect("stay secrets lock").clone()
+    }
+
     fn now(&self) -> DateTime<Utc> {
         self.now.unwrap_or_else(Utc::now)
+    }
+
+    /// Like the platform: a guest invocation reaches only its own stay; a host one, any stay
+    /// (the platform checks the property, which the mock has a single one of).
+    fn stay_scope(&self, stay_id: &str) -> Result<()> {
+        if self.context.guest.is_none() {
+            return Ok(());
+        }
+        match &self.context.stay {
+            Some(stay) if stay.stay_id.to_string() == stay_id => Ok(()),
+            _ => Err(PortakiError::Host("stay_secret_foreign_stay".into())),
+        }
     }
 }
 
@@ -562,6 +596,61 @@ impl HostBackend for MockHostFunctions {
             .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
+            .collect())
+    }
+
+    fn stay_secret_get(&self, stay_id: &str, key: &str) -> Result<Option<String>> {
+        self.stay_scope(stay_id)?;
+        Ok(self
+            .stay_secrets
+            .lock()
+            .expect("stay secrets lock")
+            .get(&(stay_id.to_string(), key.to_string()))
+            .cloned())
+    }
+
+    fn stay_secret_set(&self, stay_id: &str, key: &str, value: &str) -> Result<()> {
+        self.stay_scope(stay_id)?;
+        self.stay_secrets
+            .lock()
+            .expect("stay secrets lock")
+            .insert((stay_id.to_string(), key.to_string()), value.to_string());
+        Ok(())
+    }
+
+    fn stay_secret_delete(&self, stay_id: &str, key: &str) -> Result<()> {
+        self.stay_scope(stay_id)?;
+        self.stay_secrets
+            .lock()
+            .expect("stay secrets lock")
+            .remove(&(stay_id.to_string(), key.to_string()));
+        Ok(())
+    }
+
+    fn stay_secret_list(&self, key: &str) -> Result<Vec<String>> {
+        if self.context.guest.is_some() {
+            return Err(PortakiError::Host("stay_secret_list_host_only".into()));
+        }
+        let mut ids: Vec<String> = self
+            .stay_secrets
+            .lock()
+            .expect("stay secrets lock")
+            .keys()
+            .filter(|(_, k)| k == key)
+            .map(|(stay, _)| stay.clone())
+            .collect();
+        ids.sort();
+        Ok(ids)
+    }
+
+    /// Deterministic, never the same twice in a run: enough for a module to draw a code in a
+    /// test, and nothing a test should assert the value of.
+    fn random_bytes(&self, len: usize) -> Result<Vec<u8>> {
+        let mut draws = self.random_draws.lock().expect("random lock");
+        *draws += 1;
+        let seed = *draws;
+        Ok((0..len)
+            .map(|i| (seed.wrapping_mul(0x9E37_79B9).wrapping_add(i as u64 * 131) >> 3) as u8)
             .collect())
     }
 
@@ -684,6 +773,34 @@ impl HostBackend for MockHostFunctions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_guest_reads_only_its_own_stay_secret() {
+        use portaki_sdk::context::StayContext;
+        use portaki_sdk::host::stay_secrets;
+        let (own, other) = (uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2));
+        let guest = MockContextBuilder::guest()
+            .with_stay(StayContext {
+                stay_id: own,
+                ..StayContext::default()
+            })
+            .with_stay_secret(own, "door_code", "4821")
+            .with_stay_secret(other, "door_code", "1111");
+        guest.run(|_ctx| {
+            assert_eq!(
+                stay_secrets::get(own, "door_code").unwrap().as_deref(),
+                Some("4821")
+            );
+            assert!(stay_secrets::get(other, "door_code").is_err());
+            assert!(stay_secrets::list("door_code").is_err());
+        });
+        MockContextBuilder::host().run_with(|_ctx, host| {
+            stay_secrets::set(other, "door_code", "2222").unwrap();
+            assert_eq!(stay_secrets::list("door_code").unwrap(), vec![other]);
+            assert_eq!(host.stay_secrets().len(), 1);
+            assert!(portaki_sdk::host::random::u32_below(1_000_000).unwrap() < 1_000_000);
+        });
+    }
 
     #[test]
     fn peers_answer_with_what_they_share() {

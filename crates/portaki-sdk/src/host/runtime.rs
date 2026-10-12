@@ -105,6 +105,26 @@ pub trait HostBackend: Send + Sync {
         Err(PortakiError::HostNotConfigured)
     }
 
+    /// Reads a stay secret (`staySecret.get`); `None` when unset or expired.
+    fn stay_secret_get(&self, _stay_id: &str, _key: &str) -> Result<Option<String>> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// Stores a stay secret (`staySecret.set`).
+    fn stay_secret_set(&self, _stay_id: &str, _key: &str, _value: &str) -> Result<()> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// Deletes a stay secret (`staySecret.delete`).
+    fn stay_secret_delete(&self, _stay_id: &str, _key: &str) -> Result<()> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
+    /// The stays of this property holding `key` (`staySecret.list`, host invocations only).
+    fn stay_secret_list(&self, _key: &str) -> Result<Vec<String>> {
+        Err(PortakiError::HostNotConfigured)
+    }
+
     /// Returns current UTC time as ISO-8601 (Wasm host dispatch).
     fn time_now_iso(&self) -> Result<String> {
         Err(PortakiError::HostNotConfigured)
