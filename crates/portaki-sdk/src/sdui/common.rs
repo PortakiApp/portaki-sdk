@@ -773,6 +773,91 @@ impl ChartPoint {
     }
 }
 
+/// One day of a [`MonthCalendar`](super::primitives::MonthCalendar) that has something on it.
+///
+/// Sparse: a day without items is not sent — the shell draws the whole month from `month`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct CalendarDay {
+    /// `YYYY-MM-DD`, a day of the calendar's month.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    /// The chips of that day, in display order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<CalendarItem>>,
+}
+
+impl CalendarDay {
+    /// A day and its chips.
+    pub fn new(date: impl Into<String>, items: Vec<CalendarItem>) -> Self {
+        Self {
+            date: Some(date.into()),
+            items: Some(items),
+        }
+    }
+}
+
+/// One chip of a [`CalendarDay`] — and one entry of a calendar's `legend`, where `id` and
+/// `action` are ignored.
+///
+/// `tone` says where it comes from (`neutral`, `info`, `warning`…); `strike` and `muted` are
+/// independent of it: a cancelled entry is struck, a past one is greyed, and one can be both.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct CalendarItem {
+    /// Stable id, unique within the calendar.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Display label (often an `i18n:` key).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The chip's role; `neutral` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<Tone>,
+    /// Struck through (cancelled).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike: Option<bool>,
+    /// Greyed out (past).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub muted: Option<bool>,
+    /// Fired when the chip is pressed; a chip without one is not a button.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+}
+
+impl CalendarItem {
+    /// A labelled chip.
+    pub fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            label: Some(label.into()),
+            ..Self::default()
+        }
+    }
+
+    /// Its role.
+    pub fn tone(mut self, tone: Tone) -> Self {
+        self.tone = Some(tone);
+        self
+    }
+
+    /// Struck through.
+    pub fn strike(mut self, strike: bool) -> Self {
+        self.strike = Some(strike);
+        self
+    }
+
+    /// Greyed out.
+    pub fn muted(mut self, muted: bool) -> Self {
+        self.muted = Some(muted);
+        self
+    }
+
+    /// Fired on press.
+    pub fn action(mut self, action: Action) -> Self {
+        self.action = Some(action);
+        self
+    }
+}
+
 /// Empty state of a [`Chart`](super::primitives::Chart) with nothing to draw yet.
 ///
 /// Written by the module, drawn compact inside the panel by the shell.

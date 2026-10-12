@@ -242,3 +242,44 @@ fn toggle_row_carries_a_description() {
         "Par e-mail, à la création de la tâche"
     );
 }
+
+/// A month is one leaf: its days ride in `days`, sparse, never in children.
+#[test]
+fn month_calendar_is_a_single_leaf_node() {
+    use portaki_sdk::sdui::primitives::MonthCalendar;
+    use portaki_sdk::sdui::{Action, CalendarDay, CalendarItem, Tone};
+
+    let next = Action::emit(
+        portaki_sdk::contracts::shell::SURFACE_INPUT,
+        Some(json!({ "month": "2026-09" })),
+    );
+    let calendar: Component = MonthCalendar::new()
+        .month("2026-08")
+        .nextAction(next)
+        .days(vec![CalendarDay::new(
+            "2026-08-22",
+            vec![
+                CalendarItem::new("e1", "Concert sur la plage").tone(Tone::Warning),
+                CalendarItem::new("e2", "Marché du port").muted(true),
+            ],
+        )])
+        .legend(vec![CalendarItem::new("", "Annulé").strike(true)])
+        .into();
+    assert!(calendar.child_nodes().is_empty());
+    assert_eq!(
+        serde_json::to_value(&calendar).unwrap(),
+        json!({
+            "type": "MonthCalendar",
+            "month": "2026-08",
+            "nextAction": { "type": "emit", "event": "host.surface.input", "payload": { "month": "2026-09" } },
+            "days": [{
+                "date": "2026-08-22",
+                "items": [
+                    { "id": "e1", "label": "Concert sur la plage", "tone": "warning" },
+                    { "id": "e2", "label": "Marché du port", "muted": true }
+                ]
+            }],
+            "legend": [{ "id": "", "label": "Annulé", "strike": true }]
+        })
+    );
+}

@@ -143,6 +143,45 @@
 //! assert_eq!(wire["panel"], "dialog");
 //! ```
 //!
+//! ## Un mois en grille — `MonthCalendar`
+//!
+//! Un mois, sept colonnes du lundi au dimanche, des pastilles dans les jours : le calendrier des
+//! événements, des séjours, du ménage. Une feuille, comme `Chart` : ses données voyagent dans ses
+//! champs, jamais dans `children`.
+//!
+//! - `month` : `AAAA-MM`. Le tableau de bord écrit lui-même le titre (« Août 2026 »), les jours
+//!   de la semaine et les jours hors du mois (grisés) ; sur un téléphone, la grille devient une
+//!   liste des jours qui ont quelque chose.
+//! - `days` : **seulement les jours qui ont quelque chose**, chacun avec sa date `AAAA-MM-JJ` et
+//!   ses pastilles ([`CalendarItem`]) dans l'ordre d'affichage. Une date hors de `month` est
+//!   ignorée.
+//! - Une pastille : `label`, `tone` (d'où elle vient : `neutral` par défaut, `info`, `warning`…),
+//!   `strike` (barrée : annulée), `muted` (grisée : passée) et `action` — sans action, elle
+//!   n'est pas un bouton.
+//! - `prevAction` / `nextAction` : les boutons ‹ › ; le module rend le mois demandé (typiquement
+//!   `emit` de `contracts::shell::SURFACE_INPUT` avec le mois voisin). Sans eux, pas de bouton.
+//! - `legend` : des [`CalendarItem`] sous la grille, dessinés comme les pastilles (`id` et
+//!   `action` y sont ignorés).
+//!
+//! La semaine commence le lundi.
+//!
+//! ```
+//! use portaki_sdk::sdui::primitives::MonthCalendar;
+//! use portaki_sdk::sdui::{CalendarDay, CalendarItem, Component, Tone};
+//!
+//! let august: Component = MonthCalendar::new()
+//!     .month("2026-08")
+//!     .days(vec![CalendarDay::new("2026-08-15", vec![
+//!         CalendarItem::new("oa-1", "Feu d'artifice").tone(Tone::Info),
+//!         CalendarItem::new("e1", "Fête du jardin").strike(true),
+//!     ])])
+//!     .legend(vec![CalendarItem::new("", "Importé").tone(Tone::Info)])
+//!     .into();
+//! let wire = serde_json::to_value(&august).unwrap();
+//! assert_eq!(wire["type"], "MonthCalendar");
+//! assert_eq!(wire["days"][0]["items"][1]["strike"], true);
+//! ```
+//!
 //! ## Une erreur sous le champ — `Field::error`
 //!
 //! `Field::error` est le message affiché sous le champ, à la place de son aide (`FieldHint`) :
@@ -185,11 +224,12 @@ pub mod surface;
 
 pub use action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation};
 pub use common::{
-    AccordionItem, ActionRowItem, Animation, AnimationKind, ButtonVariant, ChartEmpty, ChartKind,
-    ChartPoint, ChoiceListLayout, ChoiceOption, DeltaTone, EditableListItem, Emphasis, FeedStatus,
-    FilterBarChip, GeoPoint, ImageSize, MapClustering, MapInteractionMode, MapMarker,
-    MapMarkerKind, MapViewport, RichTextDoc, StackDirection, SurfaceLevel, Swatch, TabBarItem,
-    TabItem, TempVariant, TemperatureUnit, TextVariant, Tone, Visibility, VisibilityExpr,
+    AccordionItem, ActionRowItem, Animation, AnimationKind, ButtonVariant, CalendarDay,
+    CalendarItem, ChartEmpty, ChartKind, ChartPoint, ChoiceListLayout, ChoiceOption, DeltaTone,
+    EditableListItem, Emphasis, FeedStatus, FilterBarChip, GeoPoint, ImageSize, MapClustering,
+    MapInteractionMode, MapMarker, MapMarkerKind, MapViewport, RichTextDoc, StackDirection,
+    SurfaceLevel, Swatch, TabBarItem, TabItem, TempVariant, TemperatureUnit, TextVariant, Tone,
+    Visibility, VisibilityExpr,
 };
 pub use component::Component;
 pub use surface::Surface;
