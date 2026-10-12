@@ -68,6 +68,7 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         "maturity",
         "sortOrder",
         "audience",
+        "core",
         "hostScheduledSync",
     ] {
         if let Some(value) = extra.get(key) {
@@ -843,6 +844,36 @@ mod tests {
         )
         .expect("parse");
         assert_eq!(filled["permissions"], json!(["platform", "email", "repo"]));
+    }
+
+    #[test]
+    fn a_core_module_on_the_listing_card_is_written_as_such() {
+        let mut emissions = module();
+        emissions[0].data["catalog"]["core"] = json!(true);
+        emissions.push(EmissionFile {
+            kind: "surface".into(),
+            data: json!({ "id": "main", "context": "host",
+                          "catalog": { "placement": ["property-listing-card"],
+                                       "label_key": "catalog.host.main" } }),
+        });
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("fr-FR.json"),
+            r#"{"catalog.host.main":"Message d'accueil"}"#,
+        )
+        .expect("fr");
+
+        let catalog = catalog_defaults(&emissions, dir.path(), &["fr-FR".to_string()]);
+
+        assert_eq!(catalog["core"], true);
+        assert_eq!(
+            catalog["hostSurfaces"],
+            json!([{ "type": "property-listing-card", "pathSegment": "issue-report",
+                     "label": { "fr": "Message d'accueil" } }])
+        );
+        assert!(catalog_defaults(&module(), dir.path(), &[])
+            .get("core")
+            .is_none());
     }
 
     #[test]

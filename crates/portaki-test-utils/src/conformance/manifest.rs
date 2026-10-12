@@ -60,9 +60,21 @@ fn problems(module: &Module) -> Vec<String> {
     problems.extend(
         shares_problems(&manifest)
             .into_iter()
+            .chain(core_problems(&manifest))
             .map(|problem| format!("{file}: {problem}")),
     );
     problems
+}
+
+/// A core module is on every property with no switch: one that shows nothing anywhere is a
+/// module nobody can see nor turn off.
+fn core_problems(manifest: &Value) -> Option<String> {
+    let shows = |key: &str| manifest[key].as_array().is_some_and(|s| !s.is_empty());
+    (manifest["core"] == true && !shows("hostSurfaces") && !shows("guestSurfaces")).then(|| {
+        "a `core` module declares no host nor guest surface — it would be installed everywhere \
+         and seen nowhere"
+            .to_string()
+    })
 }
 
 /// What a provided capability `shares` is read by other modules: it must be one of the module's
@@ -268,6 +280,35 @@ mod tests {
         let mut wrong = manifest.clone();
         wrong["capabilities"]["provided"][1]["shares"] = json!("reveal_policy");
         assert!(!validator.is_valid(&wrong));
+    }
+
+    #[test]
+    fn the_schema_accepts_a_core_module_on_the_listing_card() {
+        let schema: Value = serde_json::from_str(MODULE_SCHEMA_V1).unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let manifest = json!({
+            "id": "sections", "name": { "fr": "S" }, "description": { "fr": "S" },
+            "version": "1.0.0", "author": { "name": "A", "type": "official" }, "icon": "i", "type": "guest",
+            "core": true,
+            "hostSurfaces": [{ "type": "property-listing-card", "pathSegment": "sections",
+                               "label": { "fr": "Message d'accueil" } }]
+        });
+        let errors: Vec<String> = validator
+            .iter_errors(&manifest)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(core_problems(&manifest), None);
+
+        let mut wrong = manifest.clone();
+        wrong["core"] = json!("yes");
+        assert!(!validator.is_valid(&wrong));
+
+        let mut hidden = manifest.clone();
+        hidden["hostSurfaces"] = json!([]);
+        assert!(core_problems(&hidden).is_some());
+        hidden["core"] = json!(false);
+        assert_eq!(core_problems(&hidden), None);
     }
 
     fn step() -> Option<Value> {
