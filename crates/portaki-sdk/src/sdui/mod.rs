@@ -108,6 +108,39 @@
 //! assert_eq!(wire["children"].as_array().unwrap().len(), 1);
 //! ```
 //!
+//! ### Une liste ordonnée — `sortable`, `dividerAfter`, `panel`
+//!
+//! - `sortable` : l'hôte réordonne les lignes (poignée glissée, ou flèches ↑ ↓ sur la poignée au
+//!   clavier). Le formulaire suit l'ordre affiché : la ligne montrée en position `i` part en
+//!   `{rowName}.{i}`, avec son `id` — le module enregistre la liste dans l'ordre reçu. Le panneau
+//!   d'une ligne déplacée écrit à son nouveau rang : le module nomme toujours ses champs au rang
+//!   où il rend la ligne, le tableau de bord les renumérote.
+//! - `dividerAfter` + `dividerLabel` : un filet titré après les `dividerAfter` premières lignes
+//!   (« Sur la carte d'accueil » au-dessus, le reste en dessous). Pris tel que rendu : il suit le
+//!   réglage au rendu suivant du module, pas pendant la saisie. Masqué pendant une recherche ou un
+//!   filtre.
+//! - `panel` : `"sheet"` (défaut, le panneau latéral) ou `"dialog"`, une fenêtre centrée pour un
+//!   formulaire court — sans Précédent / Suivant, avec Supprimer, Annuler (rend à la ligne ses
+//!   valeurs d'avant l'ouverture ; retire une ligne tout juste ajoutée) et Enregistrer.
+//!
+//! ```
+//! use portaki_sdk::sdui::primitives::DataTable;
+//! use serde_json::json;
+//!
+//! let rules = DataTable::new()
+//!     .rowName("rules")
+//!     .columns(json!([{ "key": "text", "label": "Règle" }]))
+//!     .rows(json!([{ "id": "r1", "text": "Pas de fête" }, { "id": "r2", "text": "Non-fumeur" }]))
+//!     .sortable(true)
+//!     .dividerAfter(4)
+//!     .dividerLabel("Sur la carte d'accueil")
+//!     .panel("dialog");
+//! let wire = serde_json::to_value(&rules).unwrap();
+//! assert_eq!(wire["sortable"], true);
+//! assert_eq!(wire["dividerAfter"], 4);
+//! assert_eq!(wire["panel"], "dialog");
+//! ```
+//!
 //! ## Une erreur sous le champ — `Field::error`
 //!
 //! `Field::error` est le message affiché sous le champ, à la place de son aide (`FieldHint`) :

@@ -105,7 +105,7 @@
   {"name": "HeaderTitle", "serde_name": "HeaderTitle", "has_children": false, "fields": {"title": "String", "subtitle": "String"}},
   {"name": "BottomTabBar", "serde_name": "BottomTabBar", "has_children": false, "fields": {"tabs": "Vec<TabBarItem>", "activeTab": "String"}},
   {"name": "Chevron", "serde_name": "Chevron", "has_children": false, "fields": {"direction": "String"}},
-  {"name": "DataTable", "serde_name": "DataTable", "has_children": true, "fields": {"columns": "Value", "rows": "Value", "source": "String", "rowName": "String", "searchPlaceholder": "String", "filterKey": "String", "addLabel": "String", "addAction": "Action"}},
+  {"name": "DataTable", "serde_name": "DataTable", "has_children": true, "fields": {"columns": "Value", "rows": "Value", "source": "String", "rowName": "String", "searchPlaceholder": "String", "filterKey": "String", "addLabel": "String", "addAction": "Action", "sortable": "bool", "dividerAfter": "u32", "dividerLabel": "String", "panel": "String"}},
   {"name": "Stat", "serde_name": "Stat", "has_children": false, "fields": {"label": "String", "value": "String", "delta": "String", "icon": "IconName", "deltaTone": "DeltaTone", "empty": "String"}},
   {"name": "FeedItem", "serde_name": "FeedItem", "has_children": false, "fields": {"title": "String", "tag": "String", "meta": "String", "date": "String", "dotTone": "Tone", "status": "FeedStatus", "action": "Action"}},
   {"name": "Timeline", "serde_name": "Timeline", "has_children": false, "fields": {"events": "Value"}},
