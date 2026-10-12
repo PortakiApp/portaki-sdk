@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.8.0...v10.9.0) (2026-10-12)
+
+
+### Features
+
+* **host:** add per-stay secrets ([319a174](https://github.com/PortakiApp/portaki-sdk/commit/319a1744a22c7613bfbfde664fd775ff51dc22b4))
+* **sdui:** add MonthCalendar primitive ([6ea6e18](https://github.com/PortakiApp/portaki-sdk/commit/6ea6e1860c6870cf072dbae6a081eafb61d491c8))
+* **stats:** read guest views on stats surfaces ([539d05e](https://github.com/PortakiApp/portaki-sdk/commit/539d05e398b9eaf0c266abce119717dfe0733c10))
+
 ## [10.8.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.7.0...v10.8.0) (2026-10-12)
 
 
