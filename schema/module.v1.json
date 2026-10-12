@@ -113,7 +113,7 @@
     },
     "hostSurfaces": {
       "type": "array",
-      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (typed stats tile served by the statsSummary query with key = pathSegment; label and icon name the tile), property-stats-detail (host SDUI surface whose id is pathSegment, rendered with input.periodDays; same pathSegment as its tile), workspace-timeline-task (dated tasks served by the timelineTasks query), stay-detail (SDUI embed on stay detail with stayId input), stay-action (stay detail button that opens a modal hosting module SDUI).",
+      "description": "Host dashboard surfaces. Types: property-workspace-tab (fullscreen listing tab), property-module-sheet (config cards / SDUI embedded in the module configure sheet), property-stats-card (typed stats tile served by the statsSummary query with key = pathSegment; label and icon name the tile), property-stats-detail (host SDUI surface whose id is pathSegment, rendered with input.periodDays; same pathSegment as its tile), workspace-timeline-task (dated tasks served by the timelineTasks query), stay-detail (SDUI embed on stay detail with stayId input), stay-action (stay detail button that opens a modal hosting module SDUI), property-listing-card (a card of the listing's « Fiche & coordonnées » settings page: the shell draws the card frame and title, the module fills it, and its draft publishes with the listing's own Publier).",
       "items": { "$ref": "#/$defs/hostSurface" }
     },
     "guestSurfaces": {
@@ -170,6 +170,11 @@
           }
         }
       },
+    "core": {
+      "type": "boolean",
+      "default": false,
+      "description": "A core module of the booklet: installed on every property, always active, with no on/off switch, and absent from the modules list and the marketplace. Declared by portaki_module!(core); a core module must declare at least one host or guest surface."
+    },
     "audience": {
       "type": "string",
       "enum": ["guest", "host"],
@@ -383,14 +388,15 @@
             "property-stats-detail",
             "workspace-timeline-task",
             "stay-detail",
-            "stay-action"
+            "stay-action",
+            "property-listing-card"
           ],
           "description": "Where the dashboard mounts the surface — see hostSurfaces."
         },
         "pathSegment": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,64}$",
-          "description": "Lowercase letters, digits and hyphens, 64 at most: the fronts build API and dashboard URLs from it. For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id). For property-stats-card: the key passed to statsSummary. For property-stats-detail: the id of the host surface rendering the detail, equal to the pathSegment of its tile."
+          "description": "Lowercase letters, digits and hyphens, 64 at most: the fronts build API and dashboard URLs from it. For property-workspace-tab: URL segment under /listings/[id]/. For property-module-sheet: stable id (usually the module id). For property-stats-card: the key passed to statsSummary. For property-stats-detail: the id of the host surface rendering the detail, equal to the pathSegment of its tile. For property-listing-card: stable id (usually the module id)."
         },
         "label": { "$ref": "#/$defs/i18nStringMap" },
         "icon": { "type": "string" },

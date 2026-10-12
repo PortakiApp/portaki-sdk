@@ -145,6 +145,7 @@ pub fn bundle_text(input: TokenStream) -> TokenStream {
 /// | `module_type` | no | — catalog `type` and `author.type` (`official`…) |
 /// | `author_url` | no | — `author.url` |
 /// | `sort_order` | no | — integer, catalog position |
+/// | `core` | no | — bare flag: a core module of the booklet, installed on every property, always active, no on/off switch, absent from the modules list and the marketplace |
 ///
 /// The catalog keys, with the name and description read from the i18n bundles, fill whatever
 /// `portaki.module.json` leaves out — `portaki build` writes them, the author never does.

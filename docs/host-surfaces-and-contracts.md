@@ -20,9 +20,17 @@ A closed list since 6.13: any other value fails the `manifest` check.
 | `workspace-timeline-task` | Dated tasks between the stays of « À venir » | query `timelineTasks`, commands `taskToggle` / `taskComplete` |
 | `stay-detail` | Embed on the stay page (`input.stayId`) | host `#[surface]` |
 | `stay-action` | Stay page button opening a modal | host `#[surface]` |
+| `property-listing-card` | A card of the listing's « Fiche & coordonnées » page: the shell draws the frame and the title (`label`), the module fills it; its draft publishes with the listing's own « Publier » | host `#[surface]` |
 
 A module may declare several `property-stats-card` / `property-stats-detail` pairs (`checklist`:
 `checklist` and `cleaning`).
+
+## Core modules (`core`)
+
+`portaki_module!(…, core)` writes `"core": true` at the top of the manifest: the module is part of
+the booklet itself — installed on every property, always active, with no on/off switch, and absent
+from the modules list and the marketplace. It must declare at least one host or guest surface
+(`manifest` check).
 
 ## Displayed text
 

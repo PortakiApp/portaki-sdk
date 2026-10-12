@@ -49,9 +49,15 @@ impl Parse for ModuleAttrs {
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
-            // The one bare flag: the platform downloads what `scheduled_sync_sources` lists.
+            // Bare flag: the platform downloads what `scheduled_sync_sources` lists.
             if key == "scheduled_sync_platform_fetch" {
                 scheduled_sync(&mut attrs.catalog).insert("platformFetch".into(), true.into());
+                input.parse::<Option<Token![,]>>()?;
+                continue;
+            }
+            // Bare flag: a core module of the booklet — on every property, always active.
+            if key == "core" {
+                attrs.catalog.insert("core".into(), true.into());
                 input.parse::<Option<Token![,]>>()?;
                 continue;
             }
@@ -288,7 +294,8 @@ mod tests {
     fn catalog_metadata_is_collected_under_its_manifest_names() {
         let attrs: ModuleAttrs = syn::parse_str(
             r#"id = "issue-report", icon = IconName::DangerTriangle, maturity = Maturity::Stable,
-               module_type = ModuleType::Official, author_url = "https://portaki.app", sort_order = 90,"#,
+               module_type = ModuleType::Official, author_url = "https://portaki.app", sort_order = 90,
+               core,"#,
         )
         .unwrap();
         assert_eq!(
@@ -299,6 +306,7 @@ mod tests {
                 "type": "ModuleType::Official",
                 "authorUrl": "https://portaki.app",
                 "sortOrder": 90,
+                "core": true,
             })
         );
         assert!(syn::parse_str::<ModuleAttrs>(r#"sort_order = "90""#).is_err());

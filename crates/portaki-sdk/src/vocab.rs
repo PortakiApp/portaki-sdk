@@ -81,6 +81,10 @@ vocabulary! {
         StayDetail = "stay-detail",
         /// An action of the stay detail page.
         StayAction = "stay-action",
+        /// A card of the listing's « Fiche & coordonnées » settings page. The shell draws the
+        /// card frame and its title; the module fills it. Drafts publish with the listing's own
+        /// « Publier », not a button of the module.
+        PropertyListingCard = "property-listing-card",
     }
 }
 
@@ -411,6 +415,10 @@ mod tests {
     #[test]
     fn a_macro_argument_resolves_by_vocabulary_and_variant() {
         assert_eq!(wire_of("HostPlacement", "StayAction"), Some("stay-action"));
+        assert_eq!(
+            wire_of("HostPlacement", "PropertyListingCard"),
+            Some("property-listing-card")
+        );
         assert_eq!(
             wire_of("EmailAudience", "PropertyEligibleGuests"),
             Some("propertyEligibleGuests")
