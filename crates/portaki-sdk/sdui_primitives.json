@@ -108,6 +108,7 @@
   {"name": "DataTable", "serde_name": "DataTable", "has_children": true, "fields": {"columns": "Value", "rows": "Value", "source": "String", "rowName": "String", "searchPlaceholder": "String", "filterKey": "String", "addLabel": "String", "addAction": "Action", "sortable": "bool", "dividerAfter": "u32", "dividerLabel": "String", "panel": "String"}},
   {"name": "Stat", "serde_name": "Stat", "has_children": false, "fields": {"label": "String", "value": "String", "delta": "String", "icon": "IconName", "deltaTone": "DeltaTone", "empty": "String"}},
   {"name": "FeedItem", "serde_name": "FeedItem", "has_children": false, "fields": {"title": "String", "tag": "String", "meta": "String", "date": "String", "dotTone": "Tone", "status": "FeedStatus", "action": "Action"}},
+  {"name": "MonthCalendar", "serde_name": "MonthCalendar", "has_children": false, "fields": {"month": "String", "days": "Vec<CalendarDay>", "prevAction": "Action", "nextAction": "Action", "legend": "Vec<CalendarItem>"}},
   {"name": "Timeline", "serde_name": "Timeline", "has_children": false, "fields": {"events": "Value"}},
   {"name": "RichTextEditor", "serde_name": "RichTextEditor", "has_children": false, "fields": {"name": "String", "value": "String"}},
   {"name": "MapEditor", "serde_name": "MapEditor", "has_children": false, "fields": {"center": "GeoPoint", "markers": "Vec<MapMarker>"}},

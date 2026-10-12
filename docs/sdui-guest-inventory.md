@@ -300,6 +300,7 @@ Five modules have the guest fill something in: `consumables`, `guest-reviews`, `
 | `Chart` | a chart | `kind`: `bars` · `horizontal_bars` · `donut` · `heatmap` | no — **not drawn** (host: 5) |
 | `DataTable` | a data table; with `rowName`, an editable list whose row opens in a side panel (or a dialog) | columns `text` · `check` · `pill`; `sortable`, `dividerAfter`, `panel` | no — **not drawn** (host only) |
 | `Timeline` | a timeline of events | — | no — **not drawn** |
+| `MonthCalendar` | a month grid with chips on its days, ‹ › navigation | item `tone`, `strike`, `muted` | no — host only |
 | `FeedItem` | a log entry, with a status and a coloured dot | `dotTone`, action | no — **not drawn** (host: 5) |
 
 > Those four are clearly dashboard material. Nothing to draw for the booklet.

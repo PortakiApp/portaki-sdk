@@ -222,6 +222,49 @@
       }
     ]
   },
+  "CalendarDay": {
+    "fields": {
+      "date": {
+        "optional": true,
+        "type": "String"
+      },
+      "items": {
+        "optional": true,
+        "repeated": true,
+        "type": "CalendarItem"
+      }
+    },
+    "kind": "struct"
+  },
+  "CalendarItem": {
+    "fields": {
+      "action": {
+        "optional": true,
+        "type": "Action"
+      },
+      "id": {
+        "optional": true,
+        "type": "String"
+      },
+      "label": {
+        "optional": true,
+        "type": "String"
+      },
+      "muted": {
+        "optional": true,
+        "type": "bool"
+      },
+      "strike": {
+        "optional": true,
+        "type": "bool"
+      },
+      "tone": {
+        "optional": true,
+        "type": "Tone"
+      }
+    },
+    "kind": "struct"
+  },
   "CardPresentation": {
     "kind": "enum",
     "variants": [
