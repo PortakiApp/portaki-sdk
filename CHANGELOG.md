@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.7.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.6.0...v10.7.0) (2026-10-12)
+
+
+### Features
+
+* **sdk:** add listing card placement, core flag ([6b182be](https://github.com/PortakiApp/portaki-sdk/commit/6b182be99369282d54cc21d69ea689771bdfb1ec))
+* **sdui:** add FileUpload and a DataTable row panel ([0e835f5](https://github.com/PortakiApp/portaki-sdk/commit/0e835f5dd5c2198a71bd3c0e9d81d1f2495df582))
+
 ## [10.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.5.0...v10.6.0) (2026-10-12)
 
 
