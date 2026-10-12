@@ -222,6 +222,7 @@ Five modules have the guest fill something in: `consumables`, `guest-reviews`, `
 | `ChoiceList` | a choice among several | `layout`: `compact` · `cards` | **yes — 3** (`consumables` / `guest.form`) · host too |
 | `TimePicker` | a time | — | **yes — 1** (`pre-arrival-form` / `guest.form`) |
 | `ImageUpload` | uploading a photo, with preview and removal | — | **yes — 1** (`issue-report` / `guest.form`) |
+| `FileUpload` | attaching a document (a PDF manual) | `accept`, `maxBytes` | no — host only |
 | `RadioGroup` | radio buttons | options | no |
 | `Checkbox` | a checkbox | — | no |
 | `Toggle` | a checkbox with a label | — | no (host: 1) |
@@ -297,7 +298,7 @@ Five modules have the guest fill something in: `consumables`, `guest-reviews`, `
 | Primitive | What it is for | Variants | Used on the guest side |
 |---|---|---|---|
 | `Chart` | a chart | `kind`: `bars` · `horizontal_bars` · `donut` · `heatmap` | no — **not drawn** (host: 5) |
-| `DataTable` | a data table | — | no — **not drawn** |
+| `DataTable` | a data table; with `rowName`, an editable list whose row opens in a side panel | columns `text` · `check` · `pill` | no — **not drawn** (host only) |
 | `Timeline` | a timeline of events | — | no — **not drawn** |
 | `FeedItem` | a log entry, with a status and a coloured dot | `dotTone`, action | no — **not drawn** (host: 5) |
 

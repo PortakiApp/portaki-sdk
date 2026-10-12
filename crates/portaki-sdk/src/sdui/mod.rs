@@ -50,6 +50,64 @@
 //! - `PhoneInput` : un numéro E.164 (« +33612345678 »), l'indicatif choisi à côté du numéro ;
 //!   `defaultCountry` (ISO 3166, « FR ») est l'indicatif proposé d'abord.
 //!
+//! ## Un fichier joint — `FileUpload`
+//!
+//! Comme `ImageUpload`, mais pour un document : le tableau de bord envoie le fichier à la
+//! plateforme et le champ prend sa référence `portaki-file:<id>` — le module ne voit jamais les
+//! octets. `accept` est la liste des types MIME admis, séparés par des virgules
+//! (`"application/pdf"`) ; `maxBytes` la taille au-delà de laquelle le tableau de bord refuse
+//! avant tout envoi. Ce contrôle est un confort : la plateforme relit les octets à la porte.
+//!
+//! ```
+//! use portaki_sdk::sdui::{primitives::FileUpload, Component};
+//!
+//! let pdf: Component = FileUpload::new().name("devices.0.manualFile")
+//!     .accept("application/pdf").maxBytes(20 * 1024 * 1024).into();
+//! let wire = serde_json::to_value(&pdf).unwrap();
+//! assert_eq!(wire["type"], "FileUpload");
+//! assert_eq!(wire["maxBytes"], 20_971_520);
+//! ```
+//!
+//! ## Une longue liste en tableau — `DataTable` éditable
+//!
+//! Avec `rowName`, un `DataTable` édite la liste `rowName` du formulaire au lieu de seulement
+//! l'afficher (règles communes §2.4 bis : tableau + panneau latéral). Chaque objet de `rows` est
+//! une ligne : `id` obligatoire, puis les valeurs des colonnes.
+//!
+//! - **Le panneau d'une ligne est l'enfant de même rang** : `children[i]` est le formulaire de
+//!   `rows[i]`, du SDUI ordinaire dont les champs se nomment `{rowName}.{i}.{clé}` et portent
+//!   leur valeur et leur `Field::error`. Le tableau de bord l'ouvre dans un panneau latéral
+//!   (~480 px) au clic sur la ligne, avec Précédent / Suivant / Supprimer.
+//! - **Chaque ligne envoie au moins son id** (`{rowName}.{i}.id`) : une ligne jamais ouverte
+//!   n'envoie que lui, et le module (ou la plateforme, pour un champ `structured` à `item.id`)
+//!   garde ce qu'elle avait. Supprimer retire la ligne du formulaire.
+//! - **Colonnes** (`columns`, une liste d'objets) : `key`, `label`, et `kind` — `text` par
+//!   défaut ; `check`, une case liée à `{rowName}.{i}.{key}` (valeur booléenne de la ligne), que
+//!   `max` borne en nombre de cases cochées (au-delà, les autres se désactivent et `maxMessage`
+//!   s'affiche) ; `pill`, une pastille quand la valeur n'est pas vide.
+//! - `searchPlaceholder` ajoute une recherche sur le texte des cellules ; `filterKey` des
+//!   pastilles de filtre, une par valeur distincte de cette colonne ; `addLabel` + `addAction`,
+//!   un bouton « Ajouter » : le module rend une ligne de plus (avec son id), et le tableau de bord
+//!   ouvre son panneau.
+//!
+//! Sans `rowName`, la table reste en lecture seule, comme avant.
+//!
+//! ```
+//! use portaki_sdk::sdui::primitives::{DataTable, Field, TextInput};
+//! use serde_json::json;
+//!
+//! let table = DataTable::new()
+//!     .rowName("devices")
+//!     .columns(json!([{ "key": "name", "label": "Appareil" },
+//!                     { "key": "featured", "label": "Mis en avant", "kind": "check", "max": 4 }]))
+//!     .rows(json!([{ "id": "d1", "name": "Lave-linge", "featured": true }]))
+//!     .child(Field::new().name("devices.0.name")
+//!         .child(TextInput::new().name("devices.0.name").value("Lave-linge")));
+//! let wire = serde_json::to_value(&table).unwrap();
+//! assert_eq!(wire["rowName"], "devices");
+//! assert_eq!(wire["children"].as_array().unwrap().len(), 1);
+//! ```
+//!
 //! ## Une erreur sous le champ — `Field::error`
 //!
 //! `Field::error` est le message affiché sous le champ, à la place de son aide (`FieldHint`) :
