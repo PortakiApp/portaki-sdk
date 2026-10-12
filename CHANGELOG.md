@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.6.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.5.0...v10.6.0) (2026-10-12)
+
+
+### Features
+
+* **capability:** add access.reveal_schedule ([5a3f7c5](https://github.com/PortakiApp/portaki-sdk/commit/5a3f7c50947654e558ec766512ef2dfc6bdcf36e))
+* **module:** share provider settings with peers ([906023a](https://github.com/PortakiApp/portaki-sdk/commit/906023ab6ef6943f5704782390377da2bdc781c4))
+
 ## [10.5.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.4.0...v10.5.0) (2026-10-09)
 
 
