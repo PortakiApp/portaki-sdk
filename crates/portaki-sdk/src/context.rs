@@ -405,6 +405,25 @@ impl Context {
         crate::contracts::stats::Period::from_days(self.input_u64("periodDays").unwrap_or(30))
     }
 
+    /// How guests consulted this module over [`Self::stats_period`], on a statistics detail
+    /// surface: `input.views`, with the per-day series. `None` when the workspace has no booklet
+    /// statistics, on any other surface, or when the platform does not send it.
+    ///
+    /// ```
+    /// use portaki_sdk::context::Context;
+    ///
+    /// let ctx = Context {
+    ///     input: serde_json::json!({ "periodDays": 30, "views": { "opens": 4, "surfaces": { "detail": 4 }, "clicks": {} } }),
+    ///     ..Context::default()
+    /// };
+    /// assert_eq!(ctx.stats_views().map(|views| views.opens), Some(4));
+    /// ```
+    pub fn stats_views(&self) -> Option<crate::contracts::stats::StatsViews> {
+        self.input
+            .get("views")
+            .and_then(|views| serde_json::from_value(views.clone()).ok())
+    }
+
     /// Unsigned integer draft field from [`Self::input`].
     pub fn input_u64(&self, key: &str) -> Option<u64> {
         self.input.get(key).and_then(Value::as_u64)
@@ -574,6 +593,21 @@ mod tests {
         assert_eq!(ctx.stats_period().days(), 365);
         ctx.input = serde_json::json!({ "periodDays": 12 });
         assert_eq!(ctx.stats_period().days(), 30);
+    }
+
+    #[test]
+    fn the_stats_views_come_from_the_input() {
+        let mut ctx = Context::default();
+        assert_eq!(ctx.stats_views(), None);
+        ctx.input = serde_json::json!({ "views": {
+            "opens": 2, "surfaces": { "detail": 2 }, "clicks": { "directions": 1 },
+            "days": [{ "date": "2026-10-01", "opens": 2, "clicks": 1 }]
+        } });
+        let views = ctx.stats_views().unwrap();
+        assert_eq!(views.clicks_of("directions"), 1);
+        assert_eq!(views.days.len(), 1);
+        ctx.input = serde_json::json!({ "views": "nope" });
+        assert_eq!(ctx.stats_views(), None);
     }
 
     #[test]

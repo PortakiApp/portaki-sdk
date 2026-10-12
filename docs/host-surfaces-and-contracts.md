@@ -45,7 +45,7 @@ One JSON Schema each in `contracts/`, shipped in the SDK contracts bundle; the R
 
 ### `statsSummary` — `contracts/stats-summary.v1.json`
 
-Args `StatsSummaryArgs { propertyId, period: 30 | 90 | 365, key }`. Answer `StatsSummary`:
+Args `StatsSummaryArgs { propertyId, period: 30 | 90 | 365, key, views? }`. Answer `StatsSummary`:
 
 ```json
 { "value": "5", "label": { "fr": "signalements", "en": "reports" },
@@ -70,6 +70,35 @@ fn stats_summary(_ctx: Context, args: stats::StatsSummaryArgs) -> Result<stats::
 
 The detail surface reads the same window with `ctx.stats_period()` (`input.periodDays`);
 `period.since(now)` starts it, `period.window(&ctx.lang())` writes it (« sur 90 jours »).
+
+#### How guests consulted the module — `views`
+
+When the workspace has the booklet statistics (`core.analytics.basic` or `.advanced`), the platform
+adds `views` to the args, over the same window, for this property:
+
+```json
+{ "opens": 12, "surfaces": { "detail": 9, "map": 3 },
+  "clicks": { "directions": 4, "call": 1 } }
+```
+
+- `opens` — module surfaces the booklet opened, once per surface and per booklet session, however
+  the guest got there (a card, a link inside the module, a shared address); `surfaces` splits them
+  by manifest surface id.
+- `clicks` — taps leaving the booklet from the module, by kind: `call` (`tel:`), `directions` (a
+  maps link), `mail` (`mailto:`), `link` (any other `https`). Every tap counts.
+
+Counts only: no stay, no guest, no time of day, never the URL or the number. `views` is absent
+without the statistics — a tile must still make sense without it. The detail surface gets the same
+object in `input.views`, plus `days: [{ date, opens, clicks }]` (active UTC days, oldest first):
+read it with `ctx.stats_views()`.
+
+```rust
+#[query(name = "statsSummary")]
+fn stats_summary(_ctx: Context, args: stats::StatsSummaryArgs) -> Result<stats::StatsSummary> {
+    let opens = args.views.as_ref().map_or(0, |views| views.opens);
+    Ok(stats::summary(opens.to_string(), I18nText::new("consultations", "views")))
+}
+```
 
 ### `timelineTasks`, `taskToggle`, `taskComplete` — `contracts/timeline-tasks.v1.json`
 
