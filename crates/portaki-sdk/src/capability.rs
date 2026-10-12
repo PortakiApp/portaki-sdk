@@ -149,6 +149,10 @@ pub enum CapabilityId {
     /// Amenities provider contract (`amenities.list`) — equipment a module adds to the property.
     #[serde(rename = "amenities.provide")]
     AmenitiesProvide,
+    /// Reveal-schedule provider contract: when access details reach the guest, shared read-only
+    /// with peers through `shares` ([`crate::host::module::ModulePeer::shared`]).
+    #[serde(rename = "access.reveal_schedule")]
+    RevealSchedule,
 }
 
 impl CapabilityId {
@@ -192,6 +196,7 @@ impl CapabilityId {
             Self::GuestAssistant => "ai.guest.assistant",
             Self::SmartLock => "access.smart_lock",
             Self::AmenitiesProvide => "amenities.provide",
+            Self::RevealSchedule => "access.reveal_schedule",
         }
     }
 
@@ -234,6 +239,7 @@ impl CapabilityId {
         Self::GuestAssistant,
         Self::SmartLock,
         Self::AmenitiesProvide,
+        Self::RevealSchedule,
     ];
 
     /// Returns `true` when `id` is a registered platform capability string.
@@ -296,6 +302,7 @@ impl FromStr for CapabilityId {
             "ai.guest.assistant" => Ok(Self::GuestAssistant),
             "access.smart_lock" => Ok(Self::SmartLock),
             "amenities.provide" => Ok(Self::AmenitiesProvide),
+            "access.reveal_schedule" => Ok(Self::RevealSchedule),
             other => Err(ParseCapabilityIdError {
                 id: other.to_string(),
             }),
@@ -437,6 +444,11 @@ pub mod access {
     ///
     /// Peer command names: [`crate::contracts::smart_lock`].
     pub const SMART_LOCK: CapabilityId = CapabilityId::SmartLock;
+
+    /// Reveal-schedule provider contract: the module that decides when access details reach the
+    /// guest provides it and `shares` the settings that say so; a consumer reads them read-only
+    /// as [`crate::host::module::ModulePeer::shared`] instead of asking the host twice.
+    pub const REVEAL_SCHEDULE: CapabilityId = CapabilityId::RevealSchedule;
 }
 
 /// Exhaustive list of known capability ids for compile-time validation and CLI linting.
@@ -473,6 +485,12 @@ mod tests {
             "external.google-places.byok"
         );
         assert_eq!(access::SMART_LOCK.as_str(), "access.smart_lock");
+        assert_eq!(access::REVEAL_SCHEDULE.as_str(), "access.reveal_schedule");
+        assert_eq!(
+            CapabilityId::from_str("access.reveal_schedule").unwrap(),
+            CapabilityId::RevealSchedule
+        );
+        assert!(super::is_known("access.reveal_schedule"));
         assert!(ALL.contains(&CapabilityId::AmenitiesProvide));
         assert_eq!(CapabilityId::AmenitiesProvide.as_str(), "amenities.provide");
         assert_eq!(
