@@ -28,6 +28,86 @@
           "type": "string",
           "minLength": 1,
           "description": "pathSegment of the property-stats-card surface."
+        },
+        "views": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/StatsViews"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How guests consulted the module over the window; absent without booklet statistics. Never carries days."
+        }
+      }
+    },
+    "StatsViews": {
+      "type": "object",
+      "description": "Counts only: no stay, no guest, no time of day. Same shape in input.views of the property-stats-detail surface, with days.",
+      "required": [
+        "opens",
+        "surfaces",
+        "clicks"
+      ],
+      "properties": {
+        "opens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Module surfaces opened, once per surface and booklet session."
+        },
+        "surfaces": {
+          "type": "object",
+          "description": "opens by manifest surface id.",
+          "propertyNames": {
+            "pattern": "^[a-z0-9/_-]{1,64}$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "clicks": {
+          "type": "object",
+          "description": "Taps leaving the booklet, by kind.",
+          "propertyNames": {
+            "enum": [
+              "call",
+              "directions",
+              "mail",
+              "link"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "days": {
+          "type": "array",
+          "description": "Active UTC days, oldest first; detail surface only.",
+          "items": {
+            "type": "object",
+            "required": [
+              "date",
+              "opens",
+              "clicks"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "opens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "clicks": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
         }
       }
     },

@@ -7,6 +7,11 @@
 //! `input.periodDays`. Name and icon of the tile come from the manifest. Schema:
 //! `contracts/stats-summary.v1.json`.
 //!
+//! When the workspace has the booklet statistics (`core.analytics.basic` or `.advanced`), the
+//! platform adds how guests consulted the module over the same window: [`StatsSummaryArgs::views`]
+//! on the tile, `input.views` on the detail surface ([`Context::stats_views`](crate::context::Context::stats_views)).
+//! Counts only — no stay, no guest, no time of day.
+//!
 //! ```
 //! use portaki_sdk::contracts::i18n::I18nText;
 //! use portaki_sdk::contracts::stats::{self, AttentionLevel, TrendDirection};
@@ -19,7 +24,9 @@
 //! assert_eq!(wire["trend"]["direction"], "up");
 //! ```
 
-use chrono::{DateTime, Duration, Utc};
+use std::collections::BTreeMap;
+
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -39,6 +46,75 @@ pub struct StatsSummaryArgs {
     pub period: u32,
     /// Which tile: the `pathSegment` of the `property-stats-card` surface.
     pub key: String,
+    /// How guests consulted this module over the window; `None` when the workspace has no booklet
+    /// statistics (or with a platform that does not send them yet). Never carries `days`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub views: Option<StatsViews>,
+}
+
+/// How guests consulted a module over a statistics window, on one property.
+///
+/// ```
+/// use portaki_sdk::contracts::stats::StatsViews;
+///
+/// let views: StatsViews = serde_json::from_value(serde_json::json!({
+///     "opens": 12,
+///     "surfaces": { "detail": 9, "map": 3 },
+///     "clicks": { "directions": 4, "call": 1 }
+/// }))
+/// .unwrap();
+/// assert_eq!(views.surface("detail"), 9);
+/// assert_eq!(views.clicks_of("mail"), 0);
+/// assert!(views.days.is_empty());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatsViews {
+    /// Detail surfaces of the module the booklet opened — once per surface and per booklet
+    /// session, however the guest got there (a card, a link inside the module, a shared address).
+    #[serde(default)]
+    pub opens: u64,
+    /// [`Self::opens`] by surface id (the manifest id, `detail`, never an address with an item id).
+    #[serde(default)]
+    pub surfaces: BTreeMap<String, u64>,
+    /// Ways out of the booklet a guest took from the module, by kind: `call` (`tel:`),
+    /// `directions` (a maps link), `mail` (`mailto:`), `link` (any other `https`). Every tap counts.
+    #[serde(default)]
+    pub clicks: BTreeMap<String, u64>,
+    /// Active days only, oldest first, in UTC — on the detail surface, never on the tile.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub days: Vec<StatsViewsDay>,
+}
+
+impl StatsViews {
+    /// Opens of one surface, 0 when none.
+    pub fn surface(&self, id: &str) -> u64 {
+        self.surfaces.get(id).copied().unwrap_or(0)
+    }
+
+    /// Taps of one kind (`call`, `directions`, `mail`, `link`), 0 when none.
+    pub fn clicks_of(&self, kind: &str) -> u64 {
+        self.clicks.get(kind).copied().unwrap_or(0)
+    }
+
+    /// All taps, every kind.
+    pub fn total_clicks(&self) -> u64 {
+        self.clicks.values().sum()
+    }
+}
+
+/// One active day of [`StatsViews::days`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatsViewsDay {
+    /// The UTC day.
+    pub date: NaiveDate,
+    /// Surfaces opened that day.
+    #[serde(default)]
+    pub opens: u64,
+    /// Taps that day, every kind.
+    #[serde(default)]
+    pub clicks: u64,
 }
 
 impl StatsSummaryArgs {
@@ -215,6 +291,7 @@ mod tests {
             property_id: Uuid::nil(),
             period,
             key: "stock".into(),
+            views: None,
         };
         let days: Vec<u32> = [0, 30, 90, 365, 400]
             .map(|period| args(period).period().days())
@@ -229,5 +306,38 @@ mod tests {
             Period::Days30.since(now).to_rfc3339(),
             "2026-08-26T00:00:00+00:00"
         );
+    }
+
+    #[test]
+    fn views_are_optional_and_read_back() {
+        let id = Uuid::nil();
+        let without: StatsSummaryArgs = serde_json::from_value(serde_json::json!({
+            "propertyId": id, "period": 30, "key": "stock"
+        }))
+        .unwrap();
+        assert_eq!(without.views, None);
+        assert!(!serde_json::to_value(&without)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("views"));
+
+        let with: StatsSummaryArgs = serde_json::from_value(serde_json::json!({
+            "propertyId": id, "period": 90, "key": "stock",
+            "views": { "opens": 3, "surfaces": { "detail": 3 }, "clicks": { "call": 1, "link": 2 } }
+        }))
+        .unwrap();
+        let views = with.views.unwrap();
+        assert_eq!(views.opens, 3);
+        assert_eq!(views.surface("detail"), 3);
+        assert_eq!(views.surface("map"), 0);
+        assert_eq!(views.total_clicks(), 3);
+
+        let detail: StatsViews = serde_json::from_value(serde_json::json!({
+            "opens": 2, "surfaces": {}, "clicks": {},
+            "days": [{ "date": "2026-10-01", "opens": 2, "clicks": 0 }]
+        }))
+        .unwrap();
+        assert_eq!(detail.days[0].date.to_string(), "2026-10-01");
     }
 }

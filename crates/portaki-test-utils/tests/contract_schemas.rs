@@ -5,7 +5,9 @@ use chrono::{TimeZone, Utc};
 use portaki_sdk::contracts::amenities;
 use portaki_sdk::contracts::i18n::I18nText;
 use portaki_sdk::contracts::publish::{PublishCheck, PublishLevel, PublishReadiness};
-use portaki_sdk::contracts::stats::{self, AttentionLevel, StatsSummaryArgs, TrendDirection};
+use portaki_sdk::contracts::stats::{
+    self, AttentionLevel, StatsSummaryArgs, StatsViews, StatsViewsDay, TrendDirection,
+};
 use portaki_sdk::contracts::timeline::{
     self, TaskCompleteArgs, TaskToggleArgs, TaskUpdated, TimelineStay, TimelineTaskItem,
     TimelineTasks, TimelineTasksArgs,
@@ -43,8 +45,35 @@ fn stats_summary_examples_fit_the_schema() {
         property_id: Uuid::new_v4(),
         period: 90,
         key: "reports".into(),
+        views: None,
     };
-    assert_valid(STATS_SUMMARY_SCHEMA_V1, "StatsSummaryArgs", args);
+    assert_valid(STATS_SUMMARY_SCHEMA_V1, "StatsSummaryArgs", args.clone());
+    let views = StatsViews {
+        opens: 3,
+        surfaces: [("detail".to_string(), 2), ("trails/map".to_string(), 1)].into(),
+        clicks: [("directions".to_string(), 2), ("call".to_string(), 1)].into(),
+        days: vec![],
+    };
+    assert_valid(
+        STATS_SUMMARY_SCHEMA_V1,
+        "StatsSummaryArgs",
+        StatsSummaryArgs {
+            views: Some(views.clone()),
+            ..args
+        },
+    );
+    assert_valid(
+        STATS_SUMMARY_SCHEMA_V1,
+        "StatsViews",
+        StatsViews {
+            days: vec![StatsViewsDay {
+                date: chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                opens: 3,
+                clicks: 3,
+            }],
+            ..views
+        },
+    );
     assert_valid(
         STATS_SUMMARY_SCHEMA_V1,
         "StatsSummary",
