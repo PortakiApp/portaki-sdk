@@ -53,6 +53,12 @@ pub const STAY_GUEST_CONTACT_READ: &str = "stay:guest_contact:read";
 /// not declare it, so a host reviewing the manifest sees which modules collect guest photos.
 pub const GUEST_FILES: &str = "guest:files";
 
+/// `files.read` — the bytes of a file the host attached to this module (`host::files::read`).
+///
+/// The host's mirror of [`GUEST_FILES`]: that one lets a guest drop a file, this one lets the
+/// module open what the host dropped. Granted by the `host-files` feature.
+pub const HOST_FILES: &str = "host:files";
+
 /// Every permission without a parameter.
 pub const FIXED: &[&str] = &[
     KV,
@@ -62,6 +68,7 @@ pub const FIXED: &[&str] = &[
     PLATFORM,
     STAY_GUEST_CONTACT_READ,
     GUEST_FILES,
+    HOST_FILES,
 ];
 
 /// Whether `permission` is one the manifest schema accepts.
