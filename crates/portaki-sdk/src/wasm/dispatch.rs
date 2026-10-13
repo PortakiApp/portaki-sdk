@@ -157,11 +157,28 @@ mod tests {
         }
     }
 
-    fn command(name: &str) -> String {
-        let envelope = format!(
+    inventory::submit! {
+        HandlerRegistration {
+            operation_names: &["testRefuse"],
+            dispatch: |_ctx, _params| Err(crate::PortakiError::Refused("photo_required")),
+        }
+    }
+
+    fn envelope(name: &str) -> String {
+        format!(
             r#"{{"command":"{name}","params":{{}},"context":{{"moduleId":"nuki","moduleVersion":"1.0.0","propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2","stayId":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","caller":"guest"}}}}"#
-        );
-        dispatch_command_json(&envelope).expect("dispatched")
+        )
+    }
+
+    fn command(name: &str) -> String {
+        dispatch_command_json(&envelope(name)).expect("dispatched")
+    }
+
+    /// Un refus sort de la dispatch tel quel : le code en tête du texte, sans préfixe.
+    #[test]
+    fn a_refusal_leaves_the_dispatch_as_its_code() {
+        let refused = dispatch_command_json(&envelope("testRefuse")).expect_err("refused");
+        assert_eq!(refused.to_string(), "module_refused:photo_required");
     }
 
     /// Ce qu'une commande renvoie revient à son appelant — sans quoi `getGuestCredential` ne peut
