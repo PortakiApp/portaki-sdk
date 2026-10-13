@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.10.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.9.0...v10.10.0) (2026-10-13)
+
+
+### Features
+
+* **cli:** read permission reasons from a file ([21f0a8d](https://github.com/PortakiApp/portaki-sdk/commit/21f0a8d340d0b19d3960873df2d84edc1619eece))
+
 ## [10.9.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.8.0...v10.9.0) (2026-10-12)
 
 
