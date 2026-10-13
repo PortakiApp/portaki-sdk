@@ -322,6 +322,11 @@ invocation serves both.
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
 | `portaki ci report --outcome <…>` | Tell the platform how this module's CI run ended |
 
+A version already in the registry is not published again: `ci release` reads what the registry
+holds — by digest from the catalogue, or by the version's tag for a draft it does not show — and
+ends `already-published` if that is the artifact just built. Other content under the same number
+fails: publish a new version.
+
 `ci modules` reads the layout from the crates, not from a flag: a crate on `portaki-sdk` at the
 root means one module, crates under `modules/*/` mean several. A change to the shared workspace
 (`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain`) rebuilds everything; a change to a
