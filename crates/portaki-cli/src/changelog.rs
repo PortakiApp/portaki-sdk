@@ -12,6 +12,10 @@
 //! A line that reads like a commit message (`chore: bump deps`) is refused in `--notes`, written
 //! by hand. In a `CHANGELOG*.md` — often generated — it is dropped with a warning: a language left
 //! without a line then counts as absent, and the registry keeps a stable version as a draft.
+//! Unless every dropped line is a dependency bump (`**deps:** …`, `bump <crate> to <version>`):
+//! the version then gets a standard line in `fr` and `en` — and in `fr` too when
+//! `CHANGELOG.fr.md` has no section while `CHANGELOG.md`'s bumps dependencies only. A real line
+//! anywhere in the section, and no standard line is made up.
 //!
 //! In a monorepo, release-please writes into a module's `CHANGELOG.md` the commits scoped to other
 //! modules (`**trails:** upload GPX…` in checklist's section): a line scoped to another module of
@@ -176,6 +180,8 @@ pub fn lines(
         );
     }
     let others = other_modules(module_root);
+    let mut with_section = BTreeSet::new();
+    let mut deps_only = BTreeSet::new();
     for (lang, path) in changelog_files(module_root)? {
         if by_lang.contains_key(&lang) {
             continue;
@@ -183,7 +189,11 @@ pub fn lines(
         let markdown =
             std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let source = path.file_name().unwrap_or_default().to_string_lossy();
-        let (foreign, ours): (Vec<_>, Vec<_>) = section(&markdown, version)
+        let bullets = section(&markdown, version);
+        if !bullets.is_empty() {
+            with_section.insert(lang.clone());
+        }
+        let (foreign, ours): (Vec<_>, Vec<_>) = bullets
             .into_iter()
             .partition(|(scope, _)| scope.as_ref().is_some_and(|s| others.contains(s)));
         if !foreign.is_empty() {
@@ -198,24 +208,55 @@ pub fn lines(
             ));
         }
         // Generated most of the time: a commit line is dropped from it, never a blocker.
-        let (commits, kept): (Vec<String>, Vec<String>) = ours
+        let (commits, kept): (Vec<_>, Vec<_>) = ours
             .into_iter()
-            .map(|(_, line)| line)
-            .partition(|line| looks_like_commit(line));
+            .partition(|(_, line)| looks_like_commit(line));
         if !commits.is_empty() {
             crate::ui::warn(format!(
                 "{source} {version}: dropped {} line(s) that read like commit messages — {}",
                 commits.len(),
-                commits.join(" · ")
+                commits
+                    .iter()
+                    .map(|(_, line)| line.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" · ")
             ));
         }
         let found: Vec<String> = kept
             .into_iter()
             .take(MAX_LINES)
-            .map(|line| shorten(&line))
+            .map(|(_, line)| shorten(&line))
             .collect();
         if !found.is_empty() {
             by_lang.insert(lang, found);
+        } else if foreign.is_empty()
+            && !commits.is_empty()
+            && commits
+                .iter()
+                .all(|(scope, line)| is_deps_bump(scope.as_deref(), line))
+        {
+            deps_only.insert(lang.clone());
+            if let Some(standard) = deps_only_line(&lang) {
+                crate::ui::warn(format!(
+                    "{source} {version}: dependency bumps only — standard line used: « {standard} »"
+                ));
+                by_lang.insert(lang, vec![standard.to_string()]);
+            }
+        }
+    }
+    // A release-please patch for an SDK bump: nobody writes CHANGELOG.fr.md for it, and the
+    // registry's fallback language is the one a stable version cannot go without.
+    if deps_only.contains(UNSUFFIXED_LANG)
+        && !by_lang.contains_key(FALLBACK_LANG)
+        && !with_section.contains(FALLBACK_LANG)
+    {
+        if let Some(standard) = deps_only_line(FALLBACK_LANG) {
+            crate::ui::warn(format!(
+                "{} {version}: no section, CHANGELOG.md bumps dependencies only — standard line \
+                 used: « {standard} »",
+                file_for(FALLBACK_LANG)
+            ));
+            by_lang.insert(FALLBACK_LANG.to_string(), vec![standard.to_string()]);
         }
     }
     let count = by_lang.values().map(Vec::len).max().unwrap_or(0);
@@ -227,6 +268,39 @@ pub fn lines(
                 .collect()
         })
         .collect())
+}
+
+/// A dependency bump, release-please's `**deps:** …` or a bare `bump <crate> to <version>`.
+fn is_deps_bump(scope: Option<&str>, line: &str) -> bool {
+    if scope == Some("deps") {
+        return true;
+    }
+    let line = line.to_lowercase();
+    match line.split_whitespace().collect::<Vec<_>>()[..] {
+        ["bump", krate, "to", version] => {
+            let version = version.strip_prefix('v').unwrap_or(version);
+            !krate.is_empty()
+                && version.starts_with(|c: char| c.is_ascii_digit())
+                && version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || ".-+".contains(c))
+        }
+        _ => false,
+    }
+}
+
+/// What a host reads for a version that only bumps dependencies — fr and en only.
+fn deps_only_line(lang: &str) -> Option<&'static str> {
+    match lang {
+        "fr" => Some(
+            "Le module passe à la dernière base technique de Portaki ; rien ne change pour \
+             l'hôte ni pour le voyageur.",
+        ),
+        "en" => {
+            Some("Updated to Portaki's latest technical base; nothing changes for hosts or guests.")
+        }
+        _ => None,
+    }
 }
 
 /// The ids of the repository's other modules — none outside a monorepo.
@@ -649,14 +723,164 @@ mod tests {
         }
     }
 
-    /// A release-please deps bump leaves the language without a line: absent, not an error.
+    /// Commit lines that are not all dependency bumps leave the language absent, not an error.
     #[test]
     fn a_file_left_with_commits_only_counts_as_absent() {
-        let dir = module(Some(
-            "## [0.8.2](https://x) (2026-09-26)\n\n### Bug Fixes\n\n* **deps:** bump portaki-sdk to 8.8.1 ([474417d](https://x))\n",
-        ));
+        for section in [
+            "* **deps:** bump portaki-sdk to 8.8.1 ([474417d](https://x))\n* chore: release 1.2\n",
+            "* chore: release 1.2\n",
+            "* build(deps): bump serde\n",
+        ] {
+            let dir = module(Some(&format!(
+                "## [0.8.2](https://x) (2026-09-26)\n\n### Bug Fixes\n\n{section}"
+            )));
+            assert!(
+                lines(&[], "fr", dir.path(), "0.8.2").unwrap().is_empty(),
+                "{section}"
+            );
+        }
+    }
 
-        assert!(lines(&[], "fr", dir.path(), "0.8.2").unwrap().is_empty());
+    /// nuki 1.8.1 in portaki-modules' release-please PR: an SDK bump, nothing else.
+    const DEPS_ONLY: &str = "# Changelog
+
+## [1.8.1](https://github.com/PortakiApp/portaki-modules/compare/nuki-v1.8.0...nuki-v1.8.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **deps:** bump portaki-sdk to 10.10.0 ([f9906b0](https://github.com/PortakiApp/portaki-modules/commit/f9906b0045b44a3f033f1feac24ef7b0ba7f4954))
+
+## [1.8.0](https://github.com/PortakiApp/portaki-modules/compare/nuki-v1.7.0...nuki-v1.8.0) (2026-10-12)
+
+
+### Features
+
+* **nuki:** show the lock's battery ([1a2b3c4](https://github.com/PortakiApp/portaki-modules/commit/1a2b3c4))
+";
+
+    fn standard() -> Vec<Line> {
+        vec![Line::from([
+            ("en".into(), deps_only_line("en").unwrap().into()),
+            ("fr".into(), deps_only_line("fr").unwrap().into()),
+        ])]
+    }
+
+    #[test]
+    fn a_deps_only_version_gets_the_standard_line_in_french_and_english() {
+        // No CHANGELOG.fr.md at all, then one without a section for 1.8.1.
+        let dir = module(Some(DEPS_ONLY));
+        assert_eq!(lines(&[], "fr", dir.path(), "1.8.1").unwrap(), standard());
+        fs::write(
+            dir.path().join("CHANGELOG.fr.md"),
+            "# Changelog\n\n## 1.8.0\n\n* La batterie de la serrure s'affiche\n",
+        )
+        .unwrap();
+        assert_eq!(lines(&[], "fr", dir.path(), "1.8.1").unwrap(), standard());
+        // The version before is real work: no standard line.
+        assert_eq!(
+            en(&[], dir.path(), "1.8.0").unwrap(),
+            vec!["show the lock's battery"]
+        );
+        for lang in ["fr", "en"] {
+            let line = deps_only_line(lang).unwrap();
+            assert!(
+                check_text("x", line).is_ok() && !looks_like_commit(line),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn both_forms_of_a_dependency_bump_are_recognised() {
+        for section in [
+            "- bump portaki-sdk to 10.10.0\n",
+            "- Bump portaki-sdk to v10.10.0\n",
+            "* **deps:** bump deps ([1](https://x))\n",
+            "* **deps:** bump portaki-sdk to 10.10.0\n* **deps:** bump serde to 1.0.200-rc.1\n",
+        ] {
+            let dir = module(Some(&format!("## 1.0.1\n{section}")));
+            assert_eq!(
+                lines(&[], "fr", dir.path(), "1.0.1").unwrap(),
+                standard(),
+                "{section}"
+            );
+        }
+        for (scope, line, bump) in [
+            (Some("deps"), "bump deps", true),
+            (None, "bump portaki-sdk to 10.10.0", true),
+            (None, "bump portaki-sdk", false),
+            (None, "bump portaki-sdk to latest", false),
+            (None, "bump portaki-sdk to 10.10.0 and serde", false),
+            (None, "build(deps): bump serde", false),
+            (Some("ui"), "bump deps", false),
+        ] {
+            assert_eq!(is_deps_bump(scope, line), bump, "{scope:?} {line}");
+        }
+    }
+
+    #[test]
+    fn a_real_line_is_never_replaced_by_the_standard_one() {
+        // A real English line beside the bump: kept alone, French stays absent.
+        let dir = module(Some(
+            "## 1.0.1\n* **deps:** bump portaki-sdk to 10.10.0\n* keypad code\n",
+        ));
+        assert_eq!(
+            lines(&[], "fr", dir.path(), "1.0.1").unwrap(),
+            vec![Line::from([("en".into(), "keypad code".into())])]
+        );
+        // A French section of its own wins over the standard line.
+        let dir = module(Some(DEPS_ONLY));
+        fs::write(
+            dir.path().join("CHANGELOG.fr.md"),
+            "## 1.8.1\n* Code clavier la veille\n",
+        )
+        .unwrap();
+        assert_eq!(
+            lines(&[], "fr", dir.path(), "1.8.1").unwrap(),
+            vec![Line::from([
+                ("en".into(), deps_only_line("en").unwrap().into()),
+                ("fr".into(), "Code clavier la veille".into()),
+            ])]
+        );
+        // A French section of commit lines only, not bumps: absent, not made up from English.
+        fs::write(
+            dir.path().join("CHANGELOG.fr.md"),
+            "## 1.8.1\n* chore: release\n",
+        )
+        .unwrap();
+        assert_eq!(
+            lines(&[], "fr", dir.path(), "1.8.1").unwrap(),
+            vec![Line::from([(
+                "en".into(),
+                deps_only_line("en").unwrap().into()
+            )])]
+        );
+        // `--notes` win, and a language without a standard line stays absent.
+        fs::write(dir.path().join("CHANGELOG.fr.md"), "").unwrap();
+        fs::write(
+            dir.path().join("CHANGELOG.de.md"),
+            "## 1.8.1\n* **deps:** bump portaki-sdk to 10.10.0\n",
+        )
+        .unwrap();
+        let found = lines(&["fr:Code clavier".into()], "en", dir.path(), "1.8.1").unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0]["fr"], "Code clavier");
+        assert!(!found[0].contains_key("de"));
+    }
+
+    #[test]
+    fn a_bump_beside_another_modules_line_gets_no_standard_line() {
+        let repo = tempdir().unwrap();
+        let nuki = monorepo_member(repo.path(), "nuki");
+        monorepo_member(repo.path(), "trails");
+        fs::write(
+            nuki.join("CHANGELOG.md"),
+            "## 1.8.1\n* **trails:** upload GPX\n* **deps:** bump portaki-sdk to 10.10.0\n",
+        )
+        .unwrap();
+
+        assert!(lines(&[], "fr", &nuki, "1.8.1").unwrap().is_empty());
     }
 
     /// `CHANGELOG.md` stays English whatever the notes language: no English text tagged `fr`.
