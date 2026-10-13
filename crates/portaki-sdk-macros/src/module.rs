@@ -115,6 +115,35 @@ impl Parse for ModuleAttrs {
                         .expect("list")
                         .push(text.into());
                 }
+                "error" if !is_error_code(&text) => {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "error takes a code: ^[a-z][a-z0-9_]{0,47}$, e.g. \"photo_required\"",
+                    ));
+                }
+                // Repeats: each one a code `refuse!` may raise. The host reads its label from the
+                // i18n key `errors.<code>`.
+                "error" => {
+                    let errors = attrs
+                        .catalog
+                        .entry("errors")
+                        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+                        .as_array_mut()
+                        .expect("list");
+                    if errors.iter().any(|code| code == text.as_str()) {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            format!("error \"{text}\" is declared twice"),
+                        ));
+                    }
+                    if errors.len() == MAX_ERRORS {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            format!("at most {MAX_ERRORS} error codes per module"),
+                        ));
+                    }
+                    errors.push(text.into());
+                }
                 "scheduled_sync_sources" => {
                     scheduled_sync(&mut attrs.catalog).insert("sourcesQuery".into(), text.into());
                 }
@@ -143,6 +172,17 @@ fn is_module_id(id: &str) -> bool {
     let mut chars = id.chars();
     matches!(chars.next(), Some(first) if first.is_ascii_lowercase())
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// The manifest's `errors` cap.
+const MAX_ERRORS: usize = 32;
+
+/// `^[a-z][a-z0-9_]{0,47}$` — the schema's error code pattern.
+fn is_error_code(code: &str) -> bool {
+    let mut chars = code.chars();
+    code.len() <= 48
+        && matches!(chars.next(), Some(first) if first.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn is_https_url(url: &str) -> bool {
@@ -210,6 +250,14 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
 
     let emission = write_emission("module", &sanitize_key(&id), &json);
     let checks = &attrs.checks;
+    let errors: Vec<&str> = attrs
+        .catalog
+        .get("errors")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
     // Without a build script Cargo sets no OUT_DIR, and the emissions go nowhere: a wasm32 build
     // would ship a module whose manifest silently lacks what the code declares. Native builds
     // (tests, rust-analyzer) are left alone — they produce no manifest.
@@ -232,6 +280,14 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
         #missing_out_dir
         #(#checks)*
         #icon
+        /// What `portaki_sdk::refuse!` checks its code against — emitted even empty, so an
+        /// undeclared code fails on the declaration rather than on a missing item.
+        #[doc(hidden)]
+        #[allow(dead_code)]
+        pub const __PORTAKI_DECLARED_ERRORS: &[&str] = &[#(#errors),*];
+        ::portaki_sdk::inventory::submit! {
+            ::portaki_sdk::error::DeclaredErrors(__PORTAKI_DECLARED_ERRORS)
+        }
         #[cfg(target_arch = "wasm32")]
         mod __portaki_wasm_getrandom {
             #[no_mangle]
@@ -335,6 +391,38 @@ mod tests {
         assert!(syn::parse_str::<ModuleAttrs>(r#"audience = "host""#).is_err());
         assert!(syn::parse_str::<ModuleAttrs>(r#"author_url = "http://x.fr""#).is_err());
         assert!(syn::parse_str::<ModuleAttrs>(r#"feeds = "Access_Guide""#).is_err());
+    }
+
+    #[test]
+    fn declared_error_codes_land_in_the_catalog() {
+        let attrs: ModuleAttrs =
+            syn::parse_str(r#"id = "lost-found", error = "photo_required", error = "host_only""#)
+                .unwrap();
+        assert_eq!(
+            serde_json::Value::Object(attrs.catalog),
+            serde_json::json!({ "errors": ["photo_required", "host_only"] })
+        );
+        for bad in [
+            r#"error = "Photo""#,
+            r#"error = "photo-required""#,
+            r#"error = "1st""#,
+            r#"error = """#,
+            r#"error = "a", error = "a""#,
+        ] {
+            assert!(syn::parse_str::<ModuleAttrs>(bad).is_err(), "{bad}");
+        }
+        let longest = format!(r#"error = "a{}""#, "b".repeat(47));
+        assert!(syn::parse_str::<ModuleAttrs>(&longest).is_ok());
+        let too_long = format!(r#"error = "a{}""#, "b".repeat(48));
+        assert!(syn::parse_str::<ModuleAttrs>(&too_long).is_err());
+        let codes = |n: usize| {
+            (0..n)
+                .map(|i| format!(r#"error = "e{i}""#))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        assert!(syn::parse_str::<ModuleAttrs>(&codes(32)).is_ok());
+        assert!(syn::parse_str::<ModuleAttrs>(&codes(33)).is_err());
     }
 
     #[test]

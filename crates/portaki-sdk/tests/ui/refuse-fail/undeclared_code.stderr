@@ -1,0 +1,7 @@
+error[E0080]: evaluation panicked: refuse!("host_only"): undeclared code — add error = "host_only" to portaki_module! and errors.host_only to every i18n bundle
+ --> tests/ui/refuse-fail/undeclared_code.rs:4:13
+  |
+4 |     let _ = portaki_sdk::refuse!("host_only");
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `main::_` failed here
+  |
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `portaki_sdk::refuse` (in Nightly builds, run with -Z macro-backtrace for more info)
