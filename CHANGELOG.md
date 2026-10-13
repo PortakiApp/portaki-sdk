@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.12.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.11.0...v10.12.0) (2026-10-13)
+
+
+### Features
+
+* **cli:** add publish gates to ci check ([c8170b5](https://github.com/PortakiApp/portaki-sdk/commit/c8170b59db2d14c380e121b2d912376e51b1abfa))
+
+
+### Bug Fixes
+
+* **cli:** compare digests before already-published ([11dfbfd](https://github.com/PortakiApp/portaki-sdk/commit/11dfbfd6779f89b720911103e0dd313e82db93cb))
+
 ## [10.11.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.10.0...v10.11.0) (2026-10-13)
 
 
