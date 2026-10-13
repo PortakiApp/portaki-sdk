@@ -13,10 +13,15 @@
 //! by hand. In a `CHANGELOG*.md` — often generated — it is dropped with a warning: a language left
 //! without a line then counts as absent, and the registry keeps a stable version as a draft.
 //!
+//! In a monorepo, release-please writes into a module's `CHANGELOG.md` the commits scoped to other
+//! modules (`**trails:** upload GPX…` in checklist's section): a line scoped to another module of
+//! the repository is dropped; unscoped lines, and lines scoped to this module or to anything else
+//! (`ui`, `guest`), are kept.
+//!
 //! A stable version stays pending at the registry until its changelog covers every language of
 //! the module's listing — writing each `CHANGELOG.<lang>.md` is what keeps a CI green and live.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -170,18 +175,34 @@ pub fn lines(
             many.len()
         );
     }
+    let others = other_modules(module_root);
     for (lang, path) in changelog_files(module_root)? {
         if by_lang.contains_key(&lang) {
             continue;
         }
         let markdown =
             std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        // Generated most of the time: a commit line is dropped from it, never a blocker.
-        let (commits, kept): (Vec<String>, Vec<String>) = section(&markdown, version)
+        let source = path.file_name().unwrap_or_default().to_string_lossy();
+        let (foreign, ours): (Vec<_>, Vec<_>) = section(&markdown, version)
             .into_iter()
+            .partition(|(scope, _)| scope.as_ref().is_some_and(|s| others.contains(s)));
+        if !foreign.is_empty() {
+            crate::ui::warn(format!(
+                "{source} {version}: dropped {} line(s) scoped to other modules — {}",
+                foreign.len(),
+                foreign
+                    .iter()
+                    .map(|(scope, _)| scope.as_deref().unwrap_or_default())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        // Generated most of the time: a commit line is dropped from it, never a blocker.
+        let (commits, kept): (Vec<String>, Vec<String>) = ours
+            .into_iter()
+            .map(|(_, line)| line)
             .partition(|line| looks_like_commit(line));
         if !commits.is_empty() {
-            let source = path.file_name().unwrap_or_default().to_string_lossy();
             crate::ui::warn(format!(
                 "{source} {version}: dropped {} line(s) that read like commit messages — {}",
                 commits.len(),
@@ -206,6 +227,16 @@ pub fn lines(
                 .collect()
         })
         .collect())
+}
+
+/// The ids of the repository's other modules — none outside a monorepo.
+fn other_modules(module_root: &Path) -> BTreeSet<String> {
+    let own = std::fs::canonicalize(module_root).ok();
+    crate::workspace::members(module_root)
+        .into_iter()
+        .filter(|member| std::fs::canonicalize(&member.root).ok() != own)
+        .map(|member| member.id)
+        .collect()
 }
 
 /// `CHANGELOG.md` in English, `CHANGELOG.<lang>.md` in its own.
@@ -242,8 +273,8 @@ fn changelog_files(module_root: &Path) -> Result<Vec<(String, std::path::PathBuf
 }
 
 /// The top-level bullets under `## [version]` / `## version`, cleaned of release-please's
-/// `**scope:**` prefix and trailing commit link.
-fn section(markdown: &str, version: &str) -> Vec<String> {
+/// `**scope:**` prefix (returned beside the text) and trailing commit link.
+fn section(markdown: &str, version: &str) -> Vec<(Option<String>, String)> {
     let mut inside = false;
     let mut bullets = Vec::new();
     for line in markdown.lines() {
@@ -256,9 +287,9 @@ fn section(markdown: &str, version: &str) -> Vec<String> {
         }
         let bullet = line.strip_prefix("* ").or_else(|| line.strip_prefix("- "));
         if let (true, Some(bullet)) = (inside, bullet) {
-            let cleaned = clean(bullet);
+            let (scope, cleaned) = clean(bullet);
             if !cleaned.is_empty() {
-                bullets.push(cleaned);
+                bullets.push((scope.map(str::to_string), cleaned));
             }
         }
     }
@@ -275,11 +306,13 @@ fn heading_version(heading: &str) -> &str {
     token.strip_prefix('v').unwrap_or(token)
 }
 
-/// `**access-guide:** add listing ([2b27528](https://…))` → `add listing`.
-fn clean(bullet: &str) -> String {
+/// `**access-guide:** add listing ([2b27528](https://…))` → `(Some("access-guide"), "add listing")`.
+fn clean(bullet: &str) -> (Option<&str>, String) {
     let mut text = bullet.trim();
+    let mut scope = None;
     if let Some(rest) = text.strip_prefix("**") {
-        if let Some((_, after)) = rest.split_once(":**") {
+        if let Some((found, after)) = rest.split_once(":**") {
+            scope = Some(found.trim());
             text = after.trim_start();
         }
     }
@@ -288,7 +321,7 @@ fn clean(bullet: &str) -> String {
             text = &text[..at];
         }
     }
-    text.trim().to_string()
+    (scope, text.trim().to_string())
 }
 
 fn shorten(line: &str) -> String {
@@ -313,8 +346,115 @@ pub fn stamp(raw: &str, lines: &[Line]) -> Result<String> {
     serde_json::to_string_pretty(&manifest).context("serialise publish manifest")
 }
 
+/// The module's permission reasons, written once beside its sources so a CI passes them:
+/// `{ "<permission>": { "fr": "…", "en": "…" } }`, a permission or a `reveal:<field>:<place>` key.
+pub const REASONS_FILE: &str = "permission-reasons.json";
+
+/// Reasons by permission, then by language.
+pub type Reasons = BTreeMap<String, BTreeMap<String, String>>;
+
+/// A key `--permission-reason` and [`REASONS_FILE`] accept: a manifest permission, or a revealed
+/// secret's `reveal:<field>:<place>`.
+fn is_reason_key(key: &str) -> bool {
+    portaki_sdk::permission::is_known(key) || portaki_sdk::permission::is_reveal(key)
+}
+
+/// [`REASONS_FILE`] at `module_root`, checked like `--permission-reason`; empty when absent.
+///
+/// With `wanted`, only its keys are kept — the others are left out with a warning: a reason for a
+/// permission this version does not declare (or, completing a version, does not add) is noise.
+pub fn file_reasons(module_root: &Path, wanted: Option<&BTreeSet<String>>) -> Result<Reasons> {
+    let path = module_root.join(REASONS_FILE);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => return Ok(Reasons::new()),
+        Err(failure) => return Err(failure).with_context(|| format!("read {}", path.display())),
+    };
+    let parsed: Reasons = serde_json::from_str(&raw).with_context(|| {
+        format!(
+            "{REASONS_FILE}: expected {{ \"<permission>\": {{ \"fr\": \"…\", \"en\": \"…\" }} }}"
+        )
+    })?;
+    let mut kept = Reasons::new();
+    let mut ignored = Vec::new();
+    for (permission, by_lang) in parsed {
+        if !is_reason_key(&permission) {
+            anyhow::bail!("{REASONS_FILE}: unknown permission « {permission} »");
+        }
+        for (lang, text) in &by_lang {
+            if !(lang.len() == 2 && lang.chars().all(|c| c.is_ascii_lowercase())) {
+                anyhow::bail!("{REASONS_FILE}: « {permission} » — unknown language « {lang} »");
+            }
+            check_text(REASONS_FILE, text.trim())?;
+        }
+        if wanted.is_some_and(|wanted| !wanted.contains(&permission)) {
+            ignored.push(permission);
+            continue;
+        }
+        let by_lang = by_lang
+            .into_iter()
+            .map(|(lang, text)| (lang, text.trim().to_string()))
+            .collect();
+        kept.insert(permission, by_lang);
+    }
+    if !ignored.is_empty() {
+        crate::ui::warn(format!(
+            "{REASONS_FILE}: not sent, this version does not ask for them — {}",
+            ignored.join(", ")
+        ));
+    }
+    Ok(kept)
+}
+
+/// What a built manifest declares that a reason may be asked for: its `permissions`, and a
+/// `reveal:<field>:<place>` key per place of each revealed secret — the field's key, or
+/// `<list>[].<sub>` for each `item.secret` sub-key of a structured list (`SecretReveal.declaredIn`).
+pub fn declared(manifest: &serde_json::Value) -> BTreeSet<String> {
+    let strings = |value: &serde_json::Value| -> Vec<String> {
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let mut found: BTreeSet<String> = strings(&manifest["permissions"]).into_iter().collect();
+    for field in manifest["config"]["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let Some(key) = field["key"].as_str().filter(|key| !key.trim().is_empty()) else {
+            continue;
+        };
+        let secrets = match field["type"].as_str() {
+            Some("secret") => vec![key.to_string()],
+            Some("structured") => strings(&field["item"]["secret"])
+                .into_iter()
+                .map(|sub| format!("{key}[].{sub}"))
+                .collect(),
+            _ => Vec::new(),
+        };
+        for place in strings(&field["reveal"])
+            .into_iter()
+            .filter(|place| portaki_sdk::permission::REVEAL_PLACES.contains(&place.as_str()))
+        {
+            for secret in &secrets {
+                found.insert(format!(
+                    "{}{secret}:{place}",
+                    portaki_sdk::permission::REVEAL_PREFIX
+                ));
+            }
+        }
+    }
+    found
+}
+
 /// What the registry is told beside the manifest, for this release only: why a permission is
-/// added (`--permission-reason <permission>=[lang:]text`) and whether the host has to act
+/// added (`file`, read from [`REASONS_FILE`], then `--permission-reason <permission>=[lang:]text`
+/// over it per permission and language) and whether the host has to act
 /// (`--host-action-required`, `--host-action [lang:]text`). Sent with the announcement, not
 /// stamped into the manifest: the console can complete it later, and an older SDK schema would
 /// refuse the extra keys.
@@ -323,14 +463,15 @@ pub fn release_notes(
     host_action_required: bool,
     host_action: &[String],
     default_lang: &str,
+    file: Reasons,
 ) -> Result<serde_json::Value> {
-    let mut reasons: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    let mut reasons = file;
     for value in permission_reasons {
         let Some((permission, reason)) = value.split_once('=') else {
             anyhow::bail!("--permission-reason: expected <permission>=[lang:]text — « {value} »");
         };
         let permission = permission.trim();
-        if !portaki_sdk::permission::is_known(permission) {
+        if !is_reason_key(permission) {
             anyhow::bail!("--permission-reason: unknown permission « {permission} »");
         }
         let (lang, text) = tagged(reason, default_lang);
@@ -618,6 +759,7 @@ mod tests {
             false,
             &["fr:Reconnecter la serrure".into()],
             "en",
+            Reasons::new(),
         )
         .unwrap();
 
@@ -640,10 +782,172 @@ mod tests {
             &format!("email={}", "x".repeat(MAX_CHARS + 1)),
         ] {
             assert!(
-                release_notes(&[bad.to_string()], false, &[], "en").is_err(),
+                release_notes(&[bad.to_string()], false, &[], "en", Reasons::new()).is_err(),
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn a_revealed_secret_is_justified_by_its_reveal_key() {
+        let notes = release_notes(
+            &[
+                "reveal:networks[].password:guest_stay=fr:Le mot de passe du Wi-Fi".into(),
+                "reveal:bin_room_code:guest_pre_arrival=en:The bin room code".into(),
+            ],
+            false,
+            &[],
+            "en",
+            Reasons::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            notes["permissionReasons"]["reveal:networks[].password:guest_stay"],
+            serde_json::json!({ "fr": "Le mot de passe du Wi-Fi" })
+        );
+        assert!(release_notes(
+            &["reveal:code:host=x".into()],
+            false,
+            &[],
+            "en",
+            Reasons::new()
+        )
+        .is_err());
+    }
+
+    fn reasons_file(json: &str) -> tempfile::TempDir {
+        let dir = module(None);
+        fs::write(dir.path().join(REASONS_FILE), json).unwrap();
+        dir
+    }
+
+    /// A CI passes no flag: the file says it once, the flags still win per permission and language.
+    #[test]
+    fn the_reasons_file_is_read_and_the_flags_override_it() {
+        let dir = reasons_file(
+            r#"{ "email": { "fr": " Pour envoyer le code ", "en": "To send the code" },
+                 "reveal:code:guest_stay": { "fr": "Le code", "en": "The code" } }"#,
+        );
+        let wanted = BTreeSet::from(["email".to_string()]);
+
+        let file = file_reasons(dir.path(), Some(&wanted)).unwrap();
+        let notes = release_notes(&["email=en:To send it".into()], false, &[], "fr", file).unwrap();
+
+        assert_eq!(
+            notes["permissionReasons"],
+            serde_json::json!({ "email": { "fr": "Pour envoyer le code", "en": "To send it" } })
+        );
+        assert_eq!(file_reasons(dir.path(), None).unwrap().len(), 2);
+        assert!(file_reasons(module(None).path(), None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_reasons_file_is_checked_like_the_flag() {
+        for bad in [
+            r#"{ "nope": { "fr": "x" } }"#,
+            r#"{ "email": { "fr": "" } }"#,
+            r#"{ "email": { "français": "x" } }"#,
+            r#"{ "email": "x" }"#,
+            "not json",
+        ] {
+            assert!(
+                file_reasons(reasons_file(bad).path(), None).is_err(),
+                "{bad}"
+            );
+        }
+        let long = format!(
+            r#"{{ "email": {{ "fr": "{}" }} }}"#,
+            "x".repeat(MAX_CHARS + 1)
+        );
+        assert!(file_reasons(reasons_file(&long).path(), None).is_err());
+    }
+
+    #[test]
+    fn a_manifest_declares_its_permissions_and_each_revealed_secret() {
+        let manifest = serde_json::json!({
+            "permissions": ["kv", "email"],
+            "config": { "fields": [
+                { "key": "bin_room_code", "type": "secret", "reveal": ["guest_pre_arrival", "guest_stay"] },
+                { "key": "networks", "type": "structured", "item": { "secret": ["password"] },
+                  "reveal": ["guest_stay"] },
+                { "key": "hidden", "type": "secret" },
+                { "key": "ssid", "type": "text", "reveal": ["guest_stay"] },
+            ] }
+        });
+
+        assert_eq!(
+            declared(&manifest),
+            BTreeSet::from(
+                [
+                    "email",
+                    "kv",
+                    "reveal:bin_room_code:guest_pre_arrival",
+                    "reveal:bin_room_code:guest_stay",
+                    "reveal:networks[].password:guest_stay",
+                ]
+                .map(String::from)
+            )
+        );
+    }
+
+    /// checklist 1.9.0 in portaki-modules: release-please filed other modules' commits under it.
+    const MONOREPO_SECTION: &str = "# Changelog
+
+## [1.9.0](https://github.com/PortakiApp/portaki-modules/compare/checklist-v1.8.0...checklist-v1.9.0) (2026-10-12)
+
+
+### Features
+
+* **appliances:** settings page and devices table ([5843ee5](https://github.com/PortakiApp/portaki-modules/commit/5843ee5))
+* **checklist:** redesign host settings ([fa8e81b](https://github.com/PortakiApp/portaki-modules/commit/fa8e81b))
+* **trails:** upload GPX as a file, not an image ([9b3db9e](https://github.com/PortakiApp/portaki-modules/commit/9b3db9e))
+* **guest:** scope the prep-card routes per module ([09bb90c](https://github.com/PortakiApp/portaki-modules/commit/09bb90c))
+* show steps in order
+
+
+### Bug Fixes
+
+* **deps:** bump portaki-sdk to 10.4.0 ([909824e](https://github.com/PortakiApp/portaki-modules/commit/909824e))
+";
+
+    fn monorepo_member(repo: &Path, id: &str) -> std::path::PathBuf {
+        let root = repo.join("modules").join(id);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{id}\"\nversion = \"1.0.0\"\n\n[dependencies]\nportaki-sdk = \"10\"\n"
+            ),
+        )
+        .unwrap();
+        root
+    }
+
+    #[test]
+    fn lines_scoped_to_another_module_of_the_repository_are_dropped() {
+        let repo = tempdir().unwrap();
+        let checklist = monorepo_member(repo.path(), "checklist");
+        monorepo_member(repo.path(), "appliances");
+        monorepo_member(repo.path(), "trails");
+        fs::write(checklist.join("CHANGELOG.md"), MONOREPO_SECTION).unwrap();
+        assert_eq!(
+            crate::workspace::members(&checklist).len(),
+            3,
+            "the fixture is a monorepo"
+        );
+
+        assert_eq!(
+            en(&[], &checklist, "1.9.0").unwrap(),
+            vec![
+                "redesign host settings",
+                "scope the prep-card routes per module",
+                "show steps in order"
+            ]
+        );
+        // A single-module repository has no other module: every scope stays.
+        let alone = module(Some(MONOREPO_SECTION));
+        assert_eq!(en(&[], alone.path(), "1.9.0").unwrap().len(), 5);
     }
 
     fn schema_errors(manifest: &serde_json::Value) -> Vec<String> {

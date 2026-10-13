@@ -44,7 +44,8 @@ pub struct NotesArgs {
     /// The channel, when the version exists on both.
     #[arg(long, value_parser = ["preview", "stable"])]
     pub channel: Option<String>,
-    /// Send the notes to the registry: the changelog from `--notes`, then from `CHANGELOG*.md`.
+    /// Send the notes to the registry: the changelog from `--notes`, then from `CHANGELOG*.md`;
+    /// the reasons from `--permission-reason`, then from `permission-reasons.json`.
     /// Implied by any of the flags below.
     #[arg(long)]
     pub complete: bool,
@@ -161,7 +162,7 @@ async fn notes(args: NotesArgs) -> Result<()> {
     .await?;
 
     if args.completes() {
-        let body = merged_notes(&release["notes"], &args, &member.root)?;
+        let body = merged_notes(&release["notes"], &release["added"], &args, &member.root)?;
         let sending = ui::step(crate::tr!(
             "sending the notes to the registry",
             "envoi des notes au registre"
@@ -328,15 +329,28 @@ fn pick(versions: &Value, version: &str, channel: Option<&str>) -> Option<Value>
         .map(|entry| (*entry).clone())
 }
 
-/// The notes to send: the registry's, completed with what the flags and the version's
-/// `CHANGELOG*.md` files say.
-fn merged_notes(current: &Value, args: &NotesArgs, module_root: &std::path::Path) -> Result<Value> {
+/// The notes to send: the registry's, completed with what the flags, the version's
+/// `CHANGELOG*.md` files and `permission-reasons.json` say — the file kept to the permissions the
+/// registry says this version adds (`added`), the ones it asks a reason for.
+fn merged_notes(
+    current: &Value,
+    added: &Value,
+    args: &NotesArgs,
+    module_root: &std::path::Path,
+) -> Result<Value> {
     let lang = changelog::default_lang(module_root);
+    let asked: std::collections::BTreeSet<String> = added
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|change| change["permission"].as_str().map(str::to_string))
+        .collect();
     let extra = changelog::release_notes(
         &args.permission_reasons,
         args.host_action_required,
         &args.host_action,
         &lang,
+        changelog::file_reasons(module_root, Some(&asked))?,
     )?;
     let mut changelog: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for line in current["changelog"].as_array().into_iter().flatten() {
@@ -551,7 +565,7 @@ mod tests {
             modules: ModuleArgs::default(),
         };
 
-        let body = merged_notes(&current, &args, dir.path()).unwrap();
+        let body = merged_notes(&current, &json!([]), &args, dir.path()).unwrap();
 
         assert_eq!(
             body["changelog"],
@@ -560,6 +574,38 @@ mod tests {
         assert_eq!(
             body["permissionReasons"]["email"],
             json!({ "fr": "Pour prévenir", "en": "To warn" })
+        );
+    }
+
+    /// `--complete` alone, as a CI runs it: the reasons come from the file, for what the version
+    /// adds only.
+    #[test]
+    fn completing_reads_the_reasons_file_for_what_the_version_adds() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(changelog::REASONS_FILE),
+            r#"{ "reveal:bin_room_code:guest_stay": { "fr": "Le code", "en": "The code" },
+                 "email": { "fr": "Pas ajoutée ici" } }"#,
+        )
+        .unwrap();
+        let current = json!({ "changelog": [], "permissionReasons": {} });
+        let added = json!([{ "permission": "reveal:bin_room_code:guest_stay", "label": "…" }]);
+        let args = NotesArgs {
+            version: "1.0.0".into(),
+            channel: None,
+            complete: true,
+            notes: vec![],
+            permission_reasons: vec![],
+            host_action_required: false,
+            host_action: vec![],
+            modules: ModuleArgs::default(),
+        };
+
+        let body = merged_notes(&current, &added, &args, dir.path()).unwrap();
+
+        assert_eq!(
+            body["permissionReasons"],
+            json!({ "reveal:bin_room_code:guest_stay": { "fr": "Le code", "en": "The code" } })
         );
     }
 
