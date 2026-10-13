@@ -56,6 +56,8 @@ serde_json = { workspace = true }
 # The SDK's tests exercise the whole host API, whichever feature is asked for.
 portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files"] }
 serde_json = { workspace = true }
+# What `plugin_fn` formats a handler's error through: the wire text of a refusal is tested on it.
+anyhow = { workspace = true }
 trybuild = "1.0.120"
 # Reads `sdui/common.rs` and `sdui/action.rs` to derive `contracts/sdui_types.json` from them.
 # Dev only: none of this ends up in a module's Wasm.

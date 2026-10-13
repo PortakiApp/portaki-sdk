@@ -62,6 +62,7 @@
 //! - [`MockContextBuilder`] / [`MockHostFunctions`] — mock host installation
 //! - [`Property`], [`Booking`], [`GuestIdentityFixture`] — default fixtures
 //! - [`SurfaceAssertions`], [`PrimitiveTag`] — SDUI tree queries over every primitive
+//! - [`assert_refused`], [`assert_declared_error`] — a handler refused with a declared code
 //! - [`mod@scenarios`] — the seven pathological cases of the sandbox, for `tests/scenarios.rs`
 //! - [`conformance!`] / [`mod@conformance`] — the battery every module runs: manifest, listing,
 //!   surfaces, operations, i18n, emails, contracts
@@ -88,6 +89,45 @@ macro_rules! link_module {
 #[doc(hidden)]
 pub mod __private {
     pub use portaki_sdk;
+}
+
+/// Asserts that `code` is declared by `portaki_module!(error = "…")` in a module linked into this
+/// test binary.
+///
+/// `portaki_sdk::refuse!` checks that at compile time; a `PortakiError::Refused` built by hand
+/// does not — the platform would then drop the refusal and show the host a generic failure. An
+/// integration test that names nothing of the module links it with [`link_module!`] first.
+///
+/// # Panics
+///
+/// When no linked module declares `code`.
+#[track_caller]
+pub fn assert_declared_error(code: &str) {
+    let declared: Vec<&str> = portaki_sdk::error::declared_errors().collect();
+    assert!(
+        declared.contains(&code),
+        "refusal code `{code}` is not declared — add error = \"{code}\" to portaki_module! \
+         (declared: {declared:?}; none at all? link the module with link_module!())"
+    );
+}
+
+/// Asserts that `result` is the refusal `code`, and that the module declares it.
+///
+/// ```ignore
+/// let result = MockContext::guest().run(|ctx| report(ctx, Report { photo: None }));
+/// portaki_test_utils::assert_refused(&result, "photo_required");
+/// ```
+///
+/// # Panics
+///
+/// When `result` is anything but `Err(PortakiError::Refused(code))`, or `code` is undeclared.
+#[track_caller]
+pub fn assert_refused<T: std::fmt::Debug>(result: &portaki_sdk::Result<T>, code: &str) {
+    match result {
+        Err(portaki_sdk::PortakiError::Refused(refused)) if *refused == code => {}
+        other => panic!("expected Err(Refused({code:?})), got {other:?}"),
+    }
+    assert_declared_error(code);
 }
 
 pub use assertions::{PrimitiveTag, SurfaceAssertions};

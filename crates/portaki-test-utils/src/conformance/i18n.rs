@@ -154,6 +154,22 @@ fn used_keys(module: &Module) -> BTreeMap<String, BTreeSet<String>> {
                 note(key, format!("{MANIFEST_FILE} guestSurfaces `{surface}`"));
             }
         }
+        for code in manifest
+            .get("errors")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            note(&format!("errors.{code}"), format!("{MANIFEST_FILE} errors"));
+        }
+    }
+    // The refusal codes `portaki_module!(error = "…")` declares: the host reads their label.
+    for code in portaki_sdk::error::declared_errors() {
+        note(
+            &format!("errors.{code}"),
+            format!("portaki_module!(error = \"{code}\")"),
+        );
     }
 
     let mut from_invocation = |origin: String, invocation: &Invocation| {

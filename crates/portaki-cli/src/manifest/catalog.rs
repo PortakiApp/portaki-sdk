@@ -70,6 +70,7 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         "audience",
         "core",
         "hostScheduledSync",
+        "errors",
     ] {
         if let Some(value) = extra.get(key) {
             catalog[key] = value.clone();
@@ -295,6 +296,10 @@ pub fn check_references(
             "module" => {
                 for module in data["catalog"]["feeds"].as_array().into_iter().flatten() {
                     keys.push(format!("feeds.{}", module.as_str().unwrap_or_default()));
+                }
+                // The host's label of each declared refusal code.
+                for code in data["catalog"]["errors"].as_array().into_iter().flatten() {
+                    keys.push(format!("errors.{}", code.as_str().unwrap_or_default()));
                 }
                 vec![data.get("displayName"), data.get("description")]
             }
@@ -881,6 +886,7 @@ mod tests {
         let mut emissions = module();
         emissions[0].data["catalog"]["audience"] = json!("host");
         emissions[0].data["catalog"]["feeds"] = json!(["access-guide"]);
+        emissions[0].data["catalog"]["errors"] = json!(["photo_required"]);
         emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "platformFetch": true });
         emissions.push(EmissionFile {
             kind: "nav".into(),
@@ -901,6 +907,7 @@ mod tests {
         let catalog = catalog_defaults(&emissions, dir.path(), &["fr-FR".to_string()]);
 
         assert_eq!(catalog["audience"], "host");
+        assert_eq!(catalog["errors"], json!(["photo_required"]));
         assert_eq!(catalog["hostScheduledSync"]["platformFetch"], true);
         assert_eq!(
             catalog["feeds"],
@@ -1019,6 +1026,30 @@ mod tests {
         emissions[0].data["catalog"]["hostScheduledSync"] = json!({ "applyQuery": "applyFeed" });
         let typo = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
         assert!(typo.to_string().contains("applyFeed"), "{typo}");
+    }
+
+    /// A declared refusal code the host could not read in its language stops the build.
+    #[test]
+    fn a_declared_error_code_needs_its_label_in_every_bundle() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let locales = ["fr-FR".to_string(), "en-US".to_string()];
+        let mut emissions = module();
+        emissions[0].data["catalog"]["errors"] = json!(["photo_required"]);
+        let keys = r#"{"module.displayName":"x","module.description":"y"}"#;
+        let labelled = r#"{"module.displayName":"x","module.description":"y",
+                           "errors.photo_required":"Photo requise"}"#;
+        std::fs::write(dir.path().join("fr-FR.json"), labelled).expect("fr");
+        std::fs::write(dir.path().join("en-US.json"), keys).expect("en");
+
+        let missing = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
+        assert!(
+            missing
+                .to_string()
+                .contains("errors.photo_required (en-US)"),
+            "{missing}"
+        );
+        std::fs::write(dir.path().join("en-US.json"), labelled).expect("en");
+        super::check_references(&emissions, dir.path(), &locales).expect("labelled");
     }
 
     fn with_config() -> Vec<EmissionFile> {

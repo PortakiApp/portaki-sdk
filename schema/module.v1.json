@@ -202,6 +202,16 @@
         }
       }
     },
+    "errors": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 32,
+      "description": "The refusal codes the module may raise (portaki_module!(error = \"…\"), raised with refuse!). A module's error text never reaches the host, since free text could carry guest data out: the platform shows a refusal only when its code is listed here, with the label of the i18n key errors.<code>. On the wire a refusal reads module_refused:<code>.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
+      }
+    },
     "changelog": {
       "type": "array",
       "maxItems": 5,

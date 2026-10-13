@@ -147,6 +147,11 @@ pub fn bundle_text(input: TokenStream) -> TokenStream {
 /// | `sort_order` | no | — integer, catalog position |
 /// | `core` | no | — bare flag: a core module of the booklet, installed on every property, always active, no on/off switch, absent from the modules list and the marketplace |
 ///
+/// `error = "photo_required"` (repeatable, at most 32, `^[a-z][a-z0-9_]{0,47}$`) declares a code
+/// `portaki_sdk::refuse!` may raise; it lands in the manifest's `errors` and needs the key
+/// `errors.<code>` in every bundle. A module's own error text never reaches the host — it could
+/// carry guest data out — so the host only ever sees a code declared here.
+///
 /// The catalog keys, with the name and description read from the i18n bundles, fill whatever
 /// `portaki.module.json` leaves out — `portaki build` writes them, the author never does.
 ///
@@ -158,6 +163,11 @@ pub fn bundle_text(input: TokenStream) -> TokenStream {
 /// `version`, `manifestVersion: "1"`, and `uiSchema: { host: "1", guest: "1" }`.
 ///
 /// `portaki build` requires exactly one `module` emission (or a `portaki.module.json` catalog).
+///
+/// # Generated Rust
+///
+/// - `const __PORTAKI_DECLARED_ERRORS` — the `error` codes, which `portaki_sdk::refuse!` checks
+///   at compile time (hence: at the crate root).
 ///
 /// # Generated Rust (Wasm only)
 ///
