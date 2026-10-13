@@ -352,6 +352,26 @@ impl std::fmt::Display for AlreadyInRegistry {
 
 impl std::error::Error for AlreadyInRegistry {}
 
+/// The right to push was refused because the version is already published: what it holds has to
+/// be compared with what was just built before anything is concluded.
+#[derive(Debug)]
+struct VersionTaken {
+    status: u16,
+    body: String,
+}
+
+impl std::fmt::Display for VersionTaken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the registry refused the push ({}): {}",
+            self.status, self.body
+        )
+    }
+}
+
+impl std::error::Error for VersionTaken {}
+
 /// In the registry, but as a draft, while `--require-available` asked for a visible version.
 #[derive(Debug)]
 struct DraftRefused {
@@ -638,18 +658,33 @@ async fn release(
     // Asked before pushing, not discovered afterwards. A publication is immutable (ADR-0005):
     // republishing would rewrite the OCI tag, which would no longer point at the artifact the
     // catalogue references.
-    refuse_if_already_published(base, &coords).await?;
+    if let Some(published) = published_digest(base, &coords, &args.channel).await {
+        return Err(
+            compare_with_published(base, &coords, Some(&published), &layers)
+                .await?
+                .into(),
+        );
+    }
 
     let pushing = ui::step(crate::tr!(
         "asking the registry for the right to push",
         "demande du droit de push au registre"
     ));
-    let grant = push_grant(base, &coords, &args.channel)
-        .await
-        .map_err(|failure| {
+    let grant = match push_grant(base, &coords, &args.channel).await {
+        Ok(grant) => grant,
+        // A draft is invisible to the catalogue for anyone but its owner — a CI credential never
+        // is one — so a job replayed minutes after the first only learns it here.
+        Err(failure) if failure.downcast_ref::<VersionTaken>().is_some() => {
             pushing.abandon();
-            failure
-        })?;
+            return Err(compare_with_published(base, &coords, None, &layers)
+                .await?
+                .into());
+        }
+        Err(failure) => {
+            pushing.abandon();
+            return Err(failure);
+        }
+    };
     pushing.say(crate::tr!(
         "pushing to {}",
         "poussée vers {}",
@@ -823,41 +858,31 @@ fn release_notes(
     Ok(notes)
 }
 
-/// A published version is not published again.
-///
-/// Asked before the push: the announcement would refuse it, but the tag would already have been
-/// rewritten. The catalogue is public: the question costs neither a token nor a right.
-///
-/// If it cannot be reached, we carry on. The right to push refuses a published version anyway.
-async fn refuse_if_already_published(
-    base: &str,
-    coords: &oci::pack::ModuleCoordinates,
-) -> Result<()> {
-    let Some(published) = published_digest(base, &coords.id, &coords.version).await else {
-        return Ok(());
-    };
-    Err(AlreadyInRegistry {
-        id: coords.id.clone(),
-        version: coords.version.clone(),
-        digest: published,
-    }
-    .into())
-}
-
 /// A version in the catalogue, as the registry renders it.
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PublishedVersion {
     digest: String,
     version: String,
+    #[serde(default)]
+    channel: Option<String>,
 }
 
-/// The digest published for this version, if there is one.
-async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<String> {
+/// The digest published for this version on this channel, if the catalogue shows one.
+///
+/// The catalogue is public: the question costs neither a token nor a right. It shows no draft to
+/// a CI, though — the right to push is what refuses those. If it cannot be reached, we carry on:
+/// the right to push refuses a published version anyway.
+async fn published_digest(
+    base: &str,
+    coords: &oci::pack::ModuleCoordinates,
+    channel: &str,
+) -> Option<String> {
     let response = crate::http::client()
         .get(format!(
-            "{}/registry/v1/modules/{module_id}/versions",
-            base.trim_end_matches('/')
+            "{}/registry/v1/modules/{}/versions",
+            base.trim_end_matches('/'),
+            coords.id
         ))
         .timeout(std::time::Duration::from_secs(10))
         .send()
@@ -868,16 +893,107 @@ async fn published_digest(base: &str, module_id: &str, version: &str) -> Option<
     }
     digest_of(
         &response.json::<Vec<PublishedVersion>>().await.ok()?,
-        version,
+        &coords.version,
+        channel,
     )
 }
 
-/// The selection on its own, kept apart from the network so that it can be checked.
-fn digest_of(published: &[PublishedVersion], version: &str) -> Option<String> {
+/// The selection on its own, kept apart from the network so that it can be checked. A version
+/// without a channel is an older registry's answer: it counts.
+fn digest_of(published: &[PublishedVersion], version: &str, channel: &str) -> Option<String> {
     published
         .iter()
-        .find(|candidate| candidate.version == version)
+        .find(|candidate| {
+            candidate.version == version
+                && candidate
+                    .channel
+                    .as_deref()
+                    .map_or(true, |found| found == channel)
+        })
         .map(|candidate| candidate.digest.clone())
+}
+
+/// A version already in the registry passes only if it is the artifact just built.
+///
+/// A replayed job lands here, and that is fine — as long as it rebuilt the same bytes. Anything
+/// else under the same number is a change shipped without a new version: refused, since the
+/// registry would keep serving the first one (ADR-0005). What the registry holds is read from
+/// its OCI repository — by `digest` when the catalogue gave one, by the version's tag otherwise:
+/// a draft shows no digest to a CI, and no push can have moved the tag since the version exists.
+async fn compare_with_published(
+    base: &str,
+    coords: &oci::pack::ModuleCoordinates,
+    digest: Option<&str>,
+    layers: &[oci::pack::PushLayer],
+) -> Result<AlreadyInRegistry> {
+    let unverifiable = |why: String| {
+        anyhow::anyhow!(crate::tr!(
+            "{} {} already exists in the registry and its content could not be compared ({}) — \
+             publish a new version",
+            "{} {} existe déjà au registre et son contenu n'a pas pu être comparé ({}) — publie \
+             une nouvelle version",
+            coords.id,
+            coords.version,
+            why
+        ))
+    };
+    let Some(registry) = oci_host(base, &coords.id).await else {
+        return Err(unverifiable(
+            "the catalogue names no OCI repository for this module".to_string(),
+        ));
+    };
+    let reference = match digest {
+        Some(digest) => format!("{registry}/modules/{}@{digest}", coords.id),
+        None => format!("{registry}/modules/{}:{}", coords.id, coords.version),
+    };
+    let (manifest, published) = oci::published_manifest(&registry, &reference)
+        .await
+        .map_err(|failure| unverifiable(format!("{failure:#}")))?;
+    let built = oci::pack::layers_to_image_layers(layers)?;
+    if !oci::same_content(&manifest, &built) {
+        anyhow::bail!(crate::tr!(
+            "{} {} already exists with other content ({}) — publish a new version",
+            "{} {} : la version existe déjà avec un autre contenu ({}) — publie une nouvelle \
+             version",
+            coords.id,
+            coords.version,
+            published
+        ));
+    }
+    Ok(AlreadyInRegistry {
+        id: coords.id.clone(),
+        version: coords.version.clone(),
+        digest: published,
+    })
+}
+
+/// The OCI host this registry serves the module from, read off its catalogue entry: the CLI
+/// writes no host down, and a refused push names none.
+async fn oci_host(base: &str, module_id: &str) -> Option<String> {
+    let entry: serde_json::Value = crate::http::client()
+        .get(format!(
+            "{}/registry/v1/modules/{module_id}",
+            base.trim_end_matches('/')
+        ))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    host_of(entry["artifactRef"].as_str()?).map(str::to_string)
+}
+
+/// `oci://oci.portaki.app/modules/nuki@sha256:…` → `oci.portaki.app`.
+fn host_of(artifact_ref: &str) -> Option<&str> {
+    artifact_ref
+        .strip_prefix("oci://")?
+        .split_once('/')
+        .map(|(host, _)| host)
+        .filter(|host| !host.is_empty())
 }
 
 /// The right to push this version, asked of the registry (`push-token`) with the same publisher
@@ -937,6 +1053,11 @@ fn grant_from(status: u16, body: &str) -> Result<oci::PushGrant> {
         Outcome::Unauthorized => anyhow::bail!(
             "the registry refused the token for a push — run portaki login, or replay the job"
         ),
+        Outcome::AlreadyPublished => Err(VersionTaken {
+            status,
+            body: body.to_string(),
+        }
+        .into()),
         Outcome::Refused {
             status,
             code,
@@ -1660,11 +1781,58 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            digest_of(&published, "0.3.2").as_deref(),
+            digest_of(&published, "0.3.2", "stable").as_deref(),
             Some("sha256:bbb")
         );
-        assert!(digest_of(&published, "0.4.0").is_none());
-        assert!(digest_of(&[], "0.3.2").is_none());
+        assert!(digest_of(&published, "0.4.0", "stable").is_none());
+        assert!(digest_of(&[], "0.3.2", "stable").is_none());
+    }
+
+    /// The right to push is refused per channel: a preview of the same number is another version.
+    #[test]
+    fn the_catalogue_is_searched_on_our_own_channel() {
+        let published: Vec<PublishedVersion> = serde_json::from_value(serde_json::json!([
+            { "digest": "sha256:pre", "version": "1.0.0", "channel": "preview" },
+            { "digest": "sha256:sta", "version": "1.0.0", "channel": "stable" }
+        ]))
+        .unwrap();
+
+        assert_eq!(
+            digest_of(&published, "1.0.0", "stable").as_deref(),
+            Some("sha256:sta")
+        );
+        assert_eq!(
+            digest_of(&published, "1.0.0", "preview").as_deref(),
+            Some("sha256:pre")
+        );
+    }
+
+    /// The failure seen on a replayed release: the push refused as already published turns into
+    /// a comparison, not a red job — and the message stays the registry's for anything else.
+    #[test]
+    fn a_push_refused_as_already_published_is_told_apart() {
+        let body = r#"{"code":"version_already_published","message":"facility-hours@1.14.2"}"#;
+        let failure = grant_from(409, body).unwrap_err();
+        assert!(failure.downcast_ref::<VersionTaken>().is_some());
+        assert!(failure.to_string().contains("refused the push (409)"));
+
+        let other =
+            grant_from(409, r#"{"code":"module_name_not_owned","message":"x"}"#).unwrap_err();
+        assert!(other.downcast_ref::<VersionTaken>().is_none());
+    }
+
+    #[test]
+    fn the_oci_host_is_read_off_the_artifact_reference() {
+        assert_eq!(
+            host_of("oci://oci-staging.portaki.app/modules/nuki@sha256:9f2c"),
+            Some("oci-staging.portaki.app")
+        );
+        assert_eq!(
+            host_of("oci://localhost:5000/modules/nuki@sha256:9f2c"),
+            Some("localhost:5000")
+        );
+        assert_eq!(host_of("https://oci.portaki.app/modules/nuki"), None);
+        assert_eq!(host_of("oci:///modules/nuki"), None);
     }
 
     #[test]

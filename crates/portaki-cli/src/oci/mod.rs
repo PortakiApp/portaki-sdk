@@ -10,7 +10,8 @@ pub mod pack;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use oci_distribution::client::{Client, ClientConfig, ClientProtocol, Config};
+use oci_distribution::client::{Client, ClientConfig, ClientProtocol, Config, ImageLayer};
+use oci_distribution::manifest::OciImageManifest;
 use oci_distribution::secrets::RegistryAuth;
 use oci_distribution::Reference;
 
@@ -112,11 +113,7 @@ pub async fn push_artifact(
         .with_context(|| format!("invalid OCI reference: {}", grant.reference))?;
 
     let image_layers = pack::layers_to_image_layers(&layers)?;
-    let config = Config::new(
-        br#"{}"#.to_vec(),
-        "application/vnd.oci.empty.v1+json".to_string(),
-        None,
-    );
+    let config = empty_config();
 
     let client = client(&grant.registry);
     let auth = grant.auth();
@@ -136,6 +133,44 @@ pub async fn push_artifact(
         repository: grant.repository.clone(),
         digest,
     })
+}
+
+/// The config every module artifact carries: empty, as ORAS writes it.
+fn empty_config() -> Config {
+    Config::new(
+        br#"{}"#.to_vec(),
+        "application/vnd.oci.empty.v1+json".to_string(),
+        None,
+    )
+}
+
+/// The manifest the OCI repository holds under `reference`, and its digest — read anonymously:
+/// every module repository is public to pull, a refused push leaves no right to read with.
+pub async fn published_manifest(
+    registry: &str,
+    reference: &str,
+) -> Result<(OciImageManifest, String)> {
+    let parsed: Reference = reference
+        .parse()
+        .with_context(|| format!("invalid OCI reference: {reference}"))?;
+    client(registry)
+        .pull_image_manifest(&parsed, &RegistryAuth::Anonymous)
+        .await
+        .with_context(|| format!("read {reference}"))
+}
+
+/// Is `published` the manifest a push of `layers` writes? Its config and its layers — media
+/// type and digest, in order — are all a manifest without annotations holds: equal, the two
+/// manifests are the same bytes, so the same digest. Compared on content rather than by
+/// re-serialising the manifest, which would tie the answer to the library's JSON formatter.
+pub fn same_content(published: &OciImageManifest, layers: &[ImageLayer]) -> bool {
+    let config = empty_config();
+    published.config.digest == config.sha256_digest()
+        && published.config.media_type == config.media_type
+        && published.layers.len() == layers.len()
+        && published.layers.iter().zip(layers).all(|(theirs, ours)| {
+            theirs.media_type == ours.media_type && theirs.digest == ours.sha256_digest()
+        })
 }
 
 fn client(registry: &str) -> Client {
@@ -214,6 +249,38 @@ mod tests {
     fn the_password_never_shows_in_debug_output() {
         let shown = format!("{:?}", grant("r", "modules/nuki"));
         assert!(!shown.contains("secret"), "{shown}");
+    }
+
+    /// What `push` writes for these layers, built by the library itself.
+    fn pushed_manifest(layers: &[ImageLayer]) -> OciImageManifest {
+        OciImageManifest::build(layers, &empty_config(), None)
+    }
+
+    fn layer(data: &[u8], media_type: &str) -> ImageLayer {
+        ImageLayer::new(data.to_vec(), media_type.to_string(), None)
+    }
+
+    #[test]
+    fn the_same_layers_make_the_same_artifact() {
+        let built = [
+            layer(b"\0asm", "application/vnd.portaki.module.wasm"),
+            layer(b"{}", "application/vnd.portaki.manifest+json"),
+        ];
+        assert!(same_content(&pushed_manifest(&built), &built));
+    }
+
+    #[test]
+    fn another_byte_another_order_or_another_layer_is_another_artifact() {
+        let wasm = layer(b"\0asm", "application/vnd.portaki.module.wasm");
+        let manifest = layer(b"{}", "application/vnd.portaki.manifest+json");
+        let published = pushed_manifest(&[wasm.clone(), manifest.clone()]);
+
+        let rebuilt = layer(b"\0asm2", "application/vnd.portaki.module.wasm");
+        assert!(!same_content(&published, &[rebuilt, manifest.clone()]));
+        assert!(!same_content(&published, &[manifest.clone(), wasm.clone()]));
+        assert!(!same_content(&published, std::slice::from_ref(&wasm)));
+        let retyped = layer(b"{}", "application/json");
+        assert!(!same_content(&published, &[wasm, retyped]));
     }
 
     #[test]
