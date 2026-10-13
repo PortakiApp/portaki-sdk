@@ -48,7 +48,8 @@ pub enum CiCommand {
     Modules(ModulesArgs),
     /// Print the Portaki SDK this checkout actually resolves to, as a cache key.
     SdkVersion(SdkVersionArgs),
-    /// Warn about what will age badly: an old SDK, a manifest behind the host.
+    /// The checks a module must pass before it is published — release notes in every language,
+    /// permission reasons, entity columns, SDK pin — then warnings about what will age badly.
     Check(CheckArgs),
     /// Print this module's id and version — what a workflow needs to name a release.
     Info(InfoArgs),
@@ -677,20 +678,31 @@ pub struct CheckArgs {
     /// Skip the crates.io lookup — for an offline runner.
     #[arg(long)]
     pub offline: bool,
+    /// Only warn about what is ageing: skip the checks that fail the run.
+    #[arg(long)]
+    pub no_gates: bool,
 }
 
-/// What gets in nobody's way today and will cost dearly later.
+/// What would keep a version out of the catalogue, then what will cost dearly later.
+///
+/// The gates fail the run — every one of them is reported before it does. The ageing stays a
+/// warning: an SDK falling behind is seen coming, it blocks nothing.
 async fn check(args: CheckArgs) -> Result<()> {
     if !ui::plain() {
         ui::header(
             "portaki ci check",
-            "What still builds today and will not tomorrow.",
+            "What would keep this version from hosts, and what will not build tomorrow.",
         );
     }
     let mut modules = Vec::new();
+    let mut failed = 0;
     for root in roots(&args.root, &args.modules)? {
-        let (id, warnings) = check_one(&root, args.offline).await?;
-        modules.push(serde_json::json!({ "id": id, "warnings": warnings }));
+        let (id, said) = check_one(&root, args.offline, !args.no_gates).await?;
+        let (errors, warnings): (Vec<_>, Vec<_>) = said
+            .into_iter()
+            .partition(|entry| entry["level"] == "error");
+        failed += errors.len();
+        modules.push(serde_json::json!({ "id": id, "errors": errors, "warnings": warnings }));
     }
     if ui::json() {
         ui::emit(&serde_json::json!({ "schemaVersion": 1, "modules": modules }));
@@ -698,19 +710,46 @@ async fn check(args: CheckArgs) -> Result<()> {
     if !ui::plain() {
         ui::blank();
     }
+    if failed > 0 {
+        anyhow::bail!("{failed} check(s) failed — each is listed above");
+    }
     Ok(())
 }
 
-/// `ci check` for one module: what is ageing, said as it goes and returned for `--json`.
-async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json::Value>)> {
+/// `ci check` for one module: what fails, then what is ageing, said as it goes and returned for
+/// `--json`.
+async fn check_one(
+    root: &Path,
+    offline: bool,
+    gates: bool,
+) -> Result<(String, Vec<serde_json::Value>)> {
     let root = root.to_path_buf();
     warnings().clear();
     let mut found = 0;
     let (manifest, _) = crate::manifest::load_manifest(&root, None)?;
 
+    if gates {
+        let failures = run_gates(&root, &manifest, env!("CARGO_PKG_VERSION"));
+        for (file, message) in &failures {
+            // A gate that could not run names no file: the annotation then stands on the run.
+            annotate(
+                Level::Error,
+                Some(file.as_str()).filter(|file| !file.is_empty()),
+                message,
+            );
+        }
+        if failures.is_empty() {
+            ui::success(format!(
+                "{} passes every check before publishing",
+                manifest.id
+            ));
+        }
+    }
+
     if manifest.manifest_version != MANIFEST_VERSION {
         found += 1;
         annotate(
+            Level::Warning,
             Some(MODULE_MANIFEST),
             format!(
                 "manifest_version {} — this SDK writes {MANIFEST_VERSION}; rebuild with a current \
@@ -726,6 +765,7 @@ async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json
         if declared != SDUI_SCHEMA_VERSION {
             found += 1;
             annotate(
+                Level::Warning,
                 Some(MODULE_MANIFEST),
                 format!(
                     "ui_schema {shell}={declared} — the shell now renders {SDUI_SCHEMA_VERSION}; \
@@ -744,6 +784,7 @@ async fn check_one(root: &Path, offline: bool) -> Result<(String, Vec<serde_json
                 Ok(latest) if outdated(&resolved.version, &latest) => {
                     found += 1;
                     annotate(
+                        Level::Warning,
                         Some("Cargo.toml"),
                         format!(
                             "portaki-sdk {} — {latest} is published; \
@@ -783,25 +824,214 @@ fn warnings() -> std::sync::MutexGuard<'static, Vec<serde_json::Value>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Writes the warning where it will be seen.
+/// A failed gate, or something ageing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Level {
+    Error,
+    Warning,
+}
+
+impl Level {
+    fn as_str(self) -> &'static str {
+        match self {
+            Level::Error => "error",
+            Level::Warning => "warning",
+        }
+    }
+}
+
+/// Writes the finding where it will be seen.
 ///
-/// Under GitHub Actions, the `::warning::` syntax pins it onto the file concerned, in the diff
-/// view. Elsewhere it is a line like any other — the same information, without the encoding that
-/// would be of use to nobody.
-fn annotate(file: Option<&str>, message: impl std::fmt::Display) {
-    warnings().push(serde_json::json!({ "file": file, "message": message.to_string() }));
+/// Under GitHub Actions, the `::error::` / `::warning::` syntax pins it onto the file concerned,
+/// in the diff view. Elsewhere it is a line like any other — the same information, without the
+/// encoding that would be of use to nobody.
+fn annotate(level: Level, file: Option<&str>, message: impl std::fmt::Display) {
+    warnings().push(serde_json::json!({
+        "level": level.as_str(),
+        "file": file,
+        "message": message.to_string(),
+    }));
+    let say = |message: &dyn std::fmt::Display| match level {
+        Level::Error => ui::failure(message),
+        Level::Warning => ui::warn(message),
+    };
     if ui::json() {
-        ui::warn(message);
+        say(&message);
         return;
     }
     if std::env::var("GITHUB_ACTIONS").is_ok_and(|value| value == "true") {
+        let kind = level.as_str();
         match file {
-            Some(file) => println!("::warning file={file}::{message}"),
-            None => println!("::warning::{message}"),
+            Some(file) => println!("::{kind} file={file}::{message}"),
+            None => println!("::{kind}::{message}"),
         }
         return;
     }
-    ui::warn(message);
+    say(&message);
+}
+
+/// The checks a version has to pass before it is published: each failure as `(file, message)`.
+///
+/// Every one of them guards against a version that publishes fine and still never reaches a
+/// host — kept as a draft for want of notes or reasons, or failing every write in production —
+/// with nothing turning red. A check that cannot even run says so as a failure of its own.
+fn run_gates(root: &Path, manifest: &ModuleManifest, cli_version: &str) -> Vec<(String, String)> {
+    let langs = crate::changelog::required_langs(root);
+    let mut failures = Vec::new();
+    for (name, outcome) in [
+        ("release notes", release_notes_gate(root, &langs)),
+        ("permission reasons", permission_reasons_gate(root, &langs)),
+        ("entity columns", entity_columns_gate(root, manifest)),
+        ("SDK pin", sdk_pin_gate(root, cli_version)),
+    ] {
+        match outcome {
+            Ok(found) => failures.extend(found),
+            Err(failure) => failures.push((String::new(), format!("{name}: {failure:#}"))),
+        }
+    }
+    failures
+}
+
+/// The declared version's notes cover every language the registry requires, within its bounds.
+fn release_notes_gate(root: &Path, langs: &[String]) -> Result<Vec<(String, String)>> {
+    let coords = crate::oci::pack::read_source_coordinates(root)?;
+    Ok(crate::changelog::problems(root, &coords.version, langs)?
+        .into_iter()
+        .map(|(file, problem)| {
+            let message = format!("{file}: {problem}");
+            (file, message)
+        })
+        .collect())
+}
+
+/// Every permission and revealed secret the built manifest declares has its reason in every
+/// required language — `portaki release` sends them from the file, the registry holds a stable
+/// version back without them.
+fn permission_reasons_gate(root: &Path, langs: &[String]) -> Result<Vec<(String, String)>> {
+    use crate::changelog::REASONS_FILE;
+    let path = crate::oci::pack::publish_manifest_path(&root.join("target/portaki"));
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Ok(vec![(
+            REASONS_FILE.to_string(),
+            "target/portaki/publish-manifest.json is missing — run portaki build first: the \
+             reasons are checked against what the build declares"
+                .to_string(),
+        )]);
+    };
+    let manifest: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
+    let declared = crate::changelog::declared(&manifest);
+    if declared.is_empty() {
+        return Ok(Vec::new());
+    }
+    let reasons = crate::changelog::file_reasons(root, Some(&declared))?;
+    let mut failures = Vec::new();
+    for key in &declared {
+        for lang in langs {
+            if reasons
+                .get(key)
+                .and_then(|by_lang| by_lang.get(lang))
+                .is_none()
+            {
+                failures.push((
+                    REASONS_FILE.to_string(),
+                    format!(
+                        "« {key} » has no reason in {lang} — the version stays a draft, hidden \
+                         from hosts"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(failures)
+}
+
+/// Every field of an entity has its column in `db/migrations/*.sql`.
+///
+/// The platform writes a row with one column per field, but the table only comes from the
+/// migrations: a field added without `ALTER TABLE … ADD COLUMN` fails every write, and no test
+/// sees it — a mock has no table. A column counts as soon as its name appears as a word in a
+/// migration: coarse, but it only lets an omission through if the name lies elsewhere in the SQL.
+/// The column name is the one the build derives for the platform (`operations.bundle.json`).
+fn entity_columns_gate(root: &Path, manifest: &ModuleManifest) -> Result<Vec<(String, String)>> {
+    if manifest.entities.is_empty() {
+        return Ok(Vec::new());
+    }
+    let directory = root.join("db/migrations");
+    let mut files: Vec<PathBuf> = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "sql"))
+            .collect(),
+        Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(failure) => {
+            return Err(failure).with_context(|| format!("read {}", directory.display()))
+        }
+    };
+    files.sort();
+    let mut sql = String::new();
+    for file in &files {
+        sql.push_str(
+            &std::fs::read_to_string(file).with_context(|| format!("read {}", file.display()))?,
+        );
+        sql.push('\n');
+    }
+    let sql = sql.to_lowercase();
+
+    let mut failures = Vec::new();
+    for entity in &manifest.entities {
+        for field in &entity.fields {
+            let Some(name) = field["name"].as_str().filter(|name| !name.is_empty()) else {
+                continue;
+            };
+            let column = crate::manifest::operations_bundle::to_snake_case(name);
+            if !contains_word(&sql, &column.to_lowercase()) {
+                failures.push((
+                    "db/migrations".to_string(),
+                    format!(
+                        "{}.{name} has no column `{column}` in db/migrations — every write would \
+                         fail: add a migration (ALTER TABLE … ADD COLUMN IF NOT EXISTS) and raise \
+                         the entity's schema_version, or it is never applied",
+                        entity.name
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(failures)
+}
+
+/// `word` stands on its own in `text`: no letter, digit or `_` against it on either side.
+fn contains_word(text: &str, word: &str) -> bool {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    !word.is_empty()
+        && text.match_indices(word).any(|(at, _)| {
+            !text[..at].chars().next_back().is_some_and(is_word)
+                && !text[at + word.len()..].chars().next().is_some_and(is_word)
+        })
+}
+
+/// The SDK the module resolves is the one this CLI ships with: the two are released together,
+/// and a CLI of another version checks, builds and packs by other rules than the SDK's.
+fn sdk_pin_gate(root: &Path, cli_version: &str) -> Result<Vec<(String, String)>> {
+    let lock = find_lockfile(root).context(
+        "no Cargo.lock here or above — commit it: it says which SDK the module is built on",
+    )?;
+    let text =
+        std::fs::read_to_string(&lock).with_context(|| format!("read {}", lock.display()))?;
+    let locked = read_locked_sdk(&text).context("Cargo.lock carries no portaki-sdk")?;
+    if locked.version == cli_version {
+        return Ok(Vec::new());
+    }
+    Ok(vec![(
+        "Cargo.lock".to_string(),
+        format!(
+            "Cargo.lock resolves portaki-sdk {}, this CLI is {cli_version} — run the CLI of the \
+             same version (cargo install portaki-cli@{} --locked), or raise portaki-sdk",
+            locked.version, locked.version
+        ),
+    )])
 }
 
 /// What the manifest declares and the platform is withdrawing.
@@ -823,6 +1053,7 @@ fn warn_about_withdrawn(manifest: &ModuleManifest, catalogue: &[Withdrawn]) -> u
             None => String::new(),
         };
         annotate(
+            Level::Warning,
             Some(MODULE_MANIFEST),
             format!(
                 "{} `{}` is deprecated since {}{replacement}: {}",
@@ -1091,5 +1322,224 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         std::fs::create_dir_all(root.path().join(MODULES_DIR).join("target")).unwrap();
 
         assert!(discover(root.path()).unwrap().is_empty());
+    }
+
+    /// A built manifest with these entities, the rest as small as the SDK reads it.
+    fn manifest_with_entities(entities: serde_json::Value) -> ModuleManifest {
+        serde_json::from_value(serde_json::json!({
+            "manifestVersion": "1",
+            "id": "lost-found",
+            "version": "1.4.0",
+            "displayName": "k",
+            "description": "k",
+            "author": { "name": "x" },
+            "uiSchema": { "host": "1", "guest": "1" },
+            "capabilities": { "required": [], "optional": [], "provided": [] },
+            "connectors": { "builtin": [], "custom": [] },
+            "entities": entities,
+            "surfaces": {},
+            "queries": [],
+            "commands": [],
+            "events": {},
+            "i18n": { "default": "fr-FR", "supported": ["fr-FR"] }
+        }))
+        .expect("manifeste lisible")
+    }
+
+    fn report_entity() -> ModuleManifest {
+        manifest_with_entities(serde_json::json!([{
+            "name": "LostFoundReport",
+            "schema_version": 3,
+            "fields": [
+                { "name": "id", "type": "Uuid" },
+                { "name": "category", "type": "String" },
+                { "name": "return_choice", "type": "Option<String>" }
+            ]
+        }]))
+    }
+
+    fn migrations(root: &Path, files: &[(&str, &str)]) {
+        let directory = root.join("db/migrations");
+        std::fs::create_dir_all(&directory).unwrap();
+        for (name, sql) in files {
+            std::fs::write(directory.join(name), sql).unwrap();
+        }
+    }
+
+    /// What broke lost-found, consumables and pre-arrival-form in production from 4 to 9
+    /// October 2026: a field added to the struct, never to the table.
+    #[test]
+    fn an_entity_field_without_a_column_fails() {
+        let root = tempfile::tempdir().unwrap();
+        migrations(
+            root.path(),
+            &[(
+                "20260925120000_v1_lost_found.sql",
+                "CREATE TABLE lost_found_report (id UUID PRIMARY KEY, category_label TEXT);",
+            )],
+        );
+
+        let failures = entity_columns_gate(root.path(), &report_entity()).unwrap();
+
+        // `category_label` is not `category`: a word, not a substring.
+        let missing: Vec<&str> = failures
+            .iter()
+            .map(|(_, message)| message.split(' ').next().unwrap())
+            .collect();
+        assert_eq!(
+            missing,
+            ["LostFoundReport.category", "LostFoundReport.return_choice"]
+        );
+        assert!(failures[0].1.contains("schema_version"), "{failures:?}");
+    }
+
+    #[test]
+    fn a_column_added_by_a_later_migration_counts() {
+        let root = tempfile::tempdir().unwrap();
+        migrations(
+            root.path(),
+            &[
+                (
+                    "20260925120000_v1_lost_found.sql",
+                    "CREATE TABLE lost_found_report (id UUID PRIMARY KEY);",
+                ),
+                (
+                    "20261009180000_v3_lost_found.sql",
+                    "ALTER TABLE lost_found_report ADD COLUMN IF NOT EXISTS CATEGORY TEXT,\n\
+                     ADD COLUMN IF NOT EXISTS return_choice TEXT;",
+                ),
+                ("notes.txt", "category return_choice"),
+            ],
+        );
+
+        assert!(entity_columns_gate(root.path(), &report_entity())
+            .unwrap()
+            .is_empty());
+    }
+
+    /// No entity, nothing to compare — with or without a migrations directory.
+    #[test]
+    fn a_module_without_entities_has_no_columns_to_check() {
+        let root = tempfile::tempdir().unwrap();
+        let manifest = manifest_with_entities(serde_json::json!([]));
+        assert!(entity_columns_gate(root.path(), &manifest)
+            .unwrap()
+            .is_empty());
+        // An entity and no migration at all: every field is missing.
+        assert_eq!(
+            entity_columns_gate(root.path(), &report_entity())
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn a_word_is_matched_whole() {
+        assert!(contains_word("add column emoji text", "emoji"));
+        assert!(contains_word("(emoji)", "emoji"));
+        assert!(!contains_word("emoji_label text", "emoji"));
+        assert!(!contains_word("myemoji text", "emoji"));
+        assert!(contains_word("x emoji_label, emoji", "emoji"));
+        assert!(!contains_word("anything", ""));
+    }
+
+    /// A module root with a built manifest declaring `permissions`, and this reasons file.
+    fn built_module(permissions: &[&str], reasons: Option<&str>) -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        let artifacts = root.path().join("target/portaki");
+        std::fs::create_dir_all(&artifacts).unwrap();
+        std::fs::write(
+            crate::oci::pack::publish_manifest_path(&artifacts),
+            serde_json::json!({ "id": "train", "version": "2.0.1", "permissions": permissions })
+                .to_string(),
+        )
+        .unwrap();
+        if let Some(reasons) = reasons {
+            std::fs::write(root.path().join(crate::changelog::REASONS_FILE), reasons).unwrap();
+        }
+        root
+    }
+
+    fn langs(list: &[&str]) -> Vec<String> {
+        list.iter().map(|lang| lang.to_string()).collect()
+    }
+
+    /// What kept train 2.0.1 and consumables 2.5.0 out of the catalogue on 7 October 2026.
+    #[test]
+    fn every_declared_permission_has_a_reason_in_every_language() {
+        let root = built_module(
+            &["kv", "email"],
+            Some(
+                r#"{ "kv": { "fr": "Pour garder vos réglages", "en": "To keep your settings" },
+                       "email": { "fr": "Pour envoyer le code" } }"#,
+            ),
+        );
+
+        let failures = permission_reasons_gate(root.path(), &langs(&["fr", "en"])).unwrap();
+
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(failures[0].1.contains("« email »"), "{failures:?}");
+        assert!(failures[0].1.contains(" en "), "{failures:?}");
+    }
+
+    #[test]
+    fn reasons_need_a_build_and_nothing_declared_needs_none() {
+        let root = tempfile::tempdir().unwrap();
+        let failures = permission_reasons_gate(root.path(), &langs(&["fr"])).unwrap();
+        assert!(failures[0].1.contains("portaki build"), "{failures:?}");
+
+        let quiet = built_module(&[], None);
+        assert!(permission_reasons_gate(quiet.path(), &langs(&["fr"]))
+            .unwrap()
+            .is_empty());
+
+        let missing = built_module(&["kv"], None);
+        assert_eq!(
+            permission_reasons_gate(missing.path(), &langs(&["fr", "en"]))
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn the_locked_sdk_must_be_this_clis() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("Cargo.lock"), REGISTRY_LOCK).unwrap();
+
+        assert!(sdk_pin_gate(root.path(), "2.3.0").unwrap().is_empty());
+        let failures = sdk_pin_gate(root.path(), "2.4.0").unwrap();
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].1.contains("portaki-cli@2.3.0"), "{failures:?}");
+    }
+
+    /// A check that cannot run is a failure of its own, and never hides the others.
+    #[test]
+    fn every_gate_runs_and_reports_before_the_run_fails() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("Cargo.toml"),
+            "[package]\nname = \"lost-found\"\nversion = \"1.4.0\"\n",
+        )
+        .unwrap();
+
+        let failures = run_gates(root.path(), &report_entity(), "10.11.0");
+        let files: Vec<&str> = failures.iter().map(|(file, _)| file.as_str()).collect();
+
+        for expected in [
+            "CHANGELOG.fr.md",
+            crate::changelog::REASONS_FILE,
+            "db/migrations",
+        ] {
+            assert!(files.contains(&expected), "{expected} in {files:?}");
+        }
+        // No Cargo.lock: the pin cannot be read, which is said rather than skipped.
+        assert!(
+            failures
+                .iter()
+                .any(|(file, message)| file.is_empty() && message.starts_with("SDK pin: ")),
+            "{failures:?}"
+        );
     }
 }

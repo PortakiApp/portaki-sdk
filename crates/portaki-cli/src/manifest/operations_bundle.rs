@@ -227,7 +227,7 @@ fn pascal_to_snake(name: &str) -> String {
     out
 }
 
-fn to_snake_case(name: &str) -> String {
+pub(crate) fn to_snake_case(name: &str) -> String {
     if name.contains('_') || name.chars().all(|c| c.is_lowercase() || !c.is_alphabetic()) {
         return name.to_string();
     }

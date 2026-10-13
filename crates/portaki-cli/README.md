@@ -217,7 +217,7 @@ A command that renders no information writes nothing to stdout.
 | `ci modules` | `{ schemaVersion, modules: [id], any, reason }` |
 | `ci sdk-version` | `{ schemaVersion, version, rev, key }` |
 | `ci info` | `{ schemaVersion, modules: [{ id, version }] }` |
-| `ci check` | `{ schemaVersion, modules: [{ id, warnings: [{ file, message }] }] }` |
+| `ci check` | `{ schemaVersion, modules: [{ id, errors: [{ level, file, message }], warnings: [{ level, file, message }] }] }` |
 | `ci report` | `{ schemaVersion, modules: [{ id, outcome, reported, error }] }` |
 
 ### Exit codes
@@ -318,9 +318,23 @@ invocation serves both.
 |---------|---------|
 | `portaki ci modules [--changed-since <ref>] [--only a,b] [--module <id> \| --all]` | Which modules this run should build — one repo per module, or `modules/*` in a monorepo |
 | `portaki ci sdk-version` | The Portaki SDK this checkout resolves to, and the CLI version to install with it |
-| `portaki ci check [--offline]` | Warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
+| `portaki ci check [--offline] [--no-gates]` | Fails on what would keep the version from hosts — notes, permission reasons, entity columns, SDK pin — then warns about an outdated SDK, a deprecated capability, or a manifest the shell has moved past |
 | `portaki ci info` | This module's id and version — one per line under `--plain` |
 | `portaki ci report --outcome <…>` | Tell the platform how this module's CI run ended |
+
+`ci check` runs after a build — it reads `target/portaki/`. Its gates fail the run, each one
+reported before it does; `--no-gates` keeps only the warnings:
+
+- **Release notes** — the declared version's section in `CHANGELOG.<lang>.md` (`CHANGELOG.md`
+  in English) for every language of `listing.json`'s `publishedLangs`, and `fr` in any case: at
+  most 5 lines of at most 160 characters, none reading like a commit message. A version that only
+  bumps dependencies passes, with the standard line `publish` gives it.
+- **Permission reasons** — every permission and `reveal:` key of the built manifest has its text
+  in each of those languages in `permission-reasons.json`.
+- **Entity columns** — every field of a `#[portaki_sdk::entity]` has its column in
+  `db/migrations/*.sql`; a field without one fails every write in production. Adding one also
+  means raising the entity's `schema_version`, which this check cannot see.
+- **SDK pin** — the `portaki-sdk` `Cargo.lock` resolves is this CLI's version.
 
 A version already in the registry is not published again: `ci release` reads what the registry
 holds — by digest from the catalogue, or by the version's tag for a draft it does not show — and
