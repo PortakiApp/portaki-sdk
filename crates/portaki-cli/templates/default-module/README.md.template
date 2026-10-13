@@ -29,6 +29,8 @@ portaki check         # the gate portaki release applies
 portaki release       # push, sign and announce
 ```
 
+A version that adds a permission (or reveals a secret) says why to hosts: put the reasons in `permission-reasons.json`, `{ "<permission>": { "fr": "…", "en": "…" } }` — a CI release sends them.
+
 The version lives in `Cargo.toml` only. There is no manifest to write: `portaki build` reads `portaki_module!`, `#[surface]`, `#[email]`, the `portaki-sdk` features and `i18n/`.
 
 ## License

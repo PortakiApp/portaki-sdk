@@ -534,13 +534,14 @@ async fn release(
 ) -> Result<Landed> {
     let artifact_dir = module_root.join("target/portaki");
     let lang = notes_lang(args, module_root);
-    // Read before any build: a malformed flag discovered at announcement time would leave a
-    // pushed artifact and an unannounced version.
-    let notes = crate::changelog::release_notes(
+    // Read before any build: a malformed flag or reasons file discovered at announcement time
+    // would leave a pushed artifact and an unannounced version.
+    crate::changelog::release_notes(
         &args.permission_reasons,
         args.host_action_required,
         &args.host_action,
         &lang,
+        crate::changelog::file_reasons(module_root, None)?,
     )?;
 
     // Before any build: a refusal discovered after the push would leave an unsigned artifact.
@@ -584,6 +585,7 @@ async fn release(
     }
 
     stamp_changelog(module_root, &artifact_dir, args, &lang)?;
+    let notes = release_notes(module_root, &artifact_dir, args, &lang)?;
     // Before the push: the registry would refuse the announcement, but the artifact would already
     // have been pushed.
     crate::commands::lint::assert_sdk_version(
@@ -786,6 +788,39 @@ fn stamp_changelog(
         ),
     );
     Ok(())
+}
+
+/// The release notes the announcement carries: `permission-reasons.json`, kept to what the built
+/// manifest declares, then the flags over it.
+fn release_notes(
+    module_root: &Path,
+    artifact_dir: &Path,
+    args: &ReleaseArgs,
+    lang: &str,
+) -> Result<serde_json::Value> {
+    let path = oci::pack::publish_manifest_path(artifact_dir);
+    let raw = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let manifest: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
+    let declared = crate::changelog::declared(&manifest);
+    let file = crate::changelog::file_reasons(module_root, Some(&declared))?;
+    let notes = crate::changelog::release_notes(
+        &args.permission_reasons,
+        args.host_action_required,
+        &args.host_action,
+        lang,
+        file,
+    )?;
+    if let Some(reasons) = notes["permissionReasons"]
+        .as_object()
+        .filter(|reasons| !reasons.is_empty())
+    {
+        ui::field(
+            "reasons",
+            reasons.keys().cloned().collect::<Vec<_>>().join(", "),
+        );
+    }
+    Ok(notes)
 }
 
 /// A published version is not published again.
@@ -1197,14 +1232,20 @@ fn accepted(body: &serde_json::Value) -> Outcome {
             let lang = field("lang").unwrap_or("?");
             let file = crate::changelog::file_for(lang);
             match (field("kind"), field("permission")) {
-                (Some("permissionReason"), Some(permission)) => {
-                    format!("justification de la permission {permission} ({lang})")
-                }
+                (Some("permissionReason"), Some(permission)) => format!(
+                    "justification de la permission {permission} ({lang}) — dans {} ou \
+                     --permission-reason {permission}={lang}:…",
+                    crate::changelog::REASONS_FILE
+                ),
                 (Some("changelogRewrite"), _) => format!(
                     "changelog ({lang}) à réécrire pour les hôtes, pas en message de commit — \
                      dans {file} ou --notes {lang}:…"
                 ),
-                _ => format!("changelog ({lang}) — ajoutez {file} ou --notes {lang}:…"),
+                (Some("changelog"), _) => {
+                    format!("changelog ({lang}) — ajoutez {file} ou --notes {lang}:…")
+                }
+                // Conformance, host action, a kind this CLI does not know yet: never a changelog.
+                _ => crate::commands::release_notes::missing_line(item),
             }
         })
         .collect();
@@ -1650,11 +1691,28 @@ mod tests {
             Outcome::Draft {
                 missing: vec![
                     "changelog (fr) — ajoutez CHANGELOG.fr.md ou --notes fr:…".into(),
-                    "justification de la permission email (en)".into()
+                    "justification de la permission email (en) — dans permission-reasons.json \
+                     ou --permission-reason email=en:…"
+                        .into()
                 ],
                 url: Some("https://developer.portaki.app/nuki/release".into()),
             }
         );
+        let Outcome::Draft { missing, .. } = classify(
+            201,
+            r#"{"releaseState":"draft","missing":[{"kind":"conformance_pending"},
+                {"kind":"conformance","check":"surfaces"},{"kind":"hostAction","lang":"fr"},
+                {"kind":"brandNew"}]}"#,
+        ) else {
+            panic!("a draft");
+        };
+        assert_eq!(missing.len(), 4);
+        assert!(
+            missing.iter().all(|line| !line.contains("changelog")),
+            "{missing:?}"
+        );
+        assert!(missing[1].contains("surfaces"));
+        assert_eq!(missing[3], "brandNew");
         assert_eq!(
             classify(201, r#"{"releaseState":"available"}"#),
             Outcome::Published

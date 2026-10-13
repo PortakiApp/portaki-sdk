@@ -74,6 +74,32 @@ pub fn is_known(permission: &str) -> bool {
         .is_some_and(is_connector_id)
 }
 
+/// Prefix of the release-notes key of a revealed secret: `reveal:<field>:<place>`.
+///
+/// Not a manifest permission: `config.fields[].reveal` declares it. A reveal added since the
+/// previous stable is justified like an added permission, under this key — `<field>` is the
+/// field's key, or `<list>[].<sub>` for a secret sub-key of a structured list's rows.
+pub const REVEAL_PREFIX: &str = "reveal:";
+
+/// Where a secret may be shown — the schema's `reveal` enum, closed.
+pub const REVEAL_PLACES: &[&str] = &["guest_pre_arrival", "guest_stay", "arrival_email"];
+
+/// Whether `key` is a `reveal:<field>:<place>` key, read as the registry reads it
+/// (`SecretReveal.fromToken`): a non-empty field, then a known place after the last `:`.
+///
+/// ```
+/// use portaki_sdk::permission;
+///
+/// assert!(permission::is_reveal("reveal:bin_room_code:guest_pre_arrival"));
+/// assert!(permission::is_reveal("reveal:networks[].password:guest_stay"));
+/// assert!(!permission::is_reveal("reveal:code:host"));
+/// ```
+pub fn is_reveal(key: &str) -> bool {
+    key.strip_prefix(REVEAL_PREFIX)
+        .and_then(|rest| rest.rsplit_once(':'))
+        .is_some_and(|(field, place)| !field.is_empty() && REVEAL_PLACES.contains(&place))
+}
+
 /// `[a-z][a-z0-9-]*` — the schema's connector id pattern.
 fn is_connector_id(id: &str) -> bool {
     let mut chars = id.chars();
@@ -99,6 +125,38 @@ mod tests {
     fn stay_read_is_not_a_manifest_permission() {
         assert!(!is_known("stay:read"));
         assert!(is_known("stay:guest_contact:read"));
+    }
+
+    #[test]
+    fn reveal_keys_name_a_field_and_a_known_place() {
+        for key in [
+            "reveal:bin_room_code:guest_pre_arrival",
+            "reveal:bin_room_code:guest_stay",
+            "reveal:networks[].password:guest_stay",
+            "reveal:keyboxCode:arrival_email",
+        ] {
+            assert!(is_reveal(key), "{key}");
+            assert!(!is_known(key), "{key} is not a manifest permission");
+        }
+        for key in [
+            "reveal:code:host",
+            "reveal::guest_stay",
+            "reveal:guest_stay",
+            "reveal:",
+            "code:guest_stay",
+        ] {
+            assert!(!is_reveal(key), "{key}");
+        }
+    }
+
+    #[test]
+    fn the_reveal_places_are_the_schema_ones() {
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../../../schema/module.v1.json")).expect("schema");
+        assert_eq!(
+            schema["$defs"]["configField"]["properties"]["reveal"]["items"]["enum"],
+            serde_json::json!(REVEAL_PLACES)
+        );
     }
 
     /// The schema's pattern and this list are the same contract, written twice.

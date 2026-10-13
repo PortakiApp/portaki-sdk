@@ -74,7 +74,7 @@ rustup target add wasm32-unknown-unknown
 | `portaki test` | Forward to `cargo test` in the module crate |
 | `portaki release [--channel preview\|stable] [--notes …] [--no-sign] [--require-available] [--dry-run]` | Test, build, push to Portaki's OCI repository with a short-lived push right from the registry, sign, and announce — locally with `portaki login`; from CI, `ci build` then `ci release`. `publish` is a hidden alias |
 | `portaki release status <v>` | Where a published version stands: draft or available, signature, review, what is missing — and the next command |
-| `portaki release notes <v> [--complete] [--notes …] [--permission-reason …] [--host-action …]` | Read a version's release notes; with a flag, complete them — from the flags, then `CHANGELOG*.md` — and let the registry publish the draft |
+| `portaki release notes <v> [--complete] [--notes …] [--permission-reason …] [--host-action …]` | Read a version's release notes; with a flag, complete them — from the flags, then `CHANGELOG*.md` and `permission-reasons.json` — and let the registry publish the draft |
 | `portaki link [--all]` | Open the dashboard page that links this module; with `--all`, link every module of the monorepo like this one |
 | `portaki catalog` | Dump the SDUI primitive catalog |
 | `portaki inspect <url>` | GET a URL and pretty-print it when it is JSON — no registry authentication |
@@ -448,6 +448,26 @@ stable version as a draft, as before. A file never blocks the push.
 Beside the manifest, the announcement carries what only the author can say: why a permission is
 added (`--permission-reason email=fr:"Pour envoyer le code"`, one per permission and language) and
 whether the host has to act after updating (`--host-action-required`, `--host-action fr:"…"`).
+
+A CI passes no flag: write the reasons once in `permission-reasons.json` at the module root, and
+`portaki release` and `portaki release notes <v> --complete` send them.
+
+```json
+{
+  "email": { "fr": "Pour envoyer le code d'accès", "en": "To send the access code" },
+  "reveal:networks[].password:guest_stay": {
+    "fr": "Donner au voyageur, pendant son séjour, le mot de passe du Wi-Fi.",
+    "en": "Gives the guest the Wi-Fi password during the stay."
+  }
+}
+```
+
+A key is a manifest permission or the `reveal:<field>:<place>` of a revealed secret (`<field>` is
+the field's key, `<list>[].<sub>` for a secret sub-key of a list's rows; `<place>` is
+`guest_pre_arrival`, `guest_stay` or `arrival_email`). The texts follow the flag's rules. `release`
+sends only the keys the built manifest declares, `release notes` only those the registry says the
+version adds — the others are left out with a warning. A `--permission-reason` flag wins over the
+file for its permission and language.
 
 A **stable** version stays pending at the registry — kept, but invisible to hosts — until its
 changelog has a line in every language of the module's listing and each permission added since the
