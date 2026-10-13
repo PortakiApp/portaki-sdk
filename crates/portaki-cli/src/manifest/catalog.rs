@@ -411,13 +411,14 @@ pub fn check_references(
 }
 
 /// Every `portaki-sdk` feature and the permission it declares.
-pub(crate) const FEATURE_PERMISSIONS: [(&str, &str); 7] = [
+pub(crate) const FEATURE_PERMISSIONS: [(&str, &str); 8] = [
     ("kv", permission::KV),
     ("repo", permission::REPO),
     ("email", permission::EMAIL),
     ("events", permission::EVENTS),
     ("platform", permission::PLATFORM),
     ("guest-files", permission::GUEST_FILES),
+    ("host-files", permission::HOST_FILES),
     ("stay-guest-contact", permission::STAY_GUEST_CONTACT_READ),
 ];
 
@@ -833,11 +834,24 @@ mod tests {
             kind: "connector_custom".into(),
             data: json!({ "id": "nuki" }),
         });
-        let features = ["repo", "email", "not-a-permission", "guest-files"].map(String::from);
+        let features = [
+            "repo",
+            "email",
+            "not-a-permission",
+            "guest-files",
+            "host-files",
+        ]
+        .map(String::from);
 
         assert_eq!(
             super::permissions(&emissions, &features),
-            ["connectors:nuki", "email", "guest:files", "repo"]
+            [
+                "connectors:nuki",
+                "email",
+                "guest:files",
+                "host:files",
+                "repo"
+            ]
         );
     }
 

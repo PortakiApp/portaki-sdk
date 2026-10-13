@@ -112,7 +112,7 @@ fill `listing.json` in, or delete it to write the listing in the dashboard.
 | `hostSurfaces`, `guestSurfaces` | `#[surface(host, id, placement = HostPlacement::…, design_id = DesignId::…, label_key, icon = IconName::…, path)]` / `#[surface(guest, id, path, label_key, role = GuestRole::…, embeds = HostFragmentId::…)]` |
 | `emails` | `#[email(id, audience, …)]` above the `#[command]` that sends it |
 | `errors` | `portaki_module!(error = "photo_required", …)` — the codes `refuse!` may raise, each labelled by `errors.<code>` in `i18n/*.json` |
-| `permissions` | the features enabled on `portaki-sdk` (`kv`, `repo`, `email`, `events`, `platform`, `guest-files`, `stay-guest-contact`) and each `#[connector]` id |
+| `permissions` | the features enabled on `portaki-sdk` (`kv`, `repo`, `email`, `events`, `platform`, `guest-files`, `host-files`, `stay-guest-contact`) and each `#[connector]` id |
 | `sdkVersion`, `requiresModuleSdk` | the `portaki-sdk` version cargo resolved |
 | `dispatchExamples` | `example(label = "…", input = r#"{…}"#)` on a `#[query]` / `#[command]` |
 

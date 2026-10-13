@@ -30,7 +30,7 @@ platform = []
 # host attaches (checklist); the platform refuses a guest upload without `guest:files`, and leaves
 # StayContext::guest_email / guest_phone empty without the second one.
 guest-files = []
-# Lire les octets d'un fichier joint par l'hôte à ce module (`host::files::read`).
+# `host::files::read`, the bytes of a file the host attached to this module; declares `host:files`.
 host-files = []
 stay-guest-contact = []
 
@@ -54,7 +54,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 # The SDK's tests exercise the whole host API, whichever feature is asked for.
-portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files"] }
+portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files", "host-files"] }
 serde_json = { workspace = true }
 # What `plugin_fn` formats a handler's error through: the wire text of a refusal is tested on it.
 anyhow = { workspace = true }

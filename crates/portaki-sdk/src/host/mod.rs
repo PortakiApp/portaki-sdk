@@ -49,6 +49,7 @@
 pub mod connectors;
 pub mod email;
 pub mod events;
+#[cfg(feature = "host-files")]
 pub mod files;
 pub mod i18n;
 pub mod kv;
