@@ -55,17 +55,43 @@ pub fn file_for(lang: &str) -> String {
 
 /// The language of untagged `--notes`: the listing's first, else `fr`.
 pub fn default_lang(module_root: &Path) -> String {
-    std::fs::read_to_string(module_root.join("listing.json"))
+    listing_langs(module_root)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| FALLBACK_LANG.to_string())
+}
+
+/// Every language a stable version's notes must cover before the registry lets hosts see it:
+/// the listing's `publishedLangs`, and `fr` — the fallback of all of them — in any case.
+pub fn required_langs(module_root: &Path) -> Vec<String> {
+    let mut langs = listing_langs(module_root);
+    if !langs.iter().any(|lang| lang == FALLBACK_LANG) {
+        langs.insert(0, FALLBACK_LANG.to_string());
+    }
+    langs
+}
+
+/// `publishedLangs` of `listing.json`, two lowercase letters each; empty without a listing.
+fn listing_langs(module_root: &Path) -> Vec<String> {
+    let listing = std::fs::read_to_string(module_root.join("listing.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|listing| {
-            listing
-                .pointer("/publishedLangs/0")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
-        .filter(|lang| lang.len() == 2 && lang.chars().all(|c| c.is_ascii_lowercase()))
-        .unwrap_or_else(|| FALLBACK_LANG.to_string())
+        .unwrap_or_default();
+    let mut langs: Vec<String> = Vec::new();
+    for lang in listing["publishedLangs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+    {
+        if lang.len() == 2
+            && lang.chars().all(|c| c.is_ascii_lowercase())
+            && !langs.iter().any(|known| known == lang)
+        {
+            langs.push(lang.to_string());
+        }
+    }
+    langs
 }
 
 /// Synced copy of portaki-platform's `contracts/release-notes-rules.json`: the registry
@@ -186,55 +212,39 @@ pub fn lines(
         if by_lang.contains_key(&lang) {
             continue;
         }
-        let markdown =
-            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let source = path.file_name().unwrap_or_default().to_string_lossy();
-        let bullets = section(&markdown, version);
-        if !bullets.is_empty() {
+        let read = Section::read(&path, version, &others)?;
+        if read.found {
             with_section.insert(lang.clone());
         }
-        let (foreign, ours): (Vec<_>, Vec<_>) = bullets
-            .into_iter()
-            .partition(|(scope, _)| scope.as_ref().is_some_and(|s| others.contains(s)));
-        if !foreign.is_empty() {
+        if !read.foreign.is_empty() {
             crate::ui::warn(format!(
                 "{source} {version}: dropped {} line(s) scoped to other modules — {}",
-                foreign.len(),
-                foreign
-                    .iter()
-                    .map(|(scope, _)| scope.as_deref().unwrap_or_default())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                read.foreign.len(),
+                read.foreign.join(", ")
             ));
         }
         // Generated most of the time: a commit line is dropped from it, never a blocker.
-        let (commits, kept): (Vec<_>, Vec<_>) = ours
-            .into_iter()
-            .partition(|(_, line)| looks_like_commit(line));
-        if !commits.is_empty() {
+        if !read.commits.is_empty() {
             crate::ui::warn(format!(
                 "{source} {version}: dropped {} line(s) that read like commit messages — {}",
-                commits.len(),
-                commits
+                read.commits.len(),
+                read.commits
                     .iter()
                     .map(|(_, line)| line.as_str())
                     .collect::<Vec<_>>()
                     .join(" · ")
             ));
         }
-        let found: Vec<String> = kept
-            .into_iter()
+        let found: Vec<String> = read
+            .kept
+            .iter()
             .take(MAX_LINES)
-            .map(|(_, line)| shorten(&line))
+            .map(|line| shorten(line))
             .collect();
         if !found.is_empty() {
             by_lang.insert(lang, found);
-        } else if foreign.is_empty()
-            && !commits.is_empty()
-            && commits
-                .iter()
-                .all(|(scope, line)| is_deps_bump(scope.as_deref(), line))
-        {
+        } else if read.deps_only() {
             deps_only.insert(lang.clone());
             if let Some(standard) = deps_only_line(&lang) {
                 crate::ui::warn(format!(
@@ -268,6 +278,141 @@ pub fn lines(
                 .collect()
         })
         .collect())
+}
+
+/// What one changelog file says for a version, sorted the way [`lines`] treats it.
+struct Section {
+    /// A `## <version>` heading with at least one bullet under it.
+    found: bool,
+    /// Scopes of the lines that belong to another module of the repository — dropped.
+    foreign: Vec<String>,
+    /// Lines that read like commit messages, with their scope — dropped.
+    commits: Vec<(Option<String>, String)>,
+    /// The lines a host reads, as written.
+    kept: Vec<String>,
+}
+
+impl Section {
+    fn read(path: &Path, version: &str, others: &BTreeSet<String>) -> Result<Self> {
+        let markdown =
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        let bullets = section(&markdown, version);
+        let found = !bullets.is_empty();
+        let (foreign, ours): (Vec<_>, Vec<_>) = bullets
+            .into_iter()
+            .partition(|(scope, _)| scope.as_ref().is_some_and(|s| others.contains(s)));
+        let (commits, kept): (Vec<_>, Vec<_>) = ours
+            .into_iter()
+            .partition(|(_, line)| looks_like_commit(line));
+        Ok(Self {
+            found,
+            foreign: foreign
+                .into_iter()
+                .map(|(scope, _)| scope.unwrap_or_default())
+                .collect(),
+            commits,
+            kept: kept.into_iter().map(|(_, line)| line).collect(),
+        })
+    }
+
+    /// Nothing but dependency bumps: the version gets the standard line.
+    fn deps_only(&self) -> bool {
+        self.kept.is_empty()
+            && self.foreign.is_empty()
+            && !self.commits.is_empty()
+            && self
+                .commits
+                .iter()
+                .all(|(scope, line)| is_deps_bump(scope.as_deref(), line))
+    }
+}
+
+/// What would keep `version` out of the catalogue, or lose lines on the way there, as
+/// `(file, problem)` — empty when its notes cover every language of `langs`.
+///
+/// Strict where [`lines`] is lenient: a sixth line, a line over [`MAX_CHARS`] or a commit message
+/// is reported here, where publishing would cut, clip or drop it. A dependency bump is never one:
+/// it gets the standard line, exactly as [`lines`] gives it — `fr` included when
+/// `CHANGELOG.fr.md` has no section while `CHANGELOG.md` bumps dependencies only.
+pub fn problems(
+    module_root: &Path,
+    version: &str,
+    langs: &[String],
+) -> Result<Vec<(String, String)>> {
+    let others = other_modules(module_root);
+    let read = |lang: &str| -> Result<Option<Section>> {
+        let path = module_root.join(file_for(lang));
+        if !path.is_file() {
+            return Ok(None);
+        }
+        Section::read(&path, version, &others).map(Some)
+    };
+    let english_deps_only = read(UNSUFFIXED_LANG)?.is_some_and(|english| english.deps_only());
+    let mut problems = Vec::new();
+    for lang in langs {
+        let file = file_for(lang);
+        let Some(section) = read(lang)?.filter(|section| section.found) else {
+            if lang != FALLBACK_LANG || !english_deps_only {
+                problems.push((
+                    file,
+                    format!(
+                        "no line under « ## {version} » — the version would stay a draft, \
+                         hidden from hosts"
+                    ),
+                ));
+            }
+            continue;
+        };
+        if section.deps_only() {
+            if deps_only_line(lang).is_none() {
+                problems.push((
+                    file,
+                    format!(
+                        "{version}: dependency bumps only, and there is no standard line in \
+                         {lang} — write one"
+                    ),
+                ));
+            }
+            continue;
+        }
+        for (_, line) in section
+            .commits
+            .iter()
+            .filter(|(scope, line)| !is_deps_bump(scope.as_deref(), line))
+        {
+            problems.push((
+                file.clone(),
+                format!("{version}: « {line} » reads like a commit message — it would be dropped"),
+            ));
+        }
+        if section.kept.is_empty() {
+            problems.push((
+                file.clone(),
+                format!(
+                    "no line a host can read under « ## {version} » — the version would stay a \
+                     draft, hidden from hosts"
+                ),
+            ));
+        }
+        if section.kept.len() > MAX_LINES {
+            problems.push((
+                file.clone(),
+                format!(
+                    "{version}: {} lines, {MAX_LINES} at most",
+                    section.kept.len()
+                ),
+            ));
+        }
+        for line in &section.kept {
+            if line.chars().count() > MAX_CHARS {
+                problems.push((
+                    file.clone(),
+                    format!("{version}: over {MAX_CHARS} characters — « {line} »"),
+                ));
+            }
+        }
+    }
+    Ok(problems)
 }
 
 /// A dependency bump, release-please's `**deps:** …` or a bare `bump <crate> to <version>`.
@@ -1224,5 +1369,119 @@ mod tests {
             { "fr": "Code clavier la veille", "en": "Keypad code the day before" }
         ])))
         .is_empty());
+    }
+
+    /// A release-please section that bumps the SDK, then what each case adds to it.
+    const BUMPED: &str = "# Changelog\n\n## [1.8.1](https://github.com/o/r/compare/nuki-v1.8.0...nuki-v1.8.1) (2026-10-13)\n\n\n### Bug Fixes\n\n* **deps:** bump portaki-sdk to 10.10.0 ([f9906b0](https://github.com/o/r/commit/f9906b0))\n";
+    const OLDER_FR: &str = "## 1.8.0\n\n* Batterie de la serrure affichée\n";
+
+    /// A module at 1.8.1 with these two files, `None` leaving one out.
+    fn notes_module(english: Option<&str>, french: Option<&str>) -> tempfile::TempDir {
+        let dir = tempdir().unwrap();
+        for (file, content) in [("CHANGELOG.md", english), ("CHANGELOG.fr.md", french)] {
+            if let Some(content) = content {
+                fs::write(dir.path().join(file), content).unwrap();
+            }
+        }
+        dir
+    }
+
+    fn problems_in(dir: &tempfile::TempDir, langs: &[&str]) -> Vec<(String, String)> {
+        let langs: Vec<String> = langs.iter().map(|lang| lang.to_string()).collect();
+        problems(dir.path(), "1.8.1", &langs).unwrap()
+    }
+
+    /// The cases `check-changelog-fr.sh --self-test` of portaki-modules played, kept as they were.
+    #[test]
+    fn the_french_notes_are_due_unless_the_version_only_bumps_dependencies() {
+        let real_change = format!("{BUMPED}* **nuki:** show the battery ([1a2b3c4](https://x))\n");
+        let other_commit = format!("{BUMPED}* chore: release 1.8.1\n");
+        let written = format!("## 1.8.1\n\n* Code clavier la veille\n\n{OLDER_FR}");
+        let older = format!("# Changelog\n\n{OLDER_FR}");
+        for (case, english, french, passes) in [
+            ("deps-only", BUMPED, older.as_str(), true),
+            (
+                "bare-bump",
+                "## 1.8.1\n- Bump portaki-sdk to v10.10.0\n",
+                "",
+                true,
+            ),
+            ("written", BUMPED, written.as_str(), true),
+            ("real-change", real_change.as_str(), OLDER_FR, false),
+            ("other-commit", other_commit.as_str(), OLDER_FR, false),
+            (
+                "deps-prose",
+                "## 1.8.1\n* **deps:** build against portaki-sdk 10.10\n",
+                OLDER_FR,
+                false,
+            ),
+            (
+                "no-section",
+                "## 1.8.0\n* **deps:** bump portaki-sdk to 10.9.0\n",
+                OLDER_FR,
+                false,
+            ),
+            (
+                "near-version",
+                "## 1.8.10\n* **deps:** bump portaki-sdk to 10.10.0\n",
+                OLDER_FR,
+                false,
+            ),
+        ] {
+            let dir = notes_module(Some(english), Some(french));
+            let found = problems_in(&dir, &["fr"]);
+            assert_eq!(found.is_empty(), passes, "{case}: {found:?}");
+        }
+    }
+
+    /// Every published language is due, not only French — and `CHANGELOG.md` holds English.
+    #[test]
+    fn every_required_language_is_checked() {
+        let dir = notes_module(None, Some("## 1.8.1\n\n* Code clavier la veille\n"));
+        let found = problems_in(&dir, &["fr", "en"]);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "CHANGELOG.md");
+
+        let dir = notes_module(
+            Some("## 1.8.1\n\n* Keypad code the day before\n"),
+            Some("## 1.8.1\n\n* Code clavier la veille\n"),
+        );
+        assert!(problems_in(&dir, &["fr", "en"]).is_empty());
+        // No standard line exists in German: a bump alone leaves it without notes.
+        assert_eq!(problems_in(&dir, &["fr", "en", "de"]).len(), 1);
+    }
+
+    /// Publishing would cut the sixth line, clip the long one and drop the commit: said here.
+    #[test]
+    fn what_publishing_would_cut_is_reported() {
+        let six: String = (1..=6).map(|n| format!("* Ligne {n}\n")).collect();
+        let long = format!("* {}\n", "é".repeat(MAX_CHARS + 1));
+        for (case, french) in [
+            ("six lines", format!("## 1.8.1\n{six}")),
+            ("too long", format!("## 1.8.1\n{long}")),
+            (
+                "commit",
+                "## 1.8.1\n* Code clavier\n* fix: typo\n".to_string(),
+            ),
+        ] {
+            let dir = notes_module(None, Some(&french));
+            let found = problems_in(&dir, &["fr"]);
+            assert_eq!(found.len(), 1, "{case}: {found:?}");
+        }
+        let exact = format!("## 1.8.1\n* {}\n", "é".repeat(MAX_CHARS));
+        assert!(problems_in(&notes_module(None, Some(&exact)), &["fr"]).is_empty());
+    }
+
+    #[test]
+    fn french_is_required_whatever_the_listing_says() {
+        let dir = tempdir().unwrap();
+        assert_eq!(required_langs(dir.path()), vec!["fr"]);
+        fs::write(
+            dir.path().join("listing.json"),
+            r#"{"publishedLangs":["en","de","en","EN"]}"#,
+        )
+        .unwrap();
+        assert_eq!(required_langs(dir.path()), vec!["fr", "en", "de"]);
+        assert_eq!(default_lang(dir.path()), "en");
     }
 }
