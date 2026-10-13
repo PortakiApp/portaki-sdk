@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.11.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.10.0...v10.11.0) (2026-10-13)
+
+
+### Features
+
+* **cli:** standard note for deps-only versions ([f8ac002](https://github.com/PortakiApp/portaki-sdk/commit/f8ac0024ecf67552b894955a5cd430888f37e552))
+* **sdk:** declare module refusal codes ([0fa9e12](https://github.com/PortakiApp/portaki-sdk/commit/0fa9e12d57c8fbb8d2d101cac9bd8dfe4b8da51a))
+* **sdk:** host:files permission for files.read ([17855c8](https://github.com/PortakiApp/portaki-sdk/commit/17855c815b4274eaa3980d0d7fc6766676cc9f57))
+
 ## [10.10.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.9.0...v10.10.0) (2026-10-13)
 
 
