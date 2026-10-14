@@ -116,7 +116,10 @@ pub struct TimelineTask {
     /// Who does it, if anyone is named.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee: Option<TaskAssignee>,
-    /// What to tick — never empty.
+    /// What to tick. Empty = an informational task: the dashboard shows no checkbox and the task
+    /// must go away on its own once its condition clears (lock back online, form filled). A task
+    /// the host has to acknowledge needs at least one item and the module must serve
+    /// `taskToggle` / `taskComplete` for it.
     pub items: Vec<TimelineTaskItem>,
 }
 
