@@ -229,7 +229,7 @@
       "properties": {
         "provided": {
           "type": "array",
-          "description": "A capability id alone, or { id, shares } when the module shares some of its own settings with the modules that consume this capability.",
+          "description": "A capability id alone, or { id, shares, path, commands } when the module shares some of its own settings, names the guest path consumers open, or lets them call some of its commands.",
           "items": {
             "oneOf": [
               { "type": "string", "minLength": 1 },
@@ -244,10 +244,34 @@
                     "description": "Keys of this module's own config.fields that consumers read, read-only, as ModulePeer.shared. Only the published values are shared — never the draft — and never a secret: a secret field or a structured list with item.secret sub-keys is refused by the conformance battery and dropped again by the platform.",
                     "uniqueItems": true,
                     "items": { "type": "string", "minLength": 1 }
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "One of this module's own guestSurfaces paths, without :params: where a consumer opens this capability (ModulePeer.path, then Action::navigate).",
+                    "pattern": "^[a-z0-9-]{1,64}(/[a-z0-9-]{1,64})*$"
+                  },
+                  "commands": {
+                    "type": "array",
+                    "description": "This module's own commands a module that depends on this capability (capabilities.depends) may call. Absent: no peer command at all — the capability is reached by navigation only.",
+                    "uniqueItems": true,
+                    "items": { "type": "string", "minLength": 1 }
                   }
                 }
               }
             ]
+          }
+        },
+        "depends": {
+          "type": "array",
+          "description": "Capabilities named by modules (not the platform) that this module relies on: #[portaki_sdk::capability(required|optional, id = \"…\")]. The platform resolves providers among the property's installed modules, and accepts a peer command only from a module that depends on the capability.",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "optional": { "type": "boolean", "description": "The module works without a provider. Absent = false." }
+            }
           }
         }
       }

@@ -1,5 +1,6 @@
 //! `capability` expansion — required/optional host capability dependencies, and provided ones
-//! with the config keys they share (`shares = ["key", …]`).
+//! with the config keys they share (`shares = ["key", …]`), the guest path consumers open
+//! (`path = "…"`) and the commands they may call (`commands = ["…"]`).
 //!
 //! Resolves capability id from `id = "…"` or a string-literal const initializer. Cross-const
 //! references require an explicit `id` attribute.
@@ -20,6 +21,8 @@ struct CapabilityAttrs {
     purpose_key: Option<String>,
     fallback_key: Option<String>,
     shares: Vec<String>,
+    path: Option<String>,
+    commands: Vec<String>,
 }
 
 impl Parse for CapabilityAttrs {
@@ -30,6 +33,8 @@ impl Parse for CapabilityAttrs {
         let mut purpose_key = None;
         let mut fallback_key = None;
         let mut shares = Vec::new();
+        let mut path = None;
+        let mut commands = Vec::new();
 
         while !input.is_empty() {
             if input.peek(Token![,]) {
@@ -58,11 +63,16 @@ impl Parse for CapabilityAttrs {
 
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
-            if key == "shares" {
+            if key == "shares" || key == "commands" {
                 let list;
                 syn::bracketed!(list in input);
                 let keys = list.parse_terminated(|p| p.parse::<LitStr>(), Token![,])?;
-                shares = keys.iter().map(LitStr::value).collect();
+                let keys = keys.iter().map(LitStr::value).collect();
+                if key == "shares" {
+                    shares = keys;
+                } else {
+                    commands = keys;
+                }
                 continue;
             }
             let value: LitStr = input.parse()?;
@@ -72,6 +82,7 @@ impl Parse for CapabilityAttrs {
                 "id" => capability_id = Some(text),
                 "purpose_key" => purpose_key = Some(text),
                 "fallback_key" => fallback_key = Some(text),
+                "path" => path = Some(text),
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -88,6 +99,8 @@ impl Parse for CapabilityAttrs {
             purpose_key,
             fallback_key,
             shares,
+            path,
+            commands,
         })
     }
 }
@@ -103,10 +116,18 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         .or_else(|| capability_id_from_expr(&const_item.expr))
         .unwrap_or_default();
 
-    if !attrs.shares.is_empty() && !attrs.provided {
+    let provider_only = [
+        (!attrs.shares.is_empty(), "shares = [...]"),
+        (attrs.path.is_some(), "path = \"...\""),
+        (!attrs.commands.is_empty(), "commands = [...]"),
+    ];
+    if let Some((_, attribute)) = provider_only
+        .iter()
+        .find(|(set, _)| *set && !attrs.provided)
+    {
         return syn::Error::new(
             const_item.ident.span(),
-            "#[capability(shares = [...])] only applies to a provided capability",
+            format!("#[capability({attribute})] only applies to a provided capability"),
         )
         .to_compile_error()
         .into();
@@ -130,7 +151,9 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
   "provided": {},
   "purposeKey": {},
   "fallbackKey": {},
-  "shares": {}
+  "shares": {},
+  "path": {},
+  "commands": {}
 }}"#,
         serde_json::to_string(&const_name).unwrap(),
         serde_json::to_string(&capability_id).unwrap(),
@@ -139,6 +162,8 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         serde_json::to_string(&attrs.purpose_key).unwrap(),
         serde_json::to_string(&attrs.fallback_key).unwrap(),
         serde_json::to_string(&attrs.shares).unwrap(),
+        serde_json::to_string(&attrs.path).unwrap(),
+        serde_json::to_string(&attrs.commands).unwrap(),
     );
 
     let emission = write_emission("capability", &sanitize_key(&capability_id), &json);

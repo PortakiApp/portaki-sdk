@@ -130,6 +130,37 @@ pub struct ManifestCapabilities {
     /// **published** values as `host::module::ModulePeer::shared`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub shares: BTreeMap<String, Vec<String>>,
+    /// Capabilities this module provides under ids it names itself
+    /// ([`crate::capability::is_module_declared`], e.g. `report.issue`) — the platform does not
+    /// know them, it matches them with the modules that [`Self::depends`] on them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub declared: Vec<String>,
+    /// The guest path a consumer navigates to for each provided capability, by capability wire
+    /// id — `#[capability(provided, …, path = "…")]`, one of the module's own guest surface paths.
+    /// Peers read it as `host::module::ModulePeer::path`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub paths: BTreeMap<String, String>,
+    /// The commands a consumer may call on this module for each provided capability, by
+    /// capability wire id — `#[capability(provided, …, commands = [...])]`. The platform accepts
+    /// a peer command only from a module that [`Self::depends`] on the capability, and only one
+    /// listed here. None listed: the capability is reached by navigation only.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub commands: BTreeMap<String, Vec<String>>,
+    /// Module-declared capabilities this module depends on — `#[capability(required|optional,
+    /// id = "report.issue")]` with an id no platform capability has. Optional: the module works
+    /// without a provider and hides what it would have offered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depends: Vec<ManifestDependency>,
+}
+
+/// A module-declared capability this module depends on.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManifestDependency {
+    /// The capability id, as its providers declare it.
+    pub id: String,
+    /// The module works without a provider.
+    #[serde(default)]
+    pub optional: bool,
 }
 
 /// Optional capability entry with i18n keys for setup and degraded UX.

@@ -60,9 +60,56 @@ fn problems(module: &Module) -> Vec<String> {
     problems.extend(
         shares_problems(&manifest)
             .into_iter()
+            .chain(contract_problems(&manifest))
             .chain(core_problems(&manifest))
             .map(|problem| format!("{file}: {problem}")),
     );
+    problems
+}
+
+/// What a provided capability hands its consumers must be the module's own: `path` one of its
+/// guest surface paths (a consumer navigates there), `commands` some of its commands (the
+/// platform lets a dependent module call those, and only those).
+fn contract_problems(manifest: &Value) -> Vec<String> {
+    let names = |key: &str, field: &str| -> Vec<String> {
+        manifest[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry[field].as_str().map(str::to_string))
+            .collect()
+    };
+    let paths = names("guestSurfaces", "path");
+    let commands = names("commands", "name");
+    let mut problems = Vec::new();
+    for entry in manifest["capabilities"]["provided"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let capability = entry["id"].as_str().unwrap_or("?");
+        if let Some(path) = entry["path"].as_str() {
+            if !paths.iter().any(|own| own == path) {
+                problems.push(format!(
+                    "capability `{capability}` opens at `{path}`, which is not one of the \
+                     module's guest surface paths"
+                ));
+            }
+        }
+        for command in entry["commands"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            if !commands.iter().any(|own| own == command) {
+                problems.push(format!(
+                    "capability `{capability}` lets peers call `{command}`, which is not one of \
+                     the module's commands"
+                ));
+            }
+        }
+    }
     problems
 }
 
@@ -261,6 +308,27 @@ mod tests {
     }
 
     #[test]
+    fn a_capability_opens_its_own_path_and_lends_its_own_commands() {
+        let manifest = json!({
+            "guestSurfaces": [{ "surfaceId": "guest.form", "path": "provider/form" }],
+            "commands": [{ "name": "submit" }],
+            "capabilities": { "provided": [
+                { "id": "report.issue", "path": "provider/form", "commands": ["submit"] },
+                { "id": "other.thing", "path": "elsewhere", "commands": ["drop"] }
+            ] }
+        });
+        assert_eq!(
+            contract_problems(&manifest),
+            vec![
+                "capability `other.thing` opens at `elsewhere`, which is not one of the module's \
+                 guest surface paths",
+                "capability `other.thing` lets peers call `drop`, which is not one of the \
+                 module's commands",
+            ]
+        );
+    }
+
+    #[test]
     fn the_schema_accepts_provided_capabilities_with_shares() {
         let schema: Value = serde_json::from_str(MODULE_SCHEMA_V1).unwrap();
         let validator = jsonschema::validator_for(&schema).unwrap();
@@ -269,8 +337,9 @@ mod tests {
             "version": "1.0.0", "author": { "name": "A", "type": "official" }, "icon": "i", "type": "guest",
             "capabilities": { "provided": [
                 "access.smart_lock",
-                { "id": "amenities.provide", "shares": ["reveal_policy"] }
-            ] }
+                { "id": "amenities.provide", "shares": ["reveal_policy"] },
+                { "id": "report.issue", "path": "provider/form", "commands": ["submit"] }
+            ], "depends": [{ "id": "other.thing", "optional": true }] }
         });
         let errors: Vec<String> = validator
             .iter_errors(&manifest)

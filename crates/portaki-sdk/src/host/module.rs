@@ -16,6 +16,12 @@
 //!   capability (`#[capability(provided, id = "…", shares = ["reveal_policy"])]`), keyed by
 //!   config key — so a consumer can show the provider's value read-only instead of asking the
 //!   host twice.
+//! - [`ModulePeer::path`] is the guest path the provider declared for that capability
+//!   (`#[capability(provided, id = "report.issue", path = "…")]`): a consumer opens the provider
+//!   with `Action::navigate(path, params)` without knowing its module id.
+//! - The id may be a platform one ([`crate::CapabilityId`]) or one modules name themselves
+//!   ([`crate::capability::is_module_declared`]) — the consumer then declares it as a dependency,
+//!   `#[capability(optional, id = "report.issue")]`.
 //!
 //! ## What modules must not assume
 //!
@@ -45,8 +51,6 @@
 
 use serde::Deserialize;
 
-#[cfg(feature = "platform")]
-use crate::capability::CapabilityId;
 #[cfg(feature = "platform")]
 use crate::error::Result;
 #[cfg(feature = "platform")]
@@ -92,6 +96,10 @@ pub struct ModulePeer {
     /// by config key. Empty or missing keys are left out; never secrets.
     #[serde(default)]
     pub shared: serde_json::Map<String, serde_json::Value>,
+    /// The guest path the provider declared for this capability (`path = "…"`), to open with
+    /// `Action::navigate`. `None` when it declared none, or on a platform that predates it.
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 /// Fetches the current module status from the gateway orchestrator.
@@ -106,10 +114,11 @@ pub fn status() -> Result<ModuleStatus> {
 /// Lists workspace-enabled, property-active peer modules that provide `capability_id`.
 ///
 /// Provider modules declare the id under `capabilities.provided` in their SDK manifest.
-/// Pass [`crate::CapabilityId`] / [`crate::contracts::smart_lock::CAPABILITY`].
+/// Pass a [`crate::CapabilityId`] ([`crate::contracts::smart_lock::CAPABILITY`]) or the `&str`
+/// of a module-declared capability this module depends on (`"report.issue"`).
 #[cfg(feature = "platform")]
-pub fn list_by_capability(capability_id: CapabilityId) -> Result<Vec<ModulePeer>> {
-    backend()?.module_list_by_capability(capability_id.as_str())
+pub fn list_by_capability(capability_id: impl AsRef<str>) -> Result<Vec<ModulePeer>> {
+    backend()?.module_list_by_capability(capability_id.as_ref())
 }
 
 #[cfg(test)]
@@ -127,6 +136,17 @@ mod tests {
         .unwrap();
         assert_eq!(peer.shared["reveal_policy"], "before_arrival");
         assert_eq!(peer.shared["reveal_hours"], 48);
+        assert_eq!(peer.path, None);
+    }
+
+    #[test]
+    fn a_peer_reads_the_path_it_declared() {
+        let peer: ModulePeer = serde_json::from_value(json!({
+            "moduleId": "provider",
+            "path": "provider/form"
+        }))
+        .unwrap();
+        assert_eq!(peer.path.as_deref(), Some("provider/form"));
     }
 
     /// A platform that predates `shared` still answers.

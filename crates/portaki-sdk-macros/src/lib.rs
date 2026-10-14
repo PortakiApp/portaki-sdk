@@ -683,6 +683,13 @@ pub fn event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// #[portaki_sdk::capability(provided, id = "amenities.provide", shares = ["reveal_policy"])]
 /// pub const AMENITIES: &str = "amenities.provide";
+///
+/// // A capability the module names itself: the provider says where to open it…
+/// #[portaki_sdk::capability(provided, id = "report.issue", path = "my-module/form")]
+/// pub const REPORT_ISSUE: &str = "report.issue";
+/// // …and a consumer depends on it, here without requiring it.
+/// #[portaki_sdk::capability(optional, id = "report.issue")]
+/// pub const ISSUE_REPORTING: &str = "report.issue";
 /// ```
 ///
 /// # Attributes
@@ -694,6 +701,12 @@ pub fn event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// | `purpose_key = "…"` | no | i18n key for optional capabilities |
 /// | `fallback_key = "…"` | no | i18n key when capability unavailable |
 /// | `shares = ["key", …]` | no, `provided` only | own config keys peers read through `host::module::list_by_capability` (`ModulePeer::shared`), published values only — `portaki check` refuses an unknown key, a secret field or a list with secret sub-keys |
+/// | `path = "…"` | no, `provided` only | one of the module's own guest surface paths, served to peers as `ModulePeer::path` — a consumer opens it with `Action::navigate` |
+/// | `commands = ["…", …]` | no, `provided` only | own commands a module that depends on the capability may call; none = reached by navigation only, the platform refuses every peer command |
+///
+/// An id no platform capability has, outside the platform namespaces, is **module-declared**
+/// (`portaki_sdk::capability::is_module_declared`): `provided` offers it to other modules,
+/// `required` / `optional` declares a dependency on it (`manifest.capabilities.depends[]`).
 ///
 /// Capability id is taken from `id = "…"` or from a **string literal** const initializer. A const
 /// referencing another const (e.g. `capability::core::STORAGE`) without explicit `id` → **compile
@@ -709,7 +722,8 @@ pub fn event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Emission
 ///
 /// `capability-{id}.json` → `manifest.capabilities.required[]`, `.optional[]` (with
-/// `purposeKey` / `fallbackKey` for optional entries) or `.provided[]` (with `.shares[id]`).
+/// `purposeKey` / `fallbackKey` for optional entries) or `.provided[]` (with `.shares[id]`,
+/// `.paths[id]`, `.commands[id]`); a module-declared id goes to `.declared[]` or `.depends[]`.
 #[proc_macro_attribute]
 pub fn capability(attr: TokenStream, item: TokenStream) -> TokenStream {
     capability::expand(attr, item)

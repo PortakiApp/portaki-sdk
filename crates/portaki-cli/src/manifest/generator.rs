@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use portaki_sdk::capability::CapabilityId;
 use portaki_sdk::manifest::{
     DispatchExample, ManifestAuthor, ManifestCapabilities, ManifestCommand, ManifestConnectors,
-    ManifestEntity, ManifestEventSubscription, ManifestEvents, ManifestI18n,
+    ManifestDependency, ManifestEntity, ManifestEventSubscription, ManifestEvents, ManifestI18n,
     ManifestOptionalCapability, ManifestQuery, ManifestSurface, ManifestSurfaces, ModuleManifest,
     OperationParams, ParamShape, ParamType, UiSchemaVersions,
 };
@@ -174,6 +174,10 @@ pub fn generate_manifest(
     let mut optional_caps = Vec::new();
     let mut provided_caps = Vec::new();
     let mut shares = BTreeMap::new();
+    let mut declared = Vec::new();
+    let mut paths = BTreeMap::new();
+    let mut peer_commands = BTreeMap::new();
+    let mut depends = Vec::new();
     let mut builtin_connectors = Vec::new();
     let mut custom_connectors: Vec<Value> = Vec::new();
 
@@ -184,18 +188,43 @@ pub fn generate_manifest(
                 if id_raw.is_empty() {
                     continue;
                 }
+                let provided = emission.data["provided"].as_bool().unwrap_or(false);
+                if provided {
+                    let strings = |key: &str| -> Vec<String> {
+                        emission.data[key]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|value| value.as_str().map(str::to_string))
+                            .collect()
+                    };
+                    for (map, key) in [(&mut shares, "shares"), (&mut peer_commands, "commands")] {
+                        let values = strings(key);
+                        if !values.is_empty() {
+                            map.insert(id_raw.to_string(), values);
+                        }
+                    }
+                    if let Some(path) = emission.data["path"].as_str() {
+                        paths.insert(id_raw.to_string(), path.to_string());
+                    }
+                }
+                // A capability a module names itself: offered to peers, or depended on.
+                if !portaki_sdk::capability::is_known(id_raw)
+                    && portaki_sdk::capability::is_module_declared(id_raw)
+                {
+                    if provided {
+                        declared.push(id_raw.to_string());
+                    } else {
+                        depends.push(ManifestDependency {
+                            id: id_raw.to_string(),
+                            optional: emission.data["optional"].as_bool().unwrap_or(false),
+                        });
+                    }
+                    continue;
+                }
                 let id = CapabilityId::from_str(id_raw)
                     .with_context(|| format!("unknown capability id in emission: {id_raw}"))?;
-                if emission.data["provided"].as_bool().unwrap_or(false) {
-                    let keys: Vec<String> = emission.data["shares"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|key| key.as_str().map(str::to_string))
-                        .collect();
-                    if !keys.is_empty() {
-                        shares.insert(id_raw.to_string(), keys);
-                    }
+                if provided {
                     provided_caps.push(id);
                 } else if emission.data["optional"].as_bool().unwrap_or(false) {
                     optional_caps.push(ManifestOptionalCapability {
@@ -431,6 +460,10 @@ pub fn generate_manifest(
             optional: optional_caps,
             provided: provided_caps,
             shares,
+            declared,
+            paths,
+            commands: peer_commands,
+            depends,
         },
         connectors: ManifestConnectors {
             builtin: builtin_connectors,
@@ -1026,6 +1059,58 @@ mod imply_storage_tests {
             built.capabilities.shares["amenities.provide"],
             vec!["reveal_policy", "reveal_hours"]
         );
+    }
+
+    /// A capability a module names itself: the provider's path and commands, the consumer's
+    /// dependency — and a typo in a platform namespace stays an error.
+    #[test]
+    fn module_declared_capabilities_are_offered_or_depended_on() {
+        let capability = |data: serde_json::Value| EmissionFile {
+            kind: "capability".into(),
+            data,
+        };
+        let built = generate_manifest(
+            &[
+                emission("module"),
+                capability(serde_json::json!({
+                    "id": "report.issue", "provided": true,
+                    "path": "provider/form", "commands": ["submit"]
+                })),
+                capability(serde_json::json!({ "id": "other.thing", "optional": true })),
+                capability(serde_json::json!({ "id": "third.thing" })),
+            ],
+            "fr-FR",
+            &["fr-FR".to_string()],
+        )
+        .unwrap();
+        let caps = &built.capabilities;
+        assert_eq!(caps.declared, vec!["report.issue"]);
+        assert!(caps.provided.is_empty() && caps.required.is_empty() && caps.optional.is_empty());
+        assert_eq!(caps.paths["report.issue"], "provider/form");
+        assert_eq!(caps.commands["report.issue"], vec!["submit"]);
+        assert_eq!(
+            caps.depends,
+            vec![
+                ManifestDependency {
+                    id: "other.thing".into(),
+                    optional: true
+                },
+                ManifestDependency {
+                    id: "third.thing".into(),
+                    optional: false
+                },
+            ]
+        );
+
+        let typo = generate_manifest(
+            &[
+                emission("module"),
+                capability(serde_json::json!({ "id": "core.storag" })),
+            ],
+            "fr-FR",
+            &["fr-FR".to_string()],
+        );
+        assert!(typo.is_err());
     }
 
     #[test]

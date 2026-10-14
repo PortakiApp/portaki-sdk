@@ -200,24 +200,59 @@ pub fn stamp_built_declarations(raw: &str, built_manifest: &str) -> Result<Strin
     serde_json::to_string_pretty(&manifest).context("serialise module manifest")
 }
 
-/// `capabilities.provided` of the published manifest, from what the build emitted: an id alone, or
-/// `{ "id", "shares" }` when `#[capability(provided, …, shares = [...])]` names config keys.
+/// `capabilities` of the published manifest, from what the build emitted.
 ///
-/// Only `provided`: the platform finds peers with it (`host::module::list_by_capability`) and
-/// serves the shared keys from the provider's published config. `required` / `optional` stay out
-/// — the orchestrator derives credential bindings from them, and nothing asked to change those.
+/// `provided`: an id alone, or `{ "id", "shares", "path", "commands" }` when
+/// `#[capability(provided, …)]` says more — platform ids and module-declared ones alike. The
+/// platform finds peers with it (`host::module::list_by_capability`), serves the shared keys from
+/// the provider's published config and the path as declared, and accepts a peer command only if
+/// listed. `depends`: the module-declared capabilities this module relies on, `{ "id",
+/// "optional" }` — the platform lets a module call a provider's listed commands only through one.
+///
+/// Platform `required` / `optional` stay out — the orchestrator derives credential bindings from
+/// them, and nothing asked to change those.
 fn published_capabilities(built: &serde_json::Value) -> Option<serde_json::Value> {
     let capabilities = &built["capabilities"];
-    let provided: Vec<serde_json::Value> = capabilities["provided"]
-        .as_array()?
-        .iter()
-        .filter_map(serde_json::Value::as_str)
-        .map(|id| match capabilities["shares"][id].as_array() {
-            Some(keys) if !keys.is_empty() => serde_json::json!({ "id": id, "shares": keys }),
-            _ => serde_json::Value::from(id),
+    let ids = |key: &str| {
+        capabilities[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let provided: Vec<serde_json::Value> = ids("provided")
+        .into_iter()
+        .chain(ids("declared"))
+        .map(|id| {
+            let mut entry = serde_json::Map::new();
+            for key in ["shares", "commands"] {
+                if let Some(values) = capabilities[key][&id].as_array().filter(|v| !v.is_empty()) {
+                    entry.insert(key.to_string(), values.clone().into());
+                }
+            }
+            if let Some(path) = capabilities["paths"][&id].as_str() {
+                entry.insert("path".to_string(), path.into());
+            }
+            if entry.is_empty() {
+                return serde_json::Value::from(id);
+            }
+            entry.insert("id".to_string(), id.into());
+            entry.into()
         })
         .collect();
-    (!provided.is_empty()).then(|| serde_json::json!({ "provided": provided }))
+    let depends = capabilities["depends"]
+        .as_array()
+        .filter(|depends| !depends.is_empty());
+    let mut published = serde_json::Map::new();
+    if !provided.is_empty() {
+        published.insert("provided".to_string(), provided.into());
+    }
+    if let Some(depends) = depends {
+        published.insert("depends".to_string(), depends.clone().into());
+    }
+    (!published.is_empty()).then(|| published.into())
 }
 
 /// Pours the build's `#[email]`s into `emails[]`, by `id`, and grants the `email` permission.
@@ -975,6 +1010,31 @@ mod stamp_built_declarations_tests {
                 { "id": "amenities.provide", "shares": ["reveal_policy", "reveal_hours"] },
                 "access.smart_lock"
             ] })
+        );
+    }
+
+    /// A module-declared capability: the provider's path and commands, the consumer's dependency.
+    #[test]
+    fn carries_module_declared_capabilities_and_dependencies() {
+        let raw = r#"{"id":"provider"}"#;
+        let built = r#"{"id":"provider","capabilities":{
+            "provided":[],
+            "declared":["report.issue"],
+            "paths":{"report.issue":"provider/form"},
+            "commands":{"report.issue":["submit"]},
+            "depends":[{"id":"other.thing","optional":true}]}}"#;
+
+        let stamped = stamp_surfaces(raw, built).expect("stamp");
+        let value: serde_json::Value = serde_json::from_str(&stamped).expect("parse");
+
+        assert_eq!(
+            value["capabilities"],
+            serde_json::json!({
+                "provided": [
+                    { "id": "report.issue", "path": "provider/form", "commands": ["submit"] }
+                ],
+                "depends": [{ "id": "other.thing", "optional": true }]
+            })
         );
     }
 

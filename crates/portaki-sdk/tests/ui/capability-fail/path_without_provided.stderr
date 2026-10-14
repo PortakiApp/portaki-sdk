@@ -1,0 +1,5 @@
+error: #[capability(path = "...")] only applies to a provided capability
+ --> tests/ui/capability-fail/path_without_provided.rs:2:11
+  |
+2 | pub const REPORT_ISSUE: &str = "report.issue";
+  |           ^^^^^^^^^^^^
