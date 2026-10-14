@@ -462,8 +462,50 @@ pub fn is_known(id: &str) -> bool {
     CapabilityId::is_known(id)
 }
 
+/// Returns `true` when `id` is a capability a **module** declares — not one of the platform's.
+///
+/// Modules cooperate through ids they name themselves: a provider declares
+/// `#[capability(provided, id = "report.issue", path = "…")]`, a consumer declares the same id
+/// `required` or `optional` — its dependency — and finds the provider with
+/// [`crate::host::module::list_by_capability`]. The platform does not know these ids: it only
+/// matches provider and consumer.
+///
+/// Shape: dot-separated segments of lowercase letters, digits, `-` and `_`, at least two, each
+/// starting with a letter. The first segment must not be a platform namespace (`core`,
+/// `external`, `ai`, …, read off [`ALL`]): an unknown id there is a typo of a platform id, never a
+/// module's own — `core.storag` stays an error instead of becoming a dependency.
+pub fn is_module_declared(id: &str) -> bool {
+    let segments: Vec<&str> = id.split('.').collect();
+    let well_formed = segments.len() >= 2
+        && id.len() <= 64
+        && segments.iter().all(|segment| {
+            segment.starts_with(|c: char| c.is_ascii_lowercase())
+                && segment
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+        });
+    well_formed
+        && !ALL
+            .iter()
+            .any(|platform| platform.as_str().split('.').next() == Some(segments[0]))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn module_declared_ids_never_sit_in_a_platform_namespace() {
+        use super::is_module_declared;
+        assert!(is_module_declared("report.issue"));
+        assert!(is_module_declared("my-module.open_form"));
+        assert!(!is_module_declared("core.storag"));
+        assert!(!is_module_declared("access.anything"));
+        assert!(!is_module_declared("amenities.other"));
+        assert!(!is_module_declared("report"));
+        assert!(!is_module_declared("Report.issue"));
+        assert!(!is_module_declared("report..issue"));
+        assert!(!is_module_declared("report.1issue"));
+    }
+
     use super::access;
     use super::core;
     use super::external;

@@ -388,13 +388,11 @@ impl MockContextBuilder {
     }
 
     /// What `host::module::list_by_capability(capability)` answers — the peers providing it, with
-    /// what they share (`ModulePeer::shared`). Without it, no peer.
-    pub fn with_peers(
-        mut self,
-        capability: portaki_sdk::capability::CapabilityId,
-        peers: Vec<ModulePeer>,
-    ) -> Self {
-        self.peers.insert(capability.as_str().to_string(), peers);
+    /// what they share (`ModulePeer::shared`) and the path they declared (`ModulePeer::path`).
+    /// A platform [`portaki_sdk::capability::CapabilityId`] or a module-declared id (`"report.issue"`).
+    /// Without it, no peer.
+    pub fn with_peers(mut self, capability: impl AsRef<str>, peers: Vec<ModulePeer>) -> Self {
+        self.peers.insert(capability.as_ref().to_string(), peers);
         self
     }
 
