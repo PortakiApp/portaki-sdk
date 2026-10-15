@@ -37,6 +37,24 @@
 //! assert_eq!(time::hm(paris.to_local(checkout)), "10:00"); // CEST
 //! assert_eq!(PropertyTz::parse("Mars/Olympus_Mons"), None);
 //! ```
+//!
+//! # Days near today
+//!
+//! [`relative_day`] says where a day falls from the reader's today — tonight, tomorrow, Saturday —
+//! without writing it: the words live in the module's bundles, which speak every guest language,
+//! where the tables above speak six.
+//!
+//! ```
+//! use chrono::NaiveDate;
+//! use portaki_sdk::host::time::{self, RelativeDay};
+//!
+//! // Wednesday 3 June 2026, 10:00 at the property.
+//! let now = NaiveDate::from_ymd_opt(2026, 6, 3).unwrap().and_hms_opt(10, 0, 0).unwrap();
+//! let on = |d, h| NaiveDate::from_ymd_opt(2026, 6, d).unwrap().and_hms_opt(h, 30, 0).unwrap();
+//! assert_eq!(time::relative_day(on(3, 20), now), RelativeDay::Tonight);
+//! assert_eq!(time::relative_day(on(4, 10), now), RelativeDay::Tomorrow);
+//! assert_eq!(time::relative_day(on(6, 20), now), RelativeDay::Weekday(chrono::Weekday::Sat));
+//! ```
 
 use chrono::{
     DateTime, Datelike, Days, Duration, FixedOffset, NaiveDate, NaiveDateTime, Timelike, Utc,
@@ -459,6 +477,42 @@ pub fn ago(at: DateTime<Utc>, now: DateTime<Utc>, lang: &str) -> String {
     texts[1].replace("{}", &elapsed(at, now, lang))
 }
 
+// ── Days near today ─────────────────────────────────────────────────────────
+
+/// The hour from which a time today reads as the evening (« Ce soir », « Tonight »).
+pub const EVENING_FROM_HOUR: u32 = 18;
+
+/// Where a day falls from today, for a label a guest reads at a glance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelativeDay {
+    /// Today, before [`EVENING_FROM_HOUR`].
+    Today,
+    /// Today, from [`EVENING_FROM_HOUR`].
+    Tonight,
+    /// The next day.
+    Tomorrow,
+    /// Two to six days ahead: the weekday names it without ambiguity.
+    Weekday(Weekday),
+    /// Further ahead, or already past: write the date ([`short_date`]).
+    Date(NaiveDate),
+}
+
+/// Where `at` falls from `now`, both in the property's time ([`PropertyTz::to_local`], then
+/// `naive_local()`) — two UTC instants would put midnight in the wrong place.
+///
+/// A day without a time of its own (a deadline, a departure day) passes midnight, and so is
+/// never [`RelativeDay::Tonight`].
+pub fn relative_day(at: NaiveDateTime, now: NaiveDateTime) -> RelativeDay {
+    let day = at.date();
+    match (day - now.date()).num_days() {
+        0 if at.hour() >= EVENING_FROM_HOUR => RelativeDay::Tonight,
+        0 => RelativeDay::Today,
+        1 => RelativeDay::Tomorrow,
+        2..=6 => RelativeDay::Weekday(day.weekday()),
+        _ => RelativeDay::Date(day),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -580,5 +634,38 @@ mod tests {
         assert_eq!(ago(before(12), now, "en"), "12 min ago");
         assert_eq!(ago(before(2 * 1440), now, "de"), "vor 2 T.");
         assert_eq!(elapsed(now + Duration::hours(1), now, "en"), "0 min");
+    }
+
+    #[test]
+    fn days_near_today() {
+        let at = |s: &str| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap();
+        let now = at("2026-06-03 10:00");
+        let shown: Vec<RelativeDay> = [
+            "2026-06-03 08:00",
+            "2026-06-03 17:59",
+            "2026-06-03 18:00",
+            "2026-06-04 00:00",
+            "2026-06-05 09:00",
+            "2026-06-09 23:59",
+            "2026-06-10 00:00",
+            "2026-06-02 20:00",
+        ]
+        .iter()
+        .map(|s| relative_day(at(s), now))
+        .collect();
+        let date = |d| RelativeDay::Date(NaiveDate::from_ymd_opt(2026, 6, d).unwrap());
+        assert_eq!(
+            shown,
+            [
+                RelativeDay::Today,
+                RelativeDay::Today,
+                RelativeDay::Tonight,
+                RelativeDay::Tomorrow,
+                RelativeDay::Weekday(Weekday::Fri),
+                RelativeDay::Weekday(Weekday::Tue),
+                date(10),
+                date(2),
+            ]
+        );
     }
 }
