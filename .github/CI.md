@@ -39,7 +39,9 @@ maintainer's crates.io account to what we ship. Security fixes do not wait.
 runtime, and a bump that is not matched on the other side breaks modules at run time, not at
 compile time.
 
-The configuration lives in `PortakiApp/renovate-config`.
+The whole configuration lives in `renovate.json`. It used to extend a shared preset in a private
+repository, but Mend never reads a private preset from a public repository (404), which froze
+Renovate here from September 10 to October 15.
 
 The rule is still **a `breaking` label on a PR**, not a block: it really is a manual review, since
 a human does the merge. What was missing was not the lock, it was having a single bot.
