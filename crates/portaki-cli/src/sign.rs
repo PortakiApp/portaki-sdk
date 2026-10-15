@@ -160,15 +160,37 @@ pub fn attest_ci(
             .to_string()
             .as_bytes(),
     )?;
-    let mut command = cosign_attest(bin, PROVENANCE_TYPE, &provenance, pushed, &scratch.0, CI);
-    ui::command("cosign attest (provenance)", &mut command)?;
+    attest_twice("cosign attest (provenance)", || {
+        cosign_attest(bin, PROVENANCE_TYPE, &provenance, pushed, &scratch.0, CI)
+    })?;
 
     let Some(audit) = audit else {
         return Ok(false);
     };
-    let mut command = cosign_attest(bin, AUDIT_TYPE, audit, pushed, &scratch.0, CI);
-    ui::command("cosign attest (audit)", &mut command)?;
+    attest_twice("cosign attest (audit)", || {
+        cosign_attest(bin, AUDIT_TYPE, audit, pushed, &scratch.0, CI)
+    })?;
     Ok(true)
+}
+
+/// Pause before the second `cosign attest`: long enough for a Rekor hiccup to pass.
+#[cfg(not(test))]
+const RETRY_PAUSE: Duration = Duration::from_secs(15);
+#[cfg(test)]
+const RETRY_PAUSE: Duration = Duration::ZERO;
+
+/// One more `cosign attest` if the first fails. Rekor can record an entry and still answer too
+/// late: cosign's own retry then gets `409 … an equivalent entry already exists` and stops
+/// before attaching anything to the OCI repository — nothing to announce, so it is not a
+/// success. A new run makes a new ephemeral key, hence a new entry (modules run 38719680261:
+/// two 409s and a 502, all three green on retry). Same digest either way: the push stays.
+fn attest_twice(label: &str, command: impl Fn() -> Command) -> Result<()> {
+    if ui::command(label, &mut command()).is_ok() {
+        return Ok(());
+    }
+    ui::warn(format!("{label} failed — trying once more"));
+    std::thread::sleep(RETRY_PAUSE);
+    ui::command(label, &mut command())
 }
 
 /// The SLSA v1 provenance of this run, from what GitHub Actions puts in the environment.
@@ -690,6 +712,29 @@ pub(crate) mod tests {
         let bin = fake_cosign(dir.path(), "", 1);
         let registry = "oci.portaki.app";
         assert!(attest_ci(&bin, &pushed(registry), &grant(registry), None).is_err());
+    }
+
+    /// Rekor answering 409 to cosign's own retry: a second `cosign attest` gets a fresh entry.
+    #[cfg(unix)]
+    #[test]
+    fn a_cosign_that_fails_once_is_run_again() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let calls = dir.path().join("calls");
+        let bin = dir.path().join("cosign");
+        std::fs::write(
+            &bin,
+            format!(
+                "#!/bin/sh\necho x >>{calls}\n[ \"$(wc -l <{calls})\" -gt 1 ]\n",
+                calls = calls.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let registry = "oci.portaki.app";
+
+        assert!(attest_ci(&bin, &pushed(registry), &grant(registry), None).is_ok());
+        assert_eq!(std::fs::read_to_string(&calls).unwrap().lines().count(), 2);
     }
 
     #[test]
