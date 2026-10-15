@@ -483,7 +483,11 @@ pub fn ago(at: DateTime<Utc>, now: DateTime<Utc>, lang: &str) -> String {
 pub const EVENING_FROM_HOUR: u32 = 18;
 
 /// Where a day falls from today, for a label a guest reads at a glance.
+///
+/// `#[non_exhaustive]`: a later case must not break the modules that match on it — keep a
+/// `_ =>` arm that writes the date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RelativeDay {
     /// Today, before [`EVENING_FROM_HOUR`].
     Today,
