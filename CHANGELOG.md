@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.13.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.13.0...v10.13.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **deps:** bump rustls and quinn-proto for RUSTSEC ([a2aeaf2](https://github.com/PortakiApp/portaki-sdk/commit/a2aeaf26f791db74a3c970cc3772593d06bf049c))
+
 ## [10.13.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.12.0...v10.13.0) (2026-10-15)
 
 
