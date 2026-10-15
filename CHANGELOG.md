@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.14.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.14.0...v10.14.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **cli:** retry cosign attest once ([e64c62a](https://github.com/PortakiApp/portaki-sdk/commit/e64c62a0dc2acbae444c91a77e6dc823e931b222))
+
 ## [10.14.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.13.1...v10.14.0) (2026-10-15)
 
 
