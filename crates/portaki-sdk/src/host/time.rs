@@ -491,9 +491,11 @@ pub enum RelativeDay {
     Tonight,
     /// The next day.
     Tomorrow,
+    /// The day before — a departure, last night's concert.
+    Yesterday,
     /// Two to six days ahead: the weekday names it without ambiguity.
     Weekday(Weekday),
-    /// Further ahead, or already past: write the date ([`short_date`]).
+    /// Further ahead, or further back: write the date ([`short_date`]).
     Date(NaiveDate),
 }
 
@@ -508,6 +510,7 @@ pub fn relative_day(at: NaiveDateTime, now: NaiveDateTime) -> RelativeDay {
         0 if at.hour() >= EVENING_FROM_HOUR => RelativeDay::Tonight,
         0 => RelativeDay::Today,
         1 => RelativeDay::Tomorrow,
+        -1 => RelativeDay::Yesterday,
         2..=6 => RelativeDay::Weekday(day.weekday()),
         _ => RelativeDay::Date(day),
     }
@@ -649,6 +652,7 @@ mod tests {
             "2026-06-09 23:59",
             "2026-06-10 00:00",
             "2026-06-02 20:00",
+            "2026-06-01 20:00",
         ]
         .iter()
         .map(|s| relative_day(at(s), now))
@@ -664,7 +668,8 @@ mod tests {
                 RelativeDay::Weekday(Weekday::Fri),
                 RelativeDay::Weekday(Weekday::Tue),
                 date(10),
-                date(2),
+                RelativeDay::Yesterday,
+                date(1),
             ]
         );
     }
