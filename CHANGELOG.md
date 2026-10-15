@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.14.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.13.1...v10.14.0) (2026-10-15)
+
+
+### Features
+
+* **sdk:** relative_day for guest date labels ([54f60c6](https://github.com/PortakiApp/portaki-sdk/commit/54f60c65abea988989da19767515d1ad311de5b4))
+* **sdk:** relative_day knows yesterday ([ff51c12](https://github.com/PortakiApp/portaki-sdk/commit/ff51c127dbd1e74882a96aab22199e1a7a76d481))
+* **sdk:** RelativeDay is non_exhaustive ([0516fc3](https://github.com/PortakiApp/portaki-sdk/commit/0516fc3c60d75da04b781235ec6484b14f26bb7e))
+
 ## [10.13.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.13.0...v10.13.1) (2026-10-15)
 
 
