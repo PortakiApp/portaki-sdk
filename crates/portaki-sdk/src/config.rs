@@ -98,6 +98,8 @@
 //! ```
 
 pub mod check;
+#[cfg(feature = "unstable")]
+pub mod form;
 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
