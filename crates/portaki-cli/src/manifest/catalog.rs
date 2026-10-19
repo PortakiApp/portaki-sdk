@@ -231,9 +231,11 @@ fn resources(
             let mut resource = json!({
                 "name": data["name"],
                 "kind": data["resourceKind"],
-                "order": data["order"],
                 "fields": fields_of(&data["item"]),
             });
+            if data["order"].is_string() {
+                resource["order"] = data["order"].clone();
+            }
             if let Some(key) = item(&data["item"])
                 .map(|i| &i.data["key"])
                 .filter(|k| k.is_string())
@@ -433,7 +435,7 @@ pub fn check_references(
                 }
                 Vec::new()
             }
-            "resource" => {
+            "resource" if data["resourceKind"] == "collection" => {
                 // The derived editor's texts, by convention.
                 let name = data["name"].as_str().unwrap_or_default();
                 for text in ["title", "add", "tooMany"] {

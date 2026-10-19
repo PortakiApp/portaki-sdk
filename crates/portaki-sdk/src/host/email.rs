@@ -1107,6 +1107,33 @@ pub fn send(args: &SendEmailArgs) -> Result<()> {
         .map_err(PortakiError::typed)
 }
 
+/// Longest guest-typed text quoted in an email, in chars.
+pub const GUEST_TEXT_MAX_CHARS: usize = 500;
+
+/// `text` cut to at most `max` chars, ending in `…` when cut — backing off to a word boundary
+/// within the last 40 chars when there is one. The second value says whether it was cut (an
+/// email then offers « see more » instead of its own button).
+pub fn clip(text: &str, max: usize) -> (String, bool) {
+    let Some((cut, _)) = text.char_indices().nth(max) else {
+        return (text.to_string(), false);
+    };
+    let head = &text[..cut];
+    let end = if text[cut..].starts_with(char::is_whitespace) {
+        head.len()
+    } else {
+        let window = head.char_indices().rev().nth(39).map_or(0, |(i, _)| i);
+        head[window..]
+            .rfind(char::is_whitespace)
+            .map_or(head.len(), |offset| window + offset)
+    };
+    (format!("{}…", head[..end].trim_end()), true)
+}
+
+/// A guest's text quoted in an email: [`clip`] at [`GUEST_TEXT_MAX_CHARS`].
+pub fn quote_guest(text: &str) -> (String, bool) {
+    clip(text, GUEST_TEXT_MAX_CHARS)
+}
+
 #[cfg(test)]
 mod guard_tests {
     use std::sync::{Arc, Mutex};
@@ -1621,5 +1648,15 @@ mod tests {
             locale_fallback_chain("en"),
             vec!["en".to_string(), "fr".to_string()]
         );
+    }
+}
+
+#[cfg(test)]
+mod clip_tests {
+    #[test]
+    fn a_long_text_is_cut_on_a_word() {
+        let (text, cut) = super::clip("un deux trois quatre", 9);
+        assert_eq!((text.as_str(), cut), ("un deux…", true));
+        assert_eq!(super::clip("court", 9), ("court".to_string(), false));
     }
 }
