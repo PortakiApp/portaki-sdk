@@ -285,7 +285,7 @@
         "required": ["name", "kind", "fields"],
         "properties": {
           "name": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_]*$" },
-          "kind": { "type": "string", "enum": ["collection"] },
+          "kind": { "type": "string", "enum": ["collection", "record"] },
           "max": { "type": "integer", "minimum": 1 },
           "order": { "type": "string", "enum": ["manual"] },
           "key": { "type": "string" },
@@ -356,7 +356,7 @@
       "required": ["key", "type", "label"],
       "properties": {
         "key": { "type": "string" },
-        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range"] },
+        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range", "photo"] },
         "required": { "type": "boolean" },
         "label": {},
         "description": {},

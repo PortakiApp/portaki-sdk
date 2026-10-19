@@ -20,8 +20,11 @@ pub struct PortakiResource {
     pub resource: String,
     /// The rows, a JSON array.
     pub rows_json: String,
-    /// The settings, a JSON object.
+    /// The settings (a collection) or the record's bookkeeping (a record), a JSON object.
     pub meta_json: String,
+    /// The stay a record belongs to — a column, so purging a stay takes its records with it.
+    #[serde(default)]
+    pub stay_id: Option<Uuid>,
     /// Last write.
     pub updated_at: DateTime<Utc>,
 }
@@ -45,6 +48,7 @@ pub fn save_raw(name: &str, rows: &[Value], meta: &Value) -> Result<()> {
         resource: name.to_string(),
         rows_json: serde_json::to_string(rows)?,
         meta_json: serde_json::to_string(meta)?,
+        stay_id: None,
         updated_at: crate::host::time::now()?,
     };
     let _: PortakiResource = repo::create::<PortakiResource, _, _>(row)?;

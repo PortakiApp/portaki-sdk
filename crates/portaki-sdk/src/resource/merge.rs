@@ -116,6 +116,22 @@ pub fn import(
     (rows, report)
 }
 
+/// `previous` with the declared fields of `raw` written over it, normalized to their kinds.
+pub(crate) fn normalize(
+    previous: &Map<String, Value>,
+    raw: &Value,
+    fields: &[FieldSpec],
+    lang: &str,
+) -> Value {
+    let mut row = previous.clone();
+    for field in fields {
+        if let Some(value) = raw.get(field.key).filter(|v| !v.is_null()) {
+            set(&mut row, field, value, lang);
+        }
+    }
+    Value::Object(row)
+}
+
 /// Writes `raw` (what a form or an import sends) into `row[field.key]`, normalized to the kind.
 fn set(row: &mut Map<String, Value>, field: &FieldSpec, raw: &Value, lang: &str) {
     let value = match field.kind {
@@ -136,7 +152,7 @@ fn set(row: &mut Map<String, Value>, field: &FieldSpec, raw: &Value, lang: &str)
                 Value::Object(texts)
             }
         },
-        FieldKind::Text | FieldKind::TimeRange => Value::String(scalar(raw)),
+        FieldKind::Text | FieldKind::TimeRange | FieldKind::Photo => Value::String(scalar(raw)),
         FieldKind::Choice => {
             let wire = scalar(raw);
             let known = field
@@ -223,6 +239,7 @@ mod tests {
             kind: FieldKind::Localized,
             label: "t",
             description: None,
+            placeholder: None,
             required: true,
             max_chars: Some(60),
             min: None,
@@ -234,6 +251,7 @@ mod tests {
             kind: FieldKind::Choice,
             label: "s",
             description: None,
+            placeholder: None,
             required: false,
             max_chars: None,
             min: None,
@@ -251,6 +269,7 @@ mod tests {
         kind: FieldKind::Number,
         label: "c",
         description: None,
+        placeholder: None,
         required: false,
         max_chars: None,
         min: Some(2.0),

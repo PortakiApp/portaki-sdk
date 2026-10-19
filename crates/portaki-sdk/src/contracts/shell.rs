@@ -10,6 +10,11 @@ use crate::ids::EventType;
 /// without a Wasm command round-trip.
 pub const SURFACE_INPUT: EventType = EventType::new("host.surface.input");
 
+/// Host asks the shell to open a side panel rendering the same surface with `payload.input`
+/// (`host.surface.overlay`): the detail of a row. Payload: `input`, `icon`, `title`, optional
+/// `kicker` and `status` `{ label, tone }`.
+pub const SURFACE_OVERLAY: EventType = EventType::new("host.surface.overlay");
+
 /// Host asks the shell to close the current overlay / stay-action modal.
 pub const SURFACE_DISMISS: EventType = EventType::new("host.surface.dismiss");
 

@@ -118,6 +118,18 @@ pub(crate) fn has_key(path: &Path, key: &str) -> bool {
         .is_some_and(|bundle| bundle.get(key).is_some_and(serde_json::Value::is_string))
 }
 
+/// `<label>.<suffix>` (`host.x.label` → `host.x.<suffix>`) when the module's bundles have it.
+pub(crate) fn conventional_key(label: &str, suffix: &str) -> Option<String> {
+    let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
+    let bundles = bundle_files(&root);
+    let stem = label.strip_suffix(".label").unwrap_or(label);
+    let key = format!("{stem}.{suffix}");
+    bundles
+        .iter()
+        .any(|(_, path)| has_key(path, &key))
+        .then_some(key)
+}
+
 /// The help the module's bundles hold for a field label, by convention: `<label>.hint` or
 /// `.help` (`host.x.label` → `host.x.hint`). Read at compile time, so a declaration gets its help
 /// without naming it, and nothing looks a key up that may not exist.

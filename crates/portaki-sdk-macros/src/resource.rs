@@ -53,7 +53,15 @@ fn choice(item: &mut ItemEnum, label: &str) -> syn::Result<TokenStream2> {
         .variants
         .iter()
         .any(|v| v.attrs.iter().any(|a| a.path().is_ident("default")));
+    let mut initial: Option<syn::Ident> = None;
+    let mut done: Option<syn::Ident> = None;
     for (index, variant) in item.variants.iter_mut().enumerate() {
+        for (marker, slot) in [("initial", &mut initial), ("done", &mut done)] {
+            if let Some(position) = variant.attrs.iter().position(|a| a.path().is_ident(marker)) {
+                variant.attrs.remove(position);
+                *slot = Some(variant.ident.clone());
+            }
+        }
         if !matches!(variant.fields, Fields::Unit) {
             return Err(syn::Error::new(
                 variant.span(),
@@ -81,7 +89,23 @@ fn choice(item: &mut ItemEnum, label: &str) -> syn::Result<TokenStream2> {
         &json!({ "kind": "params", "name": ident.to_string(), "enum": wire_list, "labelPrefix": label })
             .to_string(),
     );
+    let lifecycle = match (&initial, &done) {
+        (Some(initial), Some(done)) => quote! {
+            impl ::portaki_sdk::resource::Lifecycle for #ident {
+                const INITIAL: Self = Self::#initial;
+                const DONE: Self = Self::#done;
+            }
+        },
+        (None, None) => quote! {},
+        _ => {
+            return Err(syn::Error::new(
+                ident.span(),
+                "a lifecycle marks one #[initial] and one #[done] variant",
+            ))
+        }
+    };
     Ok(quote! {
+        #lifecycle
         #emission
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ::serde::Serialize, ::serde::Deserialize)]
         #[serde(rename_all = "snake_case")]
@@ -248,13 +272,15 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     };
     // No description declared: the help the bundles already hold for this label, if any.
     let description = description.or_else(|| crate::bundle::conventional_help(&label));
+    let placeholder = crate::bundle::conventional_key(&label, "placeholder");
     let inner = unwrap_option(ty);
     let (kind, wire_type) = match (forced.as_deref(), type_name(inner).as_deref()) {
         (Some("time_range"), _) => (quote!(TimeRange), "time_range"),
+        (Some("photo"), _) => (quote!(Photo), "photo"),
         (Some(other), _) => {
             return Err(syn::Error::new(
                 attr.span(),
-                format!("unknown kind `{other}` — time_range"),
+                format!("unknown kind `{other}` — time_range, photo"),
             ))
         }
         (None, Some("I18nText")) => (quote!(Localized), "localized"),
@@ -284,12 +310,14 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let min_tokens = opt_f64(between.map(|b| b.0));
     let maxn_tokens = opt_f64(between.map(|b| b.1));
     let description_tokens = opt_str(&description);
+    let placeholder_tokens = opt_str(&placeholder);
     let spec = quote! {
         ::portaki_sdk::resource::FieldSpec {
             key: #key,
             kind: ::portaki_sdk::resource::FieldKind::#kind,
             label: #label,
             description: #description_tokens,
+            placeholder: #placeholder_tokens,
             required: #required,
             max_chars: #max_tokens,
             min: #min_tokens,
@@ -500,6 +528,234 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
                 pub resource: String,
                 pub rows_json: String,
                 pub meta_json: String,
+                pub stay_id: Option<Uuid>,
+                pub updated_at: DateTime<Utc>,
+            }
+        }
+    }
+    .into()
+}
+
+// ── #[record] ────────────────────────────────────────────────────────────────────────────────
+
+/// `#[record(name = "reports", item = Report, status = ReportStatus, due_hours = 24,
+/// task_title = "task.title", task_done = "host.detail.resolve", hooks)]` on a unit struct.
+pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = syn::parse_macro_input!(item as ItemStruct);
+    let mut name: Option<String> = None;
+    let mut row: Option<syn::Path> = None;
+    let mut status: Option<syn::Path> = None;
+    let mut due_hours: Option<i64> = None;
+    let mut task_title: Option<String> = None;
+    let mut task_done: Option<String> = None;
+    let mut hooks = false;
+    let parser =
+        syn::meta::parser(|m| {
+            let key = m
+                .path
+                .get_ident()
+                .map(ToString::to_string)
+                .unwrap_or_default();
+            match key.as_str() {
+                "name" => name = Some(m.value()?.parse::<syn::LitStr>()?.value()),
+                "item" => row = Some(m.value()?.parse()?),
+                "status" => status = Some(m.value()?.parse()?),
+                "due_hours" => due_hours = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?),
+                "task_title" => task_title = Some(m.value()?.parse::<syn::LitStr>()?.value()),
+                "task_done" => task_done = Some(m.value()?.parse::<syn::LitStr>()?.value()),
+                "hooks" => hooks = true,
+                _ => return Err(m.error(
+                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks",
+                )),
+            }
+            Ok(())
+        });
+    syn::parse_macro_input!(attr with parser);
+    let (Some(name), Some(row), Some(status)) = (name, row, status) else {
+        return syn::Error::new(
+            Span::call_site(),
+            "#[record] needs name = \"…\", item = Type and status = Lifecycle",
+        )
+        .to_compile_error()
+        .into();
+    };
+    if due_hours.is_some() && (task_title.is_none() || task_done.is_none()) {
+        return syn::Error::new(
+            Span::call_site(),
+            "due_hours makes timeline tasks: give task_title and task_done (bundle keys)",
+        )
+        .to_compile_error()
+        .into();
+    }
+    let ident = &item.ident;
+    let snake = sanitize_key(&name).to_lowercase();
+    let f = |what: &str| format_ident!("__portaki_{}_{}", snake, what);
+    let (submit, add, set_status, note, list_for_stay, tasks, toggle, complete, entity_mod) = (
+        f("submit"),
+        f("add"),
+        f("set_status"),
+        f("note"),
+        f("list_for_stay"),
+        f("timeline_tasks"),
+        f("task_toggle"),
+        f("task_complete"),
+        f("resource_entity"),
+    );
+    let due_tokens = match due_hours {
+        Some(h) => quote!(::core::option::Option::Some(#h)),
+        None => quote!(::core::option::Option::None),
+    };
+    let row_name = row
+        .segments
+        .last()
+        .map(|s| s.ident.to_string())
+        .unwrap_or_default();
+    let emission = write_emission(
+        "resource",
+        &sanitize_key(&name),
+        &json!({
+            "kind": "resource", "name": name, "resourceKind": "record",
+            "item": row_name, "order": Value::Null, "import": Value::Null,
+        })
+        .to_string(),
+    );
+    let hooks_impl = if hooks {
+        quote! {}
+    } else {
+        quote! {
+            impl ::portaki_sdk::resource::RecordHooks for #ident {
+                type Item = #row;
+                type Status = #status;
+            }
+        }
+    };
+    let entry = quote!(::portaki_sdk::resource::Entry<#row, #status>);
+    let id_example = r#"{"id":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","status":"in_progress"}"#;
+    let note_example =
+        r#"{"id":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","text":"Le technicien passe demain."}"#;
+    let tasks_tokens = match (task_title, task_done) {
+        (Some(title), Some(done)) if due_hours.is_some() => quote! {
+            #[doc(hidden)]
+            #[::portaki_sdk::query(name = "timelineTasks", example(label = "Semaine en cours",
+                input = r#"{"propertyId":"5f0c2b1e-8a4d-4c6f-9e21-3b7d9a6c4e10","from":"2026-06-15T00:00:00Z","to":"2026-06-22T00:00:00Z","stays":[]}"#))]
+            pub fn #tasks(
+                _ctx: ::portaki_sdk::Context,
+                args: ::portaki_sdk::contracts::timeline::TimelineTasksArgs,
+            ) -> ::portaki_sdk::Result<::portaki_sdk::contracts::timeline::TimelineTasks> {
+                ::portaki_sdk::resource::record::timeline_tasks::<#ident>(
+                    #ident::DECL, &args, ::portaki_sdk::bundle_text!(#title), ::portaki_sdk::bundle_text!(#done))
+            }
+
+            #[doc(hidden)]
+            #[::portaki_sdk::command(name = "taskToggle", example(label = "Clore",
+                input = r#"{"propertyId":"5a1c9e2b-4f3d-4b8a-8e7f-6d2c1b0a9f8e","taskId":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","itemId":"done","done":true}"#))]
+            pub fn #toggle(
+                _ctx: ::portaki_sdk::Context,
+                args: ::portaki_sdk::contracts::timeline::TaskToggleArgs,
+            ) -> ::portaki_sdk::Result<()> {
+                if args.item_id != "done" || !args.done {
+                    return ::core::result::Result::Err(::portaki_sdk::PortakiError::Host("cannot_reopen".into()));
+                }
+                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id)
+            }
+
+            #[doc(hidden)]
+            #[::portaki_sdk::command(name = "taskComplete", example(label = "Clore",
+                input = r#"{"propertyId":"5a1c9e2b-4f3d-4b8a-8e7f-6d2c1b0a9f8e","taskId":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a"}"#))]
+            pub fn #complete(
+                _ctx: ::portaki_sdk::Context,
+                args: ::portaki_sdk::contracts::timeline::TaskCompleteArgs,
+            ) -> ::portaki_sdk::Result<()> {
+                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id)
+            }
+        },
+        _ => quote! {},
+    };
+    quote! {
+        #emission
+        #item
+        #hooks_impl
+
+        impl #ident {
+            /// What `#[record]` declared.
+            pub const DECL: ::portaki_sdk::resource::RecordDecl =
+                ::portaki_sdk::resource::RecordDecl { name: #name, due_hours: #due_tokens };
+
+            /// Every record, newest first.
+            pub fn list(_ctx: &::portaki_sdk::Context) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
+                ::portaki_sdk::resource::record::list(Self::DECL)
+            }
+
+            /// The records of one stay, newest first.
+            pub fn for_stay(
+                _ctx: &::portaki_sdk::Context,
+                stay: ::portaki_sdk::prelude::Uuid,
+            ) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
+                ::portaki_sdk::resource::record::for_stay(Self::DECL, stay)
+            }
+
+            /// One record.
+            pub fn get(
+                _ctx: &::portaki_sdk::Context,
+                id: ::portaki_sdk::prelude::Uuid,
+            ) -> ::portaki_sdk::Result<::core::option::Option<#entry>> {
+                ::portaki_sdk::resource::record::get(Self::DECL, id)
+            }
+        }
+
+        #[doc(hidden)]
+        #[::portaki_sdk::command(name = "submit", guest, example(label = "Un dépôt", input = "{}"))]
+        pub fn #submit(ctx: ::portaki_sdk::Context, args: ::serde_json::Value) -> ::portaki_sdk::Result<()> {
+            ::portaki_sdk::resource::record::submit_command::<#ident>(&ctx, #ident::DECL, &args)
+        }
+
+        #[doc(hidden)]
+        #[::portaki_sdk::command(name = "add", example(label = "Ajouté par l'hôte",
+            input = r#"{"stayId":"5d1a7e3c-2b9f-4c8d-a6e0-7f3b1c9d2e54"}"#))]
+        pub fn #add(ctx: ::portaki_sdk::Context, args: ::serde_json::Value) -> ::portaki_sdk::Result<()> {
+            ::portaki_sdk::resource::record::add_command::<#ident>(&ctx, #ident::DECL, &args)
+        }
+
+        #[doc(hidden)]
+        #[::portaki_sdk::command(name = "setStatus", example(label = "Pris en charge", input = #id_example))]
+        pub fn #set_status(
+            ctx: ::portaki_sdk::Context,
+            args: ::portaki_sdk::resource::record::SetStatusArgs,
+        ) -> ::portaki_sdk::Result<()> {
+            ::portaki_sdk::resource::record::set_status_command::<#ident>(&ctx, #ident::DECL, args)
+        }
+
+        #[doc(hidden)]
+        #[::portaki_sdk::command(name = "note", example(label = "Répondre", input = #note_example))]
+        pub fn #note(
+            ctx: ::portaki_sdk::Context,
+            args: ::portaki_sdk::resource::record::NoteArgs,
+        ) -> ::portaki_sdk::Result<()> {
+            ::portaki_sdk::resource::record::note_command::<#ident>(&ctx, #ident::DECL, args)
+        }
+
+        #[doc(hidden)]
+        #[::portaki_sdk::query(name = "listForStay", guest, example(label = "Les dépôts du séjour"))]
+        pub fn #list_for_stay(
+            ctx: ::portaki_sdk::Context,
+        ) -> ::portaki_sdk::Result<::std::vec::Vec<::serde_json::Value>> {
+            ::portaki_sdk::resource::record::list_for_stay_query::<#ident>(&ctx, #ident::DECL)
+        }
+
+        #tasks_tokens
+
+        #[doc(hidden)]
+        #[allow(dead_code, missing_docs)]
+        mod #entity_mod {
+            use ::portaki_sdk::prelude::{DateTime, Utc, Uuid};
+
+            #[::portaki_sdk::entity(schema_version = 1)]
+            pub struct PortakiResource {
+                pub id: Uuid,
+                pub resource: String,
+                pub rows_json: String,
+                pub meta_json: String,
+                pub stay_id: Option<Uuid>,
                 pub updated_at: DateTime<Utc>,
             }
         }
