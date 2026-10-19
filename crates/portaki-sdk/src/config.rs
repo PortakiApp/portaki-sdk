@@ -127,7 +127,7 @@ pub fn declarations() -> impl Iterator<Item = &'static ConfigDeclaration> {
 /// Replaces each field's `itemType` by `item`: the row's `I18nText` fields become
 /// `item.localized`, its `#[field(secret)]` fields `item.secret`, and `item.id` is the
 /// `#[field(item_id = "…")]` given, else a field named `id`. `item.fields` lists every row field
-/// as `{ "name", "type", "ref"?, "doc"? }`, the row's shape for whoever builds or checks rows
+/// as `{ "name", "type", "ref"?, "format"?, "items"?, "required"?, "doc"? }`, the row's shape for whoever builds or checks rows
 /// (the listing import).
 ///
 /// `shape_of` gives the `#[params]` shape of a type by name (`{ "fields": [{ "name", "type",
@@ -152,7 +152,7 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
         for row_field in row_fields {
             let name = row_field["name"].as_str().unwrap_or_default();
             let mut entry = Map::new();
-            for key in ["name", "type", "ref", "doc"] {
+            for key in ["name", "type", "ref", "format", "items", "required", "doc"] {
                 if let Some(value) = row_field.get(key) {
                     entry.insert(key.into(), value.clone());
                 }
@@ -458,6 +458,7 @@ mod tests {
         let bin = json!({ "doc": "A bin.", "fields": [
             { "name": "kind", "type": "string", "required": true, "doc": "What goes in." },
             { "name": "days", "type": "array", "items": { "type": "string" }, "required": true },
+            { "name": "from", "type": "string", "format": "date", "required": false, "secret": true },
         ] });
         let opaque = json!({ "opaque": true, "fields": [] });
         let mut fields = vec![
@@ -478,7 +479,7 @@ mod tests {
         let event_fields = json!([
             { "name": "id", "type": "string" },
             { "name": "title", "type": "ref", "ref": "I18nText" },
-            { "name": "place", "type": "ref", "ref": "I18nText" },
+            { "name": "place", "type": "ref", "ref": "I18nText", "required": false },
             { "name": "endsAt", "type": "string" },
             { "name": "url", "type": "string" },
         ]);
@@ -492,9 +493,13 @@ mod tests {
                         "item": { "id": "slug", "localized": ["title", "place"], "secret": ["url"],
                                   "fields": event_fields } }),
                 json!({ "key": "bins", "type": "structured",
-                        "item": { "localized": [], "fields": [
-                            { "name": "kind", "type": "string", "doc": "What goes in." },
-                            { "name": "days", "type": "array" },
+                        "item": { "localized": [], "secret": ["from"], "fields": [
+                            { "name": "kind", "type": "string", "required": true,
+                              "doc": "What goes in." },
+                            { "name": "days", "type": "array", "items": { "type": "string" },
+                              "required": true },
+                            { "name": "from", "type": "string", "format": "date",
+                              "required": false },
                         ] } }),
                 json!({ "key": "pairs", "type": "structured" }),
                 json!({ "key": "raw", "type": "structured" }),
