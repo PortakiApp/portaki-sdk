@@ -126,27 +126,38 @@ pub fn declarations() -> impl Iterator<Item = &'static ConfigDeclaration> {
 
 /// Replaces each field's `itemType` by `item`: the row's `I18nText` fields become
 /// `item.localized`, its `#[field(secret)]` fields `item.secret`, and `item.id` is the
-/// `#[field(item_id = "…")]` given, else a field named `id`.
+/// `#[field(item_id = "…")]` given, else a field named `id`. `item.fields` lists every row field
+/// as `{ "name", "type", "ref"?, "doc"? }`, the row's shape for whoever builds or checks rows
+/// (the listing import).
 ///
 /// `shape_of` gives the `#[params]` shape of a type by name (`{ "fields": [{ "name", "type",
-/// "ref" }] }`). A row without one keeps only an explicit `item_id`; a row with neither translated
-/// fields nor an id gets no `item`. Shared by `portaki build` and the conformance battery.
+/// "ref" }] }`). A row without one, or with an opaque one, keeps only an explicit `item_id`, and gets no `item` without
+/// it. Shared by `portaki build` and the conformance battery.
 pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Value>) {
     for field in fields.iter_mut().filter_map(Value::as_object_mut) {
         let Some(row) = field.remove("itemType") else {
             continue;
         };
         let shape = row.as_str().and_then(&shape_of);
-        let row_fields = shape
+        // An opaque shape (tuple struct, enum) has no fields to declare.
+        let shape_fields = shape
             .as_ref()
-            .and_then(|shape| shape["fields"].as_array())
-            .into_iter()
-            .flatten();
+            .filter(|shape| shape["opaque"] != true)
+            .and_then(|shape| shape["fields"].as_array());
+        let row_fields = shape_fields.into_iter().flatten();
         let mut localized = Vec::new();
         let mut secret = Vec::new();
+        let mut declared = Vec::new();
         let mut has_id = false;
         for row_field in row_fields {
             let name = row_field["name"].as_str().unwrap_or_default();
+            let mut entry = Map::new();
+            for key in ["name", "type", "ref", "doc"] {
+                if let Some(value) = row_field.get(key) {
+                    entry.insert(key.into(), value.clone());
+                }
+            }
+            declared.push(Value::Object(entry));
             has_id |= name == "id";
             if row_field["ref"] == "I18nText" {
                 localized.push(Value::from(name));
@@ -160,7 +171,7 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
             .and_then(|item| item.get("id"))
             .cloned()
             .or_else(|| has_id.then(|| Value::from("id")));
-        if localized.is_empty() && secret.is_empty() && id.is_none() {
+        if shape_fields.is_none() && id.is_none() {
             continue;
         }
         let mut item = Map::new();
@@ -170,6 +181,9 @@ pub fn resolve_items(fields: &mut [Value], shape_of: impl Fn(&str) -> Option<Val
         item.insert("localized".into(), Value::Array(localized));
         if !secret.is_empty() {
             item.insert("secret".into(), Value::Array(secret));
+        }
+        if shape_fields.is_some() {
+            item.insert("fields".into(), Value::Array(declared));
         }
         field.insert("item".into(), Value::Object(item));
     }
@@ -441,21 +455,48 @@ mod tests {
             { "name": "endsAt", "type": "string" },
             { "name": "url", "type": "string", "secret": true },
         ] });
+        let bin = json!({ "doc": "A bin.", "fields": [
+            { "name": "kind", "type": "string", "required": true, "doc": "What goes in." },
+            { "name": "days", "type": "array", "items": { "type": "string" }, "required": true },
+        ] });
+        let opaque = json!({ "opaque": true, "fields": [] });
         let mut fields = vec![
             json!({ "key": "events", "type": "structured", "itemType": "Event" }),
             json!({ "key": "spots", "type": "structured", "itemType": "Event", "item": { "id": "slug" } }),
+            json!({ "key": "bins", "type": "structured", "itemType": "Bin" }),
+            json!({ "key": "pairs", "type": "structured", "itemType": "Pair" }),
             json!({ "key": "raw", "type": "structured", "itemType": "Unknown" }),
             json!({ "key": "keyed", "type": "structured", "itemType": "Unknown", "item": { "id": "key" } }),
             json!({ "key": "welcome", "type": "localized" }),
         ];
-        resolve_items(&mut fields, |name| (name == "Event").then(|| shape.clone()));
+        resolve_items(&mut fields, |name| match name {
+            "Event" => Some(shape.clone()),
+            "Bin" => Some(bin.clone()),
+            "Pair" => Some(opaque.clone()),
+            _ => None,
+        });
+        let event_fields = json!([
+            { "name": "id", "type": "string" },
+            { "name": "title", "type": "ref", "ref": "I18nText" },
+            { "name": "place", "type": "ref", "ref": "I18nText" },
+            { "name": "endsAt", "type": "string" },
+            { "name": "url", "type": "string" },
+        ]);
         assert_eq!(
             fields,
             vec![
                 json!({ "key": "events", "type": "structured",
-                        "item": { "id": "id", "localized": ["title", "place"], "secret": ["url"] } }),
+                        "item": { "id": "id", "localized": ["title", "place"], "secret": ["url"],
+                                  "fields": event_fields } }),
                 json!({ "key": "spots", "type": "structured",
-                        "item": { "id": "slug", "localized": ["title", "place"], "secret": ["url"] } }),
+                        "item": { "id": "slug", "localized": ["title", "place"], "secret": ["url"],
+                                  "fields": event_fields } }),
+                json!({ "key": "bins", "type": "structured",
+                        "item": { "localized": [], "fields": [
+                            { "name": "kind", "type": "string", "doc": "What goes in." },
+                            { "name": "days", "type": "array" },
+                        ] } }),
+                json!({ "key": "pairs", "type": "structured" }),
                 json!({ "key": "raw", "type": "structured" }),
                 json!({ "key": "keyed", "type": "structured", "item": { "id": "key", "localized": [] } }),
                 json!({ "key": "welcome", "type": "localized" }),

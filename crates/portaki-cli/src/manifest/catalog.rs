@@ -1101,7 +1101,11 @@ mod tests {
             catalog["config"]["fields"][3],
             json!({ "key": "contacts", "type": "structured", "required": false,
                     "recommended": false, "label": {},
-                    "item": { "id": "id", "localized": ["role"] } })
+                    "item": { "id": "id", "localized": ["role"], "fields": [
+                        { "name": "id", "type": "string" },
+                        { "name": "role", "type": "ref", "ref": "I18nText" },
+                        { "name": "phone", "type": "string" },
+                    ] } })
         );
     }
 
