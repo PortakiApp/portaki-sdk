@@ -382,6 +382,21 @@
               "description": "Sub-keys encrypted at rest, like a secret field: a save that leaves one out, empty or masked keeps the stored value (row matched by id, else position); null clears it.",
               "uniqueItems": true,
               "items": { "type": "string", "minLength": 1 }
+            },
+            "fields": {
+              "type": "array",
+              "description": "The row's fields, from its #[params] shape, stamped by portaki build: what a tool building or checking rows (the listing import) holds them to. Absent when the row type declares no shape.",
+              "items": {
+                "type": "object",
+                "required": ["name", "type"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "type": { "type": "string", "minLength": 1, "description": "string, boolean, integer, number, array, map, json or ref." },
+                  "ref": { "type": "string", "minLength": 1, "description": "The type a ref names, e.g. I18nText." },
+                  "doc": { "type": "string" }
+                }
+              }
             }
           }
         }
