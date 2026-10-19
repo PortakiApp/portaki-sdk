@@ -8,7 +8,7 @@ use crate::sdui::common::{
     BadgeSpec, Leading, SurfaceLevel, TextVariant, Trailing, TrailingVisual,
 };
 use crate::sdui::component::Component;
-use crate::sdui::primitives::{Button, Card, ListItem, Stack, Text};
+use crate::sdui::primitives::{Button, Card, EmptyState, ListItem, Stack, Text};
 use crate::sdui::surface::Surface;
 use crate::vocab::IconName;
 use crate::{ids::SurfaceId, sdui::common::ButtonVariant};
@@ -85,7 +85,7 @@ pub fn count_line(key: &str, count: usize) -> String {
 }
 
 /// The home card: an icon, a title, a count line, the first rows, « see all » when there are
-/// more; it opens the detail. No row: an empty stack, the card does not show.
+/// more; it opens the detail. No row: the empty state.
 pub struct ListCard {
     rows: Vec<Row>,
     icon: IconName,
@@ -127,7 +127,7 @@ impl ListCard {
     pub fn build(self, id: SurfaceId) -> Surface {
         let total = self.rows.len();
         if total == 0 {
-            return Surface::new(Stack::new()).with_id(id);
+            return empty_state(id, self.icon);
         }
         let open = Action::open_overlay(
             OverlayPresentation::Fullscreen,
@@ -199,6 +199,9 @@ impl GroupedList {
     /// The surface.
     pub fn build(self, id: SurfaceId) -> Surface {
         let count = self.groups.iter().map(|(_, rows)| rows.len()).sum();
+        if count == 0 {
+            return empty_state(id, self.icon);
+        }
         let mut children: Vec<Component> = vec![Text::new()
             .text(count_line(&self.intro_key, count))
             .variant(TextVariant::Caption)
@@ -216,4 +219,15 @@ impl GroupedList {
         }
         Surface::new(Stack::new().gap(0.0).children(children)).with_id(id)
     }
+}
+
+/// Nothing to list yet: `home.card.empty.title` / `.description` of the module's bundles.
+pub fn empty_state(id: SurfaceId, icon: IconName) -> Surface {
+    Surface::new(
+        EmptyState::new()
+            .title("i18n:home.card.empty.title")
+            .description("i18n:home.card.empty.description")
+            .icon(icon),
+    )
+    .with_id(id)
 }

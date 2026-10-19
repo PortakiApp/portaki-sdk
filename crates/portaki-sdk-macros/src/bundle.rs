@@ -86,7 +86,7 @@ fn expand_in(root: &Path, parsed: BundleText) -> syn::Result<TokenStream2> {
 
 /// `(language, path)` of every bundle, `i18n/` first, each folder sorted by file name. The
 /// language is the file stem's first part: `fr-FR.json` and `fr.json` are both `fr`.
-fn bundle_files(root: &Path) -> Vec<(String, PathBuf)> {
+pub(crate) fn bundle_files(root: &Path) -> Vec<(String, PathBuf)> {
     let mut found = Vec::new();
     for dir in DIRS {
         let mut files: Vec<PathBuf> = std::fs::read_dir(root.join(dir))
@@ -111,7 +111,7 @@ fn bundle_files(root: &Path) -> Vec<(String, PathBuf)> {
     found
 }
 
-fn has_key(path: &Path, key: &str) -> bool {
+pub(crate) fn has_key(path: &Path, key: &str) -> bool {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
@@ -164,4 +164,16 @@ mod tests {
         let empty = tempfile::tempdir().unwrap();
         assert!(expand_in(empty.path(), syn::parse_str(r#""a""#).unwrap()).is_err());
     }
+}
+
+/// The help the module's bundles hold for a field label, by convention: `<label>.hint` or
+/// `.help` (`host.x.label` → `host.x.hint`). Read at compile time, so a declaration gets its help
+/// without naming it, and nothing looks a key up that may not exist.
+pub(crate) fn conventional_help(label: &str) -> Option<String> {
+    let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
+    let bundles = bundle_files(&root);
+    let stem = label.strip_suffix(".label").unwrap_or(label);
+    [format!("{stem}.hint"), format!("{stem}.help")]
+        .into_iter()
+        .find(|key| bundles.iter().any(|(_, path)| has_key(path, key)))
 }
