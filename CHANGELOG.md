@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.16.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.15.0...v10.16.0) (2026-10-19)
+
+
+### Features
+
+* **config:** declare row field types ([f645ef0](https://github.com/PortakiApp/portaki-sdk/commit/f645ef07ffb27a71b45e01f22ff8531f0291e23d))
+* **config:** declare structured row fields ([dc61f1c](https://github.com/PortakiApp/portaki-sdk/commit/dc61f1cf9449529a0342966b4c2bfcd9189799ec))
+
 ## [10.15.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.14.1...v10.15.0) (2026-10-19)
 
 
