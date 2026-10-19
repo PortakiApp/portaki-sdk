@@ -139,6 +139,12 @@ pub fn catalog_defaults(emissions: &[EmissionFile], i18n_dir: &Path, locales: &[
         catalog["config"] = json!({ "fields": fields });
     }
 
+    let in_bundles = |key: &str| bundles.iter().any(|(_, bundle)| bundle.get(key).is_some());
+    let resources = resources(emissions, &translated, &in_bundles);
+    if !resources.is_empty() {
+        catalog["resources"] = Value::Array(resources);
+    }
+
     let (host, guest) = surfaces(
         emissions,
         data["id"].as_str().unwrap_or_default(),
@@ -192,6 +198,114 @@ fn config_fields(
             })
             .collect(),
     )
+}
+
+/// The `#[collection]`s (SDK 11 proof, `unstable`), their fields from the `#[item]` emissions in
+/// the shape of `config.fields`: labels translated, a `select`'s options from its `#[choice]`, and
+/// a `description` by convention when none is declared — the bundle's `<label>.hint` or
+/// `<label>.help` (`host.rule.title` or `host.rule.title.label` → `host.rule.title.hint`), the help
+/// already written for the host, which is also what an import tells the model.
+fn resources(
+    emissions: &[EmissionFile],
+    translated: &dyn Fn(&Value) -> Value,
+    in_bundles: &dyn Fn(&str) -> bool,
+) -> Vec<Value> {
+    let item = |name: &Value| {
+        emissions
+            .iter()
+            .find(|e| e.kind == "item" && e.data["name"] == *name)
+    };
+    let fields_of = |name: &Value| -> Vec<Value> {
+        item(name)
+            .and_then(|e| e.data["fields"].as_array())
+            .into_iter()
+            .flatten()
+            .map(|field| resource_field(field, emissions, translated, in_bundles))
+            .collect()
+    };
+    let mut out: Vec<Value> = emissions
+        .iter()
+        .filter(|e| e.kind == "resource")
+        .map(|e| {
+            let data = &e.data;
+            let mut resource = json!({
+                "name": data["name"],
+                "kind": data["resourceKind"],
+                "order": data["order"],
+                "fields": fields_of(&data["item"]),
+            });
+            if let Some(key) = item(&data["item"])
+                .map(|i| &i.data["key"])
+                .filter(|k| k.is_string())
+            {
+                resource["key"] = key.clone();
+            }
+            if data["max"].is_u64() {
+                resource["max"] = data["max"].clone();
+            }
+            if data["import"].is_object() {
+                resource["import"] = data["import"].clone();
+            }
+            if data["meta"].is_string() {
+                resource["meta"] = Value::Array(fields_of(&data["meta"]));
+            }
+            resource
+        })
+        .collect();
+    out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    out
+}
+
+fn resource_field(
+    field: &Value,
+    emissions: &[EmissionFile],
+    translated: &dyn Fn(&Value) -> Value,
+    in_bundles: &dyn Fn(&str) -> bool,
+) -> Value {
+    let mut entry = field.clone();
+    let label = field["label"].as_str().unwrap_or_default();
+    entry["label"] = translated(&field["label"]);
+    let description = field["description"]
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| help_key(label, in_bundles));
+    if let Some(key) = description {
+        entry["description"] = translated(&Value::String(key));
+    }
+    if let Some(choice) = field["optionsType"].as_str() {
+        if let Some(params) = emissions
+            .iter()
+            .find(|e| e.kind == "params" && e.data["name"] == choice)
+        {
+            let prefix = params.data["labelPrefix"].as_str().unwrap_or_default();
+            entry["options"] = params.data["enum"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|value| {
+                    let key = format!("{prefix}.{}", value.as_str().unwrap_or_default());
+                    json!({ "value": value, "label": translated(&Value::String(key)) })
+                })
+                .collect();
+        }
+        if let Some(map) = entry.as_object_mut() {
+            map.remove("optionsType");
+        }
+    }
+    entry
+}
+
+/// The help the bundles already hold for a label, by convention.
+fn help_key(label: &str, in_bundles: &dyn Fn(&str) -> bool) -> Option<String> {
+    let stem = label.strip_suffix(".label").unwrap_or(label);
+    [
+        format!("{stem}.hint"),
+        format!("{stem}.help"),
+        format!("{label}.hint"),
+        format!("{label}.help"),
+    ]
+    .into_iter()
+    .find(|key| in_bundles(key))
 }
 
 fn option_label_key(field: &Value, value: &Value) -> String {
@@ -306,6 +420,27 @@ pub fn check_references(
             "surface" => vec![data["catalog"].get("label_key")],
             "nav" => vec![data.get("label_key")],
             "email" => vec![data.get("descriptionKey")],
+            "item" => data["fields"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|field| [field.get("label"), field.get("description")])
+                .collect(),
+            "params" if data["labelPrefix"].is_string() => {
+                let prefix = data["labelPrefix"].as_str().unwrap_or_default();
+                for value in data["enum"].as_array().into_iter().flatten() {
+                    keys.push(format!("{prefix}.{}", value.as_str().unwrap_or_default()));
+                }
+                Vec::new()
+            }
+            "resource" => {
+                // The derived editor's texts, by convention.
+                let name = data["name"].as_str().unwrap_or_default();
+                for text in ["title", "add", "tooMany"] {
+                    keys.push(format!("host.{name}.{text}"));
+                }
+                Vec::new()
+            }
             "config" => {
                 for field in data["fields"].as_array().into_iter().flatten() {
                     for option in field["options"].as_array().into_iter().flatten() {

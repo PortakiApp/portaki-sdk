@@ -276,6 +276,29 @@
         }
       }
     },
+    "resources": {
+      "description": "Unstable (SDK 11 proof): the resources the SDK stores for the module (#[collection]). Fields have the shape of config.fields.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "fields"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_]*$" },
+          "kind": { "type": "string", "enum": ["collection"] },
+          "max": { "type": "integer", "minimum": 1 },
+          "order": { "type": "string", "enum": ["manual"] },
+          "key": { "type": "string" },
+          "import": {
+            "type": "object",
+            "required": ["command"],
+            "properties": { "command": { "type": "string" } }
+          },
+          "fields": { "type": "array", "items": { "$ref": "#/$defs/resourceField" } },
+          "meta": { "type": "array", "items": { "$ref": "#/$defs/resourceField" } }
+        }
+      }
+    },
     "config": {
       "type": "object",
       "description": "Host configuration, declared by #[portaki_sdk::config] (portaki build writes it). The platform validates and stores what the host saves (updateConfig), encrypts secret fields at rest and passes the result to the module as context.moduleConfig. A required field left empty flags the install requiresConfig / incomplete and blocks publication; a recommended one only warns. Empty = absent, null, blank string, empty list or object; toggle and number are never empty. The dashboard also reads globalAlert and defaults.",
@@ -328,6 +351,28 @@
     }
   },
   "$defs": {
+    "resourceField": {
+      "type": "object",
+      "required": ["key", "type", "label"],
+      "properties": {
+        "key": { "type": "string" },
+        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range"] },
+        "required": { "type": "boolean" },
+        "label": {},
+        "description": {},
+        "maxChars": { "type": "integer", "minimum": 1 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value"],
+            "properties": { "value": { "type": "string" }, "label": {} }
+          }
+        }
+      }
+    },
     "configField": {
       "type": "object",
       "required": ["key"],

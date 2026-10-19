@@ -77,6 +77,7 @@ mod module;
 mod nav;
 mod params;
 mod query;
+mod resource;
 mod surface;
 mod typed;
 mod wasm_handler;
@@ -974,4 +975,31 @@ pub fn connector_op(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn link_module_crate(input: TokenStream) -> TokenStream {
     link::expand(input)
+}
+
+/// A unit enum a declared field picks from (`unstable`). `label = "rule.status"`: a value's label
+/// is the bundle key `rule.status.<value>`; `#[icon(IconName::X)]` on a variant gives its icon.
+/// Writes the derives, `portaki_sdk::resource::Choice`, and the values for the manifest.
+#[proc_macro_attribute]
+pub fn choice(attr: TokenStream, item: TokenStream) -> TokenStream {
+    resource::expand_choice(attr, item)
+}
+
+/// A row type of a declared collection (`unstable`), or with `meta` its settings. Each
+/// `#[field(label = "…", required, max_chars = N, between(a, b), description = "…")]` is declared:
+/// kind from the Rust type (`I18nText`, `String`, `bool`, numbers, a `#[choice]` enum;
+/// `kind = "time_range"` on a `String`). Adds `id`, the derives, `#[serde(default)]`, and
+/// `portaki_sdk::resource::Item` (or `Meta`). `key = "title"`: the natural key an import dedupes on.
+#[proc_macro_attribute]
+pub fn item(attr: TokenStream, item: TokenStream) -> TokenStream {
+    resource::expand_item(attr, item)
+}
+
+/// A collection the SDK stores (`unstable`): `#[collection(name = "rules", item = Rule,
+/// meta = Display, max = 30, import)]` on a unit struct. Generates `load` / `save`, the
+/// `updateConfig` command (host form), `importRows` (with `import`), `publishReadiness` (unless
+/// `readiness = false`), the `PortakiResource` entity and the manifest's `resources[]` entry.
+#[proc_macro_attribute]
+pub fn collection(attr: TokenStream, item: TokenStream) -> TokenStream {
+    resource::expand_collection(attr, item)
 }
