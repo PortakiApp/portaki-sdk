@@ -1003,3 +1003,14 @@ pub fn item(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     resource::expand_collection(attr, item)
 }
+
+/// A record the SDK stores (`unstable`): what a guest deposits during a stay and the host follows.
+/// `#[record(name = "reports", item = Report, status = ReportStatus, due_hours = 24,
+/// task_title = "…", task_done = "…", hooks)]` on a unit struct. Generates `list` / `for_stay` /
+/// `get`, the commands `submit` (guest), `add`, `setStatus`, `note`, the query `listForStay`, the
+/// timeline contract when `due_hours` is set, and the entity. With `hooks`, the module implements
+/// `portaki_sdk::resource::RecordHooks` (guard, on_created, on_note).
+#[proc_macro_attribute]
+pub fn record(attr: TokenStream, item: TokenStream) -> TokenStream {
+    resource::expand_record(attr, item)
+}

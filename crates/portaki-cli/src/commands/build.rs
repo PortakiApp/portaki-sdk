@@ -168,7 +168,7 @@ fn ensure_resource_migration(
     std::fs::write(
         &path,
         format!(
-            "-- {id}: the collections the SDK stores (#[collection]) — written by portaki build.\n\n\
+            "-- {id}: the collections and records the SDK stores — written by portaki build.\n\n\
              CREATE SCHEMA IF NOT EXISTS {schema};\n\n\
              CREATE TABLE IF NOT EXISTS {schema}.portaki_resource (\n\
              \x20   id UUID PRIMARY KEY,\n\
@@ -176,11 +176,14 @@ fn ensure_resource_migration(
              \x20   resource TEXT NOT NULL,\n\
              \x20   rows_json TEXT NOT NULL DEFAULT '[]',\n\
              \x20   meta_json TEXT NOT NULL DEFAULT '{{}}',\n\
+             \x20   stay_id UUID,\n\
              \x20   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n\
              \x20   created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n\
              );\n\n\
-             CREATE UNIQUE INDEX IF NOT EXISTS portaki_resource_property_resource_idx\n\
-             \x20   ON {schema}.portaki_resource (property_id, resource);\n"
+             CREATE INDEX IF NOT EXISTS portaki_resource_property_resource_idx\n\
+             \x20   ON {schema}.portaki_resource (property_id, resource);\n\n\
+             CREATE INDEX IF NOT EXISTS portaki_resource_stay_idx\n\
+             \x20   ON {schema}.portaki_resource (stay_id);\n"
         ),
     )?;
     Ok(Some(path))

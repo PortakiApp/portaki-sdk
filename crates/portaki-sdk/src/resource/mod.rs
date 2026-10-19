@@ -35,8 +35,11 @@
 //! ```
 
 mod editor;
+mod form;
 mod guest;
+mod inbox;
 pub mod merge;
+pub mod record;
 pub mod store;
 
 use serde::de::DeserializeOwned;
@@ -48,7 +51,10 @@ use crate::sdui::common::ChoiceOption;
 use crate::vocab::IconName;
 
 pub use editor::CollectionEditor;
+pub use form::FormFlow;
 pub use guest::{count_line, empty_state, GroupedList, ListCard, Row};
+pub use inbox::Inbox;
+pub use record::{Actor, Entry, HistoryEvent, HistoryLine, RecordDecl, RecordHooks};
 
 /// A unit enum a field picks from — `#[portaki_sdk::choice]` writes it.
 pub trait Choice: Copy + Default + PartialEq + Serialize + DeserializeOwned + 'static {
@@ -65,9 +71,14 @@ pub trait Choice: Copy + Default + PartialEq + Serialize + DeserializeOwned + 's
         None
     }
 
-    /// The bundle key of the label, `i18n:`-prefixed for SDUI text.
+    /// The bundle key of the label: `<prefix>.<wire>`.
+    fn bundle_key(self) -> String {
+        format!("{}.{}", Self::LABEL_PREFIX, self.wire())
+    }
+
+    /// The same key, `i18n:`-prefixed for SDUI text.
     fn label_key(self) -> String {
-        format!("i18n:{}.{}", Self::LABEL_PREFIX, self.wire())
+        format!("i18n:{}", self.bundle_key())
     }
 
     /// The value stored as `wire`, if any.
@@ -91,6 +102,14 @@ pub trait Choice: Copy + Default + PartialEq + Serialize + DeserializeOwned + 's
     }
 }
 
+/// A [`Choice`] that is a lifecycle: `#[initial]` and `#[done]` on two of its values.
+pub trait Lifecycle: Choice {
+    /// Where a record starts.
+    const INITIAL: Self;
+    /// Where it ends — a record in this state needs nothing more.
+    const DONE: Self;
+}
+
 /// How a declared field is stored, merged and edited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldKind {
@@ -106,6 +125,8 @@ pub enum FieldKind {
     Choice,
     /// `HH:MM-HH:MM`, empty for none.
     TimeRange,
+    /// A photo the guest or the host attached: a `portaki-file:` reference.
+    Photo,
 }
 
 impl FieldKind {
@@ -126,6 +147,8 @@ pub struct FieldSpec {
     pub label: &'static str,
     /// Bundle key of the help text, if any.
     pub description: Option<&'static str>,
+    /// Bundle key of the placeholder, if any (`<label>.placeholder`, found at compile time).
+    pub placeholder: Option<&'static str>,
     /// Publication is blocked while it is empty.
     pub required: bool,
     /// At most this many characters.
