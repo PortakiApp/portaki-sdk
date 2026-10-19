@@ -48,7 +48,7 @@ use crate::sdui::common::ChoiceOption;
 use crate::vocab::IconName;
 
 pub use editor::CollectionEditor;
-pub use guest::{count_line, GroupedList, ListCard, Row};
+pub use guest::{count_line, empty_state, GroupedList, ListCard, Row};
 
 /// A unit enum a field picks from — `#[portaki_sdk::choice]` writes it.
 pub trait Choice: Copy + Default + PartialEq + Serialize + DeserializeOwned + 'static {
@@ -213,6 +213,8 @@ pub struct CollectionDecl {
     pub name: &'static str,
     /// At most this many rows before publication is blocked (and an import stops adding).
     pub max: Option<usize>,
+    /// Publication waits for at least one row.
+    pub required: bool,
 }
 
 /// A problem that blocks publication.
@@ -283,6 +285,18 @@ impl<T: Item, M: Meta> Collection<T, M> {
     /// What blocks publication: each row's fields, the settings, and more rows than `max`.
     pub fn problems(&self) -> Vec<Problem> {
         let mut problems = Vec::new();
+        if self.decl.required && self.rows.is_empty() {
+            let key = format!("publish.{}.hint", self.decl.name);
+            let text = crate::t!(&key).ok().filter(|text| *text != key);
+            problems.push(Problem {
+                row: None,
+                field: "rows",
+                message: text.map_or_else(
+                    || I18nText::new("Ajoutez au moins une ligne.", "Add at least one row."),
+                    |text| I18nText::from(text.as_str()),
+                ),
+            });
+        }
         if let Some(max) = self.decl.max.filter(|max| self.rows.len() > *max) {
             problems.push(Problem {
                 row: None,
