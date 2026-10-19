@@ -108,16 +108,32 @@ impl From<GuestIdentityFixture> for GuestIdentity {
 impl Property {
     /// Writes property fields into `ctx` (`property_id`, `property`, `locale`, `timezone`).
     ///
-    /// Sets a fixed address `"Cannes, France"` on `PropertyContext::address`.
+    /// Sets a fixed address `"Cannes, France"` and country `FR`. `locale` is both the reader's
+    /// and, as a short code, the property's language — as the envelope builds them: change the
+    /// reader alone with [`crate::MockContextBuilder::with_locale`].
     pub fn apply(&self, ctx: &mut Context) {
+        let lang = self
+            .locale
+            .split(['-', '_'])
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        let lang = if lang.is_empty() {
+            "fr".to_string()
+        } else {
+            lang
+        };
         ctx.property_id = self.id;
         ctx.property = PropertyContext::new(
             self.name.clone(),
-            self.locale.clone(),
+            lang.clone(),
             self.timezone.clone(),
             Some(GeoPoint::new(self.lat, self.lng)),
             Some("Cannes, France".to_string()),
-        );
+        )
+        .with_country(Some("FR"));
+        ctx.property_lang = Some(lang);
         ctx.locale = self.locale.clone();
         ctx.timezone = self.timezone.clone();
     }

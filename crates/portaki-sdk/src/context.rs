@@ -85,7 +85,8 @@ pub struct PlanInfo {
 pub struct PropertyContext {
     /// Display name shown in guest and host shells.
     pub name: String,
-    /// Default locale (`fr-FR`).
+    /// The property's own default language (`fr`, `en`…) — never the reader's, which is
+    /// [`Context::locale`]. `fr` when the platform does not know it.
     pub locale: String,
     /// IANA timezone (`Europe/Paris`).
     pub timezone: String,
@@ -100,6 +101,11 @@ pub struct PropertyContext {
     /// Property position (WGS-84); `None` while the property is not geocoded.
     #[serde(default)]
     pub coordinates: Option<GeoPoint>,
+    /// ISO 3166-1 alpha-2 code of the country the property is in (`FR`, `RE` for La Réunion…),
+    /// upper case; `None` when the platform does not know it. Read this, not the locale or the
+    /// timezone, for what depends on the country (emergency numbers, legal mentions).
+    #[serde(default)]
+    pub country: Option<String>,
 }
 
 impl PropertyContext {
@@ -122,7 +128,17 @@ impl PropertyContext {
             lng,
             address,
             coordinates,
+            country: None,
         }
+    }
+
+    /// The same property in `country` (ISO 3166-1 alpha-2); a blank or malformed code is `None`.
+    pub fn with_country(mut self, country: Option<&str>) -> Self {
+        self.country = country
+            .map(str::trim)
+            .filter(|code| code.len() == 2 && code.chars().all(|c| c.is_ascii_alphabetic()))
+            .map(str::to_ascii_uppercase);
+        self
     }
 }
 
@@ -308,11 +324,13 @@ impl Context {
                 .collect(),
             property: PropertyContext::new(
                 "Villa Azur",
-                "fr-FR",
+                "fr",
                 "Europe/Paris",
                 Some(GeoPoint::new(43.5513, 7.0128)),
                 Some("Cannes, France".to_string()),
-            ),
+            )
+            .with_country(Some("FR")),
+            property_lang: Some("fr".to_string()),
             ..Context::default()
         }
     }
@@ -524,15 +542,16 @@ impl Default for Context {
             stay: None,
             property: PropertyContext::new(
                 "Test Property",
-                "fr-FR",
+                "fr",
                 "Europe/Paris",
                 Some(GeoPoint::new(43.55, 7.01)),
                 None,
-            ),
+            )
+            .with_country(Some("FR")),
             host: None,
             input: Value::Null,
             module_config: None,
-            property_lang: None,
+            property_lang: Some("fr".to_string()),
         }
     }
 }
@@ -613,6 +632,12 @@ mod tests {
     #[test]
     fn a_blank_property_lang_is_unknown() {
         let mut ctx = Context::default();
+        assert_eq!(
+            ctx.property_lang(),
+            Some("fr"),
+            "a French property, as in production"
+        );
+        ctx.property_lang = None;
         assert_eq!(ctx.property_lang(), None);
         ctx.property_lang = Some(" ".into());
         assert_eq!(ctx.property_lang(), None);
