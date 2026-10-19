@@ -501,3 +501,21 @@ mod tests {
         }
     }
 }
+
+/// The id `portaki_module!(id = …)` declares, registered so the SDK's views name the module in the
+/// commands they build — the same in a test as on the platform.
+#[doc(hidden)]
+pub struct DeclaredModule(pub &'static str);
+
+inventory::collect!(DeclaredModule);
+
+/// The module this code belongs to: its declared id, else the invocation's.
+pub fn current_module(ctx: &crate::Context) -> ModuleId {
+    inventory::iter::<DeclaredModule>
+        .into_iter()
+        .next()
+        .map_or_else(
+            || ctx.module_id.clone(),
+            |declared| ModuleId::new(declared.0),
+        )
+}

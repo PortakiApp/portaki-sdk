@@ -267,6 +267,11 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
             ::core::compile_error!(#MISSING_OUT_DIR);
         }
     });
+    let declared_id = quote! {
+        ::portaki_sdk::inventory::submit! {
+            ::portaki_sdk::ids::DeclaredModule(#id)
+        }
+    };
     let icon = attrs.icon.map(|icon| {
         quote! {
             ::portaki_sdk::inventory::submit! {
@@ -278,6 +283,7 @@ fn emission_tokens(attrs: ModuleAttrs) -> TokenStream2 {
     quote! {
         #emission
         #missing_out_dir
+        #declared_id
         #(#checks)*
         #icon
         /// What `portaki_sdk::refuse!` checks its code against — emitted even empty, so an
