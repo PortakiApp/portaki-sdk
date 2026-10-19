@@ -90,8 +90,7 @@ impl<'a, T: Item> FormFlow<'a, T> {
         }
         form = form.child(
             Button::new().label(self.submit_label.clone()).action(
-                self.ctx
-                    .module_id
+                crate::ids::current_module(self.ctx)
                     .command_empty(crate::ids::OperationName::new("submit")),
             ),
         );
@@ -152,13 +151,12 @@ impl<'a, T: Item> FormFlow<'a, T> {
                 }
             }
         };
-        Some(
-            Field::new()
-                .name(spec.key)
-                .label(format!("i18n:{}", spec.label))
-                .required(spec.required)
-                .child(control)
-                .into(),
-        )
+        let mut field = Field::new()
+            .name(spec.key)
+            .label(format!("i18n:{}", spec.label));
+        if spec.required {
+            field = field.required(true);
+        }
+        Some(field.child(control).into())
     }
 }

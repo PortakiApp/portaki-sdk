@@ -1,10 +1,11 @@
 //! The host's inbox of a record: filters « open / done / all », one `FeedItem` per record, the
 //! detail in a panel (status chips, the item's fields, the photo, a reply, the history).
 //!
-//! Texts by convention in the module's bundles: `{keys}.filter.open` (with `{count}`),
-//! `{keys}.filter.<done>`, `{keys}.filter.all`, `{keys}.empty.<filter>`, `{keys}.reply.label`,
-//! `{keys}.reply.send`, `{keys}.history.title`, `{keys}.history.<created|status|note>`; status
-//! labels are the lifecycle's own (`#[choice(label = …)]`).
+//! Texts by convention in the module's bundles, under a prefix (`host`): `{p}.tab.filter.open`
+//! (with `{count}`), `{p}.tab.filter.<done>`, `{p}.tab.filter.all`, `{p}.tab.empty.<filter>`,
+//! `{p}.reply.label`, `{p}.reply.send`, `{p}.history.title`, `{p}.history.added`,
+//! `{p}.history.reported`, `{p}.history.status` (`{status}`), `{p}.history.reply` (`{text}`);
+//! status labels are the lifecycle's own (`#[choice(label = …)]`).
 
 use chrono::{DateTime, FixedOffset, Utc};
 use serde_json::json;
@@ -107,12 +108,12 @@ impl<'a, H: RecordHooks> Inbox<'a, H> {
             .map(|key| {
                 let label = if key == "open" {
                     crate::t!(
-                        &format!("{}.filter.open", self.keys),
+                        &format!("{}.tab.filter.open", self.keys),
                         count = open.to_string()
                     )
                     .unwrap_or_default()
                 } else {
-                    format!("i18n:{}.filter.{key}", self.keys)
+                    format!("i18n:{}.tab.filter.{key}", self.keys)
                 };
                 FilterChip::new()
                     .label(label)
@@ -131,7 +132,7 @@ impl<'a, H: RecordHooks> Inbox<'a, H> {
             .collect();
         let body: Component = if shown.is_empty() {
             EmptyState::new()
-                .title(format!("i18n:{}.empty.{filter}", self.keys))
+                .title(format!("i18n:{}.tab.empty.{filter}", self.keys))
                 .icon(self.icon)
                 .into()
         } else {
@@ -185,7 +186,7 @@ impl<'a, H: RecordHooks> Inbox<'a, H> {
 
     /// The detail: status chips, the item's fields, the photo, a reply, the history.
     pub fn detail(&self, entry: &Entry<H::Item, H::Status>) -> Component {
-        let module = &self.ctx.module_id;
+        let module = &crate::ids::current_module(self.ctx);
         let chips = FilterBar::new().children(
             H::Status::ALL
                 .iter()
