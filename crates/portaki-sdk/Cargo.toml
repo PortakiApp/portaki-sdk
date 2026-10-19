@@ -33,6 +33,9 @@ guest-files = []
 # `host::files::read`, the bytes of a file the host attached to this module; declares `host:files`.
 host-files = []
 stay-guest-contact = []
+# Declared resources (`#[item]`, `#[collection]`) and the views derived from them — the SDK 11
+# proof (PREUVE-SDK11.md). Not stable: its API may change in any release while it is on.
+unstable = ["repo"]
 
 [dependencies]
 portaki-sdk-macros = { workspace = true }
@@ -54,7 +57,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 # The SDK's tests exercise the whole host API, whichever feature is asked for.
-portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files", "host-files"] }
+portaki-sdk = { path = ".", features = ["kv", "repo", "email", "events", "platform", "guest-files", "host-files", "unstable"] }
 serde_json = { workspace = true }
 # What `plugin_fn` formats a handler's error through: the wire text of a refusal is tested on it.
 anyhow = { workspace = true }

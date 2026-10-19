@@ -136,6 +136,56 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
 /// Writes a minimal `build.rs` when the module has none: without it Cargo gives no `OUT_DIR`, the
 /// macros write nothing, and the wasm32 build stops on `portaki_module!`'s error.
 /// An explicit `[package] build = …` is left exactly as it is.
+/// The table of `#[collection]`s (SDK 11 proof): written once into `db/migrations/` when the
+/// module declares a collection and no migration creates `portaki_resource` yet. The module
+/// never writes it — the entity is the SDK's.
+fn ensure_resource_migration(
+    module_root: &std::path::Path,
+    emissions: &[crate::manifest::generator::EmissionFile],
+) -> Result<Option<std::path::PathBuf>> {
+    if !emissions.iter().any(|e| e.kind == "resource") {
+        return Ok(None);
+    }
+    let Some(id) = emissions
+        .iter()
+        .find(|e| e.kind == "module")
+        .and_then(|e| e.data["id"].as_str())
+    else {
+        return Ok(None);
+    };
+    let directory = module_root.join("db/migrations");
+    if let Ok(entries) = std::fs::read_dir(&directory) {
+        for entry in entries.flatten() {
+            let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            if text.contains("portaki_resource") {
+                return Ok(None);
+            }
+        }
+    }
+    std::fs::create_dir_all(&directory)?;
+    let schema = format!("module_{}", id.replace('-', "_"));
+    let path = directory.join("20261019000000_portaki_resource.sql");
+    std::fs::write(
+        &path,
+        format!(
+            "-- {id}: the collections the SDK stores (#[collection]) — written by portaki build.\n\n\
+             CREATE SCHEMA IF NOT EXISTS {schema};\n\n\
+             CREATE TABLE IF NOT EXISTS {schema}.portaki_resource (\n\
+             \x20   id UUID PRIMARY KEY,\n\
+             \x20   property_id UUID NOT NULL,\n\
+             \x20   resource TEXT NOT NULL,\n\
+             \x20   rows_json TEXT NOT NULL DEFAULT '[]',\n\
+             \x20   meta_json TEXT NOT NULL DEFAULT '{{}}',\n\
+             \x20   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n\
+             \x20   created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n\
+             );\n\n\
+             CREATE UNIQUE INDEX IF NOT EXISTS portaki_resource_property_resource_idx\n\
+             \x20   ON {schema}.portaki_resource (property_id, resource);\n"
+        ),
+    )?;
+    Ok(Some(path))
+}
+
 fn ensure_build_script(module_root: &std::path::Path) -> Result<Option<&'static str>> {
     let path = module_root.join("build.rs");
     let cargo = std::fs::read_to_string(module_root.join("Cargo.toml")).unwrap_or_default();
@@ -183,6 +233,9 @@ pub fn refresh_outputs_from(module_root: &std::path::Path, target: &std::path::P
             .unwrap_or_else(|| vec!["fr-FR".to_string(), "en-US".to_string()]);
         let default_locale = pick_default_locale(&supported);
 
+        if let Some(written) = ensure_resource_migration(module_root, &emissions)? {
+            ui::wrote("migration", relative(&written, module_root));
+        }
         let sdk_features = pack::sdk_features(module_root)?;
         let mut manifest = generate_manifest(&emissions, &default_locale, &supported)?;
         crate::manifest::imply_storage(&mut manifest, &emissions, &sdk_features);

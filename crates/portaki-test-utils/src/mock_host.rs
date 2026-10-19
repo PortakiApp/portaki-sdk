@@ -109,6 +109,7 @@ pub struct MockContextBuilder {
     pub(crate) context: Context,
     translations: HashMap<String, String>,
     kv: HashMap<String, Vec<u8>>,
+    repo: HashMap<String, Vec<serde_json::Value>>,
     stay_secrets: HashMap<(String, String), String>,
     connector_responses: HashMap<(String, String), String>,
     connector_errors: HashMap<(String, String), String>,
@@ -226,6 +227,13 @@ impl MockContextBuilder {
     /// Missing keys fall through to the key string itself.
     pub fn with_translation(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.translations.insert(key.into(), value.into());
+        self
+    }
+
+    /// Rows already stored for the entity `entity` (its Rust name), as JSON objects with an `id`.
+    /// The mock repository keeps what a test writes, and filters it as the gateway does.
+    pub fn with_rows(mut self, entity: impl Into<String>, rows: Vec<serde_json::Value>) -> Self {
+        self.repo.entry(entity.into()).or_default().extend(rows);
         self
     }
 
@@ -437,6 +445,7 @@ impl MockContextBuilder {
             context: self.context.clone(),
             translations: self.translations,
             kv: Mutex::new(self.kv),
+            repo: Mutex::new(self.repo),
             stay_secrets: Mutex::new(self.stay_secrets),
             random_draws: Mutex::new(0),
             connector_responses: self.connector_responses,
@@ -514,6 +523,7 @@ pub struct MockHostFunctions {
     context: Context,
     translations: HashMap<String, String>,
     kv: Mutex<HashMap<String, Vec<u8>>>,
+    repo: Mutex<HashMap<String, Vec<serde_json::Value>>>,
     stay_secrets: Mutex<HashMap<(String, String), String>>,
     random_draws: Mutex<u64>,
     connector_responses: HashMap<(String, String), String>,
@@ -558,6 +568,16 @@ impl MockHostFunctions {
     /// Emails the mock accepted, in order — refused ones are not included.
     pub fn sent_emails(&self) -> Vec<SendEmailArgs> {
         self.sent_emails.lock().expect("sent emails lock").clone()
+    }
+
+    /// The rows stored for the entity `entity` (its Rust name), in insertion order.
+    pub fn rows(&self, entity: &str) -> Vec<serde_json::Value> {
+        self.repo
+            .lock()
+            .expect("repo lock")
+            .get(entity)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// The stay secrets as the module left them, `(stay id, key) → value`.
@@ -759,16 +779,48 @@ impl HostBackend for MockHostFunctions {
         Ok(self.now().to_rfc3339())
     }
 
-    fn repo_find(&self, _entity: &str, _query_json: &str) -> Result<String> {
-        Ok(r#"{"items":[],"total":0}"#.to_string())
+    fn repo_find(&self, entity: &str, query_json: &str) -> Result<String> {
+        let query: serde_json::Value = serde_json::from_str(query_json)?;
+        let rows = self.repo.lock().expect("repo lock");
+        let mut found: Vec<serde_json::Value> = rows
+            .get(entity)
+            .into_iter()
+            .flatten()
+            .filter(|row| repo_matches(row, &query["filters"]))
+            .cloned()
+            .collect();
+        if let Some([field, direction]) = query["order"].as_array().map(Vec::as_slice) {
+            let field = field.as_str().unwrap_or_default();
+            found.sort_by(|a, b| repo_compare(&a[field], &b[field]));
+            if direction == "Desc" {
+                found.reverse();
+            }
+        }
+        let total = found.len();
+        if let Some(limit) = query["limit"].as_u64() {
+            found.truncate(limit as usize);
+        }
+        Ok(serde_json::json!({ "items": found, "total": total }).to_string())
     }
 
-    fn repo_create(&self, _entity: &str, entity_json: &str) -> Result<String> {
-        Ok(entity_json.to_string())
+    /// An upsert on `id`, as the gateway does.
+    fn repo_create(&self, entity: &str, entity_json: &str) -> Result<String> {
+        let row: serde_json::Value = serde_json::from_str(entity_json)?;
+        let mut rows = self.repo.lock().expect("repo lock");
+        let table = rows.entry(entity.to_string()).or_default();
+        match table.iter_mut().find(|stored| stored["id"] == row["id"]) {
+            Some(stored) => *stored = row.clone(),
+            None => table.push(row.clone()),
+        }
+        Ok(row.to_string())
     }
 
-    fn repo_delete(&self, _entity: &str, _id: &str) -> Result<bool> {
-        Ok(true)
+    fn repo_delete(&self, entity: &str, id: &str) -> Result<bool> {
+        let mut rows = self.repo.lock().expect("repo lock");
+        let table = rows.entry(entity.to_string()).or_default();
+        let before = table.len();
+        table.retain(|row| row["id"] != id);
+        Ok(table.len() < before)
     }
 
     fn module_status(&self) -> Result<portaki_sdk::host::module::ModuleStatus> {
@@ -783,6 +835,35 @@ impl HostBackend for MockHostFunctions {
         capability_id: &str,
     ) -> Result<Vec<portaki_sdk::host::module::ModulePeer>> {
         Ok(self.peers.get(capability_id).cloned().unwrap_or_default())
+    }
+}
+
+/// Whether `row` passes the gateway filters of a `Query` (`Eq`, `Gte`, `In`).
+fn repo_matches(row: &serde_json::Value, filters: &serde_json::Value) -> bool {
+    filters.as_array().into_iter().flatten().all(|filter| {
+        let Some((op, args)) = filter.as_object().and_then(|f| f.iter().next()) else {
+            return true;
+        };
+        let field = args[0].as_str().unwrap_or_default();
+        let value = &row[field];
+        match op.as_str() {
+            "Eq" => value == &args[1],
+            "Gte" => repo_compare(value, &args[1]) != std::cmp::Ordering::Less,
+            "In" => args[1]
+                .as_array()
+                .is_some_and(|values| values.contains(value)),
+            _ => true,
+        }
+    })
+}
+
+fn repo_compare(a: &serde_json::Value, b: &serde_json::Value) -> std::cmp::Ordering {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+        _ => a
+            .as_str()
+            .unwrap_or_default()
+            .cmp(b.as_str().unwrap_or_default()),
     }
 }
 
