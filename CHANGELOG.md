@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.15.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.14.1...v10.15.0) (2026-10-19)
+
+
+### Features
+
+* **sdk:** property country, own locale ([87ba3b1](https://github.com/PortakiApp/portaki-sdk/commit/87ba3b12abb252b5f91510b29a841c8e220751f0))
+
 ## [10.14.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.14.0...v10.14.1) (2026-10-15)
 
 
