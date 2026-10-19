@@ -56,6 +56,8 @@ struct ConfigAttrs {
     legacy: Option<syn::Path>,
     /// KV keys besides `config` the old code kept, deleted once the platform holds the config.
     legacy_keys: Vec<String>,
+    /// Generate `form()`, the derived host form (SDK feature `unstable`).
+    form: bool,
 }
 
 /// Expands `#[portaki_sdk::config]` / `#[portaki_sdk::config(legacy = path::to::fn,
@@ -63,7 +65,10 @@ struct ConfigAttrs {
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut attrs = ConfigAttrs::default();
     let parser = syn::meta::parser(|meta| {
-        if meta.path.is_ident("legacy") {
+        if meta.path.is_ident("form") {
+            attrs.form = true;
+            Ok(())
+        } else if meta.path.is_ident("legacy") {
             attrs.legacy = Some(meta.value()?.parse()?);
             Ok(())
         } else if meta.path.is_ident("legacy_keys") {
@@ -102,7 +107,14 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// before the platform holds the config.
 fn expand_struct(item: &mut ItemStruct, attrs: &ConfigAttrs) -> syn::Result<TokenStream2> {
     let legacy = attrs.legacy.as_ref();
+    EXTRAS.with(|e| e.borrow_mut().clear());
     let fields = declared_fields(item)?;
+    let extras: Vec<(String, FormExtra)> = EXTRAS.with(|e| std::mem::take(&mut *e.borrow_mut()));
+    let form_tokens = if attrs.form {
+        form_impl(item, &fields, &extras)
+    } else {
+        quote! {}
+    };
     if !serde_of(&item.attrs).default {
         item.attrs.push(syn::parse_quote!(#[serde(default)]));
     }
@@ -187,6 +199,7 @@ fn expand_struct(item: &mut ItemStruct, attrs: &ConfigAttrs) -> syn::Result<Toke
             }
         }
 
+        #form_tokens
         #legacy
         #registration
         #adopted
@@ -200,6 +213,74 @@ fn expand_struct(item: &mut ItemStruct, attrs: &ConfigAttrs) -> syn::Result<Toke
 }
 
 /// Every `#[field]` of the struct as a `configField`, in source order; the attributes are removed.
+/// `form()`: the derived host form of the struct — one `FormField` per declared field.
+fn form_impl(item: &ItemStruct, fields: &[Value], extras: &[(String, FormExtra)]) -> TokenStream2 {
+    let opt = |v: Option<&str>| match v {
+        Some(v) => quote!(::core::option::Option::Some(#v)),
+        None => quote!(::core::option::Option::None),
+    };
+    let specs = fields.iter().map(|field| {
+        let key = field["key"].as_str().unwrap_or_default();
+        let kind = field["type"].as_str().unwrap_or_default();
+        let label = field["label"].as_str().unwrap_or_default();
+        let extra = extras.iter().find(|(k, _)| k == key).map(|(_, e)| e);
+        let description = field["description"]
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| crate::bundle::conventional_help(label));
+        let placeholder = crate::bundle::conventional_key(label, "placeholder");
+        let description = opt(description.as_deref());
+        let placeholder = opt(placeholder.as_deref());
+        let section = opt(extra.and_then(|e| e.section.as_deref()));
+        let visible_when = opt(extra.and_then(|e| e.visible_when.as_deref()));
+        let input = opt(extra.and_then(|e| e.input.as_deref()));
+        let choice_labels = opt(extra.and_then(|e| e.choice_labels.as_deref()));
+        let options: Vec<&str> = field["options"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        let choice = match extra.and_then(|e| e.choice.as_ref()) {
+            Some(path) => quote!(::core::option::Option::Some(<#path as ::portaki_sdk::resource::Choice>::options)),
+            None => quote!(::core::option::Option::None),
+        };
+        quote! {
+            ::portaki_sdk::config::form::FormField {
+                key: #key, kind: #kind, label: #label, description: #description,
+                placeholder: #placeholder, section: #section, visible_when: #visible_when,
+                input: #input, options: &[#(#options),*], choice: #choice,
+                choice_labels: #choice_labels,
+            }
+        }
+    });
+    let ident = &item.ident;
+    quote! {
+        impl #ident {
+            /// The host form derived from the declaration (`#[config(form)]`).
+            pub fn form<'a>(&'a self, ctx: &'a ::portaki_sdk::context::Context) -> ::portaki_sdk::config::form::ConfigForm<'a> {
+                const FIELDS: &[::portaki_sdk::config::form::FormField] = &[#(#specs),*];
+                ::portaki_sdk::config::form::ConfigForm::new(ctx, FIELDS, ::serde_json::to_value(self).unwrap_or_default())
+            }
+        }
+    }
+}
+
+/// What a field says about the derived host form only — never in the manifest.
+#[derive(Default)]
+struct FormExtra {
+    section: Option<String>,
+    visible_when: Option<String>,
+    input: Option<String>,
+    choice: Option<syn::Path>,
+    choice_labels: Option<String>,
+}
+
+thread_local! {
+    /// The form extras of the struct being expanded, in field order.
+    static EXTRAS: std::cell::RefCell<Vec<(String, FormExtra)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn declared_fields(item: &mut ItemStruct) -> syn::Result<Vec<Value>> {
     let container = serde_of(&item.attrs);
     let Fields::Named(named) = &mut item.fields else {
@@ -232,14 +313,21 @@ fn declared_fields(item: &mut ItemStruct) -> syn::Result<Vec<Value>> {
                 container.rename_all.as_deref(),
             )
         });
-        declared.push(field_schema(&attr, key, &field.ty)?);
+        let mut extra = FormExtra::default();
+        declared.push(field_schema(&attr, key.clone(), &field.ty, &mut extra)?);
+        EXTRAS.with(|e| e.borrow_mut().push((key, extra)));
     }
     Ok(declared)
 }
 
 /// One `configField`: `key`, `type`, `required`, `recommended`, `label`, and `description` /
 /// `options` when given. Labels are i18n keys; `portaki build` translates them.
-fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Value> {
+fn field_schema(
+    attr: &syn::Attribute,
+    key: String,
+    ty: &Type,
+    extra: &mut FormExtra,
+) -> syn::Result<Value> {
     let mut required = false;
     let mut recommended = false;
     let mut local = false;
@@ -286,6 +374,15 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             "label" => label = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "description" => description = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "item_id" => item_id = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "section" => extra.section = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "visible_when" => {
+                extra.visible_when = Some(meta.value()?.parse::<syn::LitStr>()?.value())
+            }
+            "input" => extra.input = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "choice" => extra.choice = Some(meta.value()?.parse()?),
+            "choice_labels" => {
+                extra.choice_labels = Some(meta.value()?.parse::<syn::LitStr>()?.value())
+            }
             "reveal" => meta.parse_nested_meta(|place| {
                 let value = place
                     .path
@@ -321,7 +418,8 @@ fn field_schema(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Va
             }
             _ => return Err(meta.error(
                 "unknown #[field] attribute — required, recommended, local, secret, structured, \
-                     label, description, kind, options, item_id, reveal",
+                     label, description, kind, options, item_id, reveal, section, visible_when, \
+                     input, choice, choice_labels",
             )),
         }
         Ok(())
@@ -642,6 +740,7 @@ mod tests {
         let attrs = ConfigAttrs {
             legacy: Some(parse_quote!(crate::old::read)),
             legacy_keys: vec!["texts/fr".into(), "texts/en".into()],
+            form: false,
         };
         let mapped = expand_struct(&mut item.clone(), &attrs)
             .unwrap()
