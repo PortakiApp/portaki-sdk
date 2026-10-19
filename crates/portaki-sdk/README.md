@@ -112,7 +112,7 @@ the row type: `portaki build` reads its `I18nText` fields into `item.localized`,
 `id` (or `#[field(item_id = "…")]`) into `item.id`, so each row keeps what the form did not send.
 A row field marked `#[field(secret)]` (an iCal URL, a door code) goes to `item.secret`: encrypted
 at rest, and kept when the form sends it back empty or masked; `null` clears it.
-Every row field is listed in `item.fields` (`name`, `type`, `ref`, `doc`): the shape a tool
+Every row field is listed in `item.fields` (`name`, `type`, `ref`, `format`, `items`, `required`, `doc`): the shape a tool
 building rows, such as the listing import, holds them to.
 
 ```rust,ignore

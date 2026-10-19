@@ -1102,9 +1102,9 @@ mod tests {
             json!({ "key": "contacts", "type": "structured", "required": false,
                     "recommended": false, "label": {},
                     "item": { "id": "id", "localized": ["role"], "fields": [
-                        { "name": "id", "type": "string" },
-                        { "name": "role", "type": "ref", "ref": "I18nText" },
-                        { "name": "phone", "type": "string" },
+                        { "name": "id", "type": "string", "required": true },
+                        { "name": "role", "type": "ref", "ref": "I18nText", "required": true },
+                        { "name": "phone", "type": "string", "required": true },
                     ] } })
         );
     }

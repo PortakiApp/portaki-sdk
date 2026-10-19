@@ -394,6 +394,9 @@
                   "name": { "type": "string", "minLength": 1 },
                   "type": { "type": "string", "minLength": 1, "description": "string, boolean, integer, number, array, map, json or ref." },
                   "ref": { "type": "string", "minLength": 1, "description": "The type a ref names, e.g. I18nText." },
+                  "format": { "type": "string", "description": "uuid, date-time, date or time, on a string." },
+                  "items": { "type": "object", "required": ["type"], "description": "The element of an array, same shape as the #[params] field type (type, ref, format, items…)." },
+                  "required": { "type": "boolean", "description": "False for an Option or a #[serde(default)] field." },
                   "doc": { "type": "string" }
                 }
               }
