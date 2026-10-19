@@ -237,6 +237,24 @@ impl MockContextBuilder {
         self
     }
 
+    /// A collection already stored (`#[collection(name = …)]`, SDK `unstable`): its rows and
+    /// settings as the SDK keeps them.
+    pub fn with_resource(
+        self,
+        name: &str,
+        rows: serde_json::Value,
+        meta: serde_json::Value,
+    ) -> Self {
+        let row = serde_json::json!({
+            "id": uuid::Uuid::new_v4(),
+            "resource": name,
+            "rows_json": rows.to_string(),
+            "meta_json": meta.to_string(),
+            "updated_at": "2026-01-15T12:00:00Z",
+        });
+        self.with_rows("PortakiResource", vec![row])
+    }
+
     /// Pre-seeds a KV entry visible to `host::kv::get` before the test closure runs.
     pub fn with_kv(mut self, key: impl Into<String>, value: Vec<u8>) -> Self {
         self.kv.insert(key.into(), value);

@@ -246,6 +246,8 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             "#[field] needs label = \"<bundle key>\"",
         ));
     };
+    // No description declared: the help the bundles already hold for this label, if any.
+    let description = description.or_else(|| crate::bundle::conventional_help(&label));
     let inner = unwrap_option(ty);
     let (kind, wire_type) = match (forced.as_deref(), type_name(inner).as_deref()) {
         (Some("time_range"), _) => (quote!(TimeRange), "time_range"),
@@ -356,6 +358,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut meta: Option<syn::Path> = None;
     let mut max: Option<usize> = None;
     let mut import = false;
+    let mut required = false;
     let mut readiness = true;
     let parser = syn::meta::parser(|m| {
         let key = m
@@ -369,12 +372,11 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "meta" => meta = Some(m.value()?.parse()?),
             "max" => max = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?),
             "import" => import = true,
+            "required" => required = true,
             "readiness" => readiness = m.value()?.parse::<syn::LitBool>()?.value,
-            _ => {
-                return Err(
-                    m.error("#[collection] takes name, item, meta, max, import, readiness = false")
-                )
-            }
+            _ => return Err(m.error(
+                "#[collection] takes name, item, meta, max, import, required, readiness = false",
+            )),
         }
         Ok(())
     });
@@ -417,15 +419,17 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "item": row_name,
             "meta": meta_name,
             "max": max,
+            "required": required,
             "order": "manual",
             "import": if import { json!({ "command": "importRows" }) } else { Value::Null },
         })
         .to_string(),
     );
+    let import_example = format!(r#"{{"resource":"{name}","rows":[]}}"#);
     let import_tokens = if import {
         quote! {
             #[doc(hidden)]
-            #[::portaki_sdk::command(name = "importRows")]
+            #[::portaki_sdk::command(name = "importRows", example(label = "Importer des lignes", input = #import_example))]
             pub fn #import_fn(
                 ctx: ::portaki_sdk::Context,
                 args: ::portaki_sdk::resource::ImportArgs,
@@ -439,7 +443,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let readiness_tokens = if readiness {
         quote! {
             #[doc(hidden)]
-            #[::portaki_sdk::query(name = "publishReadiness")]
+            #[::portaki_sdk::query(name = "publishReadiness", example(label = "Prêt à publier ?"))]
             pub fn #readiness_fn(
                 ctx: ::portaki_sdk::Context,
             ) -> ::portaki_sdk::Result<::portaki_sdk::contracts::publish::PublishReadiness> {
@@ -456,7 +460,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #ident {
             /// What `#[collection]` declared.
             pub const DECL: ::portaki_sdk::resource::CollectionDecl =
-                ::portaki_sdk::resource::CollectionDecl { name: #name, max: #max_tokens };
+                ::portaki_sdk::resource::CollectionDecl { name: #name, max: #max_tokens, required: #required };
 
             /// The stored collection.
             pub fn load(
@@ -474,7 +478,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "updateConfig")]
+        #[::portaki_sdk::command(name = "updateConfig", example(label = "Enregistrer sans rien changer", input = "{}"))]
         pub fn #update(
             ctx: ::portaki_sdk::Context,
             args: ::serde_json::Value,
