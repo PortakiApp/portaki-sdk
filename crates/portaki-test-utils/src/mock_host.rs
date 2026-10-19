@@ -175,9 +175,26 @@ impl MockContextBuilder {
         self
     }
 
-    /// Sets the property's default language (`context.propertyLang`, a short code such as `en`).
+    /// Sets the property's default language (`context.propertyLang`, a short code such as `en`)
+    /// — and `PropertyContext::locale` with it, as the envelope does.
     pub fn with_property_lang(mut self, lang: impl Into<String>) -> Self {
-        self.context.property_lang = Some(lang.into());
+        let lang = lang.into();
+        self.context.property.locale = lang.clone();
+        self.context.property_lang = Some(lang);
+        self
+    }
+
+    /// Sets the reader's locale (`Context::locale`, e.g. `en-US`) and only that: the property
+    /// keeps its own language and country, as in production.
+    pub fn with_locale(mut self, locale: impl Into<String>) -> Self {
+        self.context.locale = locale.into();
+        self
+    }
+
+    /// Puts the property in `country` (ISO 3166-1 alpha-2, `None` for an unknown one) — what
+    /// the platform derives from its commune. The default is `FR`.
+    pub fn with_country(mut self, country: Option<&str>) -> Self {
+        self.context.property = self.context.property.clone().with_country(country);
         self
     }
 
@@ -324,7 +341,8 @@ impl MockContextBuilder {
             property.timezone.clone(),
             coordinates,
             property.address.clone(),
-        );
+        )
+        .with_country(property.country.as_deref());
         self
     }
 
@@ -771,6 +789,31 @@ impl HostBackend for MockHostFunctions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The mock builds the property as the envelope does: a reader in another language leaves
+    /// it in French and in France, so a module reading `property.locale` for the country fails
+    /// here as it would in production.
+    #[test]
+    fn the_reader_locale_never_moves_the_property() {
+        for builder in [
+            MockContextBuilder::guest(),
+            MockContextBuilder::host(),
+            MockContextBuilder::guest().with_property(crate::fixtures::Property::default()),
+        ] {
+            let ctx = builder.with_locale("en-US").context;
+            assert_eq!(ctx.locale, "en-US");
+            assert_eq!(ctx.property.locale, "fr");
+            assert_eq!(ctx.property_lang(), Some("fr"));
+            assert_eq!(ctx.property.country.as_deref(), Some("FR"));
+        }
+        let ctx = MockContextBuilder::guest()
+            .with_property_lang("en")
+            .with_country(Some("re"))
+            .with_coordinates(None)
+            .context;
+        assert_eq!(ctx.property.locale, "en");
+        assert_eq!(ctx.property.country.as_deref(), Some("RE"));
+    }
 
     #[test]
     fn a_guest_reads_only_its_own_stay_secret() {

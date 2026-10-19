@@ -137,9 +137,17 @@ impl WasmRequestEnvelope {
             .clone()
             .or_else(|| ctx.timezone.clone())
             .unwrap_or_else(|| "Europe/Paris".to_string());
-        let property_locale = locale.clone();
-        let property =
-            property_from_config_json(&ctx.config_json, property_locale, timezone.clone());
+        let property_lang = ctx
+            .property_lang
+            .as_deref()
+            .and_then(crate::context::short_lang);
+        // The property's language, never the reader's: copying `locale` here gave a guest reading
+        // in English a property « in English », wherever it was.
+        let property = property_from_config_json(
+            &ctx.config_json,
+            property_lang.clone().unwrap_or_else(|| "fr".to_string()),
+            timezone.clone(),
+        );
         let stay = ctx.stay_id.map(|stay_id| StayContext {
             stay_id,
             checkin_at: parse_instant_opt(ctx.checkin_at.as_deref()),
@@ -185,10 +193,7 @@ impl WasmRequestEnvelope {
             host: ctx.host.clone().filter(|host| !host.name.trim().is_empty()),
             input: self.params.clone(),
             module_config: ctx.module_config.clone(),
-            property_lang: ctx
-                .property_lang
-                .as_deref()
-                .and_then(crate::context::short_lang),
+            property_lang,
         })
     }
 }
@@ -257,7 +262,8 @@ fn property_from_config_json(
         }
         _ => None,
     };
-    PropertyContext::new(name, locale, timezone, coordinates, address)
+    let country = parsed.get("country").and_then(Value::as_str);
+    PropertyContext::new(name, locale, timezone, coordinates, address).with_country(country)
 }
 
 #[cfg(test)]
@@ -358,6 +364,39 @@ mod tests {
         assert_eq!(lang(r#","propertyLang":"de-DE""#).as_deref(), Some("de"));
         assert_eq!(lang(r#","propertyLang":" ""#), None);
         assert_eq!(lang(""), None);
+    }
+
+    /// The reader's language is `locale`; the property's comes from `propertyLang` and its
+    /// country from the property context — an English guest in France stays in France.
+    #[test]
+    fn the_property_keeps_its_language_and_country_whoever_reads() {
+        let property = |extra: &str| {
+            let envelope: WasmRequestEnvelope = serde_json::from_str(&format!(
+                r#"{{"query":"q","context":{{"moduleId":"m","moduleVersion":"1.0.0",
+                    "propertyId":"790f16ef-4dbb-4295-aa7d-6e0e0ac82ba2","locale":"en-US"{extra}}}}}"#
+            ))
+            .expect("parse");
+            let ctx = envelope.to_context("q").expect("context");
+            assert_eq!(ctx.locale, "en-US", "{extra}");
+            ctx.property
+        };
+
+        let france = property(r#","propertyLang":"fr","configJson":"{\"country\":\"FR\"}""#);
+        assert_eq!(france.locale, "fr");
+        assert_eq!(france.country.as_deref(), Some("FR"));
+
+        let reunion = property(r#","propertyLang":"fr-FR","configJson":"{\"country\":\" re \"}""#);
+        assert_eq!(reunion.locale, "fr");
+        assert_eq!(reunion.country.as_deref(), Some("RE"));
+
+        // An older platform sends neither: no country, and French rather than the reader's.
+        let unknown = property("");
+        assert_eq!(unknown.locale, "fr");
+        assert_eq!(unknown.country, None);
+        assert_eq!(
+            property(r#","configJson":"{\"country\":\"FRA\"}""#).country,
+            None
+        );
     }
 
     /// Present, even empty or null, the key says that the platform holds the config.
