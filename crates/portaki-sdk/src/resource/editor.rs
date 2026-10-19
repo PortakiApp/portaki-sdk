@@ -294,6 +294,12 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             FieldKind::Text | FieldKind::TimeRange => {
                 value.as_str().unwrap_or_default().to_string()
             }
+            FieldKind::Photo => if value.as_str().is_some_and(|v| !v.is_empty()) {
+                "📷"
+            } else {
+                ""
+            }
+            .to_string(),
         }
     }
 
@@ -355,6 +361,10 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                         .into()
                 }
             }
+            FieldKind::Photo => crate::sdui::primitives::ImageUpload::new()
+                .name(name.clone())
+                .value(value.as_str().unwrap_or_default())
+                .into(),
             FieldKind::TimeRange => TimeRange::new()
                 .name(name.clone())
                 .value(value.as_str().unwrap_or_default())

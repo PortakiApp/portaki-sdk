@@ -118,7 +118,7 @@ pub use portaki_sdk_macros::{
     portaki_module_decl as portaki_module, query, surface, wire,
 };
 #[cfg(feature = "unstable")]
-pub use portaki_sdk_macros::{choice, collection, item};
+pub use portaki_sdk_macros::{choice, collection, item, record};
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
     component::Component,
