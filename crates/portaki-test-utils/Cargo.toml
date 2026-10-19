@@ -30,3 +30,7 @@ uuid = { workspace = true }
 # The conformance suite validates `portaki.module.json` against the embedded schema: no network
 # resolution, hence without the default features (reqwest, rustls).
 jsonschema = { version = "0.56", default-features = false }
+
+[dev-dependencies]
+# The declared resources of the SDK 11 proof, exercised against the stateful mock repository.
+portaki-sdk = { workspace = true, features = ["unstable"] }

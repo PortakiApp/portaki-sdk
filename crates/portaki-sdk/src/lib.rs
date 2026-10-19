@@ -63,6 +63,8 @@ pub mod ids;
 pub mod limits;
 pub mod manifest;
 pub mod permission;
+#[cfg(feature = "unstable")]
+pub mod resource;
 pub mod reveal;
 pub mod sdui;
 pub mod surfaces;
@@ -115,6 +117,8 @@ pub use portaki_sdk_macros::{
     email_blocks, email_vars, entity, entity_indexes, event_handler, nav, params,
     portaki_module_decl as portaki_module, query, surface, wire,
 };
+#[cfg(feature = "unstable")]
+pub use portaki_sdk_macros::{choice, collection, item};
 pub use sdui::{
     action::{json_value, Action, EmptyArgs, NavigateTarget, OverlayArgs, OverlayPresentation},
     component::Component,

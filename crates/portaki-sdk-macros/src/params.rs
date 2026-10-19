@@ -365,7 +365,7 @@ pub(crate) fn rename_field(ident: &str, rule: Option<&str>) -> String {
 }
 
 /// A variant name as serde writes it — variants are `PascalCase` in Rust.
-fn rename_variant(ident: &str, rule: Option<&str>) -> String {
+pub(crate) fn rename_variant(ident: &str, rule: Option<&str>) -> String {
     let snake = {
         let mut out = String::new();
         for (index, ch) in ident.chars().enumerate() {
