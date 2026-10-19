@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
           # The `portaki release` gate runs `cargo fmt --check` and `cargo clippy`: without
@@ -35,7 +35,7 @@ jobs:
 
       # The gate (formatting, clippy, tests, build --release, manifest, texts), then packaging;
       # the artefact goes on to the next job.
-      - uses: PortakiApp/portaki-release-action/build@v2
+      - uses: PortakiApp/portaki-release-action/build@ab76c697ec3459805675a884a925b63a1ea612f8 # v2
 
   release:
     needs: build
@@ -58,7 +58,7 @@ jobs:
       # The sources are read (Cargo.lock, CHANGELOG, listing.json), never compiled.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: PortakiApp/portaki-release-action@v2
+      - uses: PortakiApp/portaki-release-action@ab76c697ec3459805675a884a925b63a1ea612f8 # v2
         with:
           # A vulnerability of this severity (CVSS) stops the release; below it, and for an
           # informational advisory (unmaintained crate), a warning only.

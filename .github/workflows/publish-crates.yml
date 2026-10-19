@@ -37,9 +37,9 @@ jobs:
     # Trusted Publishing on crates.io is bound to this environment, which only deploys `v*` tags.
     environment: crates-io
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
       - name: Install cargo-workspaces
         run: cargo install cargo-workspaces --version 0.4.2 --locked
