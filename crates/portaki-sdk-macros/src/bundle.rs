@@ -122,7 +122,10 @@ pub(crate) fn has_key(path: &Path, key: &str) -> bool {
 pub(crate) fn conventional_key(label: &str, suffix: &str) -> Option<String> {
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
     let bundles = bundle_files(&root);
-    let stem = label.strip_suffix(".label").unwrap_or(label);
+    let stem = label
+        .strip_suffix(".label")
+        .or_else(|| label.strip_suffix(".title"))
+        .unwrap_or(label);
     let key = format!("{stem}.{suffix}");
     bundles
         .iter()
@@ -136,7 +139,10 @@ pub(crate) fn conventional_key(label: &str, suffix: &str) -> Option<String> {
 pub(crate) fn conventional_help(label: &str) -> Option<String> {
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
     let bundles = bundle_files(&root);
-    let stem = label.strip_suffix(".label").unwrap_or(label);
+    let stem = label
+        .strip_suffix(".label")
+        .or_else(|| label.strip_suffix(".title"))
+        .unwrap_or(label);
     [format!("{stem}.hint"), format!("{stem}.help")]
         .into_iter()
         .find(|key| bundles.iter().any(|(_, path)| has_key(path, key)))
