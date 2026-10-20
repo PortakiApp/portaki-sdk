@@ -344,6 +344,12 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let description_tokens = opt_str(&description);
     let placeholder_tokens = opt_str(&placeholder);
     let max_rows_tokens = opt_usize(max_rows);
+    let required_tokens = match crate::bundle::conventional_key(&label, "required") {
+        Some(key) if required => quote! {
+            ::core::option::Option::Some(|| ::portaki_sdk::bundle_text!(#key))
+        },
+        _ => quote!(::core::option::Option::None),
+    };
     let default_tokens = opt_str(&default);
     let visible_tokens = opt_str(&visible_when);
     let accept_tokens = opt_str(&accept);
@@ -375,6 +381,7 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             max_bytes: #max_bytes_tokens,
             default: #default_tokens,
             visible_when: #visible_tokens,
+            required_text: #required_tokens,
         }
     };
     let mut schema = json!({ "key": key, "type": wire_type, "required": required, "label": label });
@@ -514,6 +521,17 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         Some(max) => quote!(::core::option::Option::Some(#max)),
         None => quote!(::core::option::Option::None),
     };
+    let too_many_key = format!("host.{name}.tooMany");
+    let has_too_many = crate::bundle::bundle_files(&std::path::PathBuf::from(
+        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default(),
+    ))
+    .iter()
+    .any(|(_, path)| crate::bundle::has_key(path, &too_many_key));
+    let too_many_tokens = if max.is_some() && has_too_many {
+        quote! { ::core::option::Option::Some(|| ::portaki_sdk::bundle_text!(#too_many_key)) }
+    } else {
+        quote!(::core::option::Option::None)
+    };
     let snake = sanitize_key(&name).to_lowercase();
     let update = format_ident!("__portaki_{}_update_config", snake);
     let import_fn = format_ident!("__portaki_{}_import_rows", snake);
@@ -579,7 +597,12 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #ident {
             /// What `#[collection]` declared.
             pub const DECL: ::portaki_sdk::resource::CollectionDecl =
-                ::portaki_sdk::resource::CollectionDecl { name: #name, max: #max_tokens, required: #required };
+                ::portaki_sdk::resource::CollectionDecl {
+                    name: #name,
+                    max: #max_tokens,
+                    required: #required,
+                    too_many: #too_many_tokens,
+                };
 
             /// The stored collection.
             pub fn load(

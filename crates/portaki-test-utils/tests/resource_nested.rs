@@ -128,6 +128,8 @@ fn the_editor_draws_nested_rows_with_their_ids_and_the_other_controls() {
             let devices = Devices::load(&ctx).unwrap();
             let editor = CollectionEditor::new(&ctx, &devices)
                 .column("name")
+                .computed("last", "host.column.last")
+                .cell("last", |_: &Device| "hier".into())
                 .check_at_most("featured", 1, "Un seul.")
                 .search("host.search")
                 .filter_by("name")
@@ -142,6 +144,8 @@ fn the_editor_draws_nested_rows_with_their_ids_and_the_other_controls() {
                 r#""accept":"application/pdf""#,
                 r#""type":"EditableList""#,
                 r#""kind":"check""#,
+                r#""label":"i18n:host.column.last""#,
+                r#""last":"hier""#,
                 r#""featured":true"#,
                 r#""searchPlaceholder":"i18n:host.search""#,
             ] {
