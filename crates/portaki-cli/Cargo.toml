@@ -44,6 +44,8 @@ oci-distribution = { workspace = true }
 include_dir = { workspace = true }
 base64 = "0.23"
 toml_edit = "0.25"
+# The module budget reads a module's sources as Rust, not as text (`commands/budget.rs`).
+syn = { version = "3.0.5", features = ["full", "visit"] }
 notify = { workspace = true }
 keyring = { workspace = true }
 chrono = { workspace = true }
