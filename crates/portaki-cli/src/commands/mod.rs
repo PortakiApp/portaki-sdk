@@ -1,6 +1,7 @@
 //! CLI subcommands.
 
 pub mod add;
+pub mod budget;
 pub mod build;
 pub mod catalog;
 pub mod check;

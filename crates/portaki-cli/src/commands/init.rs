@@ -609,7 +609,7 @@ mod tests {
         assert!(planned.contains(&PathBuf::from("Cargo.toml")));
         // No manifest to write: `portaki build` derives it from the code.
         assert!(!planned.contains(&PathBuf::from("portaki.module.json")));
-        assert!(planned.contains(&PathBuf::from("src/host/mod.rs")));
+        assert!(planned.contains(&PathBuf::from("src/host.rs")));
         assert!(planned.contains(&PathBuf::from(".cargo/config.toml")));
         assert!(!planned
             .iter()
@@ -709,7 +709,7 @@ mod tests {
         assert!(cargo.contains(env!("CARGO_PKG_VERSION")));
         assert!(!cargo.contains("{{"));
         // Nested and dot directories come out too — the wasm rustflags live in one of them.
-        assert!(dest.join("src/host/mod.rs").exists());
+        assert!(dest.join("src/host.rs").exists());
         assert!(dest.join(".cargo/config.toml").exists());
         assert!(!dest.join("Cargo.toml.template").exists());
         // A crate name is not a module id: `use` statements need the snake_case spelling.
