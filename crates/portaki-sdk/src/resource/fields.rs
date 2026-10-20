@@ -57,7 +57,16 @@ pub fn control(spec: &FieldSpec, name: &str, value: &Value) -> Component {
     }
 }
 
-/// The frame of nested rows: help, « add » (`<label>.add`) while `add` says how many to open.
+/// A label key without its `.label` / `.title`: `host.steps.title` → `host.steps`, the stem the
+/// conventional keys (`.add`, `.hint`) hang from.
+pub fn stem(label: &str) -> &str {
+    label
+        .strip_suffix(".label")
+        .or_else(|| label.strip_suffix(".title"))
+        .unwrap_or(label)
+}
+
+/// The frame of nested rows: help, « add » (`<stem>.add`) while `add` says how many to open.
 pub fn step_list(
     spec: &FieldSpec,
     name: &str,
@@ -66,7 +75,7 @@ pub fn step_list(
 ) -> Component {
     let mut list = StepList::new()
         .itemKeyPrefix(name)
-        .addLabel(format!("i18n:{}.add", spec.label))
+        .addLabel(format!("i18n:{}.add", stem(spec.label)))
         .children(rows);
     if let Some(hint) = spec.description {
         list = list.hint(format!("i18n:{hint}"));
