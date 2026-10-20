@@ -356,7 +356,7 @@
       "required": ["key", "type", "label"],
       "properties": {
         "key": { "type": "string" },
-        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range", "photo", "url", "file", "labels", "structured"] },
+        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range", "photo", "url", "file", "labels", "structured", "choices"] },
         "required": { "type": "boolean" },
         "label": {},
         "description": {},
