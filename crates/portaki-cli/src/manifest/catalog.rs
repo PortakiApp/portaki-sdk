@@ -441,10 +441,12 @@ pub fn check_references(
                 // Nested rows are added by « <label>.add ».
                 for field in data["fields"].as_array().into_iter().flatten() {
                     if field["type"] == "structured" {
-                        keys.push(format!(
-                            "{}.add",
-                            field["label"].as_str().unwrap_or_default()
-                        ));
+                        let label = field["label"].as_str().unwrap_or_default();
+                        let stem = label
+                            .strip_suffix(".label")
+                            .or_else(|| label.strip_suffix(".title"))
+                            .unwrap_or(label);
+                        keys.push(format!("{stem}.add"));
                     }
                 }
                 data["fields"]
