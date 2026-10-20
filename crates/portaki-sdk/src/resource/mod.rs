@@ -40,6 +40,7 @@ mod guest;
 mod inbox;
 pub mod merge;
 pub mod record;
+pub mod rich_text;
 pub mod store;
 
 use serde::de::DeserializeOwned;
@@ -127,12 +128,15 @@ pub enum FieldKind {
     TimeRange,
     /// A photo the guest or the host attached: a `portaki-file:` reference.
     Photo,
+    /// [`I18nText`] the host formats (`kind = "rich_text"`): a TipTap document from the editor,
+    /// or plain text / Markdown from an import — see [`rich_text`].
+    RichText,
 }
 
 impl FieldKind {
     /// Whether the field carries text a row is "about" — a row whose texts are all blank is empty.
     pub const fn is_text(self) -> bool {
-        matches!(self, Self::Localized | Self::Text)
+        matches!(self, Self::Localized | Self::Text | Self::RichText)
     }
 }
 
@@ -165,12 +169,15 @@ impl FieldSpec {
     /// The field's problem in `row`, if any — `None` when it is fine.
     pub fn problem(&self, row: &Value) -> Option<I18nText> {
         let value = &row[self.key];
-        let text = text_of(value);
-        if self.required && text.trim().is_empty() {
+        if self.required && self.words(value).trim().is_empty() {
             return Some(I18nText::new("Champ obligatoire.", "Required."));
         }
         if let Some(max) = self.max_chars {
             for (_, text) in texts_of(value) {
+                let text = match self.kind {
+                    FieldKind::RichText => rich_text::plain_text(&text),
+                    _ => text,
+                };
                 if let Some(error) = crate::config::check::max_chars(&text, max) {
                     return Some(error);
                 }
@@ -183,13 +190,18 @@ impl FieldSpec {
     }
 }
 
-/// The text a value holds, any language — what "empty" is judged on.
-fn text_of(value: &Value) -> String {
-    texts_of(value)
-        .into_iter()
-        .map(|(_, text)| text)
-        .find(|text| !text.trim().is_empty())
-        .unwrap_or_default()
+impl FieldSpec {
+    /// The words `value` holds, first language that has some — what "empty" is judged on.
+    pub fn words(&self, value: &Value) -> String {
+        texts_of(value)
+            .into_iter()
+            .map(|(_, text)| match self.kind {
+                FieldKind::RichText => rich_text::plain_text(&text),
+                _ => text,
+            })
+            .find(|text| !text.trim().is_empty())
+            .unwrap_or_default()
+    }
 }
 
 /// Every `(language, text)` of a value: a localized object's languages, or `("", text)`.
@@ -223,7 +235,11 @@ pub trait Meta: Serialize + DeserializeOwned + Default + Clone + 'static {
     fn fields() -> &'static [FieldSpec];
 }
 
-impl Meta for () {
+/// The settings of a collection that has none — stored as `{}`, like any other.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct NoMeta {}
+
+impl Meta for NoMeta {
     fn fields() -> &'static [FieldSpec] {
         &[]
     }
@@ -253,7 +269,7 @@ pub struct Problem {
 
 /// An ordered list of rows and its settings, as stored.
 #[derive(Debug, Clone)]
-pub struct Collection<T: Item, M: Meta = ()> {
+pub struct Collection<T: Item, M: Meta = NoMeta> {
     decl: CollectionDecl,
     rows: Vec<T>,
     meta: M,

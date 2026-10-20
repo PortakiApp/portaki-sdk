@@ -135,7 +135,7 @@ pub(crate) fn normalize(
 /// Writes `raw` (what a form or an import sends) into `row[field.key]`, normalized to the kind.
 fn set(row: &mut Map<String, Value>, field: &FieldSpec, raw: &Value, lang: &str) {
     let value = match field.kind {
-        FieldKind::Localized => match raw {
+        FieldKind::Localized | FieldKind::RichText => match raw {
             Value::Object(texts) => Value::Object(texts.clone()),
             other => {
                 let mut texts = row
@@ -207,7 +207,7 @@ fn is_blank(row: &Value, fields: &[FieldSpec]) -> bool {
         && fields
             .iter()
             .filter(|f| f.kind.is_text())
-            .all(|f| super::text_of(&row[f.key]).trim().is_empty())
+            .all(|f| f.words(&row[f.key]).trim().is_empty())
 }
 
 /// The natural key's texts, normalized: lower case, single spaces.

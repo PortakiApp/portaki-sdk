@@ -19,8 +19,8 @@ use crate::sdui::action::Action;
 use crate::sdui::common::{ChoiceListLayout, Tone};
 use crate::sdui::component::Component;
 use crate::sdui::primitives::{
-    ChoiceList, DataTable, Field, FieldHint, InlineNotice, NumberInput, Section, Select, Stack,
-    TextArea, TextInput, TimeRange, Toggle,
+    ChoiceList, DataTable, Field, FieldHint, InlineNotice, NumberInput, RichTextEditor, Section,
+    Select, Stack, TextArea, TextInput, TimeRange, Toggle,
 };
 
 type Cell<T> = Box<dyn Fn(&T) -> String>;
@@ -294,6 +294,9 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             FieldKind::Text | FieldKind::TimeRange => {
                 value.as_str().unwrap_or_default().to_string()
             }
+            FieldKind::RichText => serde_json::from_value::<I18nText>(value.clone())
+                .map(|text| super::rich_text::plain_text(text.host_value(self.ctx)))
+                .unwrap_or_default(),
             FieldKind::Photo => if value.as_str().is_some_and(|v| !v.is_empty()) {
                 "📷"
             } else {
@@ -360,6 +363,13 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                         .value(current)
                         .into()
                 }
+            }
+            FieldKind::RichText => {
+                let text = serde_json::from_value::<I18nText>(value.clone()).unwrap_or_default();
+                RichTextEditor::new()
+                    .name(name.clone())
+                    .value(super::rich_text::editor_value(text.host_value(self.ctx)))
+                    .into()
             }
             FieldKind::Photo => crate::sdui::primitives::ImageUpload::new()
                 .name(name.clone())

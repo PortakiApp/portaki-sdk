@@ -422,7 +422,7 @@ fn item_of<T: Item>(args: &Value, lang: &str) -> Result<T> {
     let row = super::merge::normalize(&Map::new(), args, T::fields(), lang);
     for field in T::fields() {
         if let Some(_problem) = field.problem(&row) {
-            let empty = super::text_of(&row[field.key]).trim().is_empty();
+            let empty = field.words(&row[field.key]).trim().is_empty();
             let code = if empty { "required" } else { "invalid" };
             return Err(PortakiError::Host(format!("{}_{code}", field.key)));
         }

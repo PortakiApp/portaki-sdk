@@ -277,10 +277,12 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let (kind, wire_type) = match (forced.as_deref(), type_name(inner).as_deref()) {
         (Some("time_range"), _) => (quote!(TimeRange), "time_range"),
         (Some("photo"), _) => (quote!(Photo), "photo"),
+        // Localized text to an import; the editor and the booklet read it as formatted.
+        (Some("rich_text"), Some("I18nText")) => (quote!(RichText), "localized"),
         (Some(other), _) => {
             return Err(syn::Error::new(
                 attr.span(),
-                format!("unknown kind `{other}` — time_range, photo"),
+                format!("unknown kind `{other}` — time_range, photo, rich_text (on I18nText)"),
             ))
         }
         (None, Some("I18nText")) => (quote!(Localized), "localized"),
@@ -328,6 +330,9 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let mut schema = json!({ "key": key, "type": wire_type, "required": required, "label": label });
     if let Some(description) = description {
         schema["description"] = json!(description);
+    }
+    if forced.as_deref() == Some("rich_text") {
+        schema["format"] = json!("rich_text");
     }
     if let Some(max) = max_chars {
         schema["maxChars"] = json!(max);
@@ -418,7 +423,9 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     };
     let ident = &item.ident;
-    let meta_ty = meta.as_ref().map_or_else(|| quote!(()), |m| quote!(#m));
+    let meta_ty = meta
+        .as_ref()
+        .map_or_else(|| quote!(::portaki_sdk::resource::NoMeta), |m| quote!(#m));
     let max_tokens = match max {
         Some(max) => quote!(::core::option::Option::Some(#max)),
         None => quote!(::core::option::Option::None),
