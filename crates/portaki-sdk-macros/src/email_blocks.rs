@@ -62,7 +62,10 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let declaration = syn::parse_macro_input!(attr as Declaration);
     let function = syn::parse_macro_input!(item as ItemFn);
     match expand_fn(declaration, function) {
-        Ok(tokens) => tokens.into(),
+        Ok(tokens) => {
+            let misplaced = crate::layout::check(crate::layout::Declared::EmailBlocks);
+            quote::quote!(#misplaced #tokens).into()
+        }
         Err(error) => error.to_compile_error().into(),
     }
 }

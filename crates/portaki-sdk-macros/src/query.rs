@@ -17,6 +17,9 @@ pub(crate) struct NamedOpAttrs {
     pub guest: bool,
     /// `example(label = "…", input = r#"{…}"#)` — what the sandbox's Exécuter tab offers to run.
     pub examples: Vec<serde_json::Value>,
+    /// `__sdk`: derived by the SDK (`#[collection]`, `#[record]`, `#[config]`), so it lives with
+    /// its declaration rather than in `commands/`. `portaki check` refuses it in a module's code.
+    pub derived: bool,
 }
 
 /// `example(label = "…", input = "{…}")`, the input checked as a JSON object here, at compile
@@ -73,11 +76,13 @@ impl Parse for NamedOpAttrs {
         let name: WireLit = input.parse()?;
         let mut guest = false;
         let mut examples = Vec::new();
+        let mut derived = false;
         while input.parse::<Option<Token![,]>>()?.is_some() && !input.is_empty() {
             let flag: syn::Ident = input.parse()?;
             match flag.to_string().as_str() {
                 "guest" if !guest && !input.peek(Token![=]) => guest = true,
                 "example" => examples.push(parse_example(input)?),
+                "__sdk" if !derived => derived = true,
                 _ => {
                     return Err(syn::Error::new(
                         flag.span(),
@@ -93,6 +98,7 @@ impl Parse for NamedOpAttrs {
             name: name.value,
             guest,
             examples,
+            derived,
         })
     }
 }
@@ -124,7 +130,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         crate::wasm_handler::register_query(&attrs.name, &fn_name, &function_item);
     let name_const =
         crate::wasm_handler::declared_const("OperationName", &attrs.name, &function_item.sig.ident);
+    let misplaced = if attrs.derived {
+        TokenStream2::new()
+    } else {
+        crate::layout::check(crate::layout::Declared::Operation(&attrs.name))
+    };
     let output: TokenStream2 = quote! {
+        #misplaced
         #emission
         #name_const
         #function_item
