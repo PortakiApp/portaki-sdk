@@ -195,6 +195,8 @@ pub struct FieldSpec {
     pub default: Option<&'static str>,
     /// The editor shows the field only while this holds (`requests_enabled=true`).
     pub visible_when: Option<&'static str>,
+    /// What « required » says, from the bundles' `<label>.required` when they have it.
+    pub required_text: Option<fn() -> I18nText>,
 }
 
 impl FieldSpec {
@@ -216,6 +218,7 @@ impl FieldSpec {
         max_bytes: None,
         default: None,
         visible_when: None,
+        required_text: None,
     };
 }
 
@@ -224,7 +227,10 @@ impl FieldSpec {
     pub fn problem(&self, row: &Value) -> Option<I18nText> {
         let value = &row[self.key];
         if self.required && self.is_empty(value) {
-            return Some(I18nText::new("Champ obligatoire.", "Required."));
+            return Some(self.required_text.map_or_else(
+                || I18nText::new("Champ obligatoire.", "Required."),
+                |text| text(),
+            ));
         }
         match self.kind {
             FieldKind::Url => return crate::config::check::https_url(value.as_str()?.trim()),
@@ -337,6 +343,8 @@ pub struct CollectionDecl {
     pub max: Option<usize>,
     /// Publication waits for at least one row.
     pub required: bool,
+    /// What « too many » says, from the bundles' `host.{name}.tooMany` when they have it.
+    pub too_many: Option<fn() -> I18nText>,
 }
 
 /// A problem that blocks publication.
@@ -439,9 +447,14 @@ impl<T: Item, M: Meta> Collection<T, M> {
             problems.push(Problem {
                 row: None,
                 field: "rows",
-                message: I18nText::new(
-                    format!("{max} lignes au maximum."),
-                    format!("{max} rows at most."),
+                message: self.decl.too_many.map_or_else(
+                    || {
+                        I18nText::new(
+                            format!("{max} lignes au maximum."),
+                            format!("{max} rows at most."),
+                        )
+                    },
+                    |text| text(),
                 ),
             });
         }

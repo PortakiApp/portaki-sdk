@@ -85,6 +85,14 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         self
     }
 
+    /// A column the module computes with [`Self::cell`], titled `label` (bundle key).
+    pub fn computed(mut self, key: &str, label: &str) -> Self {
+        let mut column = self.column_of(key);
+        column.label = format!("i18n:{label}");
+        self.columns.push(column);
+        self
+    }
+
     /// A column drawn as a pill.
     pub fn pill(mut self, key: &str, label: &str) -> Self {
         self.columns.push(Column {
