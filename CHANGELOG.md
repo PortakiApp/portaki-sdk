@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.17.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.16.0...v10.17.0) (2026-10-20)
+
+
+### Features
+
+* **cli:** enforce the budget in every build ([21d1723](https://github.com/PortakiApp/portaki-sdk/commit/21d172397934ebd6deef0069cc32f28ff1b26757))
+* **cli:** enforce the module budget ([c366661](https://github.com/PortakiApp/portaki-sdk/commit/c366661b6b803b7b39d4fadf8d1b3dbb489d0db5))
+* **cli:** one file per surface or responsibility ([e209c25](https://github.com/PortakiApp/portaki-sdk/commit/e209c25f72b8bae447026d4bd1989d3d7302b52b))
+* **config:** derive the host form ([8c61aad](https://github.com/PortakiApp/portaki-sdk/commit/8c61aada81827473b594bf74d62cc6793c2e0eb3))
+* **config:** publish visible_when in the manifest ([8365996](https://github.com/PortakiApp/portaki-sdk/commit/83659962f078817b03224e3e7701496b11fc61c8))
+* **macros:** refuse a declaration outside its file ([af2d49e](https://github.com/PortakiApp/portaki-sdk/commit/af2d49ee61cf356910dce3bd457eacdca74bbc0c))
+* **resource:** computed columns, bundle messages ([5c7e837](https://github.com/PortakiApp/portaki-sdk/commit/5c7e83778ad657d4075a398a12ade3f6c7441805))
+* **resource:** declare collections, derive views ([1037f23](https://github.com/PortakiApp/portaki-sdk/commit/1037f237ef2e8398f120abc0c3f0c172f7b3f11b))
+* **resource:** declare records ([c2bd685](https://github.com/PortakiApp/portaki-sdk/commit/c2bd6853c8298c98fc5b8c5d8fc96bdcaa2870fc))
+* **resource:** help, examples, empty state ([6fd1d2a](https://github.com/PortakiApp/portaki-sdk/commit/6fd1d2a4de2976e9cf5ca3269afa558a9ad4d7a2))
+* **resource:** inbox keys, email quote, module id ([b6c543c](https://github.com/PortakiApp/portaki-sdk/commit/b6c543c5fa3a55213cfa5155603c9e21db7ac7d8))
+* **resource:** keyed per-stay records ([0ea6804](https://github.com/PortakiApp/portaki-sdk/commit/0ea6804c413618c22fabcde8adfb19a6e009070e))
+* **resource:** multi-choice, defaults, visible_when ([ab55587](https://github.com/PortakiApp/portaki-sdk/commit/ab555878a52cb57f706f7bba5fae397d344fc18c))
+* **resource:** nested rows, links, files, labels, checks ([95467c6](https://github.com/PortakiApp/portaki-sdk/commit/95467c62065f54bd747d267020aeeb1c3ce36414))
+* **resource:** nested too-many from the bundles ([4df56bb](https://github.com/PortakiApp/portaki-sdk/commit/4df56bbfce1e08d68b50b6ab7b3b345606f95598))
+* **resource:** read collection rows for the platform ([d0e5217](https://github.com/PortakiApp/portaki-sdk/commit/d0e5217b94f332ffdb0a6dcbb558f9474a1c2ce5))
+* **resource:** record hooks for multi-deposit forms and tasks ([9bdd4c4](https://github.com/PortakiApp/portaki-sdk/commit/9bdd4c438174e921bd9f3a48d8980472032fc5f3))
+* **resource:** rich text fields, settings-free collections ([a30f166](https://github.com/PortakiApp/portaki-sdk/commit/a30f166e7572a6e10d22d17dd8a45b38ba859df1))
+* **resource:** take a module's earlier data over ([d945c1f](https://github.com/PortakiApp/portaki-sdk/commit/d945c1fd830250a5ecf45253ab4ad5964897540b))
+* **resource:** visible_when relative to the row ([41cfc1d](https://github.com/PortakiApp/portaki-sdk/commit/41cfc1d70459119de870606d5b6c09c98e077eaf))
+* **schema:** url, file, labels and nested resource fields ([d287914](https://github.com/PortakiApp/portaki-sdk/commit/d287914bb28af2b524bfad516f721480a161f2f3))
+
+
+### Bug Fixes
+
+* **cli:** owe tooMany only with a maximum ([97755d8](https://github.com/PortakiApp/portaki-sdk/commit/97755d8cd2ea61ec6a2cdad6d4b0cef58a4ae95a))
+* **resource:** add label hangs from the label stem ([61dd183](https://github.com/PortakiApp/portaki-sdk/commit/61dd1833b644d7a99d06728a8442508a26f4eebf))
+* **resource:** show the declared placeholder ([3b2c9b7](https://github.com/PortakiApp/portaki-sdk/commit/3b2c9b7a95836c0c0ac6b9ebf73bf2e970fe89a7))
+
 ## [10.16.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.15.0...v10.16.0) (2026-10-19)
 
 
