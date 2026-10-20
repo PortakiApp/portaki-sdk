@@ -438,8 +438,12 @@ pub fn check_references(
             "resource" if data["resourceKind"] == "collection" => {
                 // The derived editor's texts, by convention.
                 let name = data["name"].as_str().unwrap_or_default();
-                for text in ["title", "add", "tooMany"] {
+                for text in ["title", "add"] {
                     keys.push(format!("host.{name}.{text}"));
+                }
+                // Only a collection with a maximum can have too many rows.
+                if data["max"].is_number() {
+                    keys.push(format!("host.{name}.tooMany"));
                 }
                 Vec::new()
             }
@@ -1201,6 +1205,29 @@ mod tests {
         );
         std::fs::write(dir.path().join("en-US.json"), labelled).expect("en");
         super::check_references(&emissions, dir.path(), &locales).expect("labelled");
+    }
+
+    /// The editor's « too many » text is owed only by a collection that has a maximum.
+    #[test]
+    fn a_collection_owes_too_many_only_with_a_maximum() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let locales = ["fr-FR".to_string()];
+        let keys = r#"{"module.displayName":"x","module.description":"y",
+                       "host.sections.title":"Sections","host.sections.add":"Ajouter"}"#;
+        std::fs::write(dir.path().join("fr-FR.json"), keys).expect("fr");
+        let mut emissions = module();
+        emissions.push(EmissionFile {
+            kind: "resource".into(),
+            data: json!({ "resourceKind": "collection", "name": "sections", "max": null }),
+        });
+        super::check_references(&emissions, dir.path(), &locales).expect("no maximum");
+
+        emissions[1].data["max"] = json!(30);
+        let missing = super::check_references(&emissions, dir.path(), &locales).unwrap_err();
+        assert!(
+            missing.to_string().contains("host.sections.tooMany"),
+            "{missing}"
+        );
     }
 
     fn with_config() -> Vec<EmissionFile> {
