@@ -379,8 +379,15 @@ fn field_schema(
             "section" => extra.section = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "visible_when" => {
                 let when = meta.value()?.parse::<syn::LitStr>()?;
-                if !when.value().split_once('=').is_some_and(|(key, _)| !key.trim().is_empty()) {
-                    return Err(syn::Error::new(when.span(), "visible_when = \"otherField=value\""));
+                if !when
+                    .value()
+                    .split_once('=')
+                    .is_some_and(|(key, _)| !key.trim().is_empty())
+                {
+                    return Err(syn::Error::new(
+                        when.span(),
+                        "visible_when = \"otherField=value\"",
+                    ));
                 }
                 extra.visible_when = Some(when.value())
             }
