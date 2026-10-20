@@ -353,6 +353,56 @@ pub fn set_status<H: RecordHooks>(
     entry.save(decl)
 }
 
+/// The record of `stay` whose natural key is `item`'s moves to `to`, its item replaced; created
+/// when there is none — state kept per stay and key (a step ticked, a task item done) rather than
+/// a deposit. Moving to the status it has only replaces the item.
+pub fn mark<H: RecordHooks>(
+    decl: RecordDecl,
+    stay: Uuid,
+    item: H::Item,
+    to: H::Status,
+    actor: Actor,
+) -> Result<Entry<H::Item, H::Status>> {
+    let key = <H::Item as Item>::KEY;
+    let wanted = text_of(&item, key);
+    let found = for_stay::<H::Item, H::Status>(decl, stay)?
+        .into_iter()
+        .find(|entry| text_of(&entry.item, key) == wanted);
+    let now = crate::host::time::now()?;
+    let mut entry = match found {
+        Some(entry) => entry,
+        None => Entry {
+            id: Uuid::new_v4(),
+            item: item.clone(),
+            status: H::Status::INITIAL,
+            stay_id: Some(stay),
+            created_at: now,
+            actor,
+            guest_name: String::new(),
+            check_in: None,
+            check_out: None,
+            history: vec![HistoryLine {
+                at: now,
+                actor,
+                event: HistoryEvent::Created,
+            }],
+        },
+    };
+    entry.item = item;
+    if entry.status != to {
+        entry.status = to;
+        entry.history.push(HistoryLine {
+            at: now,
+            actor,
+            event: HistoryEvent::Status {
+                to: to.wire().to_string(),
+            },
+        });
+    }
+    entry.save(decl)?;
+    Ok(entry)
+}
+
 /// The generated `note`, host only: a line of history, then [`RecordHooks::on_note`]; the last
 /// note repeated is ignored.
 pub fn note_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: NoteArgs) -> Result<()> {
