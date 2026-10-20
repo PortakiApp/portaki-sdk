@@ -134,6 +134,15 @@ impl<T: Item, S: Lifecycle> Entry<T, S> {
         })
     }
 
+    /// When it last moved to `status`; `None` when it never did.
+    pub fn reached_at(&self, status: S) -> Option<DateTime<Utc>> {
+        self.history
+            .iter()
+            .rev()
+            .find(|line| matches!(&line.event, HistoryEvent::Status { to } if to == status.wire()))
+            .map(|line| line.at)
+    }
+
     fn from_row(row: PortakiResource) -> Result<Self> {
         let book: Bookkeeping = serde_json::from_str(&row.meta_json).map_err(corrupt)?;
         Ok(Self {
@@ -216,9 +225,25 @@ pub trait RecordHooks {
     /// Its lifecycle.
     type Status: Lifecycle;
 
+    /// What a guest's `submit` deposits: one item read from the form by default. A form that
+    /// asks several things at once (one record each) returns several; `Err` refuses them all.
+    fn deposits(ctx: &Context, args: &Value) -> Result<Vec<Self::Item>> {
+        Ok(vec![item_from(args, &ctx.lang())?])
+    }
+
     /// Before a guest's deposit is stored: refuse it (`Err`) when the module's settings say no.
     fn guard(_ctx: &Context, _item: &Self::Item) -> Result<()> {
         Ok(())
+    }
+
+    /// The record is a task in the host's timeline: not done by default.
+    fn needs_action(_ctx: &Context, entry: &Entry<Self::Item, Self::Status>) -> bool {
+        !entry.is_done()
+    }
+
+    /// The line under a task's title: the item's natural key by default.
+    fn task_context(entry: &Entry<Self::Item, Self::Status>) -> I18nText {
+        I18nText::from(text_of(&entry.item, <Self::Item as Item>::KEY).as_str())
     }
 
     /// After a record is stored — the email to the host. An error is logged, never undone.
@@ -264,11 +289,15 @@ pub fn submit_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: &Va
         .as_ref()
         .map(|guest| guest.session_id)
         .ok_or_else(|| PortakiError::Host("stay_id_required".into()))?;
-    let item: H::Item = item_of(args, &ctx.lang())?;
-    H::guard(ctx, &item)?;
-    let entry = create::<H>(ctx, decl, item, stay, Actor::Guest)?;
-    if let Err(error) = H::on_created(ctx, &entry) {
-        hook_failed(decl, &error);
+    let items = H::deposits(ctx, args)?;
+    for item in &items {
+        H::guard(ctx, item)?;
+    }
+    for item in items {
+        let entry = create::<H>(ctx, decl, item, stay, Actor::Guest)?;
+        if let Err(error) = H::on_created(ctx, &entry) {
+            hook_failed(decl, &error);
+        }
     }
     Ok(())
 }
@@ -281,7 +310,7 @@ pub fn add_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: &Value
         .and_then(Value::as_str)
         .and_then(|raw| Uuid::parse_str(raw).ok())
         .ok_or_else(|| PortakiError::Host("stay_id_required".into()))?;
-    let item: H::Item = item_of(args, &ctx.lang())?;
+    let item: H::Item = item_from(args, &ctx.lang())?;
     let entry = create::<H>(ctx, decl, item, stay, Actor::Host)?;
     if let Err(error) = H::on_created(ctx, &entry) {
         hook_failed(decl, &error);
@@ -324,7 +353,8 @@ pub fn set_status<H: RecordHooks>(
     entry.save(decl)
 }
 
-/// The generated `note`, host only: a line of history, then [`RecordHooks::on_note`].
+/// The generated `note`, host only: a line of history, then [`RecordHooks::on_note`]; the last
+/// note repeated is ignored.
 pub fn note_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: NoteArgs) -> Result<()> {
     require_host(ctx)?;
     let text = args.text.trim().to_string();
@@ -333,6 +363,10 @@ pub fn note_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: NoteA
     }
     let mut entry = get::<H::Item, H::Status>(decl, args.id)?
         .ok_or_else(|| PortakiError::Host("record_not_found".into()))?;
+    // The same reply again (a double click, a resent form) is no second note, no second email.
+    if entry.notes().last() == Some(text.as_str()) {
+        return Ok(());
+    }
     entry.history.push(HistoryLine {
         at: crate::host::time::now()?,
         actor: Actor::Host,
@@ -345,9 +379,11 @@ pub fn note_command<H: RecordHooks>(ctx: &Context, decl: RecordDecl, args: NoteA
     Ok(())
 }
 
-/// The generated `timelineTasks`: every open record older than `due_hours` is a task with one
-/// item, « done », whose check closes it.
+/// The generated `timelineTasks`: every record that [needs action](RecordHooks::needs_action)
+/// and is older than `due_hours` is a task with one item, « done », whose check closes it. The
+/// title's `{field}` placeholders take the item's text fields.
 pub fn timeline_tasks<H: RecordHooks>(
+    ctx: &Context,
     decl: RecordDecl,
     args: &TimelineTasksArgs,
     title: I18nText,
@@ -357,28 +393,18 @@ pub fn timeline_tasks<H: RecordHooks>(
         return Ok(TimelineTasks::default());
     };
     let now = crate::host::time::now()?;
-    let key = <H::Item as Item>::KEY;
     let mut tasks: Vec<_> = list::<H::Item, H::Status>(decl)?
         .into_iter()
-        .filter(|entry| !entry.is_done())
+        .filter(|entry| H::needs_action(ctx, entry))
         .map(|entry| (entry.created_at + Duration::hours(hours), entry))
         .filter(|(late, _)| *late <= now && *late <= args.to)
         .map(|(late, entry)| {
-            let context = key
-                .and_then(|key| {
-                    serde_json::to_value(&entry.item)
-                        .ok()?
-                        .get(key)?
-                        .as_str()
-                        .map(str::to_string)
-                })
-                .unwrap_or_default();
             let mut task = timeline::task(
                 entry.id.to_string(),
                 late.max(args.from),
                 args.property_id,
-                title.clone(),
-                I18nText::from(context.as_str()),
+                filled(&title, &entry.item),
+                H::task_context(&entry),
             )
             .items(vec![TimelineTaskItem::new("done", done_label.clone())]);
             if let Some(stay) = entry.stay_id {
@@ -391,10 +417,48 @@ pub fn timeline_tasks<H: RecordHooks>(
     Ok(TimelineTasks { tasks })
 }
 
-/// The generated `taskToggle` / `taskComplete`: checking the task closes the record.
-pub fn complete_task<H: RecordHooks>(decl: RecordDecl, task_id: &str) -> Result<()> {
+/// The generated `taskToggle` / `taskComplete`: checking the task closes the record, unchecking
+/// it (the host ticked the wrong line) opens it again.
+pub fn complete_task<H: RecordHooks>(decl: RecordDecl, task_id: &str, done: bool) -> Result<()> {
     let id = Uuid::parse_str(task_id).map_err(|_| PortakiError::Host("record_not_found".into()))?;
-    set_status::<H>(decl, id, H::Status::DONE, Actor::Host)
+    let to = if done {
+        H::Status::DONE
+    } else {
+        H::Status::INITIAL
+    };
+    set_status::<H>(decl, id, to, Actor::Host)
+}
+
+/// `{field}` in every language of `text`, filled with the item's text fields.
+fn filled<T: Item>(text: &I18nText, item: &T) -> I18nText {
+    let Ok(Value::Object(fields)) = serde_json::to_value(item) else {
+        return text.clone();
+    };
+    let fill = |raw: &str| {
+        fields
+            .iter()
+            .fold(raw.to_string(), |out, (key, value)| match value {
+                Value::String(v) => out.replace(&format!("{{{key}}}"), v),
+                _ => out,
+            })
+    };
+    let mut out = I18nText::new(fill(&text.fr), fill(&text.en));
+    for (lang, raw) in &text.others {
+        out = out.with(lang.clone(), fill(raw));
+    }
+    out
+}
+
+/// A text field of the item, by key; empty when there is none.
+fn text_of<T: Item>(item: &T, key: Option<&str>) -> String {
+    key.and_then(|key| {
+        serde_json::to_value(item)
+            .ok()?
+            .get(key)?
+            .as_str()
+            .map(str::to_string)
+    })
+    .unwrap_or_default()
 }
 
 fn create<H: RecordHooks>(
@@ -438,7 +502,7 @@ fn create<H: RecordHooks>(
 
 /// The item a form or a call sends, normalized like a host save, then checked: a required
 /// field empty is `{key}_required`, any other problem `{key}_invalid`.
-fn item_of<T: Item>(args: &Value, lang: &str) -> Result<T> {
+pub fn item_from<T: Item>(args: &Value, lang: &str) -> Result<T> {
     let row = super::merge::normalize(&Map::new(), args, T::fields(), lang);
     for field in T::fields() {
         if let Some(_problem) = field.problem(&row) {

@@ -669,7 +669,8 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
 // ── #[record] ────────────────────────────────────────────────────────────────────────────────
 
 /// `#[record(name = "reports", item = Report, status = ReportStatus, due_hours = 24,
-/// task_title = "task.title", task_done = "host.detail.resolve", hooks)]` on a unit struct.
+/// task_title = "task.title", task_done = "host.detail.resolve", hooks, note_email = "host-reply")]`
+/// on a unit struct. `note_email` declares the email `on_note` sends (`email.{id}.description`).
 pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = syn::parse_macro_input!(item as ItemStruct);
     let mut name: Option<String> = None;
@@ -680,6 +681,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut task_done: Option<String> = None;
     let mut hooks = false;
     let mut legacy: Option<syn::Path> = None;
+    let mut note_email: Option<String> = None;
     let parser = syn::meta::parser(|m| {
         let key = m
             .path
@@ -695,8 +697,9 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
                 "task_done" => task_done = Some(m.value()?.parse::<syn::LitStr>()?.value()),
                 "hooks" => hooks = true,
                 "legacy" => legacy = Some(m.value()?.parse()?),
+                "note_email" => note_email = Some(m.value()?.parse::<syn::LitStr>()?.value()),
                 _ => return Err(m.error(
-                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks, legacy = path",
+                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks, legacy = path, note_email",
                 )),
             }
         Ok(())
@@ -773,6 +776,14 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
     let entry = quote!(::portaki_sdk::resource::Entry<#row, #status>);
+    // The reply's email, declared on the generated `note` so the manifest lists it.
+    let note_email = note_email.map(|id| {
+        let description = format!("email.{id}.description");
+        quote! {
+            #[::portaki_sdk::email(id = #id, audience = ::portaki_sdk::host::email::EmailAudience::Guest,
+                requires_guest_email, description_key = #description)]
+        }
+    });
     let id_example = r#"{"id":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","status":"in_progress"}"#;
     let note_example =
         r#"{"id":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","text":"Le technicien passe demain."}"#;
@@ -782,11 +793,11 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
             #[::portaki_sdk::query(name = "timelineTasks", __sdk, example(label = "Semaine en cours",
                 input = r#"{"propertyId":"5f0c2b1e-8a4d-4c6f-9e21-3b7d9a6c4e10","from":"2026-06-15T00:00:00Z","to":"2026-06-22T00:00:00Z","stays":[]}"#))]
             pub fn #tasks(
-                _ctx: ::portaki_sdk::Context,
+                ctx: ::portaki_sdk::Context,
                 args: ::portaki_sdk::contracts::timeline::TimelineTasksArgs,
             ) -> ::portaki_sdk::Result<::portaki_sdk::contracts::timeline::TimelineTasks> {
                 ::portaki_sdk::resource::record::timeline_tasks::<#ident>(
-                    #ident::DECL, &args, ::portaki_sdk::bundle_text!(#title), ::portaki_sdk::bundle_text!(#done))
+                    &ctx, #ident::DECL, &args, ::portaki_sdk::bundle_text!(#title), ::portaki_sdk::bundle_text!(#done))
             }
 
             #[doc(hidden)]
@@ -796,10 +807,10 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
                 _ctx: ::portaki_sdk::Context,
                 args: ::portaki_sdk::contracts::timeline::TaskToggleArgs,
             ) -> ::portaki_sdk::Result<()> {
-                if args.item_id != "done" || !args.done {
-                    return ::core::result::Result::Err(::portaki_sdk::PortakiError::Host("cannot_reopen".into()));
+                if args.item_id != "done" {
+                    return ::core::result::Result::Err(::portaki_sdk::PortakiError::Host("item_not_found".into()));
                 }
-                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id)
+                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id, args.done)
             }
 
             #[doc(hidden)]
@@ -809,7 +820,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
                 _ctx: ::portaki_sdk::Context,
                 args: ::portaki_sdk::contracts::timeline::TaskCompleteArgs,
             ) -> ::portaki_sdk::Result<()> {
-                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id)
+                ::portaki_sdk::resource::record::complete_task::<#ident>(#ident::DECL, &args.task_id, true)
             }
         },
         _ => quote! {},
@@ -869,6 +880,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
+        #note_email
         #[::portaki_sdk::command(name = "note", __sdk, example(label = "Répondre", input = #note_example))]
         pub fn #note(
             ctx: ::portaki_sdk::Context,
