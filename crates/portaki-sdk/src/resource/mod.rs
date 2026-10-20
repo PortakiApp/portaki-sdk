@@ -10,8 +10,8 @@
 //! - [`#[choice]`](crate::choice) on a unit enum: the values a field picks from, their labels and
 //!   icons;
 //! - [`#[collection]`](crate::collection) on a marker struct: an ordered list of items, stored
-//!   by the SDK, with the host's `updateConfig`, the import's `importRows` and
-//!   `publishReadiness` generated.
+//!   by the SDK, with the host's `updateConfig`, the import's `importRows`, the platform's
+//!   `readRows` (`read`) and `publishReadiness` generated.
 //!
 //! The views follow from the declaration: [`CollectionEditor`] for the host, [`ListCard`] and
 //! [`GroupedList`] for the booklet.
@@ -513,6 +513,70 @@ pub struct ImportArgs {
     /// The rows, each an object of declared field keys.
     #[serde(default)]
     pub rows: Vec<Value>,
+}
+
+/// The arguments of `readRows`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct ReadArgs {
+    /// The resource to read.
+    pub resource: String,
+}
+
+/// The generated `readRows` (`#[collection(read)]`): `{resource, rows}`, each row reduced to its
+/// declared fields — no id, nothing a field does not name, a field hidden by its `visible_when`
+/// left out. What the platform reads of the rows the guest sees (the guest assistant); never
+/// generated for a record, whose rows belong to a stay. It loads like every other path in, so a
+/// module's earlier data is adopted on a first read ([`store::load_raw`]).
+pub fn read_query<T: Item>(
+    _ctx: &crate::Context,
+    decl: CollectionDecl,
+    args: ReadArgs,
+) -> crate::Result<Value> {
+    if args.resource != decl.name {
+        return Err(crate::PortakiError::Host(format!(
+            "resource_unknown: {}",
+            args.resource
+        )));
+    }
+    let (rows, _) = store::load_raw(decl)?;
+    let rows: Vec<Value> = rows.iter().map(|row| declared(row, T::fields())).collect();
+    Ok(serde_json::json!({ "resource": decl.name, "rows": rows }))
+}
+
+/// `row` with only what `fields` declare and show, nested rows alike.
+fn declared(row: &Value, fields: &[FieldSpec]) -> Value {
+    let mut out = serde_json::Map::new();
+    for field in fields {
+        let value = &row[field.key];
+        if value.is_null() || !shown(field.visible_when, row) {
+            continue;
+        }
+        let value = match (field.kind, field.rows) {
+            (FieldKind::Rows, Some(nested)) => Value::Array(
+                value
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|sub| declared(sub, nested()))
+                    .collect(),
+            ),
+            _ => value.clone(),
+        };
+        out.insert(field.key.to_string(), value);
+    }
+    Value::Object(out)
+}
+
+/// `visible_when = "key=value"` holds in `row`: the sibling's value, as text, is exactly `value`.
+fn shown(when: Option<&str>, row: &Value) -> bool {
+    let Some((key, expected)) = when.and_then(|when| when.split_once('=')) else {
+        return when.is_none();
+    };
+    match &row[key.trim()] {
+        Value::String(text) => text == expected.trim(),
+        Value::Null => false,
+        other => serde_json::from_str::<Value>(expected.trim()).ok().as_ref() == Some(other),
+    }
 }
 
 /// The generated `updateConfig`: the host form, merged by [`merge::host_save`].

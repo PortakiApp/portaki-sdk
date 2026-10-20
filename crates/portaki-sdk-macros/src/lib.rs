@@ -998,8 +998,10 @@ pub fn item(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// A collection the SDK stores (`unstable`): `#[collection(name = "rules", item = Rule,
 /// meta = Display, max = 30, import)]` on a unit struct. Generates `load` / `save`, the
-/// `updateConfig` command (host form), `importRows` (with `import`), `publishReadiness` (unless
-/// `readiness = false`), the `PortakiResource` entity and the manifest's `resources[]` entry.
+/// `updateConfig` command (host form), `importRows` (with `import`), the host query `readRows`
+/// (with `read`: the rows as declared, for the platform's guest assistant — only on rows the guest
+/// sees, never on a record), `publishReadiness` (unless `readiness = false`), the
+/// `PortakiResource` entity and the manifest's `resources[]` entry.
 #[proc_macro_attribute]
 pub fn collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     resource::expand_collection(attr, item)
