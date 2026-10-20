@@ -110,8 +110,13 @@ pub fn report(module_root: &Path) -> String {
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
         .unwrap_or_default();
+    let used = if found.len() > 1 {
+        "exceptions utilisées"
+    } else {
+        "exception utilisée"
+    };
     let mut out = format!(
-        "## Budget exceptions — {name}\n\n{} of the {} the repository allows.\n",
+        "## Budget exceptions — {name}\n\n{} {used} sur les {} autorisées.\n",
         found.len(),
         cap(module_root)
     );
@@ -332,6 +337,7 @@ mod tests {
         let found = problems(&root);
         assert_eq!(found.len(), 1, "{found:#?}");
         assert!(found[0].contains("the repository allows 1"));
+        assert!(report(&root).contains("\n\n2 exceptions utilisées sur les 1 autorisées.\n"));
         assert!(report(&root)
             .contains("| `src/domain/a.rs` | `table` | `clippy::too_many_lines` | one table |"));
     }
