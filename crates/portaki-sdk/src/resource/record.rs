@@ -22,6 +22,24 @@ pub struct RecordDecl {
     pub name: &'static str,
     /// An open record older than this many hours is a task in the host's timeline.
     pub due_hours: Option<i64>,
+    /// Stores the module's records from before the resource — see [`adopt`].
+    pub legacy: Option<fn(RecordDecl) -> Result<()>>,
+}
+
+/// The module's earlier records, stored once: on every read and before every new record, while
+/// the resource has no row. Once one is stored it never runs again, so it never writes over a
+/// record made since.
+fn adopt(decl: RecordDecl) -> Result<()> {
+    let Some(legacy) = decl.legacy else {
+        return Ok(());
+    };
+    let stored = repo::find::<PortakiResource, PortakiResource>(
+        Query::new().r#where(eq("resource", decl.name)).limit(1),
+    )?;
+    if stored.items.is_empty() {
+        legacy(decl)?;
+    }
+    Ok(())
 }
 
 /// Who wrote.
@@ -177,9 +195,10 @@ pub fn get<T: Item, S: Lifecycle>(decl: RecordDecl, id: Uuid) -> Result<Option<E
 }
 
 fn rows<T: Item, S: Lifecycle>(
-    _decl: RecordDecl,
+    decl: RecordDecl,
     query: Query<PortakiResource>,
 ) -> Result<Vec<Entry<T, S>>> {
+    adopt(decl)?;
     let page = repo::find::<PortakiResource, PortakiResource>(query)?;
     let mut entries = page
         .items
@@ -385,6 +404,7 @@ fn create<H: RecordHooks>(
     stay: Uuid,
     actor: Actor,
 ) -> Result<Entry<H::Item, H::Status>> {
+    adopt(decl)?;
     let now = crate::host::time::now()?;
     let stay_ctx = ctx.stay.as_ref().filter(|s| s.stay_id == stay);
     let entry = Entry {
