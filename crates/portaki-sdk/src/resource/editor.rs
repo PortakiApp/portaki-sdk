@@ -32,6 +32,8 @@ struct Column {
     kind: Option<&'static str>,
     sub: Option<String>,
     mono: bool,
+    /// A check column: at most this many ticked, and what to say past it.
+    max: Option<(usize, String)>,
 }
 
 /// The editor; [`Self::build`] gives the component.
@@ -45,6 +47,8 @@ pub struct CollectionEditor<'a, T: Item, M: Meta> {
     hint: Option<String>,
     when_empty: Vec<Component>,
     settings: Option<(String, Vec<Component>)>,
+    search: Option<String>,
+    filter: Option<String>,
 }
 
 impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
@@ -60,6 +64,8 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             hint: None,
             when_empty: Vec::new(),
             settings: None,
+            search: None,
+            filter: None,
         }
     }
 
@@ -85,7 +91,37 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             kind: Some("pill"),
             sub: None,
             mono: false,
+            max: None,
         });
+        self
+    }
+
+    /// A toggle field as a column of check boxes, ticked in the table itself.
+    pub fn check(mut self, key: &str) -> Self {
+        let mut column = self.column_of(key);
+        column.kind = Some("check");
+        self.columns.push(column);
+        self
+    }
+
+    /// [`Self::check`] with at most `max` rows ticked; past it the table says `message`.
+    pub fn check_at_most(mut self, key: &str, max: usize, message: impl Into<String>) -> Self {
+        let mut column = self.column_of(key);
+        column.kind = Some("check");
+        column.max = Some((max, message.into()));
+        self.columns.push(column);
+        self
+    }
+
+    /// A search box above the table (placeholder: bundle key).
+    pub fn search(mut self, placeholder: &str) -> Self {
+        self.search = Some(format!("i18n:{placeholder}"));
+        self
+    }
+
+    /// Filter chips on the values of the column `key`.
+    pub fn filter_by(mut self, key: &str) -> Self {
+        self.filter = Some(key.to_string());
         self
     }
 
@@ -187,6 +223,12 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                     .map(|(index, row)| self.panel(index, row))
                     .collect(),
             );
+        if let Some(placeholder) = &self.search {
+            table = table.searchPlaceholder(placeholder.clone());
+        }
+        if let Some(key) = &self.filter {
+            table = table.filterKey(key.clone());
+        }
         if let Some((count, label)) = &self.divider {
             table = table.dividerAfter(*count).dividerLabel(label.clone());
         }
@@ -252,6 +294,7 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             kind: None,
             sub: None,
             mono: false,
+            max: None,
         }
     }
 
@@ -260,10 +303,17 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         let mut cells = Map::new();
         cells.insert("id".into(), Value::String(row.id().to_string()));
         for field in T::fields() {
-            cells.insert(
-                field.key.into(),
-                Value::String(self.shown(field, &value[field.key])),
-            );
+            let checked = field.kind == FieldKind::Toggle
+                && self
+                    .columns
+                    .iter()
+                    .any(|c| c.key == field.key && c.kind == Some("check"));
+            let cell = if checked {
+                Value::Bool(value[field.key].as_bool().unwrap_or_default())
+            } else {
+                Value::String(self.shown(field, &value[field.key]))
+            };
+            cells.insert(field.key.into(), cell);
         }
         for (key, cell) in &self.cells {
             cells.insert(key.clone(), Value::String(cell(row)));
@@ -291,9 +341,20 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             }
             .to_string(),
             FieldKind::Number => value.as_f64().map_or_else(String::new, |n| n.to_string()),
-            FieldKind::Text | FieldKind::TimeRange => {
+            FieldKind::Text | FieldKind::TimeRange | FieldKind::Url => {
                 value.as_str().unwrap_or_default().to_string()
             }
+            FieldKind::Labels => super::fields::labels(value).join(", "),
+            FieldKind::Rows => match value.as_array().map_or(0, Vec::len) {
+                0 => String::new(),
+                count => count.to_string(),
+            },
+            FieldKind::File => if value.as_str().is_some_and(|v| !v.is_empty()) {
+                "📄"
+            } else {
+                ""
+            }
+            .to_string(),
             FieldKind::RichText => serde_json::from_value::<I18nText>(value.clone())
                 .map(|text| super::rich_text::plain_text(text.host_value(self.ctx)))
                 .unwrap_or_default(),
@@ -335,6 +396,10 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         error: Option<I18nText>,
     ) -> Component {
         let control: Component = match spec.kind {
+            FieldKind::Url | FieldKind::File | FieldKind::Labels => {
+                super::fields::control(spec, &name, value)
+            }
+            FieldKind::Rows => self.nested(spec, &name, value),
             FieldKind::Localized | FieldKind::Text => {
                 let text = match spec.kind {
                     FieldKind::Localized => self.shown(spec, value),
@@ -411,6 +476,44 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
     }
 }
 
+impl<T: Item, M: Meta> CollectionEditor<'_, T, M> {
+    /// The rows of a nested field, one block each: its id sent back hidden, then its fields.
+    fn nested(&self, spec: &FieldSpec, name: &str, value: &Value) -> Component {
+        let stored = value.as_array().cloned().unwrap_or_default();
+        let fields = spec.rows.map(|rows| rows()).unwrap_or_default();
+        let count_key = format!("{name}.rows");
+        let max = spec.max_rows.unwrap_or(usize::MAX);
+        let count = self
+            .ctx
+            .input_u64(&count_key)
+            .map_or(0, |n| n as usize)
+            .max(stored.len())
+            .min(max.max(stored.len()));
+        let rows = (0..count)
+            .map(|n| {
+                let row = stored.get(n).cloned().unwrap_or(Value::Null);
+                let prefix = format!("{name}.{n}");
+                let mut children = vec![crate::sdui::row_id(name, n, row["id"].as_str())];
+                children.extend(fields.iter().map(|field| {
+                    self.field(
+                        field,
+                        format!("{prefix}.{}", field.key),
+                        &row[field.key],
+                        None,
+                    )
+                }));
+                Stack::new().gap(8.0).children(children).into()
+            })
+            .collect();
+        super::fields::step_list(
+            spec,
+            name,
+            rows,
+            (count < max).then_some((count_key, count + 1)),
+        )
+    }
+}
+
 impl Column {
     fn clone_shallow(&self) -> Self {
         Self {
@@ -419,6 +522,7 @@ impl Column {
             kind: self.kind,
             sub: self.sub.clone(),
             mono: self.mono,
+            max: self.max.clone(),
         }
     }
 }
@@ -433,6 +537,10 @@ fn column_json(column: &Column) -> Value {
     }
     if column.mono {
         out["mono"] = json!(true);
+    }
+    if let Some((max, message)) = &column.max {
+        out["max"] = json!(max);
+        out["maxMessage"] = json!(message);
     }
     out
 }

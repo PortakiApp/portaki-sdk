@@ -238,6 +238,9 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let mut label: Option<String> = None;
     let mut description: Option<String> = None;
     let mut forced: Option<String> = None;
+    let mut max_rows: Option<usize> = None;
+    let mut accept: Option<String> = None;
+    let mut max_bytes: Option<u32> = None;
     attr.parse_nested_meta(|meta| {
         let name = meta.path.get_ident().map(ToString::to_string).unwrap_or_default();
         match name.as_str() {
@@ -256,9 +259,12 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             "label" => label = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "description" => description = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "kind" => forced = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "max_rows" => max_rows = Some(meta.value()?.parse::<syn::LitInt>()?.base10_parse()?),
+            "accept" => accept = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "max_bytes" => max_bytes = Some(meta.value()?.parse::<syn::LitInt>()?.base10_parse()?),
             _ => {
                 return Err(meta.error(
-                    "unknown #[field] attribute — required, max_chars, between, label, description, kind",
+                    "unknown #[field] attribute — required, max_chars, between, label, description, kind, max_rows, accept, max_bytes",
                 ))
             }
         }
@@ -274,17 +280,24 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let description = description.or_else(|| crate::bundle::conventional_help(&label));
     let placeholder = crate::bundle::conventional_key(&label, "placeholder");
     let inner = unwrap_option(ty);
+    let row_type = vec_of(inner);
     let (kind, wire_type) = match (forced.as_deref(), type_name(inner).as_deref()) {
         (Some("time_range"), _) => (quote!(TimeRange), "time_range"),
         (Some("photo"), _) => (quote!(Photo), "photo"),
         // Localized text to an import; the editor and the booklet read it as formatted.
         (Some("rich_text"), Some("I18nText")) => (quote!(RichText), "localized"),
+        (Some("url"), Some("String")) => (quote!(Url), "url"),
+        (Some("file"), Some("String")) => (quote!(File), "file"),
         (Some(other), _) => {
             return Err(syn::Error::new(
                 attr.span(),
-                format!("unknown kind `{other}` — time_range, photo, rich_text (on I18nText)"),
+                format!("unknown kind `{other}` — time_range, photo, rich_text (on I18nText), url, file (on String)"),
             ))
         }
+        (None, Some("Vec")) if row_type.as_ref().and_then(type_name).as_deref() == Some("String") => {
+            (quote!(Labels), "labels")
+        }
+        (None, Some("Vec")) => (quote!(Rows), "structured"),
         (None, Some("I18nText")) => (quote!(Localized), "localized"),
         (None, Some("String")) => (quote!(Text), "text"),
         (None, Some("bool")) => (quote!(Toggle), "toggle"),
@@ -313,6 +326,18 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let maxn_tokens = opt_f64(between.map(|b| b.1));
     let description_tokens = opt_str(&description);
     let placeholder_tokens = opt_str(&placeholder);
+    let max_rows_tokens = opt_usize(max_rows);
+    let accept_tokens = opt_str(&accept);
+    let max_bytes_tokens = match max_bytes {
+        Some(v) => quote!(::core::option::Option::Some(#v)),
+        None => quote!(::core::option::Option::None),
+    };
+    let rows_tokens = match (wire_type, &row_type) {
+        ("structured", Some(row)) => quote! {
+            ::core::option::Option::Some(<#row as ::portaki_sdk::resource::Item>::fields)
+        },
+        _ => quote!(::core::option::Option::None),
+    };
     let spec = quote! {
         ::portaki_sdk::resource::FieldSpec {
             key: #key,
@@ -325,6 +350,10 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             min: #min_tokens,
             max: #maxn_tokens,
             options: #options,
+            rows: #rows_tokens,
+            max_rows: #max_rows_tokens,
+            accept: #accept_tokens,
+            max_bytes: #max_bytes_tokens,
         }
     };
     let mut schema = json!({ "key": key, "type": wire_type, "required": required, "label": label });
@@ -343,6 +372,15 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     }
     if wire_type == "select" {
         schema["optionsType"] = json!(type_name(inner).unwrap_or_default());
+    }
+    if wire_type == "structured" {
+        schema["itemType"] = json!(row_type.as_ref().and_then(type_name).unwrap_or_default());
+    }
+    if let Some(max) = max_rows {
+        schema["maxItems"] = json!(max);
+    }
+    if let Some(accept) = &accept {
+        schema["accept"] = json!(accept);
     }
     Ok(Declared { spec, schema })
 }
@@ -374,6 +412,22 @@ fn unwrap_option(ty: &Type) -> &Type {
     ty
 }
 
+/// `T` of a `Vec<T>`.
+fn vec_of(ty: &Type) -> Option<Type> {
+    let Type::Path(path) = ty else { return None };
+    let last = path.path.segments.last()?;
+    if last.ident != "Vec" {
+        return None;
+    }
+    match &last.arguments {
+        PathArguments::AngleBracketed(args) => match args.args.first()? {
+            GenericArgument::Type(inner) => Some(inner.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn type_name(ty: &Type) -> Option<String> {
     match ty {
         Type::Path(path) => path.path.segments.last().map(|s| s.ident.to_string()),
@@ -393,6 +447,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut import = false;
     let mut required = false;
     let mut readiness = true;
+    let mut check: Option<syn::Path> = None;
     let parser = syn::meta::parser(|m| {
         let key = m
             .path
@@ -407,8 +462,9 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "import" => import = true,
             "required" => required = true,
             "readiness" => readiness = m.value()?.parse::<syn::LitBool>()?.value,
+            "check" => check = Some(m.value()?.parse()?),
             _ => return Err(m.error(
-                "#[collection] takes name, item, meta, max, import, required, readiness = false",
+                "#[collection] takes name, item, meta, max, import, required, check = path, readiness = false",
             )),
         }
         Ok(())
@@ -423,6 +479,10 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     };
     let ident = &item.ident;
+    let with_check = match &check {
+        Some(path) => quote!(.map(|c| c.with_check(#path))),
+        None => quote!(),
+    };
     let meta_ty = meta
         .as_ref()
         .map_or_else(|| quote!(::portaki_sdk::resource::NoMeta), |m| quote!(#m));
@@ -482,7 +542,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             pub fn #readiness_fn(
                 ctx: ::portaki_sdk::Context,
             ) -> ::portaki_sdk::Result<::portaki_sdk::contracts::publish::PublishReadiness> {
-                ::portaki_sdk::resource::readiness::<#row, #meta_ty>(&ctx, #ident::DECL)
+                ::portaki_sdk::resource::readiness(&ctx, &#ident::load(&ctx)?)
             }
         }
     } else {
@@ -501,7 +561,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             pub fn load(
                 _ctx: &::portaki_sdk::Context,
             ) -> ::portaki_sdk::Result<::portaki_sdk::resource::Collection<#row, #meta_ty>> {
-                ::portaki_sdk::resource::store::load(Self::DECL)
+                ::portaki_sdk::resource::store::load(Self::DECL)#with_check
             }
 
             /// Stores the collection.
