@@ -127,6 +127,18 @@ fn a_guest_deposits_and_the_host_follows_with_a_history() {
                 .unwrap(),
         )
         .unwrap();
+        let noted = NOTED.load(Ordering::SeqCst);
+        __portaki_reports_note(
+            host_ctx.clone(),
+            serde_json::from_value(json!({ "id": id, "text": " Le technicien passe demain. " }))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            NOTED.load(Ordering::SeqCst),
+            noted,
+            "the same reply is not sent twice"
+        );
         __portaki_reports_set_status(
             host_ctx.clone(),
             serde_json::from_value(json!({ "id": id, "status": "resolved" })).unwrap(),
@@ -205,6 +217,7 @@ fn a_late_open_record_is_a_task_whose_check_closes_it() {
         };
         let tasks_of = |args: &TimelineTasksArgs| {
             portaki_sdk::resource::record::timeline_tasks::<Reports>(
+                &ctx,
                 decl,
                 args,
                 "t".into(),
@@ -216,8 +229,14 @@ fn a_late_open_record_is_a_task_whose_check_closes_it() {
         let tasks = tasks_of(&args);
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].stay_id, Some(stay));
-        portaki_sdk::resource::record::complete_task::<Reports>(decl, &tasks[0].id).unwrap();
+        portaki_sdk::resource::record::complete_task::<Reports>(decl, &tasks[0].id, true).unwrap();
         assert!(Reports::list(&ctx).unwrap()[0].is_done());
         assert!(tasks_of(&args).is_empty());
+        // Unchecked: the host ticked the wrong line, the record is open again.
+        portaki_sdk::resource::record::complete_task::<Reports>(decl, &tasks[0].id, false).unwrap();
+        let entry = Reports::list(&ctx).unwrap().remove(0);
+        assert_eq!(entry.status, Status::New);
+        assert!(entry.reached_at(Status::Resolved).is_some());
+        assert_eq!(tasks_of(&args).len(), 1);
     });
 }
