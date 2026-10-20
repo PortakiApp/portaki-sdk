@@ -682,6 +682,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut hooks = false;
     let mut legacy: Option<syn::Path> = None;
     let mut note_email: Option<String> = None;
+    let mut commands = true;
     let parser = syn::meta::parser(|m| {
         let key = m
             .path
@@ -698,8 +699,9 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
                 "hooks" => hooks = true,
                 "legacy" => legacy = Some(m.value()?.parse()?),
                 "note_email" => note_email = Some(m.value()?.parse::<syn::LitStr>()?.value()),
+            "commands" => commands = m.value()?.parse::<syn::LitBool>()?.value,
                 _ => return Err(m.error(
-                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks, legacy = path, note_email",
+                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks, legacy = path, note_email, commands",
                 )),
             }
         Ok(())
@@ -825,38 +827,9 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         },
         _ => quote! {},
     };
-    quote! {
-        #emission
-        #item
-        #hooks_impl
-
-        impl #ident {
-            /// What `#[record]` declared.
-            pub const DECL: ::portaki_sdk::resource::RecordDecl =
-                ::portaki_sdk::resource::RecordDecl { name: #name, due_hours: #due_tokens, legacy: #record_legacy };
-
-            /// Every record, newest first.
-            pub fn list(_ctx: &::portaki_sdk::Context) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
-                ::portaki_sdk::resource::record::list(Self::DECL)
-            }
-
-            /// The records of one stay, newest first.
-            pub fn for_stay(
-                _ctx: &::portaki_sdk::Context,
-                stay: ::portaki_sdk::prelude::Uuid,
-            ) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
-                ::portaki_sdk::resource::record::for_stay(Self::DECL, stay)
-            }
-
-            /// One record.
-            pub fn get(
-                _ctx: &::portaki_sdk::Context,
-                id: ::portaki_sdk::prelude::Uuid,
-            ) -> ::portaki_sdk::Result<::core::option::Option<#entry>> {
-                ::portaki_sdk::resource::record::get(Self::DECL, id)
-            }
-        }
-
+    // `commands = false`: typed per-stay storage the module drives itself, no operation of its own.
+    let operations = if commands {
+        quote! {
         #[doc(hidden)]
         #[::portaki_sdk::command(name = "submit", __sdk, guest, example(label = "Un dépôt", input = "{}"))]
         pub fn #submit(ctx: ::portaki_sdk::Context, args: ::serde_json::Value) -> ::portaki_sdk::Result<()> {
@@ -898,6 +871,44 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #tasks_tokens
+
+        }
+    } else {
+        quote! {}
+    };
+    quote! {
+        #emission
+        #item
+        #hooks_impl
+
+        impl #ident {
+            /// What `#[record]` declared.
+            pub const DECL: ::portaki_sdk::resource::RecordDecl =
+                ::portaki_sdk::resource::RecordDecl { name: #name, due_hours: #due_tokens, legacy: #record_legacy };
+
+            /// Every record, newest first.
+            pub fn list(_ctx: &::portaki_sdk::Context) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
+                ::portaki_sdk::resource::record::list(Self::DECL)
+            }
+
+            /// The records of one stay, newest first.
+            pub fn for_stay(
+                _ctx: &::portaki_sdk::Context,
+                stay: ::portaki_sdk::prelude::Uuid,
+            ) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {
+                ::portaki_sdk::resource::record::for_stay(Self::DECL, stay)
+            }
+
+            /// One record.
+            pub fn get(
+                _ctx: &::portaki_sdk::Context,
+                id: ::portaki_sdk::prelude::Uuid,
+            ) -> ::portaki_sdk::Result<::core::option::Option<#entry>> {
+                ::portaki_sdk::resource::record::get(Self::DECL, id)
+            }
+        }
+
+        #operations
 
         #[doc(hidden)]
         #[allow(dead_code, missing_docs)]

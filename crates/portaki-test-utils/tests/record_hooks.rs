@@ -117,3 +117,62 @@ fn only_what_needs_action_is_a_task_titled_from_the_item() {
         assert_eq!(tasks[0].title.en, "Café requested");
     });
 }
+
+#[portaki_sdk::choice(label = "tick")]
+pub enum Tick {
+    #[initial]
+    Open,
+    #[done]
+    Done,
+}
+
+#[portaki_sdk::item(key = "step")]
+pub struct Ticked {
+    #[field(required, label = "step.label")]
+    pub step: String,
+    #[field(kind = "photo", label = "step.photo")]
+    pub photo: String,
+}
+
+/// State per stay and step, no operation of its own.
+#[portaki_sdk::record(name = "ticks", item = Ticked, status = Tick, commands = false)]
+pub struct Ticks;
+
+#[test]
+fn marking_keeps_one_record_per_stay_and_key() {
+    use portaki_sdk::resource::record::mark;
+    use portaki_sdk::resource::Actor;
+    let (ctx, host) = MockContext::host().build();
+    portaki_sdk::host::with_host(host, ctx.clone(), || {
+        let (stay, other) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        let step = |photo: &str| Ticked {
+            step: "floors".into(),
+            photo: photo.into(),
+            ..Default::default()
+        };
+        mark::<Ticks>(
+            Ticks::DECL,
+            stay,
+            step("portaki-file:a"),
+            Tick::Done,
+            Actor::Host,
+        )
+        .unwrap();
+        mark::<Ticks>(Ticks::DECL, stay, step(""), Tick::Open, Actor::Host).unwrap();
+        mark::<Ticks>(Ticks::DECL, other, step(""), Tick::Done, Actor::Guest).unwrap();
+
+        let mine = Ticks::for_stay(&ctx, stay).unwrap();
+        assert_eq!(mine.len(), 1, "one record per stay and key");
+        assert_eq!(mine[0].status, Tick::Open);
+        assert_eq!(mine[0].item.photo, "", "the item is replaced");
+        assert!(mine[0].reached_at(Tick::Done).is_some());
+        assert_eq!(Ticks::list(&ctx).unwrap().len(), 2);
+        // Marking the status it has writes no history line.
+        let before = Ticks::for_stay(&ctx, other).unwrap()[0].history.len();
+        mark::<Ticks>(Ticks::DECL, other, step(""), Tick::Done, Actor::Guest).unwrap();
+        assert_eq!(
+            Ticks::for_stay(&ctx, other).unwrap()[0].history.len(),
+            before
+        );
+    });
+}
