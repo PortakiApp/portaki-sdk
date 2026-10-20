@@ -353,6 +353,8 @@ pub struct CollectionDecl {
     pub required: bool,
     /// What « too many » says, from the bundles' `host.{name}.tooMany` when they have it.
     pub too_many: Option<fn() -> I18nText>,
+    /// The module's data from before the collection, read once — see [`store::load_raw`].
+    pub legacy: Option<store::Legacy>,
 }
 
 /// A problem that blocks publication.
@@ -519,7 +521,7 @@ pub fn host_command<T: Item, M: Meta>(
     decl: CollectionDecl,
     args: &Value,
 ) -> crate::Result<()> {
-    let (rows, meta) = store::load_raw(decl.name)?;
+    let (rows, meta) = store::load_raw(decl)?;
     let (rows, meta) = merge::host_save(
         &rows,
         &meta,
@@ -547,7 +549,7 @@ pub fn import_command<T: Item, M: Meta>(
     let lang = ctx
         .property_lang()
         .map_or_else(|| ctx.lang(), str::to_string);
-    let (rows, meta) = store::load_raw(decl.name)?;
+    let (rows, meta) = store::load_raw(decl)?;
     let (rows, report) = merge::import(&rows, &args.rows, T::fields(), T::KEY, decl.max, &lang);
     if report.added > 0 {
         store::save(&typed::<T, M>(decl, rows, meta)?)?;

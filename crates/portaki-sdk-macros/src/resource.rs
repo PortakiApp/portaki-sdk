@@ -486,6 +486,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut required = false;
     let mut readiness = true;
     let mut check: Option<syn::Path> = None;
+    let mut legacy: Option<syn::Path> = None;
     let parser = syn::meta::parser(|m| {
         let key = m
             .path
@@ -501,8 +502,9 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "required" => required = true,
             "readiness" => readiness = m.value()?.parse::<syn::LitBool>()?.value,
             "check" => check = Some(m.value()?.parse()?),
+            "legacy" => legacy = Some(m.value()?.parse()?),
             _ => return Err(m.error(
-                "#[collection] takes name, item, meta, max, import, required, check = path, readiness = false",
+                "#[collection] takes name, item, meta, max, import, required, check = path, legacy = path, readiness = false",
             )),
         }
         Ok(())
@@ -517,6 +519,12 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     };
     let ident = &item.ident;
+    let legacy_tokens = match &legacy {
+        Some(path) => quote! {
+            ::core::option::Option::Some(|| ::portaki_sdk::resource::store::legacy_json(#path()))
+        },
+        None => quote!(::core::option::Option::None),
+    };
     let with_check = match &check {
         Some(path) => quote!(.map(|c| c.with_check(#path))),
         None => quote!(),
@@ -609,6 +617,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
                     max: #max_tokens,
                     required: #required,
                     too_many: #too_many_tokens,
+                    legacy: #legacy_tokens,
                 };
 
             /// The stored collection.
@@ -670,14 +679,14 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut task_title: Option<String> = None;
     let mut task_done: Option<String> = None;
     let mut hooks = false;
-    let parser =
-        syn::meta::parser(|m| {
-            let key = m
-                .path
-                .get_ident()
-                .map(ToString::to_string)
-                .unwrap_or_default();
-            match key.as_str() {
+    let mut legacy: Option<syn::Path> = None;
+    let parser = syn::meta::parser(|m| {
+        let key = m
+            .path
+            .get_ident()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        match key.as_str() {
                 "name" => name = Some(m.value()?.parse::<syn::LitStr>()?.value()),
                 "item" => row = Some(m.value()?.parse()?),
                 "status" => status = Some(m.value()?.parse()?),
@@ -685,12 +694,13 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
                 "task_title" => task_title = Some(m.value()?.parse::<syn::LitStr>()?.value()),
                 "task_done" => task_done = Some(m.value()?.parse::<syn::LitStr>()?.value()),
                 "hooks" => hooks = true,
+                "legacy" => legacy = Some(m.value()?.parse()?),
                 _ => return Err(m.error(
-                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks",
+                    "#[record] takes name, item, status, due_hours, task_title, task_done, hooks, legacy = path",
                 )),
             }
-            Ok(())
-        });
+        Ok(())
+    });
     syn::parse_macro_input!(attr with parser);
     let (Some(name), Some(row), Some(status)) = (name, row, status) else {
         return syn::Error::new(
@@ -722,6 +732,18 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         f("task_complete"),
         f("resource_entity"),
     );
+    // The module's earlier records: each one stored as it comes, its id kept.
+    let record_legacy = match &legacy {
+        Some(path) => quote! {
+            ::core::option::Option::Some(|decl| {
+                for entry in #path()? {
+                    entry.save(decl)?;
+                }
+                ::core::result::Result::Ok(())
+            })
+        },
+        None => quote!(::core::option::Option::None),
+    };
     let due_tokens = match due_hours {
         Some(h) => quote!(::core::option::Option::Some(#h)),
         None => quote!(::core::option::Option::None),
@@ -800,7 +822,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #ident {
             /// What `#[record]` declared.
             pub const DECL: ::portaki_sdk::resource::RecordDecl =
-                ::portaki_sdk::resource::RecordDecl { name: #name, due_hours: #due_tokens };
+                ::portaki_sdk::resource::RecordDecl { name: #name, due_hours: #due_tokens, legacy: #record_legacy };
 
             /// Every record, newest first.
             pub fn list(_ctx: &::portaki_sdk::Context) -> ::portaki_sdk::Result<::std::vec::Vec<#entry>> {

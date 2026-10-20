@@ -29,15 +29,42 @@ pub struct PortakiResource {
     pub updated_at: DateTime<Utc>,
 }
 
-/// The stored rows and settings of `name`, as JSON; empty when nothing is stored yet.
-pub fn load_raw(name: &str) -> Result<(Vec<Value>, Value)> {
-    Ok(match find(name)? {
-        Some(stored) => (
+/// What a module stored before its collection, as rows and settings JSON; `None` when it had
+/// nothing. `#[collection(legacy = fn)]` writes it from the module's typed function.
+pub type Legacy = fn() -> Result<Option<(Vec<Value>, Value)>>;
+
+/// The stored rows and settings of `decl`, as JSON; empty when nothing is stored yet.
+///
+/// Nothing stored yet and a `legacy` reader declared: the module's earlier data is read, stored
+/// as the collection, and returned. It runs on every path in (a booklet render, the host's first
+/// save, an import), only while the collection has no row, so once adopted — or once anything was
+/// written — it never runs again and never writes over the collection.
+pub fn load_raw(decl: CollectionDecl) -> Result<(Vec<Value>, Value)> {
+    if let Some(stored) = find(decl.name)? {
+        return Ok((
             serde_json::from_str(&stored.rows_json).map_err(corrupt)?,
             serde_json::from_str(&stored.meta_json).map_err(corrupt)?,
-        ),
-        None => (Vec::new(), Value::Object(Default::default())),
-    })
+        ));
+    }
+    if let Some((rows, meta)) = decl.legacy.map(|legacy| legacy()).transpose()?.flatten() {
+        save_raw(decl.name, &rows, &meta)?;
+        return Ok((rows, meta));
+    }
+    Ok((Vec::new(), Value::Object(Default::default())))
+}
+
+/// The typed result of a module's legacy reader, as [`Legacy`] returns it.
+pub fn legacy_json<T: Serialize, M: Serialize>(
+    adopted: Result<Option<(Vec<T>, M)>>,
+) -> Result<Option<(Vec<Value>, Value)>> {
+    let Some((rows, meta)) = adopted? else {
+        return Ok(None);
+    };
+    let rows = rows
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(Some((rows, serde_json::to_value(meta)?)))
 }
 
 /// Stores `rows` and `meta` under `name`.
@@ -58,7 +85,7 @@ pub fn save_raw(name: &str, rows: &[Value], meta: &Value) -> Result<()> {
 /// The collection, typed. Stored rows that do not read are an error, never a silent empty list
 /// the next save would write over.
 pub fn load<T: Item, M: Meta>(decl: CollectionDecl) -> Result<Collection<T, M>> {
-    let (rows, meta) = load_raw(decl.name)?;
+    let (rows, meta) = load_raw(decl)?;
     let rows = rows
         .into_iter()
         .map(serde_json::from_value)
