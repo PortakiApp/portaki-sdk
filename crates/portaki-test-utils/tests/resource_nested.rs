@@ -20,6 +20,8 @@ pub struct Device {
     pub name: I18nText,
     #[field(label = "host.device.featured")]
     pub featured: bool,
+    #[field(visible_when = "featured=true", label = "host.device.why")]
+    pub why: String,
     #[field(kind = "url", label = "host.device.manualUrl")]
     pub manual_url: String,
     #[field(
@@ -147,6 +149,7 @@ fn the_editor_draws_nested_rows_with_their_ids_and_the_other_controls() {
                 r#""label":"i18n:host.column.last""#,
                 r#""last":"hier""#,
                 r#""featured":true"#,
+                r#""visibleWhen":"devices.0.featured=true""#,
                 r#""searchPlaceholder":"i18n:host.search""#,
             ] {
                 assert!(tree.contains(wanted), "{wanted} in {tree}");

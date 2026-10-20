@@ -507,6 +507,7 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                 input.into()
             }
         };
+        let row = name.rsplit_once('.').map(|(row, _)| row.to_string());
         let mut field = Field::new()
             .name(name)
             .label(format!("i18n:{}", spec.label))
@@ -519,7 +520,12 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             field = field.error(error.get(&self.ctx.locale).to_string());
         }
         if let Some(when) = spec.visible_when {
-            field = field.visibleWhen(when);
+            // In a row's panel the condition names a sibling: `audience=guest` there is
+            // `lists.2.audience=guest`.
+            field = field.visibleWhen(match &row {
+                Some(row) => format!("{row}.{when}"),
+                None => when.to_string(),
+            });
         }
         field.into()
     }
