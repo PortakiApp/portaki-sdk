@@ -294,6 +294,21 @@ fn resource_field(
             map.remove("optionsType");
         }
     }
+    // Nested rows: the row's fields, in the `structured` shape an import already reads.
+    if let Some(row) = field["itemType"].as_str() {
+        let fields: Vec<Value> = emissions
+            .iter()
+            .find(|e| e.kind == "item" && e.data["name"] == row)
+            .and_then(|e| e.data["fields"].as_array())
+            .into_iter()
+            .flatten()
+            .map(|sub| resource_field(sub, emissions, translated, in_bundles))
+            .collect();
+        entry["item"] = json!({ "id": "id", "fields": fields });
+        if let Some(map) = entry.as_object_mut() {
+            map.remove("itemType");
+        }
+    }
     entry
 }
 
@@ -422,12 +437,23 @@ pub fn check_references(
             "surface" => vec![data["catalog"].get("label_key")],
             "nav" => vec![data.get("label_key")],
             "email" => vec![data.get("descriptionKey")],
-            "item" => data["fields"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .flat_map(|field| [field.get("label"), field.get("description")])
-                .collect(),
+            "item" => {
+                // Nested rows are added by « <label>.add ».
+                for field in data["fields"].as_array().into_iter().flatten() {
+                    if field["type"] == "structured" {
+                        keys.push(format!(
+                            "{}.add",
+                            field["label"].as_str().unwrap_or_default()
+                        ));
+                    }
+                }
+                data["fields"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|field| [field.get("label"), field.get("description")])
+                    .collect()
+            }
             "params" if data["labelPrefix"].is_string() => {
                 let prefix = data["labelPrefix"].as_str().unwrap_or_default();
                 for value in data["enum"].as_array().into_iter().flatten() {
@@ -1205,6 +1231,35 @@ mod tests {
         );
         std::fs::write(dir.path().join("en-US.json"), labelled).expect("en");
         super::check_references(&emissions, dir.path(), &locales).expect("labelled");
+    }
+
+    /// Nested rows reach the manifest in the `structured` shape, their fields resolved.
+    #[test]
+    fn nested_rows_carry_their_fields_into_the_manifest() {
+        let emissions = vec![
+            EmissionFile {
+                kind: "item".into(),
+                data: json!({ "name": "Step", "fields": [ { "key": "text", "type": "localized", "label": "host.step" } ] }),
+            },
+            EmissionFile {
+                kind: "item".into(),
+                data: json!({ "name": "Device", "fields": [ { "key": "steps", "type": "structured",
+                                                               "label": "host.steps", "itemType": "Step", "maxItems": 15 } ] }),
+            },
+            EmissionFile {
+                kind: "resource".into(),
+                data: json!({ "resourceKind": "collection", "name": "devices", "item": "Device" }),
+            },
+        ];
+        let resources = super::resources(
+            &emissions,
+            &|v: &serde_json::Value| v.clone(),
+            &|_: &str| false,
+        );
+        let steps = &resources[0]["fields"][0];
+        assert_eq!(steps["item"]["fields"][0]["key"], "text");
+        assert_eq!(steps["maxItems"], 15);
+        assert!(steps.get("itemType").is_none());
     }
 
     /// The editor's « too many » text is owed only by a collection that has a maximum.

@@ -35,6 +35,7 @@
 //! ```
 
 mod editor;
+mod fields;
 mod form;
 mod guest;
 mod inbox;
@@ -131,12 +132,29 @@ pub enum FieldKind {
     /// [`I18nText`] the host formats (`kind = "rich_text"`): a TipTap document from the editor,
     /// or plain text / Markdown from an import — see [`rich_text`].
     RichText,
+    /// `kind = "url"`: an `https://` address.
+    Url,
+    /// `kind = "file"`: a file the host uploaded (`portaki-file:`), of the declared `accept`.
+    File,
+    /// `Vec<String>`: labels the host lists and orders.
+    Labels,
+    /// `Vec<T>` of an `#[item]`: rows inside the row, merged by id, then by position.
+    Rows,
 }
 
 impl FieldKind {
     /// Whether the field carries text a row is "about" — a row whose texts are all blank is empty.
     pub const fn is_text(self) -> bool {
         matches!(self, Self::Localized | Self::Text | Self::RichText)
+    }
+
+    /// Whether a value of this kind is something the host wrote — a row with none is blank.
+    /// A toggle, a number, a choice or hours alone are settings of a row, not a row.
+    pub const fn is_content(self) -> bool {
+        !matches!(
+            self,
+            Self::Toggle | Self::Number | Self::Choice | Self::TimeRange
+        )
     }
 }
 
@@ -163,14 +181,47 @@ pub struct FieldSpec {
     pub max: Option<f64>,
     /// The options of a [`FieldKind::Choice`].
     pub options: Option<fn() -> Vec<ChoiceOption>>,
+    /// The fields of each row of a [`FieldKind::Rows`].
+    pub rows: Option<fn() -> &'static [FieldSpec]>,
+    /// At most this many rows in a [`FieldKind::Rows`].
+    pub max_rows: Option<usize>,
+    /// The media types a [`FieldKind::File`] takes (`<input accept>`).
+    pub accept: Option<&'static str>,
+    /// The largest [`FieldKind::File`], in bytes.
+    pub max_bytes: Option<u32>,
+}
+
+impl FieldSpec {
+    /// A text field with nothing else declared — for `..FieldSpec::BLANK` in tests.
+    pub const BLANK: Self = Self {
+        key: "",
+        kind: FieldKind::Text,
+        label: "",
+        description: None,
+        placeholder: None,
+        required: false,
+        max_chars: None,
+        min: None,
+        max: None,
+        options: None,
+        rows: None,
+        max_rows: None,
+        accept: None,
+        max_bytes: None,
+    };
 }
 
 impl FieldSpec {
     /// The field's problem in `row`, if any — `None` when it is fine.
     pub fn problem(&self, row: &Value) -> Option<I18nText> {
         let value = &row[self.key];
-        if self.required && self.words(value).trim().is_empty() {
+        if self.required && self.is_empty(value) {
             return Some(I18nText::new("Champ obligatoire.", "Required."));
+        }
+        match self.kind {
+            FieldKind::Url => return crate::config::check::https_url(value.as_str()?.trim()),
+            FieldKind::Rows => return self.rows_problem(value),
+            _ => {}
         }
         if let Some(max) = self.max_chars {
             for (_, text) in texts_of(value) {
@@ -191,6 +242,28 @@ impl FieldSpec {
 }
 
 impl FieldSpec {
+    /// Whether `value` holds nothing the host wrote.
+    pub fn is_empty(&self, value: &Value) -> bool {
+        match self.kind {
+            FieldKind::Rows | FieldKind::Labels => value.as_array().map_or(true, Vec::is_empty),
+            _ => self.words(value).trim().is_empty(),
+        }
+    }
+
+    /// Too many rows, or the first problem of a row.
+    fn rows_problem(&self, value: &Value) -> Option<I18nText> {
+        let rows = value.as_array()?;
+        if let Some(max) = self.max_rows.filter(|max| rows.len() > *max) {
+            return Some(I18nText::new(
+                format!("{max} lignes au maximum."),
+                format!("{max} rows at most."),
+            ));
+        }
+        let fields = self.rows.map(|rows| rows()).unwrap_or_default();
+        rows.iter()
+            .find_map(|row| fields.iter().find_map(|field| field.problem(row)))
+    }
+
     /// The words `value` holds, first language that has some — what "empty" is judged on.
     pub fn words(&self, value: &Value) -> String {
         texts_of(value)
@@ -267,18 +340,34 @@ pub struct Problem {
     pub message: I18nText,
 }
 
+/// A module's own rule over a whole collection.
+pub type Check<T, M> = fn(&Collection<T, M>) -> Vec<Problem>;
+
 /// An ordered list of rows and its settings, as stored.
 #[derive(Debug, Clone)]
 pub struct Collection<T: Item, M: Meta = NoMeta> {
     decl: CollectionDecl,
     rows: Vec<T>,
     meta: M,
+    check: Option<Check<T, M>>,
 }
 
 impl<T: Item, M: Meta> Collection<T, M> {
     /// A collection of `rows`.
     pub fn new(decl: CollectionDecl, rows: Vec<T>, meta: M) -> Self {
-        Self { decl, rows, meta }
+        Self {
+            decl,
+            rows,
+            meta,
+            check: None,
+        }
+    }
+
+    /// The module's own rules, added to [`Self::problems`] — `#[collection(check = path)]`: what
+    /// no field constraint says (two settings that disagree, a count across rows…).
+    pub fn with_check(mut self, check: Check<T, M>) -> Self {
+        self.check = Some(check);
+        self
     }
 
     /// The declaration.
@@ -368,6 +457,9 @@ impl<T: Item, M: Meta> Collection<T, M> {
                 }
             }
         }
+        if let Some(check) = self.check {
+            problems.extend(check(self));
+        }
         problems
     }
 
@@ -435,10 +527,10 @@ pub fn import_command<T: Item, M: Meta>(
 /// The generated `publishReadiness`: every [`Collection::problems`], blocking.
 pub fn readiness<T: Item, M: Meta>(
     ctx: &crate::Context,
-    decl: CollectionDecl,
+    collection: &Collection<T, M>,
 ) -> crate::Result<crate::contracts::publish::PublishReadiness> {
     use crate::contracts::publish::{PublishCheck, PublishLevel, PublishReadiness};
-    let collection = store::load::<T, M>(decl)?;
+    let decl = collection.decl();
     let label_of = |field: &str| {
         let key = T::fields()
             .iter()
