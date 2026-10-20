@@ -350,6 +350,12 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
         },
         _ => quote!(::core::option::Option::None),
     };
+    let too_many_tokens = match crate::bundle::conventional_key(&label, "tooMany") {
+        Some(key) if max_rows.is_some() => quote! {
+            ::core::option::Option::Some(|| ::portaki_sdk::bundle_text!(#key))
+        },
+        _ => quote!(::core::option::Option::None),
+    };
     let default_tokens = opt_str(&default);
     let visible_tokens = opt_str(&visible_when);
     let accept_tokens = opt_str(&accept);
@@ -382,6 +388,7 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             default: #default_tokens,
             visible_when: #visible_tokens,
             required_text: #required_tokens,
+            too_many_text: #too_many_tokens,
         }
     };
     let mut schema = json!({ "key": key, "type": wire_type, "required": required, "label": label });
