@@ -475,7 +475,8 @@ fn type_name(ty: &Type) -> Option<String> {
 
 // ── #[collection] ────────────────────────────────────────────────────────────────────────────
 
-/// `#[collection(name = "rules", item = Rule, meta = Display, max = 30, import)]` on a unit struct.
+/// `#[collection(name = "rules", item = Rule, meta = Display, max = 30, import, read)]` on a unit
+/// struct. `read` opens the rows to the platform (`readRows`) — only for rows the guest sees.
 pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = syn::parse_macro_input!(item as ItemStruct);
     let mut name: Option<String> = None;
@@ -483,6 +484,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut meta: Option<syn::Path> = None;
     let mut max: Option<usize> = None;
     let mut import = false;
+    let mut read = false;
     let mut required = false;
     let mut readiness = true;
     let mut check: Option<syn::Path> = None;
@@ -499,12 +501,13 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "meta" => meta = Some(m.value()?.parse()?),
             "max" => max = Some(m.value()?.parse::<syn::LitInt>()?.base10_parse()?),
             "import" => import = true,
+            "read" => read = true,
             "required" => required = true,
             "readiness" => readiness = m.value()?.parse::<syn::LitBool>()?.value,
             "check" => check = Some(m.value()?.parse()?),
             "legacy" => legacy = Some(m.value()?.parse()?),
             _ => return Err(m.error(
-                "#[collection] takes name, item, meta, max, import, required, check = path, legacy = path, readiness = false",
+                "#[collection] takes name, item, meta, max, import, read, required, check = path, legacy = path, readiness = false",
             )),
         }
         Ok(())
@@ -550,6 +553,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let snake = sanitize_key(&name).to_lowercase();
     let update = format_ident!("__portaki_{}_update_config", snake);
     let import_fn = format_ident!("__portaki_{}_import_rows", snake);
+    let read_fn = format_ident!("__portaki_{}_read_rows", snake);
     let readiness_fn = format_ident!("__portaki_{}_publish_readiness", snake);
     let entity_mod = format_ident!("__portaki_{}_resource_entity", snake);
     let row_name = row
@@ -574,6 +578,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
             "required": required,
             "order": "manual",
             "import": if import { json!({ "command": "importRows" }) } else { Value::Null },
+            "read": if read { json!({ "query": "readRows" }) } else { Value::Null },
         })
         .to_string(),
     );
@@ -587,6 +592,21 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
                 args: ::portaki_sdk::resource::ImportArgs,
             ) -> ::portaki_sdk::Result<::portaki_sdk::resource::merge::ImportReport> {
                 ::portaki_sdk::resource::import_command::<#row, #meta_ty>(&ctx, #ident::DECL, args)
+            }
+        }
+    } else {
+        quote! {}
+    };
+    let read_example = format!(r#"{{"resource":"{name}"}}"#);
+    let read_tokens = if read {
+        quote! {
+            #[doc(hidden)]
+            #[::portaki_sdk::query(name = "readRows", __sdk, example(label = "Lire les lignes", input = #read_example))]
+            pub fn #read_fn(
+                ctx: ::portaki_sdk::Context,
+                args: ::portaki_sdk::resource::ReadArgs,
+            ) -> ::portaki_sdk::Result<::serde_json::Value> {
+                ::portaki_sdk::resource::read_query::<#row>(&ctx, #ident::DECL, args)
             }
         }
     } else {
@@ -645,6 +665,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #import_tokens
+        #read_tokens
         #readiness_tokens
 
         #[doc(hidden)]

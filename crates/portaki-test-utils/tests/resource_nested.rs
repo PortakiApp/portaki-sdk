@@ -69,7 +69,7 @@ fn one_featured(devices: &Collection<Device, Display>) -> Vec<Problem> {
         .collect()
 }
 
-#[portaki_sdk::collection(name = "devices", item = Device, meta = Display, check = one_featured, import)]
+#[portaki_sdk::collection(name = "devices", item = Device, meta = Display, check = one_featured, import, read)]
 pub struct Devices;
 
 #[test]
@@ -204,5 +204,30 @@ fn a_default_shows_until_the_host_chooses_and_a_condition_travels() {
             tree.find("DataTable").unwrap() < tree.find("host.display.title").unwrap(),
             "rows first"
         );
+    });
+}
+
+#[test]
+fn read_rows_honours_visible_when_and_nests() {
+    MockContext::host().run(|ctx| {
+        __portaki_devices_update_config(
+            ctx.clone(),
+            json!({ "devices": [
+                { "name": "Four", "featured": false, "why": "caché", "steps": [ { "text": "Tourner" } ] },
+                { "name": "Lave-linge", "featured": true, "why": "montré" }
+            ] }),
+        )
+        .unwrap();
+        let read = __portaki_devices_read_rows(
+            ctx,
+            serde_json::from_value(json!({ "resource": "devices" })).unwrap(),
+        )
+        .unwrap();
+        let rows = read["rows"].as_array().unwrap();
+        assert!(rows[0].get("why").is_none(), "{read}");
+        assert!(rows[0].get("id").is_none(), "{read}");
+        assert_eq!(rows[0]["steps"][0]["text"]["fr"], "Tourner", "{read}");
+        assert!(rows[0]["steps"][0].get("id").is_none(), "{read}");
+        assert_eq!(rows[1]["why"], "montré", "{read}");
     });
 }

@@ -248,6 +248,9 @@ fn resources(
             if data["import"].is_object() {
                 resource["import"] = data["import"].clone();
             }
+            if data["read"].is_object() {
+                resource["read"] = data["read"].clone();
+            }
             if data["meta"].is_string() {
                 resource["meta"] = Value::Array(fields_of(&data["meta"]));
             }
@@ -1250,7 +1253,12 @@ mod tests {
             },
             EmissionFile {
                 kind: "resource".into(),
-                data: json!({ "resourceKind": "collection", "name": "devices", "item": "Device" }),
+                data: json!({ "resourceKind": "collection", "name": "devices", "item": "Device",
+                               "read": { "query": "readRows" } }),
+            },
+            EmissionFile {
+                kind: "resource".into(),
+                data: json!({ "resourceKind": "record", "name": "reports", "item": "Step", "read": null }),
             },
         ];
         let resources = super::resources(
@@ -1262,6 +1270,8 @@ mod tests {
         assert_eq!(steps["item"]["fields"][0]["key"], "text");
         assert_eq!(steps["maxItems"], 15);
         assert!(steps.get("itemType").is_none());
+        assert_eq!(resources[0]["read"]["query"], "readRows");
+        assert!(resources[1].get("read").is_none(), "a record is never read");
     }
 
     /// The editor's « too many » text is owed only by a collection that has a maximum.

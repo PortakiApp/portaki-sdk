@@ -294,6 +294,12 @@
             "required": ["command"],
             "properties": { "command": { "type": "string" } }
           },
+          "read": {
+            "type": "object",
+            "description": "#[collection(read)]: the host query that returns the rows as declared (fields only, visibleWhen honoured), {resource} in, {resource, rows} out. A collection only — never a record, whose rows are a stay's.",
+            "required": ["query"],
+            "properties": { "query": { "type": "string" } }
+          },
           "fields": { "type": "array", "items": { "$ref": "#/$defs/resourceField" } },
           "meta": { "type": "array", "items": { "$ref": "#/$defs/resourceField" } }
         }

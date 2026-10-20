@@ -30,7 +30,7 @@ pub struct Display {
     pub card_limit: u32,
 }
 
-#[portaki_sdk::collection(name = "rules", item = Rule, meta = Display, max = 3, import)]
+#[portaki_sdk::collection(name = "rules", item = Rule, meta = Display, max = 3, import, read)]
 pub struct Rules;
 
 #[test]
@@ -82,6 +82,35 @@ fn the_host_saves_then_an_import_adds_without_touching_his_rows() {
         assert_eq!(rules.rows()[0].title.get("en"), "Quiet");
         assert_eq!(rules.len(), 2);
     });
+}
+
+#[test]
+fn read_rows_gives_the_declared_fields_only() {
+    MockContext::host()
+        .with_rows(
+            "PortakiResource",
+            vec![json!({ "id": "00000000-0000-0000-0000-000000000001", "resource": "rules",
+                "rows_json": r#"[{"id":"a","title":{"fr":"Pas de fête"},"status":"important","hours":"","note":"S3CR-undeclared"}]"#,
+                "meta_json": r#"{"card_limit":4}"#, "updated_at": "2026-10-19T00:00:00Z" })],
+        )
+        .run(|ctx| {
+            let read = __portaki_rules_read_rows(
+                ctx.clone(),
+                serde_json::from_value(json!({ "resource": "rules" })).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                read,
+                json!({ "resource": "rules", "rows": [
+                    { "title": { "fr": "Pas de fête" }, "status": "important", "hours": "" }
+                ] })
+            );
+            let wrong = __portaki_rules_read_rows(
+                ctx,
+                serde_json::from_value(json!({ "resource": "devices" })).unwrap(),
+            );
+            assert!(wrong.unwrap_err().to_string().contains("resource_unknown"));
+        });
 }
 
 #[test]
