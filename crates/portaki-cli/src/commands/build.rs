@@ -78,6 +78,9 @@ async fn build_here(args: &BuildArgs) -> Result<()> {
         if let Some(written) = ensure_build_script(&module_root)? {
             ui::wrote("build.rs", written);
         }
+        // Before any artifact, and with no flag around it: an SDK 11 module that breaks its
+        // layout or its complexity budget produces nothing.
+        super::budget::enforce(&module_root)?;
         let mut cmd = Command::new("cargo");
         cmd.arg("build")
             .arg("--target")

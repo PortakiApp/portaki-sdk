@@ -56,6 +56,9 @@ pub struct CheckArgs {
     /// The channel the module is headed for: `stable` refuses an SDK older than 8.0.0.
     #[arg(long, default_value = "stable", value_parser = ["preview", "stable"])]
     pub channel: String,
+    /// Print the module's budget exceptions as markdown — what `EXCEPTIONS.md` holds — and stop.
+    #[arg(long)]
+    pub report: bool,
     /// Former flag — now `--only fmt,clippy,build,lint,i18n`.
     #[arg(long, hide = true)]
     pub skip_tests: bool,
@@ -65,6 +68,12 @@ pub struct CheckArgs {
 
 /// Runs `portaki check`.
 pub async fn run(args: CheckArgs) -> Result<()> {
+    if args.report {
+        for member in &args.modules.resolve()? {
+            print!("{}", super::exceptions::report(&member.root));
+        }
+        return Ok(());
+    }
     ui::header(
         "portaki check",
         &crate::tr!(
@@ -152,15 +161,7 @@ pub async fn gate(module_root: &Path, channel: &str, fix: bool, only: &[Control]
         format_step(module_root, fix)?;
     }
     if runs(Control::Clippy) {
-        // The budget binds a module on SDK 11 (`unstable`); the others only see it.
-        let sdk11 = crate::oci::pack::sdk_features(module_root)?
-            .iter()
-            .any(|feature| feature == "unstable");
-        super::budget::check_files(module_root, sdk11)?;
         clippy_step(module_root, fix)?;
-        if sdk11 {
-            budget_step(module_root)?;
-        }
     }
     if runs(Control::Tests) {
         test::gate_publish(module_root).context("tests before publish")?;
@@ -242,29 +243,6 @@ fn clippy_step(module_root: &Path, fix: bool) -> Result<()> {
         crate::tr!(
             "cargo clippy -D warnings — clippy missing: rustup component add clippy",
             "cargo clippy -D warnings — clippy absent : rustup component add clippy"
-        )
-    })
-}
-
-/// The complexity budget, on the module's own code (`--lib`): tests and shared harnesses are not
-/// held to it. See [`super::budget`].
-fn budget_step(module_root: &Path) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(module_root)
-        .env(
-            "CLIPPY_CONF_DIR",
-            super::budget::clippy_conf_dir(module_root)?,
-        )
-        .arg("clippy")
-        .arg("--lib")
-        .arg("--")
-        .arg("-D")
-        .arg("warnings")
-        .args(super::budget::clippy_flags());
-    ui::command("module budget (clippy --lib)", &mut cmd).with_context(|| {
-        crate::tr!(
-            "module budget — past a ceiling: split the function, or allow it there with a reason",
-            "budget du module — un plafond dépassé : découpez la fonction, ou autorisez-la sur place avec une raison"
         )
     })
 }

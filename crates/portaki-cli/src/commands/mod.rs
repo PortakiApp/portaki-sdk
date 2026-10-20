@@ -10,6 +10,7 @@ pub mod connectors;
 pub mod dev;
 pub mod docs;
 pub mod doctor;
+pub mod exceptions;
 pub mod i18n;
 pub mod init;
 pub mod inspect;
