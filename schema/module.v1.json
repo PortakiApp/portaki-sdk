@@ -356,10 +356,22 @@
       "required": ["key", "type", "label"],
       "properties": {
         "key": { "type": "string" },
-        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range", "photo"] },
+        "type": { "type": "string", "enum": ["localized", "text", "toggle", "number", "select", "time_range", "photo", "url", "file", "labels", "structured"] },
         "required": { "type": "boolean" },
         "label": {},
         "description": {},
+        "format": { "type": "string", "enum": ["rich_text"], "description": "localized: the host formats it (TipTap document or Markdown)." },
+        "accept": { "type": "string", "description": "file: the media types taken (<input accept>)." },
+        "maxItems": { "type": "integer", "minimum": 1, "description": "structured: at most this many rows." },
+        "item": {
+          "type": "object",
+          "description": "structured: the fields of each row, merged by id.",
+          "required": ["fields"],
+          "properties": {
+            "id": { "type": "string" },
+            "fields": { "type": "array", "items": { "$ref": "#/$defs/resourceField" } }
+          }
+        },
         "maxChars": { "type": "integer", "minimum": 1 },
         "min": { "type": "number" },
         "max": { "type": "number" },
