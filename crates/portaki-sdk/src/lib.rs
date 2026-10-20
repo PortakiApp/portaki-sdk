@@ -60,6 +60,8 @@ pub mod files;
 pub mod guest_shell;
 pub mod host;
 pub mod ids;
+#[doc(hidden)]
+pub mod layout;
 pub mod limits;
 pub mod manifest;
 pub mod permission;

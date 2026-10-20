@@ -457,7 +457,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let import_tokens = if import {
         quote! {
             #[doc(hidden)]
-            #[::portaki_sdk::command(name = "importRows", example(label = "Importer des lignes", input = #import_example))]
+            #[::portaki_sdk::command(name = "importRows", __sdk, example(label = "Importer des lignes", input = #import_example))]
             pub fn #import_fn(
                 ctx: ::portaki_sdk::Context,
                 args: ::portaki_sdk::resource::ImportArgs,
@@ -471,7 +471,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
     let readiness_tokens = if readiness {
         quote! {
             #[doc(hidden)]
-            #[::portaki_sdk::query(name = "publishReadiness", example(label = "Prêt à publier ?"))]
+            #[::portaki_sdk::query(name = "publishReadiness", __sdk, example(label = "Prêt à publier ?"))]
             pub fn #readiness_fn(
                 ctx: ::portaki_sdk::Context,
             ) -> ::portaki_sdk::Result<::portaki_sdk::contracts::publish::PublishReadiness> {
@@ -506,7 +506,7 @@ pub fn expand_collection(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "updateConfig", example(label = "Enregistrer sans rien changer", input = "{}"))]
+        #[::portaki_sdk::command(name = "updateConfig", __sdk, example(label = "Enregistrer sans rien changer", input = "{}"))]
         pub fn #update(
             ctx: ::portaki_sdk::Context,
             args: ::serde_json::Value,
@@ -636,7 +636,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tasks_tokens = match (task_title, task_done) {
         (Some(title), Some(done)) if due_hours.is_some() => quote! {
             #[doc(hidden)]
-            #[::portaki_sdk::query(name = "timelineTasks", example(label = "Semaine en cours",
+            #[::portaki_sdk::query(name = "timelineTasks", __sdk, example(label = "Semaine en cours",
                 input = r#"{"propertyId":"5f0c2b1e-8a4d-4c6f-9e21-3b7d9a6c4e10","from":"2026-06-15T00:00:00Z","to":"2026-06-22T00:00:00Z","stays":[]}"#))]
             pub fn #tasks(
                 _ctx: ::portaki_sdk::Context,
@@ -647,7 +647,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             #[doc(hidden)]
-            #[::portaki_sdk::command(name = "taskToggle", example(label = "Clore",
+            #[::portaki_sdk::command(name = "taskToggle", __sdk, example(label = "Clore",
                 input = r#"{"propertyId":"5a1c9e2b-4f3d-4b8a-8e7f-6d2c1b0a9f8e","taskId":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a","itemId":"done","done":true}"#))]
             pub fn #toggle(
                 _ctx: ::portaki_sdk::Context,
@@ -660,7 +660,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             #[doc(hidden)]
-            #[::portaki_sdk::command(name = "taskComplete", example(label = "Clore",
+            #[::portaki_sdk::command(name = "taskComplete", __sdk, example(label = "Clore",
                 input = r#"{"propertyId":"5a1c9e2b-4f3d-4b8a-8e7f-6d2c1b0a9f8e","taskId":"9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a"}"#))]
             pub fn #complete(
                 _ctx: ::portaki_sdk::Context,
@@ -704,20 +704,20 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "submit", guest, example(label = "Un dépôt", input = "{}"))]
+        #[::portaki_sdk::command(name = "submit", __sdk, guest, example(label = "Un dépôt", input = "{}"))]
         pub fn #submit(ctx: ::portaki_sdk::Context, args: ::serde_json::Value) -> ::portaki_sdk::Result<()> {
             ::portaki_sdk::resource::record::submit_command::<#ident>(&ctx, #ident::DECL, &args)
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "add", example(label = "Ajouté par l'hôte",
+        #[::portaki_sdk::command(name = "add", __sdk, example(label = "Ajouté par l'hôte",
             input = r#"{"stayId":"5d1a7e3c-2b9f-4c8d-a6e0-7f3b1c9d2e54"}"#))]
         pub fn #add(ctx: ::portaki_sdk::Context, args: ::serde_json::Value) -> ::portaki_sdk::Result<()> {
             ::portaki_sdk::resource::record::add_command::<#ident>(&ctx, #ident::DECL, &args)
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "setStatus", example(label = "Pris en charge", input = #id_example))]
+        #[::portaki_sdk::command(name = "setStatus", __sdk, example(label = "Pris en charge", input = #id_example))]
         pub fn #set_status(
             ctx: ::portaki_sdk::Context,
             args: ::portaki_sdk::resource::record::SetStatusArgs,
@@ -726,7 +726,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::command(name = "note", example(label = "Répondre", input = #note_example))]
+        #[::portaki_sdk::command(name = "note", __sdk, example(label = "Répondre", input = #note_example))]
         pub fn #note(
             ctx: ::portaki_sdk::Context,
             args: ::portaki_sdk::resource::record::NoteArgs,
@@ -735,7 +735,7 @@ pub fn expand_record(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::portaki_sdk::query(name = "listForStay", guest, example(label = "Les dépôts du séjour"))]
+        #[::portaki_sdk::query(name = "listForStay", __sdk, guest, example(label = "Les dépôts du séjour"))]
         pub fn #list_for_stay(
             ctx: ::portaki_sdk::Context,
         ) -> ::portaki_sdk::Result<::std::vec::Vec<::serde_json::Value>> {
