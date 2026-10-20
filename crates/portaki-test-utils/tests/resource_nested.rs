@@ -33,10 +33,25 @@ pub struct Device {
     pub steps: Vec<Step>,
 }
 
+#[portaki_sdk::choice(label = "host.notify")]
+pub enum Channel {
+    #[default]
+    Email,
+    App,
+}
+
 #[portaki_sdk::item(meta)]
 pub struct Display {
     #[field(label = "host.roomOrder.label")]
     pub room_order: Vec<String>,
+    #[field(default = true, label = "host.requests.enabled")]
+    pub requests_enabled: Option<bool>,
+    #[field(
+        kind = "choices",
+        visible_when = "requests_enabled=true",
+        label = "host.notify"
+    )]
+    pub notify: Option<Vec<Channel>>,
 }
 
 /// One device on the home card at most.
@@ -133,4 +148,54 @@ fn the_editor_draws_nested_rows_with_their_ids_and_the_other_controls() {
                 assert!(tree.contains(wanted), "{wanted} in {tree}");
             }
         });
+}
+
+#[test]
+fn several_choices_keep_only_known_values_once() {
+    MockContext::host().run(|ctx| {
+        __portaki_devices_update_config(ctx.clone(), json!({ "notify": "app,email,app,sms" }))
+            .unwrap();
+        let devices = Devices::load(&ctx).unwrap();
+        assert_eq!(
+            devices.meta().notify,
+            Some(vec![Channel::App, Channel::Email])
+        );
+        assert_eq!(
+            devices.meta().requests_enabled,
+            None,
+            "never sent, never stored"
+        );
+        __portaki_devices_update_config(ctx.clone(), json!({ "notify": r#"["email"]"# })).unwrap();
+        assert_eq!(
+            Devices::load(&ctx).unwrap().meta().notify,
+            Some(vec![Channel::Email])
+        );
+    });
+}
+
+#[test]
+fn a_default_shows_until_the_host_chooses_and_a_condition_travels() {
+    MockContext::host().run(|ctx| {
+        let devices = Devices::load(&ctx).unwrap();
+        let tree = serde_json::to_string(
+            &CollectionEditor::new(&ctx, &devices)
+                .settings("host.display.title", Vec::new())
+                .settings_last()
+                .build(),
+        )
+        .unwrap();
+        assert!(
+            tree.contains(r#""checked":true"#),
+            "requests open by default: {tree}"
+        );
+        assert!(
+            tree.contains(r#""visibleWhen":"requests_enabled=true""#),
+            "{tree}"
+        );
+        assert!(tree.contains(r#""multi":true"#), "{tree}");
+        assert!(
+            tree.find("DataTable").unwrap() < tree.find("host.display.title").unwrap(),
+            "rows first"
+        );
+    });
 }

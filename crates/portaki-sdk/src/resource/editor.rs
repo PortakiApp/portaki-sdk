@@ -49,6 +49,7 @@ pub struct CollectionEditor<'a, T: Item, M: Meta> {
     settings: Option<(String, Vec<Component>)>,
     search: Option<String>,
     filter: Option<String>,
+    settings_last: bool,
 }
 
 impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
@@ -66,6 +67,7 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             settings: None,
             search: None,
             filter: None,
+            settings_last: false,
         }
     }
 
@@ -110,6 +112,12 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         column.kind = Some("check");
         column.max = Some((max, message.into()));
         self.columns.push(column);
+        self
+    }
+
+    /// The settings section after the rows instead of before.
+    pub fn settings_last(mut self) -> Self {
+        self.settings_last = true;
         self
     }
 
@@ -188,7 +196,12 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
             fields.extend(extra.iter().cloned());
             out.push(Section::new().title(title.clone()).children(fields).into());
         }
-        out.push(self.rows_section());
+        let rows = self.rows_section();
+        if self.settings_last {
+            out.insert(0, rows);
+        } else {
+            out.push(rows);
+        }
         out
     }
 
@@ -345,6 +358,17 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                 value.as_str().unwrap_or_default().to_string()
             }
             FieldKind::Labels => super::fields::labels(value).join(", "),
+            FieldKind::Choices => super::fields::labels(value)
+                .iter()
+                .filter_map(|wire| {
+                    let options = field.options?();
+                    options
+                        .into_iter()
+                        .find(|o| &o.value == wire)
+                        .map(|o| o.label)
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
             FieldKind::Rows => match value.as_array().map_or(0, Vec::len) {
                 0 => String::new(),
                 count => count.to_string(),
@@ -395,8 +419,13 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         value: &Value,
         error: Option<I18nText>,
     ) -> Component {
+        let fallback = spec
+            .default
+            .filter(|_| value.is_null())
+            .and_then(|json| serde_json::from_str::<Value>(json).ok());
+        let value = fallback.as_ref().unwrap_or(value);
         let control: Component = match spec.kind {
-            FieldKind::Url | FieldKind::File | FieldKind::Labels => {
+            FieldKind::Url | FieldKind::File | FieldKind::Labels | FieldKind::Choices => {
                 super::fields::control(spec, &name, value)
             }
             FieldKind::Rows => self.nested(spec, &name, value),
@@ -471,6 +500,9 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
         }
         if let Some(error) = error {
             field = field.error(error.get(&self.ctx.locale).to_string());
+        }
+        if let Some(when) = spec.visible_when {
+            field = field.visibleWhen(when);
         }
         field.into()
     }

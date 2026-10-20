@@ -241,6 +241,8 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let mut max_rows: Option<usize> = None;
     let mut accept: Option<String> = None;
     let mut max_bytes: Option<u32> = None;
+    let mut default: Option<String> = None;
+    let mut visible_when: Option<String> = None;
     attr.parse_nested_meta(|meta| {
         let name = meta.path.get_ident().map(ToString::to_string).unwrap_or_default();
         match name.as_str() {
@@ -262,9 +264,21 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             "max_rows" => max_rows = Some(meta.value()?.parse::<syn::LitInt>()?.base10_parse()?),
             "accept" => accept = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "max_bytes" => max_bytes = Some(meta.value()?.parse::<syn::LitInt>()?.base10_parse()?),
+            "visible_when" => visible_when = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
+            "default" => {
+                default = Some(match meta.value()?.parse::<syn::Lit>()? {
+                    syn::Lit::Bool(b) => b.value.to_string(),
+                    syn::Lit::Int(i) => i.base10_digits().to_string(),
+                    syn::Lit::Float(f) => f.base10_digits().to_string(),
+                    // A string is JSON when it reads as JSON (`"[\"email\"]"`), else a text.
+                    syn::Lit::Str(text) => serde_json::from_str::<Value>(&text.value())
+                        .map_or_else(|_| json!(text.value()).to_string(), |v| v.to_string()),
+                    other => return Err(syn::Error::new(other.span(), "default = bool, number or \"…\"")),
+                });
+            }
             _ => {
                 return Err(meta.error(
-                    "unknown #[field] attribute — required, max_chars, between, label, description, kind, max_rows, accept, max_bytes",
+                    "unknown #[field] attribute — required, max_chars, between, label, description, kind, max_rows, accept, max_bytes, default, visible_when",
                 ))
             }
         }
@@ -288,6 +302,7 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
         (Some("rich_text"), Some("I18nText")) => (quote!(RichText), "localized"),
         (Some("url"), Some("String")) => (quote!(Url), "url"),
         (Some("file"), Some("String")) => (quote!(File), "file"),
+        (Some("choices"), Some("Vec")) => (quote!(Choices), "choices"),
         (Some(other), _) => {
             return Err(syn::Error::new(
                 attr.span(),
@@ -306,6 +321,8 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     };
     let options = if wire_type == "select" {
         quote! { ::core::option::Option::Some(<#inner as ::portaki_sdk::resource::Choice>::options) }
+    } else if let ("choices", Some(choice)) = (wire_type, &row_type) {
+        quote! { ::core::option::Option::Some(<#choice as ::portaki_sdk::resource::Choice>::options) }
     } else {
         quote! { ::core::option::Option::None }
     };
@@ -327,6 +344,8 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     let description_tokens = opt_str(&description);
     let placeholder_tokens = opt_str(&placeholder);
     let max_rows_tokens = opt_usize(max_rows);
+    let default_tokens = opt_str(&default);
+    let visible_tokens = opt_str(&visible_when);
     let accept_tokens = opt_str(&accept);
     let max_bytes_tokens = match max_bytes {
         Some(v) => quote!(::core::option::Option::Some(#v)),
@@ -354,6 +373,8 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
             max_rows: #max_rows_tokens,
             accept: #accept_tokens,
             max_bytes: #max_bytes_tokens,
+            default: #default_tokens,
+            visible_when: #visible_tokens,
         }
     };
     let mut schema = json!({ "key": key, "type": wire_type, "required": required, "label": label });
@@ -372,6 +393,9 @@ fn field_spec(attr: &syn::Attribute, key: String, ty: &Type) -> syn::Result<Decl
     }
     if wire_type == "select" {
         schema["optionsType"] = json!(type_name(inner).unwrap_or_default());
+    }
+    if wire_type == "choices" {
+        schema["optionsType"] = json!(row_type.as_ref().and_then(type_name).unwrap_or_default());
     }
     if wire_type == "structured" {
         schema["itemType"] = json!(row_type.as_ref().and_then(type_name).unwrap_or_default());

@@ -6,8 +6,9 @@ use serde_json::{Map, Value};
 use super::FieldSpec;
 use crate::contracts::shell::SURFACE_INPUT;
 use crate::sdui::action::Action;
+use crate::sdui::common::ChoiceListLayout;
 use crate::sdui::component::Component;
-use crate::sdui::primitives::{EditableList, FileUpload, StepList, TextInput};
+use crate::sdui::primitives::{ChoiceList, EditableList, FileUpload, StepList, TextInput};
 use crate::sdui::EditableListItem;
 
 /// The labels a [`super::FieldKind::Labels`] value holds.
@@ -21,7 +22,7 @@ pub fn labels(value: &Value) -> Vec<String> {
         .collect()
 }
 
-/// The control of a link, a file or a list of labels.
+/// The control of a link, a file, a list of labels or several choices.
 pub fn control(spec: &FieldSpec, name: &str, value: &Value) -> Component {
     let text = value.as_str().unwrap_or_default();
     match spec.kind {
@@ -35,6 +36,13 @@ pub fn control(spec: &FieldSpec, name: &str, value: &Value) -> Component {
             }
             upload.into()
         }
+        super::FieldKind::Choices => ChoiceList::new()
+            .name(name)
+            .multi(true)
+            .layout(ChoiceListLayout::Compact)
+            .choices(spec.options.map(|options| options()).unwrap_or_default())
+            .value(serde_json::to_string(&labels(value)).unwrap_or_default())
+            .into(),
         super::FieldKind::Labels => EditableList::new()
             .name(name)
             .items(labels(value).iter().map(EditableListItem::new).collect())

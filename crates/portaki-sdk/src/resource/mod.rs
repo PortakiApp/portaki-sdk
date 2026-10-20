@@ -140,6 +140,8 @@ pub enum FieldKind {
     Labels,
     /// `Vec<T>` of an `#[item]`: rows inside the row, merged by id, then by position.
     Rows,
+    /// `Vec<C>` of a [`Choice`] (`kind = "choices"`): several values ticked.
+    Choices,
 }
 
 impl FieldKind {
@@ -153,7 +155,7 @@ impl FieldKind {
     pub const fn is_content(self) -> bool {
         !matches!(
             self,
-            Self::Toggle | Self::Number | Self::Choice | Self::TimeRange
+            Self::Toggle | Self::Number | Self::Choice | Self::Choices | Self::TimeRange
         )
     }
 }
@@ -189,6 +191,10 @@ pub struct FieldSpec {
     pub accept: Option<&'static str>,
     /// The largest [`FieldKind::File`], in bytes.
     pub max_bytes: Option<u32>,
+    /// What the editor shows while nothing is stored, as JSON (`default = true`, `= 5`, `= "…"`).
+    pub default: Option<&'static str>,
+    /// The editor shows the field only while this holds (`requests_enabled=true`).
+    pub visible_when: Option<&'static str>,
 }
 
 impl FieldSpec {
@@ -208,6 +214,8 @@ impl FieldSpec {
         max_rows: None,
         accept: None,
         max_bytes: None,
+        default: None,
+        visible_when: None,
     };
 }
 
@@ -245,7 +253,9 @@ impl FieldSpec {
     /// Whether `value` holds nothing the host wrote.
     pub fn is_empty(&self, value: &Value) -> bool {
         match self.kind {
-            FieldKind::Rows | FieldKind::Labels => value.as_array().map_or(true, Vec::is_empty),
+            FieldKind::Rows | FieldKind::Labels | FieldKind::Choices => {
+                value.as_array().map_or(true, Vec::is_empty)
+            }
             _ => self.words(value).trim().is_empty(),
         }
     }

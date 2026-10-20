@@ -168,6 +168,28 @@ fn set(row: &mut Map<String, Value>, field: &FieldSpec, raw: &Value, lang: &str)
                 .map(Value::String)
                 .collect(),
         ),
+        FieldKind::Choices => {
+            let known = |wire: &str| {
+                field
+                    .options
+                    .map_or(true, |options| options().iter().any(|o| o.value == wire))
+            };
+            let mut wires: Vec<Value> = Vec::new();
+            let listed = match raw {
+                // A form sends the ticked values as an array, a JSON array or « a,b ».
+                Value::String(text) if !text.trim_start().starts_with('[') => text
+                    .split(',')
+                    .map(|wire| Value::String(wire.to_string()))
+                    .collect(),
+                other => array_of(other),
+            };
+            for wire in listed.iter().map(scalar) {
+                if known(&wire) && !wires.iter().any(|w| w == wire.as_str()) {
+                    wires.push(Value::String(wire));
+                }
+            }
+            Value::Array(wires)
+        }
         FieldKind::Rows => {
             let fields = field.rows.map(|rows| rows()).unwrap_or_default();
             let stored = row
