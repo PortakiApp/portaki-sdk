@@ -266,7 +266,9 @@ fn form_impl(item: &ItemStruct, fields: &[Value], extras: &[(String, FormExtra)]
     }
 }
 
-/// What a field says about the derived host form only — never in the manifest.
+/// What a field says about the derived host form — never in the manifest, except `visible_when`:
+/// a field its condition hides is not shown to the guest either, which the platform must know to
+/// read the config as the booklet shows it (the guest assistant).
 #[derive(Default)]
 struct FormExtra {
     section: Option<String>,
@@ -376,7 +378,11 @@ fn field_schema(
             "item_id" => item_id = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "section" => extra.section = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "visible_when" => {
-                extra.visible_when = Some(meta.value()?.parse::<syn::LitStr>()?.value())
+                let when = meta.value()?.parse::<syn::LitStr>()?;
+                if !when.value().split_once('=').is_some_and(|(key, _)| !key.trim().is_empty()) {
+                    return Err(syn::Error::new(when.span(), "visible_when = \"otherField=value\""));
+                }
+                extra.visible_when = Some(when.value())
             }
             "input" => extra.input = Some(meta.value()?.parse::<syn::LitStr>()?.value()),
             "choice" => extra.choice = Some(meta.value()?.parse()?),
@@ -508,6 +514,9 @@ fn field_schema(
     if local {
         schema["local"] = json!(true);
     }
+    if let Some(when) = extra.visible_when.as_deref() {
+        schema["visibleWhen"] = json!(when);
+    }
     // The macro cannot see the row type's fields; `portaki build` reads them from its `#[params]`
     // emission and fills `item` (see `portaki_sdk::config::resolve_items`).
     if kind == "structured" {
@@ -600,6 +609,8 @@ mod tests {
                 pub max_guests: Option<u32>,
                 #[field(label = "config.enabled")]
                 pub enabled: bool,
+                #[field(label = "config.phone", visible_when = "enabled=true")]
+                pub phone: String,
                 pub hidden: bool,
             }
         })
@@ -620,6 +631,8 @@ mod tests {
                 json!({ "key": "max_guests", "type": "number", "required": false, "recommended": false, "label": "config.guests",
                         "local": true }),
                 json!({ "key": "enabled", "type": "toggle", "required": false, "recommended": false, "label": "config.enabled" }),
+                json!({ "key": "phone", "type": "text", "required": false, "recommended": false, "label": "config.phone",
+                        "visibleWhen": "enabled=true" }),
             ]
         );
     }
