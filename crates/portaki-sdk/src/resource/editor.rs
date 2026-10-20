@@ -442,10 +442,19 @@ impl<'a, T: Item, M: Meta> CollectionEditor<'a, T, M> {
                     FieldKind::Localized => self.shown(spec, value),
                     _ => value.as_str().unwrap_or_default().to_string(),
                 };
+                let placeholder = spec.placeholder.map(|key| format!("i18n:{key}"));
                 if spec.max_chars.is_some_and(|max| max > 120) {
-                    TextArea::new().name(name.clone()).value(text).into()
+                    let area = TextArea::new().name(name.clone()).value(text);
+                    match placeholder {
+                        Some(p) => area.placeholder(p).into(),
+                        None => area.into(),
+                    }
                 } else {
-                    TextInput::new().name(name.clone()).value(text).into()
+                    let input = TextInput::new().name(name.clone()).value(text);
+                    match placeholder {
+                        Some(p) => input.placeholder(p).into(),
+                        None => input.into(),
+                    }
                 }
             }
             FieldKind::Choice => {
