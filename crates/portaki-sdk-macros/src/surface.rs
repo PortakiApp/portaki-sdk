@@ -197,7 +197,12 @@ fn expand_surface(attrs: SurfaceAttrs, function_item: ItemFn) -> TokenStream2 {
     let checks = &attrs.checks;
     let id_const =
         crate::wasm_handler::declared_const("SurfaceId", &attrs.id, &function_item.sig.ident);
+    let misplaced = crate::layout::check(crate::layout::Declared::Surface {
+        context: &attrs.context,
+        id: &attrs.id,
+    });
     quote! {
+        #misplaced
         #emission
         #(#checks)*
         #id_const

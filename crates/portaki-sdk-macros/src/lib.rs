@@ -72,6 +72,7 @@ mod email_vars;
 mod emit;
 mod entity;
 mod event_handler;
+mod layout;
 mod link;
 mod module;
 mod nav;

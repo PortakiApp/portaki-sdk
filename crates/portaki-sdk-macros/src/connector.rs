@@ -466,7 +466,9 @@ pub fn expand_builtin(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let emission = write_emission("connector_builtin", &sanitize_key(&attrs.builtin), &json);
+    let misplaced = crate::layout::check(crate::layout::Declared::Connector(&attrs.builtin));
     let output: TokenStream2 = quote! {
+        #misplaced
         #emission
         #item
     };
@@ -510,7 +512,9 @@ pub fn expand_custom(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let emission = write_emission("connector_custom", &sanitize_key(&attrs.id), &json);
+    let misplaced = crate::layout::check(crate::layout::Declared::Connector(&attrs.id));
     let output: TokenStream2 = quote! {
+        #misplaced
         #emission
         #struct_item
     };

@@ -30,7 +30,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         crate::wasm_handler::register_command(&attrs.name, &fn_name, &function_item);
     let name_const =
         crate::wasm_handler::declared_const("OperationName", &attrs.name, &function_item.sig.ident);
+    let misplaced = if attrs.derived {
+        proc_macro2::TokenStream::new()
+    } else {
+        crate::layout::check(crate::layout::Declared::Operation(&attrs.name))
+    };
     let output = quote::quote! {
+        #misplaced
         #emission
         #name_const
         #function_item
