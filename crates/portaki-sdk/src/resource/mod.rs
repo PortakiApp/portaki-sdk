@@ -197,6 +197,8 @@ pub struct FieldSpec {
     pub visible_when: Option<&'static str>,
     /// What « required » says, from the bundles' `<label>.required` when they have it.
     pub required_text: Option<fn() -> I18nText>,
+    /// What « too many rows » says, from the bundles' `<label>.tooMany` when they have it.
+    pub too_many_text: Option<fn() -> I18nText>,
 }
 
 impl FieldSpec {
@@ -219,6 +221,7 @@ impl FieldSpec {
         default: None,
         visible_when: None,
         required_text: None,
+        too_many_text: None,
     };
 }
 
@@ -270,9 +273,14 @@ impl FieldSpec {
     fn rows_problem(&self, value: &Value) -> Option<I18nText> {
         let rows = value.as_array()?;
         if let Some(max) = self.max_rows.filter(|max| rows.len() > *max) {
-            return Some(I18nText::new(
-                format!("{max} lignes au maximum."),
-                format!("{max} rows at most."),
+            return Some(self.too_many_text.map_or_else(
+                || {
+                    I18nText::new(
+                        format!("{max} lignes au maximum."),
+                        format!("{max} rows at most."),
+                    )
+                },
+                |text| text(),
             ));
         }
         let fields = self.rows.map(|rows| rows()).unwrap_or_default();
