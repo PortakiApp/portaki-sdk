@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.17.1](https://github.com/PortakiApp/portaki-sdk/compare/v10.17.0...v10.17.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **cli:** exceptions budget line in French ([65abfe4](https://github.com/PortakiApp/portaki-sdk/commit/65abfe43ed7034cb3aebb4e3a3bf3f5f8e793631))
+
 ## [10.17.0](https://github.com/PortakiApp/portaki-sdk/compare/v10.16.0...v10.17.0) (2026-10-20)
 
 
